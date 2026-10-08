@@ -105,6 +105,8 @@ const I = {
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></svg>',
+  key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
   google: '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>'
 };
@@ -126,16 +128,38 @@ const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extr
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
 function gate(html) { $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>OPERAÇÃO</b></div></div>${html}</div>`; }
+const GOOGLE = new URLSearchParams(location.search).has('google');
+const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="6"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
   const s = AUTH.status;
+  const sair = `<button class="btn" data-act="logout">${I.out} Sair</button>`;
   if (s === 'loading') return gate('<p class="muted">Carregando…</p>');
-  if (s === 'noConfig') return gate(`<h2>Sistema ainda não conectado</h2><p>Este endereço não encontrou a configuração do Firebase. Publique pelo Firebase Hosting (veja o README do projeto) ou crie o arquivo <code>firebase-config.js</code>.</p><a class="btn" href="?demo">Abrir a demonstração</a>`);
-  if (s === 'signedOut') return gate(`<h2>Entrar</h2><p class="muted">Use sua conta Google. O primeiro acesso de cada pessoa precisa ser liberado pelo administrador.</p><button class="btn gbtn" data-act="login">${I.google} Entrar com Google</button>${DEMO ? '' : '<a class="muted small" href="?demo">Ver demonstração sem login</a>'}`);
-  if (s === 'pending') return gate(`<h2>Acesso aguardando liberação</h2><p>Olá, <b>${esc(AUTH.user.nome)}</b>. Seu cadastro foi criado. Peça ao administrador para liberar seu acesso e definir sua área. A tela abre sozinha quando for liberado.</p><p class="muted small">${esc(AUTH.user.email || '')}</p>${DEMO ? mockSwitcher() : `<button class="btn" data-act="logout">${I.out} Sair</button>`}`);
-  if (s === 'error') return gate(`<h2>Não foi possível entrar</h2><p class="muted">${esc(AUTH.msg || '')}</p><button class="btn" data-act="logout">${I.out} Sair</button>`);
+  if (s === 'noConfig') return gate(`<h2>Sistema ainda não conectado</h2><p>Este endereço não encontrou a configuração do Firebase. Publique pelo Firebase Hosting (veja o README do projeto).</p><a class="btn" href="?demo">Abrir a demonstração</a>`);
+  if (s === 'signedOut') return gate(`<h2>Entrar</h2><form id="fLogin" class="stackform" novalidate>
+    <label class="sel"><span>Usuário</span><input class="in" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+    ${senhaField('lgPass', 'Senha', 'current-password')}
+    <p class="err" id="lgErr" role="alert" hidden></p>
+    <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
+    <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
+    ${GOOGLE ? `<button class="btn gbtn" data-act="loginGoogle">${I.google} Entrar com Google (administrador)</button>` : ''}
+    ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
+  if (s === 'firstAdmin') return gate(`<h2>Primeiro acesso</h2><p class="muted">Ainda não existe nenhum administrador. Crie o seu acesso.</p><form id="fFirst" class="stackform" novalidate>
+    <label class="sel"><span>Seu nome</span><input class="in" id="faNome" required></label>
+    <label class="sel"><span>Usuário</span><input class="in" id="faUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ex.: luiz.eduardo" required></label>
+    ${senhaField('faPass', 'Senha (mínimo 6 caracteres)', 'new-password')}
+    <p class="err" id="faErr" role="alert" hidden></p>
+    <button class="btn pri big" type="submit">Criar administrador</button></form>`);
+  if (s === 'mustChange') return gate(`<h2>Crie sua senha</h2><p>Olá, <b>${esc(title(AUTH.user.nome))}</b>. No primeiro acesso, troque a senha provisória por uma só sua.</p><form id="fMust" class="stackform" novalidate>
+    ${senhaField('mcPass', 'Nova senha (mínimo 6 caracteres)', 'new-password')}
+    ${senhaField('mcPass2', 'Repita a nova senha', 'new-password')}
+    <p class="err" id="mcErr" role="alert" hidden></p>
+    <button class="btn pri big" type="submit">Salvar e entrar</button></form>${DEMO ? mockSwitcher() : sair}`);
+  if (s === 'blocked') return gate(`<h2>Acesso bloqueado</h2><p>O usuário <b>${esc(AUTH.user.login || '')}</b> está bloqueado. Fale com o administrador do sistema.</p>${DEMO ? mockSwitcher() : sair}`);
+  if (s === 'noProfile') return gate(`<h2>Usuário sem cadastro</h2><p>Esta conta não tem cadastro no sistema. Fale com o administrador.</p>${sair}`);
+  if (s === 'error') return gate(`<h2>Não foi possível entrar</h2><p class="muted">${esc(AUTH.msg || '')}</p>${sair}`);
 }
 function mockSwitcher() {
-  return `<label class="sel"><span>Entrar como (demonstração)</span><select class="in" id="mockUser">${DB.cache.usuarios.map(u => `<option value="${u.uid}" ${ME && u.uid === ME.uid ? 'selected' : ''}>${esc(title(u.nome))} · ${papelNome(u.papel)}${u.area ? ' · ' + AREA_S[u.area] : ''}</option>`).join('')}</select></label>`;
+  return `<label class="sel"><span>Entrar como (demonstração)</span><select class="in" id="mockUser">${ME ? '' : '<option value="">—</option>'}${DB.cache.usuarios.map(u => `<option value="${u.uid}" ${ME && u.uid === ME.uid ? 'selected' : ''}>${esc(title(u.nome))} · ${papelNome(u.papel)}${u.area ? ' · ' + AREA_S[u.area] : ''}</option>`).join('')}</select></label>`;
 }
 
 /* ---------------- shell ---------------- */
@@ -160,7 +184,7 @@ const schedule = () => { if (raf) return; raf = requestAnimationFrame(() => { ra
 
 function renderNav() {
   const atr = DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
-  const pendUsers = isAdmin() ? DB.cache.usuarios.filter(u => u.papel === 'pendente').length : 0;
+  const pendUsers = 0;
   let h = '', g = '';
   for (const v of VIEWS) {
     if (v.admin && !isAdmin()) continue;
@@ -170,8 +194,8 @@ function renderNav() {
   }
   $('nav').innerHTML = h;
   $('who').innerHTML = DEMO
-    ? `${mockSwitcher()}<button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
-    : `<div class="me">${ME.foto ? `<img src="${esc(ME.foto)}" alt="" referrerpolicy="no-referrer">` : `<span class="av">${esc((ME.nome || '?')[0])}</span>`}<div><b>${esc(ME.nome || ME.email)}</b><small>${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-act="logout">${I.out} Sair</button>`;
+    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
+    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`;
   const tb = [['painel', 'Painel', 'painel'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
   const inMore = !['painel', 'prog', 'apontar', 'escala'].includes(UI.view);
   const moreBadge = atr + pendUsers;
@@ -463,14 +487,24 @@ function vGerador() {
 
 /* ---------------- USUÁRIOS ---------------- */
 function vUsuarios() {
-  const us = DB.cache.usuarios.slice().sort((a, b) => (a.papel === 'pendente' ? -1 : 0) - (b.papel === 'pendente' ? -1 : 0) || String(a.nome).localeCompare(String(b.nome)));
-  const pend = us.filter(u => u.papel === 'pendente').length;
-  return `<div class="mini"><div><b class="num">${us.length}</b><span>Usuários</span></div><div><b class="num" style="color:${pend ? 'var(--st-atr)' : 'inherit'}">${pend}</b><span>Aguardando liberação</span></div></div>
-  <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Área</th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(u.nome)}</b><div class="muted small">${esc(u.email || '')}</div></td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><select class="in" data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}" ${['lider', 'supervisor'].includes(u.papel) ? '' : 'disabled'}><option value="">—</option>${AREAS.map(a => `<option value="${a}" ${u.area === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></td></tr>`).join('')}
-  </tbody></table></div></div>
-  <p class="muted small m0">Para dar acesso a alguém: peça para a pessoa abrir o endereço do sistema e entrar com a conta Google. Ela aparece aqui como "Aguardando liberação".</p>`;
+  const us = DB.cache.usuarios.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  const ativos = us.filter(u => u.papel !== 'bloqueado').length;
+  const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${AREAS.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select>`;
+  return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div></div>
+  <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="form" novalidate>
+   <label class="sel wide"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Edmar Lucas Gomes de Araujo"></label>
+   <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: edmar.araujo"></label>
+   <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label>
+   <label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+   <label class="sel"><span>Área</span>${areaSel('id="nuArea"', '', false)}</label>
+   <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar'}</button>
+   <p class="err wide" id="nuErr" role="alert" hidden></p>
+  </form></div></div>
+  <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada. Bloqueado não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td>${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : u.uid === ME.uid ? '<span class="muted small">você</span>' : ''}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
 }
+function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
 
 /* ---------------- CONFIG ---------------- */
 function vConfig() {
@@ -500,6 +534,27 @@ function sheet(titleTxt, sub, opts, onPick) {
   document.addEventListener('keydown', kd);
   $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim') return close(); const b = e.target.closest('[data-o]'); if (!b) return; const v = b.dataset.o; close(); if (v !== 'x') onPick(opts[+v]); };
   L.querySelector('[data-o]').focus();
+}
+function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit) {
+  const L = $('layer');
+  L.innerHTML = `<div class="scrim" id="scrim"><form class="sheet" id="fSheet" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}" novalidate><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}${fieldsHtml}<p class="err" id="shErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri" type="submit">${esc(submitTxt)}</button><button class="btn" type="button" data-close>Cancelar</button></div></form></div>`;
+  const kd = e => { if (e.key === 'Escape') close(); };
+  const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
+  document.addEventListener('keydown', kd);
+  $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim' || e.target.closest('[data-close]')) close(); const eye = e.target.closest('[data-eye]'); if (eye) toggleEye(eye); };
+  $('fSheet').onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); close(); } catch (err) { showErr('shErr', err); b.disabled = false; } };
+  const f = L.querySelector('input'); if (f) f.focus();
+}
+function showErr(id, err) { const el = $(id); if (!el) return toast(msgErro(err)); el.textContent = msgErro(err); el.hidden = false; }
+const msgErro = err => (DB.erroAuth ? DB.erroAuth(err) : (err && err.message) || String(err));
+function toggleEye(b) { const i = $(b.dataset.eye); if (!i) return; i.type = i.type === 'password' ? 'text' : 'password'; b.setAttribute('aria-label', i.type === 'password' ? 'Mostrar senha' : 'Ocultar senha'); }
+function alterarSenhaSheet() {
+  formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
+    const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
+    if (n.length < 6) throw new Error('A nova senha precisa ter pelo menos 6 caracteres.');
+    if (n !== n2) throw new Error('As duas senhas novas não são iguais.');
+    await DB.alterarSenha(a, n); toast('Senha alterada');
+  });
 }
 function toast(t) { document.querySelectorAll('.toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
@@ -558,8 +613,8 @@ document.addEventListener('click', async e => {
   if (d.go) {
     if (d.go === '__more') {
       const vs = VIEWS.filter(v => !['painel', 'prog', 'apontar', 'escala'].includes(v.id) && (!v.admin || isAdmin()));
-      const extra = DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : [{ t: 'Sair', id: '__out', d: (ME.nome || '') + ' · ' + papelNome(ME.papel) }];
-      return sheet('Mais', '', [...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id === '__out') return DB.signOut(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      return sheet('Mais', '', [...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     UI.view = d.go; UI.confirm = null; UI.more = 0; render(); scrollTo(0, 0); return;
   }
@@ -584,9 +639,18 @@ document.addEventListener('click', async e => {
     const [id, k] = d.ptog.split('|'); const p = PL.get(id); const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, dias: [...x.dias].map((c, j) => (j === +k ? (c === '1' ? '0' : '1') : c)).join('') } : x));
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
   }
+  if (d.eye) { toggleEye(t); return; }
+  if (d.reset) {
+    const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
+    return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="6" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
+      const v = $('rsSenha').value.trim(); if (v.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+      await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
+    });
+  }
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
-    case 'login': try { await DB.signIn(); } catch (err) { toast('Não foi possível entrar: ' + err.message); } break;
+    case 'loginGoogle': try { await DB.signInGoogle(); } catch (err) { toast('Não foi possível entrar: ' + msgErro(err)); } break;
+    case 'senha': alterarSenhaSheet(); break;
     case 'logout': DB.signOut(); break;
     case 'mockReset': await DB.mockReset(); toast('Demonstração restaurada'); break;
     case 'hoje': UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; UI.dia = null; render(); break;
@@ -637,6 +701,41 @@ document.addEventListener('click', async e => {
     case 'print': window.print(); break;
     case 'csv': exportCSV(); break;
   }
+});
+document.addEventListener('submit', async e => {
+  const f = e.target; if (!['fLogin', 'fFirst', 'fMust', 'fNovoUser'].includes(f.id)) return;
+  e.preventDefault();
+  const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
+  try {
+    if (f.id === 'fLogin') { await DB.signIn($('lgUser').value, $('lgPass').value); return; }
+    if (f.id === 'fFirst') {
+      const nome = $('faNome').value.trim(), login = DB.normLogin($('faUser').value), senha = $('faPass').value;
+      if (!nome) throw new Error('Informe seu nome.'); if (senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+      await DB.criarPrimeiroAdmin({ nome, login, senha }); return;
+    }
+    if (f.id === 'fMust') {
+      const n = $('mcPass').value, n2 = $('mcPass2').value;
+      if (n.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); if (n !== n2) throw new Error('As duas senhas não são iguais.');
+      await DB.definirNovaSenha(n); toast('Senha criada'); return;
+    }
+    if (f.id === 'fNovoUser') {
+      const nome = $('nuNome').value.trim(), login = DB.normLogin($('nuLogin').value), senha = $('nuSenha').value.trim(), papel = $('nuPapel').value, area = $('nuArea').value || null;
+      if (!nome) throw new Error('Informe o nome.');
+      if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
+      if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
+      if (['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor.');
+      UI.busy = true;
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null });
+      DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
+      UI.busy = false; UI.senhaSug = null; render();
+      formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
+      return;
+    }
+  } catch (err) {
+    UI.busy = false;
+    const id = { fLogin: 'lgErr', fFirst: 'faErr', fMust: 'mcErr', fNovoUser: 'nuErr' }[f.id];
+    showErr(id, err);
+  } finally { const b = f.querySelector('[type=submit]'); if (b && f.isConnected) b.disabled = false; }
 });
 document.addEventListener('change', e => {
   const t = e.target;

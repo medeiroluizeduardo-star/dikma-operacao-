@@ -38,10 +38,12 @@ async function fresh() {
     cache.config.meses.push(m);
   }
   const lideres = Object.values(x.colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR');
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', email: 'admin@exemplo', papel: 'admin', area: null },
-    ...lideres.map(c => ({ uid: c.id, nome: c.nome, email: c.id.toLowerCase() + '@exemplo', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area })),
-    { uid: 'leitor', nome: 'Visitante', email: 'visitante@exemplo', papel: 'leitor', area: null },
-    { uid: 'novo', nome: 'Novo usuário', email: 'novo@exemplo', papel: 'pendente', area: null }];
+  const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null },
+    ...lideres.map(c => { const p = slug(c.nome); return { uid: c.id, nome: c.nome, login: p[0] + '.' + p[p.length - 1], senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area }; }),
+    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
+    { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
+    { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
 }
 
 export async function start(callbacks) {
@@ -53,17 +55,45 @@ export async function start(callbacks) {
     cache.semanas = Object.fromEntries(Object.entries(saved.semanas).map(([k, v]) => [k, toLocal(k, v)]));
   } else await fresh();
   cache.config.meses.forEach(m => cache.monthsLoaded.add(m));
-  me = cache.usuarios.find(u => u.uid === (saved && saved.me)) || cache.usuarios[0];
+  me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   emitAuth(); changed();
 }
-function emitAuth() { cb.onAuth(ATIVOS.has(me.papel) ? { status: 'ready', user: me } : { status: 'pending', user: me }); }
+function emitAuth() {
+  if (!me) return cb.onAuth({ status: 'signedOut' });
+  if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
+  if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
+  cb.onAuth({ status: 'ready', user: me });
+}
 export function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); emitAuth(); changed(); }
 export async function mockReset() { try { localStorage.removeItem(LS); } catch (e) { /* ignora */ } await fresh(); cache.config.meses.forEach(m => cache.monthsLoaded.add(m)); me = cache.usuarios[0]; emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
-export async function signIn() { emitAuth(); }
-export async function signOut() { cb.onAuth({ status: 'signedOut' }); }
+export const normLogin = s => String(s || '').trim().toLowerCase();
+export const loginValido = s => /^[a-z0-9][a-z0-9._-]{2,29}$/.test(s);
+export const erroAuth = e => (e && e.message) || 'Erro inesperado.';
+export async function signIn(login, senha) {
+  const u = cache.usuarios.find(x => x.login === normLogin(login));
+  if (!u || u.senha !== senha) throw new Error('Usuário ou senha incorretos.');
+  me = u; persist(); emitAuth(); changed();
+}
+export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
+export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
+export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
+export async function criarUsuario({ nome, login, senha, papel, area }) {
+  login = normLogin(login);
+  if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
+  if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
+  if (String(senha).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, trocarSenha: true }); changed();
+}
+export async function redefinirSenha(uid, nova) {
+  if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');
+  if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  Object.assign(cache.usuarios.find(u => u.uid === uid), { senha: nova, trocarSenha: true }); changed();
+}
+export async function definirNovaSenha(nova) { if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); Object.assign(me, { senha: nova, trocarSenha: false }); persist(); emitAuth(); changed(); }
+export async function alterarSenha(atual, nova) { if (me.senha !== atual) throw new Error('A senha atual não confere.'); if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); me.senha = nova; changed(); }
 
 export async function setStatusMany(docId, changes) {
   const w = cache.semanas[docId];

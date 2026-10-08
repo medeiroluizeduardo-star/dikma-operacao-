@@ -1,6 +1,6 @@
 rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
-// Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), pendente (sem acesso).
+// Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), bloqueado (sem acesso).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -14,9 +14,9 @@ service cloud.firestore {
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
     function boot() { return /databases/$(database)/documents/config/bootstrap; }
 
-    // Primeiro login do sistema: quem criar este documento vira administrador.
+    // Criação do primeiro administrador: só acontece uma vez.
     match /config/bootstrap {
-      allow read: if signed();
+      allow get: if true;
       allow create: if signed() && request.resource.data.uid == request.auth.uid;
       allow update, delete: if false;
     }
@@ -26,14 +26,24 @@ service cloud.firestore {
       allow write: if admin();
     }
 
+    // Liga o usuário digitado na tela de login à conta interna. Leitura pública só de um item por vez.
+    match /logins/{login} {
+      allow get: if true;
+      allow list: if admin();
+      allow create: if admin()
+        || (signed() && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid);
+      allow update, delete: if admin();
+    }
+
+    // Só o administrador cadastra pessoas.
     match /usuarios/{uid} {
       allow read: if signed() && (request.auth.uid == uid || admin());
-      allow create: if signed() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['nome', 'email', 'foto', 'area', 'papel', 'criadoEm', 'ultimoAcesso'])
-        && request.resource.data.area == null
-        && (request.resource.data.papel == 'pendente'
-            || (request.resource.data.papel == 'admin' && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid));
-      allow update: if admin() || (request.auth.uid == uid && soAltera(['nome', 'foto', 'ultimoAcesso']));
+      allow create: if admin()
+        || (signed() && request.auth.uid == uid && request.resource.data.papel == 'admin'
+            && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid);
+      allow update: if admin()
+        || (request.auth.uid == uid && soAltera(['trocarSenha', 'ultimoAcesso'])
+            && request.resource.data.get('trocarSenha', false) == false);
       allow delete: if admin();
     }
 

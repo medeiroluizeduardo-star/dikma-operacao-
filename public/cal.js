@@ -9,7 +9,7 @@ export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junh
 export const MOTIVOS = ['Efetivo insuficiente', 'Equipamento indisponível', 'Área não liberada pela operação', 'Chuva / condição climática', 'Prioridade operacional', 'Falta de material / EPI', 'Outro'];
 export const SITS = [['P', 'Presente'], ['F', 'Folga'], ['FE', 'Férias'], ['AT', 'Atestado'], ['AF', 'Afastado'], ['TR', 'Treinamento'], ['FT', 'Falta'], ['DS', 'Desligado'], ['HE', 'Hora extra'], ['ATR', 'Atrasado']];
 export const AUSENTE = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'DS']);
-export const PAPEIS = [['admin', 'Administrador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['leitor', 'Somente leitura'], ['pendente', 'Aguardando liberação']];
+export const PAPEIS = [['admin', 'Administrador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['leitor', 'Somente leitura'], ['bloqueado', 'Bloqueado']];
 export const ATIVOS = new Set(['admin', 'supervisor', 'lider', 'leitor']);
 
 export const pad = n => String(n).padStart(2, '0');

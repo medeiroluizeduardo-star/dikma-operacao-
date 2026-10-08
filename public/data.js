@@ -1,8 +1,11 @@
 // Camada de dados — Firebase (Auth + Firestore).
+// Login por USUÁRIO e SENHA. Só o administrador cadastra pessoas.
+// Por baixo, o Firebase Auth usa um e-mail interno gerado pelo sistema (ninguém precisa saber dele).
 // Estrutura no Firestore:
-//   config/bootstrap          { uid }                 primeiro login vira administrador
+//   config/bootstrap          { uid }                 quem criou o primeiro administrador
 //   config/sistema            { rotas[], tipos[], meses[] }
-//   usuarios/{uid}            { nome, email, foto, papel, area }
+//   logins/{login}            { email, uid }          liga o usuário digitado à conta interna
+//   usuarios/{uid}            { nome, login, papel, area, trocarSenha }
 //   plano/{ÁREA}              { itens: [ {id, area, rota, local, ativ, tipo, dias:"1111100", ativo} ] }
 //   colaboradores/{ÁREA}      { itens: [ {id, area, rota, nome, funcao, regime} ] }
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
@@ -11,8 +14,10 @@
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
 
 import {
-  initializeApp, getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
-  onAuthStateChanged, signOut as fbSignOut, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  initializeApp, getAuth, initializeAuth, inMemoryPersistence, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult,
+  onAuthStateChanged, signOut as fbSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword,
+  reauthenticateWithCredential, EmailAuthProvider,
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion
 } from './vendor/firebase.js';
@@ -21,7 +26,7 @@ import { AREAS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js
 export const isMock = false;
 export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [] };
 
-let auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0;
+let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0, aux = null;
 
 export const pendingWrites = () => pending;
 const changed = () => cb.onData && cb.onData();
@@ -29,6 +34,22 @@ function track(p) {
   pending++; changed();
   return p.catch(e => { cb.onError && cb.onError(e); }).finally(() => { pending--; changed(); });
 }
+
+// ---------- login ----------
+export const normLogin = s => String(s || '').trim().toLowerCase();
+export const loginValido = s => /^[a-z0-9][a-z0-9._-]{2,29}$/.test(s);
+const emailInterno = login => `${login}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}@usuarios.dikma.app`;
+const erroAuth = e => {
+  const c = (e && e.code) || '';
+  if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email', 'login/nao-existe'].includes(c)) return 'Usuário ou senha incorretos.';
+  if (c === 'auth/too-many-requests') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
+  if (c === 'auth/network-request-failed') return 'Sem conexão com a internet.';
+  if (c === 'auth/weak-password') return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (c === 'auth/operation-not-allowed') return 'O login por senha não está ativado no Firebase (Authentication > Método de login > E-mail/senha).';
+  if (c === 'auth/requires-recent-login') return 'Por segurança, saia e entre de novo antes de trocar a senha.';
+  return (e && e.message) || 'Erro inesperado.';
+};
+export { erroAuth };
 
 async function loadConfig() {
   // No Firebase Hosting a configuração vem pronta deste endereço reservado.
@@ -43,42 +64,113 @@ async function loadConfig() {
 
 export async function start(callbacks) {
   cb = callbacks;
-  const cfg = await loadConfig();
+  cfg = await loadConfig();
   if (!cfg) { cb.onAuth({ status: 'noConfig' }); return; }
   const app = initializeApp(cfg);
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
   getRedirectResult(auth).catch(e => cb.onError && cb.onError(e));
-  onAuthStateChanged(auth, async u => {
+  onAuthStateChanged(auth, u => {
     stopAll();
-    if (!u) { me = null; cb.onAuth({ status: 'signedOut' }); return; }
+    if (!u) { me = null; signedOutState(); return; }
     cb.onAuth({ status: 'loading' });
-    try { await ensureProfile(u); }
-    catch (e) { cb.onAuth({ status: 'error', msg: e.message }); return; }
+    // O perfil é criado pelo administrador; aqui só acompanhamos.
     userSub = onSnapshot(doc(db, 'usuarios', u.uid), s => {
-      me = { uid: u.uid, email: u.email, foto: u.photoURL || '', ...s.data() };
-      if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'pending', user: me }); return; }
+      if (!s.exists()) { me = null; stopData(); cb.onAuth({ status: 'noProfile', user: { email: u.email } }); return; }
+      const first = !me;
+      me = { uid: u.uid, email: u.email, ...s.data() };
+      if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
+      if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
+      if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
       if (!dataSubs.length) startData();
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
 }
 
-async function ensureProfile(u) {
-  const ref = doc(db, 'usuarios', u.uid);
-  const s = await getDoc(ref);
-  const nome = u.displayName || u.email;
-  if (s.exists()) { updateDoc(ref, { nome, foto: u.photoURL || '', ultimoAcesso: serverTimestamp() }).catch(() => {}); return; }
-  const base = { nome, email: u.email, foto: u.photoURL || '', area: null, criadoEm: serverTimestamp(), ultimoAcesso: serverTimestamp() };
-  const boot = await getDoc(doc(db, 'config', 'bootstrap'));
-  if (!boot.exists()) {
-    const b = writeBatch(db);
-    b.set(doc(db, 'config', 'bootstrap'), { uid: u.uid, email: u.email });
-    b.set(ref, { ...base, papel: 'admin' });
-    await b.commit();
-    return;
-  }
-  await setDoc(ref, { ...base, papel: 'pendente' });
+async function signedOutState() {
+  let temAdmin = true;
+  try { temAdmin = (await getDoc(doc(db, 'config', 'bootstrap'))).exists(); } catch (e) { /* sem sinal: mostra o login normal */ }
+  cb.onAuth({ status: temAdmin ? 'signedOut' : 'firstAdmin' });
+}
+
+export async function signIn(loginDigitado, senha) {
+  const login = normLogin(loginDigitado);
+  if (!login || !senha) throw { code: 'login/nao-existe' };
+  const l = await getDoc(doc(db, 'logins', login));
+  if (!l.exists()) throw { code: 'login/nao-existe' };
+  await signInWithEmailAndPassword(auth, l.data().email, senha);
+}
+// Entrada de emergência do administrador antigo (abrir o sistema com ?google).
+export async function signInGoogle() {
+  const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  try { await signInWithPopup(auth, p); }
+  catch (e) { if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) return signInWithRedirect(auth, p); if (e.code !== 'auth/popup-closed-by-user') throw e; }
+}
+export const signOut = () => fbSignOut(auth);
+
+// Primeiro administrador de um sistema novo (só aparece enquanto não existe nenhum).
+export async function criarPrimeiroAdmin({ nome, login, senha }) {
+  login = normLogin(login);
+  if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
+  const email = emailInterno(login);
+  const cred = await createUserWithEmailAndPassword(auth, email, senha);
+  const uid = cred.user.uid;
+  const b = writeBatch(db);
+  b.set(doc(db, 'config', 'bootstrap'), { uid, login });
+  b.set(doc(db, 'usuarios', uid), { nome, login, papel: 'admin', area: null, trocarSenha: false, criadoEm: serverTimestamp() });
+  b.set(doc(db, 'logins', login), { email, uid });
+  await b.commit();
+}
+
+// Instância auxiliar: cria contas sem derrubar a sessão do administrador.
+function authAux() {
+  if (!aux) aux = initializeAuth(initializeApp(cfg, 'cadastro'), { persistence: inMemoryPersistence });
+  return aux;
+}
+async function novaConta(login, senha) {
+  const a = authAux();
+  const email = emailInterno(login);
+  const cred = await createUserWithEmailAndPassword(a, email, senha);
+  const uid = cred.user.uid;
+  await fbSignOut(a);
+  return { email, uid };
+}
+
+export async function criarUsuario({ nome, login, senha, papel, area }) {
+  login = normLogin(login);
+  if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
+  if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
+  const { email, uid } = await novaConta(login, senha);
+  const b = writeBatch(db);
+  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'logins', login), { email, uid });
+  await b.commit();
+}
+
+// Sem servidor pago não dá para trocar a senha de outra conta diretamente.
+// Então o sistema cria uma conta interna nova para o mesmo usuário e desativa a antiga.
+export async function redefinirSenha(uidAntigo, senhaNova) {
+  if (uidAntigo === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');
+  const antigo = (await getDoc(doc(db, 'usuarios', uidAntigo))).data();
+  if (!antigo || !antigo.login) throw new Error('Este usuário não tem login cadastrado.');
+  const { email, uid } = await novaConta(antigo.login, senhaNova);
+  const b = writeBatch(db);
+  b.set(doc(db, 'usuarios', uid), { ...antigo, trocarSenha: true, senhaRedefinidaEm: serverTimestamp() });
+  b.delete(doc(db, 'usuarios', uidAntigo));
+  b.set(doc(db, 'logins', antigo.login), { email, uid });
+  await b.commit();
+}
+
+// Troca obrigatória no primeiro acesso (logo depois de entrar, então não pede a senha atual).
+export async function definirNovaSenha(nova) {
+  await updatePassword(auth.currentUser, nova);
+  await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), { trocarSenha: false });
+}
+export async function alterarSenha(atual, nova) {
+  const u = auth.currentUser;
+  await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, atual));
+  await updatePassword(u, nova);
 }
 
 function startData() {
@@ -123,12 +215,6 @@ export function watchMonths(meses) {
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 
-export async function signIn() {
-  const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
-  try { await signInWithPopup(auth, p); }
-  catch (e) { if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/cancelled-popup-request'].includes(e.code)) return signInWithRedirect(auth, p); if (e.code !== 'auth/popup-closed-by-user') throw e; }
-}
-export const signOut = () => fbSignOut(auth);
 
 // ---------- gravações ----------
 // changes: [{ pid, str, k, motivo }] — todos do mesmo documento de semana
