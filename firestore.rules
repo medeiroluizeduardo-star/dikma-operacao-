@@ -1,7 +1,8 @@
 rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
 // Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), bloqueado (sem acesso).
-// Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, equipamentos = Operação, gestao = Efetivo.
+// Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, bateria = Atividades Bateria,
+// equipamentos = Operação, gestao = Efetivo. A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -18,6 +19,8 @@ service cloud.firestore {
     function eqEdita() { return eqm() && (admin() || perfil().papel in ['supervisor', 'lider']); }
     function geEdita() { return ge() && (admin() || perfil().papel in ['supervisor', 'lider']); }
     function gestorDa(area) { return gestor() && perfil().area == area && 'operacao' in mods(); }
+    function ba() { return ativo() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
+    function gestorDaB(area) { return gestor() && perfil().area == area && 'bateria' in mods(); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
     function boot() { return /databases/$(database)/documents/config/bootstrap; }
 
@@ -92,6 +95,45 @@ service cloud.firestore {
         && request.resource.data.por == request.auth.uid
         && request.resource.data.dados.size() < 1000000;
       allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+    }
+
+    // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
+    match /b_config/sistema {
+      allow read: if ba();
+      allow write: if admin();
+    }
+    match /b_plano/{area} {
+      allow read: if ba();
+      allow write: if admin();
+    }
+    match /b_colaboradores/{area} {
+      allow read: if ba();
+      allow write: if admin();
+    }
+    match /b_situacao/{mes} {
+      allow read: if ba();
+      allow write: if admin() || (gestor() && 'bateria' in mods());
+    }
+    match /b_semanas/{id} {
+      allow read: if ba();
+      allow create, delete: if admin();
+      allow update: if admin() || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+    }
+    match /b_evidencias/{id} {
+      allow read: if ba();
+      allow create: if (admin() || gestorDaB(request.resource.data.area))
+        && request.resource.data.por == request.auth.uid
+        && request.resource.data.thumb.size() < 80000
+        && get(/databases/$(database)/documents/b_semanas/$(request.resource.data.semana)).data.get('ev', {})
+             .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
+      allow delete: if admin() || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
+    }
+    match /b_evidenciasArquivo/{id} {
+      allow read: if ba();
+      allow create: if (admin() || gestorDaB(request.resource.data.area))
+        && request.resource.data.por == request.auth.uid
+        && request.resource.data.dados.size() < 1000000;
+      allow delete: if admin() || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------

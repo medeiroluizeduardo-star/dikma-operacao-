@@ -1,6 +1,6 @@
-// Dikma Operação — interface (módulo Programação do Pátio de Carvão).
+// Dikma Operação — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
-import { AREAS, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
+import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 
 const DEMO = new URLSearchParams(location.search).has('demo');
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
@@ -21,6 +21,7 @@ const n0 = v => Number(v).toLocaleString('pt-BR');
 /* ---------------- estado ---------------- */
 let AUTH = { status: 'loading' }, ME = null;
 let PLANO = [], PL = new Map(), COLABS = [];
+let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (patio | bateria)
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
 try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; } catch (e) { /* ignora */ }
@@ -30,7 +31,7 @@ const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
 const meses = () => ((DB.cache.config && DB.cache.config.meses) || []).slice().sort();
 const isAdmin = () => ME && ME.papel === 'admin';
-const myArea = () => (ME && (ME.papel === 'lider' || ME.papel === 'supervisor') ? ME.area : null);
+const myArea = () => (ME && (ME.papel === 'lider' || ME.papel === 'supervisor') && AREAS.includes(ME.area) ? ME.area : null);
 const areaScope = () => myArea() || UI.area;
 const canEdit = area => isAdmin() || (!!myArea() && myArea() === area);
 const canEditSit = area => isAdmin() || (!!myArea() && myArea() === area);
@@ -134,10 +135,19 @@ const VIEWS = [
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' }
 ];
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', sub: 'Programação e apontamento', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
+const MODS = { operacao: { nome: 'Atividades Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
 const TODOS_MODS = Object.keys(MODS);
 const modsDe = u => (!u ? [] : u.papel === 'admin' ? TODOS_MODS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
 const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || isAdmin()));
+// Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
+function aplicarSet() {
+  const k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
+  if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', rfRota: 'TODAS', rfIni: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
+  DB.useSet(k); AREAS = SETS[k].areas;
+  if (!AREAS.includes(UI.pArea)) UI.pArea = AREAS[0];
+  if (UI.area !== 'TODAS' && !AREAS.includes(UI.area)) UI.area = 'TODAS';
+  if (myArea()) UI.area = myArea();
+}
 function ensureModulo() {
   const ms = modsDe(ME); if (!ms.length) return;
   if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
@@ -187,7 +197,7 @@ function mockSwitcher() {
 function render() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
-  rebuild(); ensureModulo();
+  ensureModulo(); aplicarSet(); rebuild();
   if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view); afterRender(); return; }
   if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = ''; renderNav(); return; }
   if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
@@ -247,7 +257,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
-  if (UI.modulo !== 'operacao' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
@@ -457,7 +467,7 @@ function vPend() {
 
 /* ---------------- FOLHA DO LÍDER ---------------- */
 function vImprimir() {
-  const area = myArea() || (UI.area === 'TODAS' ? 'RECEBIMENTO' : UI.area);
+  const area = myArea() || (UI.area === 'TODAS' ? AREAS[0] : UI.area);
   const doc = DB.cache.semanas[area + '|' + UI.ini];
   const rts = rotasDa(area).filter(r => r.carga > 0).map(r => r.rota);
   if (UI.iRota !== 'TODAS' && !rts.includes(UI.iRota)) UI.iRota = 'TODAS';
@@ -472,7 +482,7 @@ function vImprimir() {
   if (!doc) return h + '<div class="card"><div class="empty">Semana não gerada.</div></div>';
   const items = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && (UI.iRota === 'TODAS' || x.p.rota === UI.iRota) && doc.d[x.i] !== '_______');
   let g = '', n = 0;
-  h += `<div class="tw"><div class="paper"><div class="hd"><div><h3>PROGRAMAÇÃO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Mês:</b> ${monthLabel(doc.mes)}</span><span><b>Semana:</b> ${weekLabel(doc.ini)}</span><span><b>Rota:</b> ${UI.iRota === 'TODAS' ? 'Todas' : esc(UI.iRota)}</span></div><div class="meta"><span id="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>☐ programado — marque ✓ feito ou ✕ não feito · — sem programação</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>Pátio de Carvão</div></div>
+  h += `<div class="tw"><div class="paper"><div class="hd"><div><h3>PROGRAMAÇÃO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Mês:</b> ${monthLabel(doc.mes)}</span><span><b>Semana:</b> ${weekLabel(doc.ini)}</span><span><b>Rota:</b> ${UI.iRota === 'TODAS' ? 'Todas' : esc(UI.iRota)}</span></div><div class="meta"><span id="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>☐ programado — marque ✓ feito ou ✕ não feito · — sem programação</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
   <table><thead><tr><th>Nº</th><th>Local / equipamento</th><th>Atividade</th>${DAYS.map((d, k) => `<th class="c">${d}<br>${ddmm(add(doc.ini, k))}</th>`).join('')}<th style="width:120px">Observação</th></tr></thead><tbody>
   ${items.map(({ i, p }) => { let r = ''; if (p.rota !== g) { g = p.rota; r += `<tr class="grp"><td colspan="11">${esc(p.rota)}</td></tr>`; } n++; return r + `<tr><td class="c">${n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td></td></tr>`; }).join('')}
   </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div></div>`;
@@ -544,7 +554,7 @@ function vRelFoto() {
   </div></div></div>`).join('') + '</div>';
   // impressão
   const ini = UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[0], fim = add(UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[ws.length - 1], 6);
-  h += `<div class="rfprint">${gs.map(G => `<div class="paper rfpg"><div class="hd"><div><h3>RELATÓRIO FOTOGRÁFICO</h3><div class="meta"><span><b>Área:</b> ${AREA_S[G.area]}</span><span><b>Rota:</b> ${esc(G.rota)}</span><span><b>Período:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Fotos:</b> ${G.n}</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>Pátio de Carvão</div></div>
+  h += `<div class="rfprint">${gs.map(G => `<div class="paper rfpg"><div class="hd"><div><h3>RELATÓRIO FOTOGRÁFICO</h3><div class="meta"><span><b>Área:</b> ${AREA_S[G.area]}</span><span><b>Rota:</b> ${esc(G.rota)}</span><span><b>Período:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Fotos:</b> ${G.n}</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
     ${G.itens.map(x => `<div class="rfp-item"><div class="rfp-t"><b>${DAYS[x.k]} ${ddmm(x.dt)}</b> · ${esc(x.p.ativ)} · ${esc(x.p.local)} · ${ST_NOME[x.i >= 0 ? st(x.doc, x.i, x.k) : 'X']}</div><div class="rfp-grid">${x.evs.map(e => `<figure>${e.tipo && e.tipo.startsWith('image/') ? `<img src="${RF.full[e.id] || e.thumb}" alt="">` : `<div class="rfp-file">${esc(e.nome)}</div>`}<figcaption>${fmtAt(e.at)} · ${esc(title(e.porNome || ''))}</figcaption></figure>`).join('')}</div></div>`).join('')}
     <div class="sign"><div>Líder</div><div>Supervisor</div></div></div>`).join('')}</div>`;
   return h;
@@ -598,14 +608,14 @@ function vGerador() {
 function vUsuarios() {
   const us = DB.cache.usuarios.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
   const ativos = us.filter(u => u.papel !== 'bloqueado').length;
-  const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${AREAS.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select>`;
+  const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${Object.values(SETS).map(st => `<optgroup label="${st.nome}">${st.areas.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select>`;
   return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div></div>
   <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="form" novalidate>
    <label class="sel wide"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Edmar Lucas Gomes de Araujo"></label>
    <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: edmar.araujo"></label>
    <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label>
    <label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-   <label class="sel"><span>Área (Atividades Pátio)</span>${areaSel('id="nuArea"', '', false)}</label>
+   <label class="sel"><span>Área (Atividades Pátio ou Bateria)</span>${areaSel('id="nuArea"', '', false)}</label>
    <div class="sel"><span>Módulos</span><div class="row-gap">${TODOS_MODS.map(m => `<label class="chkl"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}> ${MODS[m].nome}</label>`).join('')}</div></div>
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar'}</button>
    <p class="err wide" id="nuErr" role="alert" hidden></p>
@@ -629,7 +639,7 @@ function vConfig() {
 function vImportar() {
   if (!isAdmin()) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
   const ws = []; for (const m of [CUR_MONTH]) for (const w of weeksOfMonth(m)) ws.push(w);
-  return `<div class="card"><header><h2>Importar dados da planilha</h2><p>Plano padrão (894 atividades), 32 rotas, 95 colaboradores e as situações já lançadas no Efetivo</p></header><div class="body stackcol">
+  return `<div class="card"><header><h2>Importar dados da planilha · ${esc(SETS[SK].nome)}</h2><p>Plano padrão, rotas, colaboradores e as situações já lançadas no efetivo diário da planilha ${SK === 'bateria' ? 'PLANEJAMENTO DE ATIVIDADES BATERIA (Bateria 1, Bateria 2, Trilho e CDQ)' : 'do Pátio de Carvão'}</p></header><div class="body stackcol">
    <label class="sel"><span>Começar a programação na semana</span><select class="in" id="impIni">${ws.map(w => `<option value="${w}" ${w === UI.impIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
    <p class="muted m0">Gera ${monthLabel(CUR_MONTH)} a partir dessa semana e os dois meses seguintes. Semanas anteriores não são criadas, para não aparecerem como atrasadas.</p>
    <button class="btn pri" data-act="importar" ${UI.busy ? 'disabled' : ''} style="align-self:flex-start">${UI.busy ? 'Importando…' : 'Importar e gerar a programação'}</button>
@@ -919,7 +929,7 @@ document.addEventListener('click', async e => {
     case 'importar': {
       UI.busy = true; render();
       try {
-        const seed = await (await fetch('seed.json')).json();
+        const seed = await (await fetch(SETS[SK].seed)).json();
         await DB.importar(seed, [CUR_MONTH, addMonth(CUR_MONTH, 1), addMonth(CUR_MONTH, 2)], UI.impIni);
         DB.log('Importou os dados da planilha e gerou a programação'); toast('Dados importados');
       } catch (err) { toast('Erro ao importar: ' + err.message); }
@@ -954,7 +964,8 @@ document.addEventListener('submit', async e => {
       if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
       const modulos = TODOS_MODS.filter(m => $('nuM_' + m).checked);
       if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
-      if (modulos.includes('operacao') && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor em Atividades Pátio.');
+      if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
+      if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
       UI.busy = true;
       await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, modulos: papel === 'admin' ? TODOS_MODS : modulos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);

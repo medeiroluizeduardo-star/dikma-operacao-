@@ -1,9 +1,17 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
-import { AREAS, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
+import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
 export const isMock = true;
-export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }, eVersao: 0 };
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set() });
+const S = { patio: novoSet(), bateria: novoSet() };
+let cur = 'patio';
+export const useSet = k => { if (S[k]) cur = k; };
+export const setAtual = () => cur;
+export const dados = k => S[k];
+export const cache = { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }, eVersao: 0 };
+for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
+export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k === 'patio' ? ['operacao'] : [])).includes(SETS[k].mod));
 export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 const LS = 'coqueria-demo-v1';
@@ -11,44 +19,52 @@ let cb = {}, me = null;
 
 const changed = () => { persist(); cb.onData && cb.onData(); };
 function persist() {
-  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
+  const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
+  try { localStorage.setItem(LS, JSON.stringify({ v: 2, sets, log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
 }
 const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rnd(seed) { let t = seed + 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 
-async function fresh() {
-  const seed = await (await fetch('seed.json')).json();
-  const x = seedParaBanco(seed);
-  Object.assign(cache, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sit, semanas: {}, log: [] });
-  const hoje = today(), cur = monthOfWeek(weekOf(hoje));
-  for (const m of [addMonth(cur, -1), cur, addMonth(cur, 1), addMonth(cur, 2)]) {
-    for (const ini of weeksOfMonth(m)) for (const a of AREAS) {
+async function freshSet(k) {
+  const seed = await (await fetch(SETS[k].seed)).json();
+  const x = seedParaBanco(seed, SETS[k].areas);
+  const st = S[k] = novoSet();
+  Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sit, semanas: {} });
+  const hoje = today(), cur0 = monthOfWeek(weekOf(hoje));
+  for (const m of [addMonth(cur0, -1), cur0, addMonth(cur0, 1), addMonth(cur0, 2)]) {
+    for (const ini of weeksOfMonth(m)) for (const a of SETS[k].areas) {
       const w = novaSemana(a, ini, x.plano[a]);
       for (const pid of w.ids) {
         const arr = [...w.s[pid]];
-        for (let k = 0; k < 7; k++) {
-          if (add(ini, k) >= hoje) continue;
-          const r = rnd(hash(a + ini + pid + k));
-          if (arr[k] === 'P') { if (r < .86) arr[k] = 'R'; else if (r < .93) { arr[k] = 'N'; w.m[pid + '|' + k] = MOTIVOS[Math.floor(r * 1000) % 6]; } }
-          else if (k < 5 && r < .012) arr[k] = 'E';
+        for (let d = 0; d < 7; d++) {
+          if (add(ini, d) >= hoje) continue;
+          const r = rnd(hash(a + ini + pid + d));
+          if (arr[d] === 'P') { if (r < .86) arr[d] = 'R'; else if (r < .93) { arr[d] = 'N'; w.m[pid + '|' + d] = MOTIVOS[Math.floor(r * 1000) % 6]; } }
+          else if (d < 5 && r < .012) arr[d] = 'E';
         }
         w.s[pid] = arr.join('');
       }
-      cache.semanas[a + '|' + ini] = toLocal(a + '|' + ini, w);
+      st.semanas[a + '|' + ini] = toLocal(a + '|' + ini, w);
     }
-    cache.config.meses.push(m);
+    st.config.meses.push(m);
   }
+}
+async function fresh() {
+  cache.log = [];
+  for (const k of SET_KEYS) await freshSet(k);
   const sg = await (await fetch('seed-gestao.json')).json();
   cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o, assinaturaId: null, metodo: null })) };
   cache.gAssin = {};
   await carregarE(null);
-  const lideres = Object.values(x.colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR');
+  const lideres = SET_KEYS.flatMap(k => Object.values(S[k].colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR').map(c => ({ ...c, set: k })));
   const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'equipamentos', 'gestao'] },
+  const usados = new Set();
+  const loginDe = n => { const p = slug(n); let l = p[0] + '.' + p[p.length - 1], i = 2; while (usados.has(l)) l = p[0] + '.' + p[p.length - 1] + i++; usados.add(l); return l; };
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
-    ...lideres.map(c => { const p = slug(c.nome); return { uid: c.id, nome: c.nome, login: p[0] + '.' + p[p.length - 1], senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? ['operacao', 'gestao'] : ['operacao'] }; }),
+    ...lideres.map(c => ({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
@@ -58,13 +74,13 @@ export async function start(callbacks) {
   cb = callbacks;
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { /* ignora */ }
-  if (saved && saved.config) {
-    Object.assign(cache, { config: saved.config, configLoaded: true, plano: saved.plano, colabs: saved.colabs, sitByMonth: saved.sitByMonth, log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
-    cache.semanas = Object.fromEntries(Object.entries(saved.semanas).map(([k, v]) => [k, toLocal(k, v)]));
+  if (saved && saved.v === 2 && saved.sets) {
+    for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
+    Object.assign(cache, { log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     await carregarE(saved.e);
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await (await fetch('seed-gestao.json')).json(); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
-  } else await fresh();
-  cache.config.meses.forEach(m => cache.monthsLoaded.add(m));
+  } else { saved = null; await fresh(); }
+  for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m));
   try { amostras(); } catch (e) { /* sem canvas */ }
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   emitAuth(); changed();
@@ -76,7 +92,7 @@ function emitAuth() {
   cb.onAuth({ status: 'ready', user: me });
 }
 export function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); emitAuth(); changed(); }
-export async function mockReset() { try { localStorage.removeItem(LS); } catch (e) { /* ignora */ } EV.length = 0; await fresh(); cache.config.meses.forEach(m => cache.monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; emitAuth(); changed(); }
+export async function mockReset() { try { localStorage.removeItem(LS); } catch (e) { /* ignora */ } EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
@@ -113,13 +129,13 @@ export async function setStatusMany(docId, changes) {
 }
 export async function setSit(key, code) { const m = key.split('|')[1].slice(0, 7); const o = (cache.sitByMonth[m] ||= {}); if (code) o[key] = code; else delete o[key]; changed(); }
 export async function savePlano(area, itens) { cache.plano[area] = itens; changed(); }
-export async function salvarColabsArea(area, itens) { cache.colabs[area] = itens; changed(); }
+export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].colabs[area] = itens; changed(); }
 export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); }
 export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find(u => u.uid === uid), patch); if (uid === me.uid) emitAuth(); changed(); }
 export function log(t) { cache.log.unshift({ at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;
-  for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of AREAS) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }
+  for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of SETS[cur].areas) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }
   if (!cache.config.meses.includes(ym)) { cache.config.meses.push(ym); cache.config.meses.sort(); }
   cache.monthsLoaded.add(ym); changed(); return n;
 }
@@ -141,9 +157,10 @@ function fotoExemplo(txt, cor, w, h) {
 }
 function amostras() {
   if (EV.length || typeof document === 'undefined') return;
-  const hoje = today(); const plano = new Map(Object.values(cache.plano).flat().map(p => [p.id, p])); let n = 0;
+  const hoje = today(); let n = 0;
+  for (const sk of SET_KEYS) { n = 0; const plano = new Map(Object.values(S[sk].plano).flat().map(p => [p.id, p]));
   const cores = ['#F05A26', '#2E7D5B', '#3B5BA9', '#B98200'];
-  for (const w of Object.values(cache.semanas).sort((a, b) => (a.ini < b.ini ? 1 : -1))) {
+  for (const w of Object.values(S[sk].semanas).sort((a, b) => (a.ini < b.ini ? 1 : -1))) {
     if (w.ini > hoje || w.ini < add(hoje, -40)) continue;
     w.ids.forEach((pid, i) => {
       for (let k = 0; k < 7; k++) {
@@ -153,28 +170,30 @@ function amostras() {
         const q = 1 + Math.floor(r * 150) % 3;
         for (let j = 0; j < q; j++) {
           const dados = fotoExemplo(p.ativ, cores[(n + j) % 4], 960, 720), thumb = fotoExemplo(p.ativ, cores[(n + j) % 4], 240, 180);
-          EV.push({ id: 'ex' + n + '_' + j, semana: w.id, area: w.area, pid, k, nome: `foto-${j + 1}.jpg`, tipo: 'image/jpeg', tamanho: Math.round(dados.length * .75), thumb, dados, por: 'admin', porNome: 'Demonstração', at: new Date(add(w.ini, k) + 'T' + String(8 + j).padStart(2, '0') + ':15:00') });
+          EV.push({ id: 'ex' + sk + n + '_' + j, semana: w.id, area: w.area, pid, k, nome: `foto-${j + 1}.jpg`, tipo: 'image/jpeg', tamanho: Math.round(dados.length * .75), thumb, dados, por: 'admin', porNome: 'Demonstração', at: new Date(add(w.ini, k) + 'T' + String(8 + j).padStart(2, '0') + ':15:00') });
         }
         w.ev[pid + '|' + k] = (w.ev[pid + '|' + k] || 0) + q; n++;
       }
     });
   }
+  }
 }
 export async function abrirEvidencia(id) { const e = EV.find(x => x.id === id); return e ? e.dados : null; }
 export function addEvidencia(e) {
   const x = { ...e, id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), semana: e.docId, por: me.uid, porNome: me.nome, at: new Date() };
-  EV.push(x); const w = cache.semanas[e.docId]; w.ev = w.ev || {}; const key = e.pid + '|' + e.k; w.ev[key] = (w.ev[key] || 0) + 1; changed();
+  EV.push(x); const w = S[setDaArea(e.area) || cur].semanas[e.docId]; w.ev = w.ev || {}; const key = e.pid + '|' + e.k; w.ev[key] = (w.ev[key] || 0) + 1; changed();
   const { dados, ...meta } = x; return meta;
 }
 export async function removerEvidencia(ev) {
   const i = EV.findIndex(x => x.id === ev.id); if (i >= 0) EV.splice(i, 1);
-  const w = cache.semanas[ev.semana]; const key = ev.pid + '|' + ev.k; w.ev[key] = Math.max(0, (w.ev[key] || 1) - 1); changed();
+  const w = S[setDaArea(ev.area) || cur].semanas[ev.semana]; const key = ev.pid + '|' + ev.k; w.ev[key] = Math.max(0, (w.ev[key] || 1) - 1); changed();
 }
 
 // ---------- Gestão (demonstração) ----------
 const gch = () => { cache.gVersao++; changed(); };
 const gid = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 export async function gImportar() { /* a demonstração já começa com a planilha */ }
+export async function gImportarOcorrencias(lista) { cache.g.ocorr = [...cache.g.ocorr, ...lista.map(o => ({ assinadoEm: null, testemunha: '', ...o, id: gid(), metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null }))]; gch(); }
 export async function gSalvarColabs(itens) { cache.g.colabs = itens; gch(); }
 export async function gSalvarConfig(patch) { cache.g.config = { ...cache.g.config, ...patch }; gch(); }
 export function gNovaOcorrencia(o) { const x = { id: gid(), ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '' }; cache.g.ocorr = [...cache.g.ocorr, x]; gch(); return x; }

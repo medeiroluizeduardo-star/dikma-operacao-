@@ -1,7 +1,8 @@
 # Dikma Operação
 
-Sistema web da Dikma para a Coqueria, com três módulos:
+Sistema web da Dikma para a Coqueria, com quatro módulos:
 - **Atividades Pátio:** programação e apontamento de atividades do Pátio de Carvão.
+- **Atividades Bateria:** programação e apontamento de atividades da Bateria 1, Bateria 2, Trilho e CDQ (planilha PLANEJAMENTO DE ATIVIDADES BATERIA).
 - **Operação:** controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 - **Efetivo:** Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 Funciona no PC e no celular, com login por usuário e senha, dados em tempo real para todos e funcionamento sem sinal.
@@ -78,9 +79,15 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 ---
 
 ## Módulos e acesso
-- Na tela de login a pessoa escolhe **Atividades Pátio**, **Operação** ou **Efetivo**. Se ela só tiver acesso a um módulo, entra direto nele.
+- Na tela de login a pessoa escolhe **Atividades Pátio**, **Atividades Bateria**, **Operação** ou **Efetivo**. Se ela só tiver acesso a um módulo, entra direto nele.
 - Quem tem os dois troca de módulo pelo seletor no topo do menu (no celular: **Mais › Ir para…**).
 - Em **Usuários e acessos**, marque os módulos de cada pessoa. O administrador tem acesso a todos.
+
+## Módulo Atividades Bateria
+- Tem as mesmas telas do Atividades Pátio: Painel, Programação, Apontar, Escala e efetivo, Pendências, Folha do líder, Relatório fotográfico, Plano padrão, Gerador de meses e Rotas e configurações.
+- **Primeiro acesso:** entre como administrador, escolha **Atividades Bateria** e clique em **Importar e gerar a programação**. Isso carrega as 120 atividades do plano padrão, as 18 rotas das áreas Bateria 1, Bateria 2, Trilho e CDQ e os 55 colaboradores, e gera a programação do mês atual e dos dois seguintes.
+- Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
+- Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
 
 ## Módulo Operação (controle de equipamentos)
 - **Primeiro acesso:** entre como administrador, escolha **Operação** e clique em **Importar dados da planilha**. Isso carrega os 25 operadores, as 37 identificações da frota, os turnos, as causas, as metas, os pesos, os feriados e os lançamentos e paradas de setembro e outubro.
@@ -114,13 +121,21 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Controle de fichas:** grade com as datas da integração, Folha 2 (de 33), pendências e status de cada um.
 - **Impressão:** ficha (Folhas 1 e 2, com as assinaturas feitas na tela) e via de assinatura com código de controle.
 - **Tipos de ocorrência** (administrador): até 5 vão para a Folha 1, na ordem da posição.
-- **Área de atuação e função (cadastro único):** em **Colaboradores › abrir a ficha › Editar**, o administrador escolhe a **área de atuação** (Coqueria sem rota, uma das 4 áreas do Pátio com rota e regime, ou Operação de equipamentos) e a **função**. Ao salvar, a mudança vai junto para os outros módulos:
-  - **Atividades Pátio:** a pessoa sai da rota antiga e entra na nova (Escala e efetivo), com a função e o regime novos. O histórico de faltas e folgas continua com ela.
+- **Área de atuação e função (cadastro único):** em **Colaboradores › abrir a ficha › Editar**, o administrador escolhe a **área de atuação** (Coqueria sem rota, uma das áreas do Pátio ou da Bateria com rota e regime, ou Operação de equipamentos) e a **função**. Ao salvar, a mudança vai junto para os outros módulos:
+  - **Atividades Pátio e Atividades Bateria:** a pessoa sai da rota antiga e entra na nova (Escala e efetivo), com a função e o regime novos. Pode passar do Pátio para a Bateria e vice-versa. O histórico de faltas e folgas continua com ela no módulo onde foi lançado.
   - **Operação:** marque **Opera equipamentos** para colocar a pessoa na equipe de operadores (com escala ADM ou 4x4 e turma). Desmarcando, ela sai da equipe; os lançamentos antigos continuam no histórico.
   - A ligação entre os módulos é pela matrícula e, na falta dela, pelo nome completo.
-  - Quando o administrador muda a função de um operador em **Operação › Equipe e frota**, a função também é atualizada no Efetivo e no Pátio.
+  - Quando o administrador muda a função de um operador em **Operação › Equipe e frota**, a função também é atualizada no Efetivo, no Pátio e na Bateria.
 - A lista de colaboradores mostra a área de atuação de cada um e tem filtro por área.
 - Quem tem acesso ao Efetivo com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
+
+## Efetivo › Importar dados (administrador)
+- **Importar planilha:** escolha um arquivo Excel (.xlsx, .xlsm, .xls) ou CSV. O sistema acha sozinho a tabela de colaboradores (colunas MATRÍCULA, NOME, FUNÇÃO, ÁREA, ROTA, REGIME, TURMA, LÍDER, ADMISSÃO, DEMISSÃO; só nome e matrícula são obrigatórios) e, se houver, a de ocorrências.
+  - Serve a própria planilha de fichas, a aba EFETIVO das planilhas do Pátio e da Bateria (a pessoa é achada pelo nome) ou uma lista do RH. O botão **Baixar modelo** traz um CSV pronto para preencher.
+  - Antes de gravar aparece a **conferência**: quantos são novos, quantos mudam (e o que muda), quantos estão sem matrícula, os avisos e as ocorrências novas. Nada é apagado e nada é duplicado.
+  - Com **Levar área de atuação e função…** marcado, a área, a rota e a função importadas vão também para Atividades Pátio, Atividades Bateria e Operação. A área COQUERIA não tira ninguém da rota onde já está.
+- **Planilha original de fichas:** traz de novo o que estiver faltando da planilha FO-RED-COQ-004.
+- **Pessoas sem ficha no Efetivo:** lista quem está no Pátio, na Bateria ou na Operação e ainda não tem ficha. O botão **Cadastrar** abre a ficha já preenchida: falta só a matrícula.
 
 ## Fotos e arquivos (evidências)
 - Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
@@ -161,6 +176,9 @@ public/
   seed-equip.json     dados da planilha de equipamentos (usados só na importação)
   gestao.js           módulo Efetivo (fichas de acompanhamento)
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
+  importar.js         Efetivo › Importar dados (lê Excel e CSV)
+  seed-bateria.json   dados da planilha da Bateria (usados só na importação)
+  vendor/xlsx.js      leitor de planilhas SheetJS 0.18.5 (carregado só na importação)
   seed-gestao.json    dados da planilha de fichas (usados só na importação)
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)

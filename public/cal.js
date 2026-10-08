@@ -1,8 +1,17 @@
 // Calendário operacional e constantes compartilhadas.
 // Regra da planilha: a semana (seg–dom) pertence ao mês da sua quinta-feira.
 
-export const AREAS = ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'];
-export const AREA_S = { 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque' };
+// Conjuntos de atividades: cada um é um módulo com as próprias áreas, plano, semanas e efetivo diário.
+// pre = prefixo das coleções no Firestore (o Pátio usa os nomes originais).
+export const SETS = {
+  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] },
+  bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'] }
+};
+export const SET_KEYS = Object.keys(SETS);
+export const AREAS = SETS.patio.areas;
+export const AREAS_ATIV = SET_KEYS.flatMap(k => SETS[k].areas);
+export const setDaArea = a => SET_KEYS.find(k => SETS[k].areas.includes(a)) || null;
+export const AREA_S = { 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque', 'BATERIA 1': 'Bateria 1', 'BATERIA 2': 'Bateria 2', 'TRILHO': 'Trilho', 'CDQ': 'CDQ' };
 export const DAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 export const DL = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -43,9 +52,9 @@ export function novaSemana(area, ini, itens) {
 }
 
 // Converte o seed (extraído da planilha) para a estrutura do banco.
-export function seedParaBanco(seed) {
+export function seedParaBanco(seed, areas = AREAS) {
   const plano = {}, colabs = {}, sit = {};
-  for (const a of AREAS) { plano[a] = []; colabs[a] = []; }
+  for (const a of areas) { plano[a] = []; colabs[a] = []; }
   for (const p of seed.plano) plano[p[1]].push({ id: p[0], area: p[1], rota: p[2], local: p[3], ativ: p[4], tipo: p[5], dias: p[6], ativo: true });
   for (const c of seed.colabs) colabs[c.area].push(c);
   for (const [k, v] of Object.entries(seed.sit)) { const m = k.split('|')[1].slice(0, 7); (sit[m] ||= {})[k] = v; }

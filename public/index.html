@@ -401,16 +401,16 @@ td.ec.fol{background:var(--surface-2)}td.ec.aus{background:color-mix(in srgb,var
 .cfgrow{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}
 .cfgrow .in{width:120px}
 @media (max-width:1180px){.kpis.k8{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:860px){.modsel{grid-template-columns:1fr}.cols.cmes{height:110px}}
+@media (max-width:860px){.modcard b{font-size:15px}.cols.cmes{height:110px}}
 /* módulos */
-.modsel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.modsel{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .modcard{position:relative;display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--surface)}
 .modcard input{position:absolute;opacity:0;pointer-events:none}
 .modcard b{font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
 .modcard small{font-size:12px;color:var(--ink-3)}
 .modcard:has(input:checked){border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
 .modcard:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
-.modsw{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--rail-2);border-radius:8px;padding:4px;margin:4px 0 6px}
+.modsw{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;background:var(--rail-2);border-radius:8px;padding:4px;margin:4px 0 6px}
 .modsw button{border:0;background:none;color:var(--rail-ink-2);padding:7px 2px;border-radius:6px;font-weight:600;font-size:11.5px;line-height:1.15}
 .modsw button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .chkl{display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
