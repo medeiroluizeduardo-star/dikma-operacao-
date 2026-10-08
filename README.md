@@ -78,6 +78,8 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 
 ---
 
+- **Apagar usuário:** em **Usuários e acessos**, botão **Apagar** na linha da pessoa (pede confirmação). Ela perde o acesso na hora e o nome de usuário fica livre; o que ela registrou continua no sistema. Não dá para apagar a si mesmo nem o único administrador. Para só suspender, use o perfil **Bloqueado**. A conta interna fica no Firebase Authentication e pode ser apagada no console, se quiser (não é obrigatório).
+
 ## Módulos e acesso
 - Na tela de login a pessoa escolhe **Atividades Pátio**, **Atividades Bateria**, **Operação** ou **Efetivo**. Se ela só tiver acesso a um módulo, entra direto nele.
 - Quem tem os dois troca de módulo pelo seletor no topo do menu (no celular: **Mais › Ir para…**).

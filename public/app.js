@@ -621,7 +621,7 @@ function vUsuarios() {
    <p class="err wide" id="nuErr" role="alert" hidden></p>
   </form></div></div>
   <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada. Bloqueado não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td class="nowrap">${u.papel === 'admin' ? '<span class="muted small">Todos</span>' : TODOS_MODS.map(m => `<label class="chkl"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}> ${MODS[m].nome}</label>`).join(' ')}</td><td>${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : u.uid === ME.uid ? '<span class="muted small">você</span>' : ''}</td></tr>`).join('')}
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td class="nowrap">${u.papel === 'admin' ? '<span class="muted small">Todos</span>' : TODOS_MODS.map(m => `<label class="chkl"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}> ${MODS[m].nome}</label>`).join(' ')}</td><td><div class="row-gap tight">${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : ''}${u.uid !== ME.uid ? `<button class="btn ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="muted small">você</span>'}</div></td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
@@ -884,6 +884,14 @@ document.addEventListener('click', async e => {
     });
   }
   if (d.rfev) { const ev = (RF.lista || []).find(x => x.id === d.rfev); if (ev) verEvidencia(ev, () => { RF.lista = RF.lista.filter(x => x.id !== ev.id); }, () => { $('layer').innerHTML = ''; render(); }); return; }
+  if (d.udel) {
+    const u = DB.cache.usuarios.find(x => x.uid === d.udel); if (!u) return;
+    if (u.papel === 'admin' && DB.cache.usuarios.filter(x => x.papel === 'admin').length < 2) { toast('Não dá para apagar o único administrador'); return; }
+    return formSheet('Apagar usuário', `${esc(title(u.nome))}${u.login ? ` · <span class="mono">${esc(u.login)}</span>` : ''}`, `<p class="m0">A pessoa perde o acesso ao sistema na hora. O que ela já registrou (apontamentos, fotos, ocorrências, histórico) continua no sistema.</p><p class="muted small m0">Para só suspender o acesso sem apagar, mude o perfil para <b>Bloqueado</b>. O nome de usuário fica livre para ser cadastrado de novo.</p><label class="switch"><input type="checkbox" id="udOk"><span>Confirmo que quero apagar este usuário</span></label>`, 'Apagar usuário', async () => {
+      if (!$('udOk').checked) throw new Error('Marque a confirmação.');
+      await DB.excluirUsuario(u.uid); DB.log(`Apagou o usuário ${u.login || u.nome}`); toast(`Usuário ${u.login || title(u.nome)} apagado`);
+    });
+  }
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
     case 'loginGoogle': try { await DB.signInGoogle(); } catch (err) { toast('Não foi possível entrar: ' + msgErro(err)); } break;

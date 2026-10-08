@@ -131,6 +131,7 @@ export async function setSit(key, code) { const m = key.split('|')[1].slice(0, 7
 export async function savePlano(area, itens) { cache.plano[area] = itens; changed(); }
 export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].colabs[area] = itens; changed(); }
 export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); }
+export async function excluirUsuario(uid) { if (uid === me.uid) throw new Error('Você não pode apagar o seu próprio usuário.'); cache.usuarios = cache.usuarios.filter(u => u.uid !== uid); changed(); }
 export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find(u => u.uid === uid), patch); if (uid === me.uid) emitAuth(); changed(); }
 export function log(t) { cache.log.unshift({ at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {

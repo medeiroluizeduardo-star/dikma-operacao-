@@ -315,6 +315,16 @@ export function removerEvidencia(ev) {
   b.update(doc(db, C('semanas', k), ev.semana), new FieldPath('ev', ev.pid + '|' + ev.k), increment(-1), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
   return track(b.commit());
 }
+// Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.
+// (A conta interna do Firebase Authentication fica órfã e pode ser apagada no console, se quiser.)
+export async function excluirUsuario(uid) {
+  if (uid === me.uid) throw new Error('Você não pode apagar o seu próprio usuário.');
+  const u = (await getDoc(doc(db, 'usuarios', uid))).data();
+  const b = writeBatch(db);
+  b.delete(doc(db, 'usuarios', uid));
+  if (u && u.login) { const l = await getDoc(doc(db, 'logins', u.login)); if (l.exists() && l.data().uid === uid) b.delete(l.ref); }
+  await track(b.commit());
+}
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 
