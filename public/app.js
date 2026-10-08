@@ -471,7 +471,7 @@ function vImprimir() {
   const doc = DB.cache.semanas[area + '|' + UI.ini];
   const rts = rotasDa(area).filter(r => r.carga > 0).map(r => r.rota);
   if (UI.iRota !== 'TODAS' && !rts.includes(UI.iRota)) UI.iRota = 'TODAS';
-  const lid = COLABS.find(c => c.area === area && c.funcao === 'LÍDER');
+  const lid = COLABS.find(c => c.area === area && /^L[IÍ]DER/.test(c.funcao || ''));
   const lider = UI.lider || (lid ? title(lid.nome) : '');
   let h = `<div class="filters noprint">
    ${!myArea() ? `<label class="sel"><span>Área da folha</span><select class="in" id="fArea">${AREAS.map(a => `<option value="${a}" ${a === area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>` : ''}

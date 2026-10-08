@@ -126,7 +126,8 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
   - **Operação:** marque **Opera equipamentos** para colocar a pessoa na equipe de operadores (com escala ADM ou 4x4 e turma). Desmarcando, ela sai da equipe; os lançamentos antigos continuam no histórico.
   - A ligação entre os módulos é pela matrícula e, na falta dela, pelo nome completo.
   - Quando o administrador muda a função de um operador em **Operação › Equipe e frota**, a função também é atualizada no Efetivo, no Pátio e na Bateria.
-- A lista de colaboradores mostra a área de atuação de cada um e tem filtro por área.
+- **Filtro por área** no Painel, Colaboradores, Ocorrências e Controle de fichas: por área do RH (Coqueria - Pátio, Alto Forno, Sinter…), por setor (Coqueria - Recebimento, Alto Forno - Carregamento AF1…) ou pela área de atuação no sistema. O filtro escolhido vale para todas essas telas.
+- **Excluir colaboradores** (administrador): na ficha, botão **Excluir**; na lista, marque as caixas e use **Excluir selecionados**. Dá para tirar a pessoa também de Atividades Pátio, Atividades Bateria e Operação e, se quiser, apagar as ocorrências dela. Pede confirmação e não dá para desfazer.
 - Quem tem acesso ao Efetivo com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
 
 ## Efetivo › Importar dados (administrador)
@@ -134,6 +135,9 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
   - Serve a própria planilha de fichas, a aba EFETIVO das planilhas do Pátio e da Bateria (a pessoa é achada pelo nome) ou uma lista do RH. O botão **Baixar modelo** traz um CSV pronto para preencher.
   - Antes de gravar aparece a **conferência**: quantos são novos, quantos mudam (e o que muda), quantos estão sem matrícula, os avisos e as ocorrências novas. Nada é apagado e nada é duplicado.
   - Com **Levar área de atuação e função…** marcado, a área, a rota e a função importadas vão também para Atividades Pátio, Atividades Bateria e Operação. A área COQUERIA não tira ninguém da rota onde já está.
+- **Planilha EFETIVO PARA O SISTEMA:** a lista do RH (450 colaboradores) já vem dentro do sistema. O botão **Conferir e atualizar** atualiza função, área e setor do RH, regime, turma, líder e admissão; cadastra quem falta; e leva a área e a função para os outros módulos. Opção para excluir quem não está na lista.
+  - Como a planilha do RH traz o setor ("Coqueria - Recebimento", "Coqueria - Bateria - Trilho"…) e não a rota, quem já está numa área compatível continua na rota onde está; quem muda de área vai para a rota padrão da área. "Coqueria - Pátio de Carvão" não diz a área exata: a pessoa fica como está e aparece nos avisos.
+  - Áreas fora da Coqueria (Alto Forno, Sinter, Utilidade, Sede) entram no Efetivo e saem de Atividades Pátio e Bateria. A equipe de Operação não é mexida.
 - **Planilha original de fichas:** traz de novo o que estiver faltando da planilha FO-RED-COQ-004.
 - **Pessoas sem ficha no Efetivo:** lista quem está no Pátio, na Bateria ou na Operação e ainda não tem ficha. O botão **Cadastrar** abre a ficha já preenchida: falta só a matrícula.
 
@@ -178,6 +182,7 @@ public/
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
+  seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)
   vendor/xlsx.js      leitor de planilhas SheetJS 0.18.5 (carregado só na importação)
   seed-gestao.json    dados da planilha de fichas (usados só na importação)
   data.js             conexão com o Firebase (login e banco)

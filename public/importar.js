@@ -86,19 +86,45 @@ function acharTabelas(abas) {
 
 const AREA_ALIAS = new Map([[norm(AREA_GERAL), AREA_GERAL], ['GERAL', AREA_GERAL], [norm(AREA_OP), AREA_OP], ['OPERACAO', AREA_OP], ['EQUIPAMENTOS', AREA_OP], ['OPERACAO DE EQUIPAMENTO', AREA_OP], ...AREAS_ATIV.flatMap(a => [[norm(a), a], [norm(AREA_S[a]), a]])]);
 const areaDe = v => (v ? AREA_ALIAS.get(norm(v)) || null : null);
+const regimeDe = v => { const s = norm(v); return !s ? null : /4X4|TURNO/.test(s) ? 'TURNO 4X4' : /^ADM/.test(s) ? 'ADMINISTRATIVO' : null; };
+const escalaDe = v => { const s = norm(v); return /4X4/.test(s) ? '4x4' : /^ADM/.test(s) ? 'ADM' : null; };
+
+// Lê a ÁREA/ROTA da planilha. Dois formatos:
+//  - direto: ÁREA = área do sistema (RECEBIMENTO, BATERIA 1…) e ROTA = rota do sistema (abas EFETIVO do Pátio/Bateria);
+//  - por setor (planilha do RH): ÁREA "Coqueria - Pátio", ROTA "Coqueria - Recebimento"; "Alto Forno", "Sinter"…
+// aceita = áreas do sistema compatíveis (se a pessoa já está numa delas, fica onde está); padrao = para onde vai se não estiver.
+function interpretarArea(aT, rT) {
+  if (!aT && !rT) return { aceita: null };
+  const a0 = areaDe(aT);
+  if (a0 && a0 !== AREA_GERAL) return { direta: true, aceita: [a0], padrao: a0 };
+  if (a0 === AREA_GERAL && !rT) return { aceita: null };
+  const res = { setor: aT, subsetor: rT || aT };
+  const PAT = SETS.patio.areas, BAT = SETS.bateria.areas;
+  const s = norm(rT || aT), sa = norm(aT);
+  if (!/^COQUERIA/.test(s) && !/^COQUERIA/.test(sa)) return { ...res, aceita: [], padrao: AREA_GERAL };
+  const rest = s.replace(/^COQUERIA\s*-?\s*/, ''), ar = sa.replace(/^COQUERIA\s*-?\s*/, '');
+  if (!rest) return /^PATIO/.test(ar) ? { ...res, aceita: PAT, padrao: null } : /^BATERIA/.test(ar) ? { ...res, aceita: BAT, padrao: 'BATERIA 1' } : { ...res, aceita: null };
+  const d = areaDe(rest); if (d && d !== AREA_GERAL && d !== AREA_OP) return { ...res, aceita: [d], padrao: d };
+  if (/^PATIO/.test(rest)) return { ...res, aceita: PAT, padrao: null };
+  if (/TRILHO/.test(rest)) return { ...res, aceita: ['TRILHO', 'CDQ'], padrao: 'TRILHO' };
+  if (/CDQ/.test(rest)) return { ...res, aceita: ['CDQ'], padrao: 'CDQ' };
+  if (/TURNO/.test(rest) && /BATERIA/.test(rest + ar)) return { ...res, aceita: BAT, padrao: 'BATERIA 1', rota: 'TURNO 4X4' };
+  if (/^BATERIA/.test(rest)) return { ...res, aceita: BAT, padrao: 'BATERIA 1' };
+  return { ...res, aceita: null, aviso: `"${rT || aT}" não tem área correspondente no sistema (mantida a atual).` };
+}
 
 export function criarImportador(X) {
   const { DB, esc, title, I, toast, render, PES, colabForm } = X;
   const G = () => DB.cache.g;
-  const ST = { arq: '', P: null, busy: false, erro: '', atualizar: true, sync: true, ocorr: true };
+  const ST = { arq: '', P: null, busy: false, erro: '', atualizar: true, sync: true, ocorr: true, excluirFora: false };
 
   // Monta o plano de importação sem gravar nada.
   function analisar(tab, origem) {
-    const P = { origem, aba: tab.colab ? tab.colab.aba : '', abaO: tab.ocorr ? tab.ocorr.aba : '', lidas: 0, novos: [], atual: [], iguais: 0, semMat: [], avisos: [], ocorr: [], ocDup: 0, ocSem: 0 };
+    const P = { fora: [], origem, aba: tab.colab ? tab.colab.aba : '', abaO: tab.ocorr ? tab.ocorr.aba : '', lidas: 0, novos: [], atual: [], iguais: 0, semMat: [], avisos: [], ocorr: [], ocDup: 0, ocSem: 0 };
     const efet = G().colabs; const porMat = new Map(efet.map(c => [String(c.mat), c])); const porNome = new Map(efet.map(c => [norm(c.nome), c]));
     if (tab.colab) {
       const { cols, dados } = tab.colab; const g = k => r => (k in cols ? r[cols[k]] : null);
-      let regs = dados.map(r => ({ mat: matDe(g('mat')(r)), nome: txt(g('nome')(r)).toUpperCase(), funcao: txt(g('funcao')(r)).toUpperCase(), areaTxt: txt(g('area')(r)), rota: txt(g('rota')(r)).toUpperCase(), regime: txt(g('regime')(r)).toUpperCase(), turma: txt(g('turma')(r)).toUpperCase(), lider: txt(g('lider')(r)).toUpperCase(), adm: data(g('adm')(r)), dem: data(g('dem')(r)), mes: txt(g('mes')(r)).slice(0, 7), escala: txt(g('escala')(r)).toUpperCase() }))
+      let regs = dados.map(r => ({ mat: matDe(g('mat')(r)), nome: txt(g('nome')(r)).toUpperCase(), funcao: txt(g('funcao')(r)).toUpperCase(), areaTxt: txt(g('area')(r)), rotaTxt: txt(g('rota')(r)), rota: txt(g('rota')(r)).toUpperCase(), regime: txt(g('regime')(r)).toUpperCase(), turma: txt(g('turma')(r)).toUpperCase(), lider: txt(g('lider')(r)).toUpperCase(), adm: data(g('adm')(r)), dem: data(g('dem')(r)), mes: txt(g('mes')(r)).slice(0, 7), escala: txt(g('escala')(r)).toUpperCase() }))
         .filter(r => r.nome || r.mat).filter(r => !/^\d+$/.test(r.nome));
       // Planilhas mensais (uma linha por pessoa por mês): fica a linha do mês atual ou a mais recente até hoje.
       if ('mes' in cols) {
@@ -107,6 +133,8 @@ export function criarImportador(X) {
         regs = [...grupos.values()].map(l => { const ok = l.filter(x => x.mes && x.mes <= ym).sort((a, b) => (a.mes < b.mes ? 1 : -1)); return ok[0] || l.slice().sort((a, b) => (a.mes < b.mes ? -1 : 1))[0]; });
       }
       P.lidas = regs.length;
+      // Quem está no Efetivo e não aparece na planilha (para a opção de excluir).
+      if ('mat' in cols && regs.length >= 10) { const m = new Set(regs.map(r => r.mat).filter(Boolean)); const nm = new Set(regs.map(r => norm(r.nome))); P.fora = efet.filter(c => !m.has(String(c.mat)) && !nm.has(norm(c.nome))); }
       const vistos = new Set();
       for (const r of regs) {
         const chave = r.mat || norm(r.nome); if (vistos.has(chave)) continue; vistos.add(chave);
@@ -122,21 +150,28 @@ export function criarImportador(X) {
         // área de atuação
         const atual = PES.opcoesAtuais(antes || n); const o = { ...atual };
         let mudaArea = false;
-        if (r.areaTxt) {
-          const a = areaDe(r.areaTxt);
-          // "COQUERIA" é a área geral da ficha: não tira ninguém da rota onde já está.
-          if (!a) P.avisos.push(`${title(r.nome || r.mat)}: área "${r.areaTxt}" não existe no sistema (mantida a atual).`);
-          else if (a !== AREA_GERAL && a !== atual.area) { o.area = a; mudaArea = true; }
-          if (a && a !== AREA_GERAL && a !== n.area) n.area = a;
+        const ia = interpretarArea(r.areaTxt, r.rotaTxt);
+        if (ia.setor) { set('setor', ia.setor, 'área (planilha)'); set('subsetor', ia.subsetor, 'setor'); }
+        set('regime', r.regime, 'regime');
+        if (ia.aviso) P.avisos.push(`${title(r.nome)}: ${ia.aviso}`);
+        const atualAtiv = setDaArea(atual.area) ? atual.area : AREA_GERAL; // quem só está na Operação conta como "sem rota"
+        if (ia.aceita && !ia.aceita.includes(atualAtiv)) {
+          if (ia.padrao) { if (ia.padrao !== atualAtiv) { o.area = ia.padrao; o.rota = ia.rota || ''; mudaArea = true; } }
+          else if (ia.aceita.length) P.avisos.push(`${title(r.nome)}: "${r.rotaTxt || r.areaTxt}" não diz a área exata. Ficou como está (${PES.lotacao(antes || n).txt}); ajuste em Editar se precisar.`);
         }
+        if (o.area !== n.area && (ia.aceita || ia.direta)) n.area = o.area;
         if (setDaArea(o.area)) {
           const rotas = PES.rotasDe(o.area);
-          if (r.rota) { const rr = rotas.find(x => norm(x) === norm(r.rota)); if (rr && rr !== atual.rota) { o.rota = rr; mudaArea = true; } else if (!rr) P.avisos.push(`${title(r.nome)}: rota "${r.rota}" não existe em ${AREA_S[o.area]}.`); }
-          if (mudaArea && !rotas.includes(o.rota)) o.rota = rotas.find(x => x !== 'GESTÃO') || rotas[0] || '';
-          if (r.regime) { const rg = REGIMES.find(x => norm(x) === norm(r.regime)); if (rg && rg !== atual.regime) { o.regime = rg; mudaArea = true; } }
+          if (ia.direta && r.rota) { const rr = rotas.find(x => norm(x) === norm(r.rota)); if (rr && rr !== atual.rota) { o.rota = rr; mudaArea = true; } else if (!rr) P.avisos.push(`${title(r.nome)}: rota "${r.rota}" não existe em ${AREA_S[o.area]}.`); }
+          if (mudaArea && !rotas.includes(o.rota)) o.rota = rotas.find(x => norm(x) === norm(o.area)) || rotas.find(x => x !== 'GESTÃO') || rotas[0] || '';
+          const rg = regimeDe(r.regime); if (rg && rg !== atual.regime) { o.regime = rg; mudaArea = true; }
         }
-        if (r.escala && (o.op || o.area === AREA_OP)) { const e = /4/.test(r.escala) ? '4x4' : 'ADM'; if (e !== atual.escala) { o.escala = e; mudaArea = true; } }
-        if (mudaArea) muda.push(`área: ${PES.lotacao(antes || n).txt} → ${PES.areaNome(o.area)}${setDaArea(o.area) ? ' · ' + o.rota : ''}`);
+        if (o.op || o.area === AREA_OP) {
+          const e = escalaDe(r.escala || r.regime); if (e && e !== atual.escala) { o.escala = e; mudaArea = true; }
+          const turmas = Object.keys((DB.cache.e && DB.cache.e.config && DB.cache.e.config.turmas) || {});
+          if (o.escala === '4x4' && turmas.includes(r.turma) && r.turma !== atual.turma) { o.turma = r.turma; mudaArea = true; }
+        }
+        if (mudaArea) muda.push(`no sistema: ${PES.lotacao(antes || n).txt} → ${PES.areaNome(o.area)}${setDaArea(o.area) ? ' · ' + o.rota : ''}${o.regime !== atual.regime && setDaArea(o.area) ? ' · ' + o.regime.toLowerCase() : ''}${o.escala !== atual.escala ? ' · escala ' + o.escala : ''}${o.op && o.area !== AREA_OP ? ' + Operação' : ''}`);
         const sync = mudaArea || muda.some(m => m.startsWith('função')) || !antes;
         const item = { antes, n, o, sync, muda };
         if (!antes) P.novos.push(item); else if (muda.length) P.atual.push(item); else P.iguais++;
@@ -172,6 +207,16 @@ export function criarImportador(X) {
     } catch (err) { ST.erro = (err && err.message) || String(err); }
     ST.busy = false; render();
   }
+  // Planilha "EFETIVO PARA O SISTEMA" (RH), já embutida no sistema.
+  async function planilhaRH() {
+    ST.busy = true; ST.erro = ''; ST.P = null; ST.arq = 'EFETIVO PARA O SISTEMA'; render();
+    try {
+      const s = await (await fetch('seed-efetivo.json')).json();
+      const cols = {}; s.colunas.forEach((c, i) => { const k = campoDe(c); if (k) cols[k] = i; });
+      ST.P = analisar({ colab: { aba: 'Planilha1', cols, dados: s.linhas } }, ST.arq);
+    } catch (err) { ST.erro = (err && err.message) || String(err); }
+    ST.busy = false; render();
+  }
   async function planilhaOriginal() {
     ST.busy = true; ST.erro = ''; ST.P = null; ST.arq = 'Planilha original de fichas (FO-RED-COQ-004)'; render();
     try {
@@ -194,12 +239,13 @@ export function criarImportador(X) {
       for (const x of P.novos) { itens.push(x.n); if (ST.sync && x.sync) sync.push({ antes: null, c: x.n, o: x.o }); }
       if (ST.atualizar) for (const x of P.atual) { const i = itens.findIndex(c => c.mat === x.antes.mat); if (i >= 0) itens[i] = x.n; if (ST.sync && x.sync) sync.push({ antes: x.antes, c: x.n, o: x.o }); }
       const nAt = ST.atualizar ? P.atual.length : 0;
-      if (P.novos.length || nAt) { G().colabs = itens; DB.gSalvarColabs(itens); }
+      if (P.novos.length || nAt) { G().colabs = itens; DB.cache.gVersao++; DB.gSalvarColabs(itens); }
+      const nEx = ST.excluirFora && P.fora.length ? X.excluirColabs(P.fora.map(c => c.mat), { modulos: true }) : 0;
       if (sync.length) PES.sincronizarVarios(sync);
       const nOc = ST.ocorr ? P.ocorr.length : 0;
       if (nOc) await DB.gImportarOcorrencias(P.ocorr);
-      DB.log(`Efetivo: importou ${P.origem} (${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''})`);
-      toast(`Importado: ${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}`);
+      DB.log(`Efetivo: importou ${P.origem} (${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''})`);
+      toast(`Importado: ${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''}`);
       ST.P = null; ST.arq = '';
     } catch (err) { ST.erro = (err && err.message) || String(err); }
     ST.busy = false; render();
@@ -219,6 +265,7 @@ export function criarImportador(X) {
       <p class="m0 small">O sistema procura sozinho a tabela de colaboradores (colunas <b>MATRÍCULA</b>, <b>NOME</b>, <b>FUNÇÃO</b>, <b>ÁREA</b>, <b>ROTA</b>, <b>REGIME</b>, <b>TURMA</b>, <b>LÍDER</b>, <b>ADMISSÃO</b>, <b>DEMISSÃO</b>; só nome e matrícula são obrigatórios) e, se houver, a de ocorrências. Serve a própria planilha de fichas, a aba EFETIVO das planilhas do Pátio e da Bateria ou uma lista do RH.</p>
       <div class="row-gap"><label class="btn pri">${I.file} ${ST.busy ? 'Lendo…' : 'Escolher arquivo'}<input type="file" id="impArq" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden ${ST.busy ? 'disabled' : ''}></label><button class="btn" data-g="impModelo">${I.dl} Baixar modelo</button></div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}</div></div>
+      <div class="card"><header><h2>Planilha EFETIVO PARA O SISTEMA</h2><p>Lista do RH já carregada no sistema (450 colaboradores)</p></header><div class="body stackcol"><p class="m0 small">Atualiza função, área, setor, regime, turma, líder e admissão de quem já tem ficha, cadastra quem falta e leva a área e a função para Atividades Pátio, Atividades Bateria e Operação. Antes de gravar mostra a conferência.</p><button class="btn pri" data-g="impRH" style="align-self:flex-start" ${ST.busy ? 'disabled' : ''}>Conferir e atualizar</button></div></div>
       <div class="card"><header><h2>Planilha original de fichas</h2><p>FO-RED-COQ-004, a mesma do primeiro acesso</p></header><div class="body stackcol"><p class="m0 small">Traz de novo os colaboradores e as ocorrências da planilha original. Só entra o que ainda não existe no sistema: nada é apagado ou duplicado.</p><button class="btn" data-g="impOriginal" style="align-self:flex-start" ${ST.busy ? 'disabled' : ''}>Conferir o que falta</button></div></div></div>`;
     if (P) {
       const nOcor = P.ocorr.length;
@@ -227,11 +274,12 @@ export function criarImportador(X) {
         <div class="stackcol" style="gap:8px">
           <label class="switch"><input type="checkbox" id="impAtual" ${ST.atualizar ? 'checked' : ''}><span>Atualizar quem já está cadastrado (${P.atual.length})</span></label>
           <label class="switch"><input type="checkbox" id="impSync" ${ST.sync ? 'checked' : ''}><span>Levar área de atuação e função para Atividades Pátio, Atividades Bateria e Operação</span></label>
+          ${P.fora.length ? `<label class="switch"><input type="checkbox" id="impFora" ${ST.excluirFora ? 'checked' : ''}><span>Excluir do Efetivo quem não está na planilha (${P.fora.length}: ${P.fora.slice(0, 6).map(c => esc(title(c.nome))).join(', ')}${P.fora.length > 6 ? '…' : ''}). Sai também de Atividades Pátio, Atividades Bateria e Operação; as ocorrências ficam.</span></label>` : ''}
           ${P.abaO ? `<label class="switch"><input type="checkbox" id="impOcorr" ${ST.ocorr ? 'checked' : ''}><span>Importar as ocorrências (${nOcor} novas · ${P.ocDup} já existiam${P.ocSem ? ' · ' + P.ocSem + ' sem colaborador cadastrado' : ''})</span></label>` : ''}
         </div>
         ${P.avisos.length ? `<details><summary class="small">${P.avisos.length} aviso(s)</summary><ul class="small">${P.avisos.slice(0, 60).map(a => `<li>${esc(a)}</li>`).join('')}</ul></details>` : ''}
         ${P.semMat.length ? `<details><summary class="small">${P.semMat.length} pessoa(s) sem matrícula e sem ficha: cadastre pelo botão Cadastrar em "Pessoas sem ficha"</summary><p class="small">${P.semMat.slice(0, 80).map(r => esc(title(r.nome))).join(', ')}</p></details>` : ''}
-        <div class="row-gap"><button class="btn pri" data-g="impOk" ${ST.busy || !(P.novos.length || (ST.atualizar && P.atual.length) || (ST.ocorr && nOcor)) ? 'disabled' : ''}>${ST.busy ? 'Gravando…' : 'Importar'}</button><button class="btn" data-g="impCancel">Cancelar</button></div></div>
+        <div class="row-gap"><button class="btn pri" data-g="impOk" ${ST.busy || !(P.novos.length || (ST.atualizar && P.atual.length) || (ST.ocorr && nOcor) || (ST.excluirFora && P.fora.length)) ? 'disabled' : ''}>${ST.busy ? 'Gravando…' : 'Importar'}</button><button class="btn" data-g="impCancel">Cancelar</button></div></div>
         ${P.novos.length + P.atual.length ? `<div class="tw"><table><thead><tr><th>Matrícula</th><th>Nome</th><th></th><th>O que muda</th></tr></thead><tbody>
           ${[...P.novos, ...P.atual].slice(0, 300).map(x => `<tr><td class="mono">${esc(x.n.mat)}</td><td><b>${esc(title(x.n.nome))}</b></td><td>${x.antes ? '<span class="pill warn">altera</span>' : '<span class="pill ok">novo</span>'}</td><td class="small">${x.antes ? x.muda.map(esc).join('<br>') : esc([x.n.funcao, PES.areaNome(x.o.area) + (setDaArea(x.o.area) ? ' · ' + x.o.rota : '')].filter(Boolean).join(' · '))}</td></tr>`).join('')}
           </tbody></table></div>` : ''}</div>`;
@@ -246,6 +294,7 @@ export function criarImportador(X) {
     switch (d.g) {
       case 'impModelo': modeloCSV(); return true;
       case 'impOriginal': planilhaOriginal(); return true;
+      case 'impRH': planilhaRH(); return true;
       case 'impOk': confirmar(); return true;
       case 'impCancel': ST.P = null; ST.arq = ''; ST.erro = ''; render(); return true;
       case 'impCad': { const p = PES.semFicha()[+d.i]; if (p) colabForm(null, p); return true; }
@@ -256,6 +305,7 @@ export function criarImportador(X) {
     if (t.id === 'impArq') { const f = t.files[0]; t.value = ''; if (f) carregar(f); return true; }
     if (t.id === 'impAtual') { ST.atualizar = t.checked; render(); return true; }
     if (t.id === 'impSync') { ST.sync = t.checked; return true; }
+    if (t.id === 'impFora') { ST.excluirFora = t.checked; render(); return true; }
     if (t.id === 'impOcorr') { ST.ocorr = t.checked; render(); return true; }
     return false;
   }

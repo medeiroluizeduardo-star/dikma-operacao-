@@ -33,6 +33,20 @@ export function criarPessoas(DB) {
     if (v.op) partes.push('Operação de equipamentos');
     return { ...v, area, txt: partes.join(' + ') || areaNome(area) };
   }
+  // Lotação de muitas pessoas de uma vez (índices por matrícula e nome; usado nas listas do Efetivo).
+  function lotacoes(lista) {
+    const A = ativ(), O = ops(); const am = new Map(), an = new Map(), om = new Map(), on = new Map();
+    for (const y of A) { if (y.x.mat) am.set(String(y.x.mat), y); an.set(norm(y.x.nome), y); }
+    for (const o of O) { if (o.mat) om.set(String(o.mat), o); on.set(norm(o.nome), o); }
+    const out = new Map();
+    for (const c of lista) {
+      const nn = norm(c.nome); const a = am.get(String(c.mat)) || an.get(nn) || null; const op = om.get(String(c.mat)) || on.get(nn) || null;
+      const area = a ? a.x.area : op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
+      const partes = []; if (a) partes.push(`${SETS[a.set].curto} · ${AREA_S[a.x.area] || a.x.area} · ${a.x.rota}`); if (op) partes.push('Operação de equipamentos');
+      out.set(String(c.mat), { ativ: a, patio: a ? a.x : null, op, area, txt: partes.join(' + ') || areaNome(area) });
+    }
+    return out;
+  }
   function areaNome(a) {
     if (a === AREA_OP) return 'Operação de equipamentos';
     if (!a || a === AREA_GERAL) return 'Coqueria (sem rota)';
@@ -124,5 +138,5 @@ export function criarPessoas(DB) {
     return out.sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
-  return { vinculo, lotacao, areaNome, areasAtuacao, gruposArea, funcoes, rotasDe, sincronizar, sincronizarVarios, opcoesAtuais, syncFuncao, semFicha, temOp, casa, temSetDados };
+  return { vinculo, lotacao, lotacoes, areaNome, areasAtuacao, gruposArea, funcoes, rotasDe, sincronizar, sincronizarVarios, opcoesAtuais, syncFuncao, semFicha, temOp, casa, temSetDados };
 }

@@ -379,6 +379,9 @@ export function gNovaOcorrencia(o) {
   track(setDoc(r, { ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
   return { id: r.id, ...o };
 }
+export async function gExcluirOcorrencias(ids) {
+  for (let i = 0; i < ids.length; i += 400) { const b = writeBatch(db); ids.slice(i, i + 400).forEach(id => b.delete(doc(db, 'gocorr', id))); await track(b.commit()); }
+}
 export function gExcluirOcorrencia(id) { const b = writeBatch(db); b.delete(doc(db, 'gocorr', id)); return track(b.commit()); }
 export function gAssinar(a) {
   const r = doc(collection(db, 'gassin'));
