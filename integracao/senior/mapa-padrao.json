@@ -1,0 +1,42 @@
+{
+  "_leia": "Nomes dos campos no Senior para cada campo do sistema. O primeiro preenchido vale. Os nomes do seniorx e do g5 são o ponto de partida e precisam ser confirmados com a TI; para trocar sem mexer aqui, use a variável SENIOR_MAPA no GitHub.",
+  "seniorx": {
+    "mat": ["registerNumber", "registrationNumber", "employeeNumber", "employee.registerNumber"],
+    "nome": ["name", "person.name", "employee.name", "fullName"],
+    "funcao": ["jobPosition.name", "jobposition.name", "jobPosition.description", "position.name", "role.name"],
+    "area": ["department.name", "organizationalUnit.name", "department.description"],
+    "rota": ["costCenter.name", "costCenter.description", "workstation.name", "workplace.name"],
+    "regime": ["workshift.name", "workSchedule.name", "shift.name"],
+    "turma": ["workshiftGroup.name", "team.name", "shiftGroup.name"],
+    "lider": ["manager.name", "leader.name", "superior.name"],
+    "adm": ["hireDate", "admissionDate"],
+    "dem": ["dismissalDate", "terminationDate"],
+    "situacao": ["situation.name", "situation.description", "status"]
+  },
+  "g5": {
+    "mat": ["numCad", "numcad"],
+    "nome": ["nomFun", "nomfun"],
+    "funcao": ["titCar", "titcar", "nomCar"],
+    "area": ["nomLoc", "nomloc", "nomFil"],
+    "rota": ["nomCcu", "desCcu", "nomccu"],
+    "regime": ["nomEsc", "nomesc"],
+    "turma": ["codTma", "codtma"],
+    "lider": ["nomChe", "nomche"],
+    "adm": ["datAdm", "datadm"],
+    "dem": ["datDem", "datdem", "datAfa"],
+    "situacao": ["desSit", "dessit", "sitAfa"]
+  },
+  "arquivo": {
+    "mat": ["MATRICULA", "MATRÍCULA", "CHAPA", "NUMCAD", "CADASTRO"],
+    "nome": ["NOME", "COLABORADOR", "NOMFUN", "FUNCIONARIO"],
+    "funcao": ["FUNÇÃO", "FUNCAO", "CARGO", "TITCAR"],
+    "area": ["ÁREA", "AREA", "SETOR", "LOCAL"],
+    "rota": ["ROTA", "CENTRO DE CUSTO", "CCU", "POSTO"],
+    "regime": ["REGIME", "ESCALA"],
+    "turma": ["TURMA"],
+    "lider": ["LÍDER", "LIDER", "CHEFE"],
+    "adm": ["ADMISSÃO", "ADMISSAO", "DATADM"],
+    "dem": ["DEMISSÃO", "DEMISSAO", "DATDEM"],
+    "situacao": ["SITUAÇÃO", "SITUACAO"]
+  }
+}

@@ -82,6 +82,7 @@ export async function start(callbacks) {
   } else { saved = null; await fresh(); }
   for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m));
   try { amostras(); } catch (e) { /* sem canvas */ }
+  await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   emitAuth(); changed();
 }
@@ -194,6 +195,18 @@ export async function removerEvidencia(ev) {
 const gch = () => { cache.gVersao++; changed(); };
 const gid = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 export async function gImportar() { /* a demonstração já começa com a planilha */ }
+export async function gSeniorAplicado() { if (cache.g.senior) { cache.g.senior.aplicadoEm = new Date(); cache.g.senior.aplicadoPor = me.nome; } changed(); }
+// Demonstração da ponte com o Senior: simula uma leitura feita hoje às 06:00, com algumas mudanças.
+async function seniorExemplo() {
+  try {
+    const s = await (await fetch('seed-efetivo.json')).json();
+    const registros = s.linhas.map(l => ({ mat: l[0], nome: l[1], funcao: l[2], area: l[3], rota: l[4], regime: l[5], turma: l[6], lider: l[7], adm: l[8] }));
+    registros[0] = { ...registros[0], funcao: 'EXECUTOR II' };
+    registros.push({ mat: '9001', nome: 'COLABORADOR NOVO DO SENIOR', funcao: 'AJUDANTE', area: 'Coqueria - Bateria', rota: 'Coqueria - Bateria 2', regime: 'Adm', turma: 'ADM', adm: new Date().toISOString().slice(0, 10) });
+    const d = new Date(); d.setHours(6, 0, 0, 0);
+    cache.g.senior = { estado: 'ok', modo: 'demonstração', total: registros.length, registros, recebidoEm: d, aplicadoEm: null, avisos: [] };
+  } catch (e) { cache.g.senior = null; }
+}
 export async function gImportarOcorrencias(lista) { cache.g.ocorr = [...cache.g.ocorr, ...lista.map(o => ({ assinadoEm: null, testemunha: '', ...o, id: gid(), metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null }))]; gch(); }
 export async function gSalvarColabs(itens) { cache.g.colabs = itens; gch(); }
 export async function gSalvarConfig(patch) { cache.g.config = { ...cache.g.config, ...patch }; gch(); }

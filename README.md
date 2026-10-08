@@ -143,6 +143,35 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Planilha original de fichas:** traz de novo o que estiver faltando da planilha FO-RED-COQ-004.
 - **Pessoas sem ficha no Efetivo:** lista quem está no Pátio, na Bateria ou na Operação e ainda não tem ficha. O botão **Cadastrar** abre a ficha já preenchida: falta só a matrícula.
 
+## Integração com o Senior (ponte pronta, aguardando a TI)
+O sistema já tem uma ponte para buscar os colaboradores no Senior todo dia, sozinho. Enquanto ela não é configurada, nada acontece.
+
+**Como funciona**
+- Uma rotina do GitHub (workflow **Integração Senior**, arquivo `.github/workflows/senior-sync.yml`) roda de segunda a sábado às 6h.
+- Ela entra no Senior com um usuário de integração (só leitura), lê os colaboradores e grava o resultado no Firestore (`integracao/senior`). Nada é alterado no Efetivo nesse momento.
+- Em **Efetivo › Importar dados**, o cartão **Integração Senior** mostra a leitura nova. O administrador clica em **Conferir e aplicar**, vê a mesma conferência das planilhas e aplica. Área e função vão também para Atividades Pátio, Bateria e Operação.
+- O código fica em `integracao/senior`: `sync.mjs` (rotina), `normalizar.mjs` (padroniza os campos), `mapa-padrao.json` (nomes dos campos no Senior) e `adaptadores/` (um por tipo de Senior).
+
+**Três formas de ligar (segredo `SENIOR_MODO`)**
+| Modo | Quando usar | O que a TI precisa passar |
+|---|---|---|
+| `seniorx` | Senior X (nuvem) | usuário e senha de integração (ou chave de aplicação) e o nome do tenant |
+| `g5` | Senior instalado nos servidores da Dikma (HCM / Administração de Pessoal) | endereço do web service de colaboradores, nome da porta, usuário e senha; e liberar o acesso externo ao servidor |
+| `arquivo` | Teste, ou enquanto não há API | nada: coloque a planilha exportada do Senior em `integracao/senior/entrada` |
+
+**Onde cadastrar (GitHub › Settings › Secrets and variables › Actions)**
+- Em **Secrets** (ficam escondidos): `SENIOR_MODO`, `SENIOR_USUARIO`, `SENIOR_SENHA` (ou `SENIOR_CHAVE` e `SENIOR_SEGREDO`) e, no G5, `SENIOR_G5_URL`. O `FIREBASE_SERVICE_ACCOUNT` já existe.
+- Em **Variables**: `SENIOR_TENANT`, `SENIOR_URL` (só se a Dikma usar outro endereço), `SENIOR_G5_PORTA`, `SENIOR_G5_PARAMETROS` (JSON), `SENIOR_MAPA` (JSON, para trocar os nomes dos campos) e `SENIOR_ARQUIVO`.
+- Nunca coloque senha em arquivo do repositório nem envie para ninguém.
+
+**Primeiro teste**
+1. Cadastre os segredos.
+2. Em **Actions › Integração Senior › Run workflow**, marque **Só testar** e rode. O registro da execução mostra quantos colaboradores vieram e dois de exemplo, sem gravar nada.
+3. Se aparecer "nenhum registro tinha matrícula e nome", a mensagem lista os nomes dos campos que o Senior mandou. Ajuste o `SENIOR_MAPA` com esses nomes. Exemplo: `{"mat":["numCad"],"nome":["nomFun"],"funcao":["titCar"]}`.
+4. Rode de novo sem **Só testar**. A leitura aparece em **Efetivo › Importar dados**.
+
+Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json` são o ponto de partida. Confirme-os com a TI, porque cada instalação do Senior pode ter serviços e campos próprios.
+
 ## Fotos e arquivos (evidências)
 - Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
 - Na **Programação**, toque no dia da atividade e escolha **Fotos e arquivos**. Os dias com anexo têm um ponto laranja no canto.
@@ -230,3 +259,10 @@ Um documento por área e semana mantém cada tela em poucas leituras, dentro do 
 - **Actions falhou com "Falta o secret":** confira o passo 6.2. O nome precisa ser exatamente `FIREBASE_SERVICE_ACCOUNT`.
 - **Tela "Sistema ainda não conectado":** faltou registrar o app web (passo 2).
 - **"O login por senha não está ativado":** confira o passo 3.
+
+
+Outros arquivos fora de `public`:
+```
+integracao/senior/            ponte com o Senior (roda no GitHub Actions, não vai para o site)
+.github/workflows/senior-sync.yml   agenda da ponte (seg a sáb, 6h)
+```

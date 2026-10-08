@@ -17,6 +17,7 @@
 //   gassin/{id}               { mat, ocorrIds[], metodo: tela|papel|recusa, colab, resp, respNome, foto, testemunhas[], em }
 //   eq/config, eq/cadastro    módulo Operação: turnos, causas, metas, pesos, feriados · operadores e frota
 //   eqlanc/{id} eqpar/{id} eqinsp/{id}   lançamentos, paradas e inspeções (campo mes = AAAA-MM)
+//   integracao/senior        { estado, modo, recebidoEm, total, registros[], erro, aplicadoEm }  (ponte com o Senior)
 //   eqaval/{AAAA-MM}          { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }
 //   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
 //   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
@@ -365,7 +366,10 @@ function startGestao() {
   on(doc(db, 'gestao', 'config'), s => { cache.g.config = s.exists() ? s.data() : null; ok.c = true; g(); });
   on(doc(db, 'gestao', 'colaboradores'), s => { cache.g.colabs = (s.exists() && s.data().itens) || []; ok.l = true; g(); });
   on(collection(db, 'gocorr'), qs => { cache.g.ocorr = qs.docs.map(d => ({ id: d.id, ...d.data() })); ok.o = true; g(); });
+  // Ponte com o Senior: o que a rotina do GitHub trouxe (só o administrador vê).
+  if (me.papel === 'admin') on(doc(db, 'integracao', 'senior'), s => { const x = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; cache.g.senior = x ? { ...x, recebidoEm: x.recebidoEm && x.recebidoEm.toDate ? x.recebidoEm.toDate() : null, tentativaEm: x.tentativaEm && x.tentativaEm.toDate ? x.tentativaEm.toDate() : null, aplicadoEm: x.aplicadoEm && x.aplicadoEm.toDate ? x.aplicadoEm.toDate() : null } : null; changed(); });
 }
+export const gSeniorAplicado = () => track(updateDoc(doc(db, 'integracao', 'senior'), { aplicadoEm: serverTimestamp(), aplicadoPor: me.nome || me.login || '' }));
 const gch = () => { cache.gVersao++; changed(); };
 export async function gImportar(seed) {
   const b = writeBatch(db);

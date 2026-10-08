@@ -1,0 +1,2 @@
+Modo "arquivo" da ponte com o Senior: coloque aqui a planilha (.xlsx ou .csv) exportada do Senior.
+A rotina usa a mais recente. A tabela precisa ter as colunas NOME e MATRICULA (ou CHAPA/NUMCAD).

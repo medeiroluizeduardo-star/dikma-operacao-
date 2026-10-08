@@ -164,6 +164,12 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Ponte com o Senior: a rotina do GitHub grava com a chave de serviço; só o administrador lê e marca como aplicado.
+    match /integracao/{docId} {
+      allow read: if admin();
+      allow update: if admin() && soAltera(['aplicadoEm', 'aplicadoPor']);
+    }
+
     match /historico/{id} {
       allow read: if ativo();
       allow create: if ativo()

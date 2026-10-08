@@ -1,0 +1,16 @@
+{
+  "name": "dikma-ponte-senior",
+  "private": true,
+  "type": "module",
+  "description": "Ponte entre o Senior e o Dikma Operação (roda no GitHub Actions)",
+  "scripts": {
+    "sync": "node sync.mjs",
+    "testar": "node sync.mjs --testar"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0",
+    "firebase-admin": "^12.7.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}

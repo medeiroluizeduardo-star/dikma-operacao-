@@ -208,6 +208,28 @@ export function criarImportador(X) {
     ST.busy = false; render();
   }
   // Planilha "EFETIVO PARA O SISTEMA" (RH), já embutida no sistema.
+  // Ponte com o Senior: registros que a rotina do GitHub deixou em integracao/senior.
+  function planilhaSenior() {
+    const S = G().senior; if (!S || !S.registros) return;
+    const cols = { mat: 0, nome: 1, funcao: 2, area: 3, rota: 4, regime: 5, turma: 6, lider: 7, adm: 8, dem: 9 };
+    ST.erro = ''; ST.arq = 'Senior';
+    ST.P = analisar({ colab: { aba: 'Senior', cols, dados: S.registros.map(r => [r.mat, r.nome, r.funcao, r.area, r.rota, r.regime, r.turma, r.lider, r.adm, r.dem]) } }, `Senior (${fmtData(S.recebidoEm)})`);
+    ST.P.senior = true; render();
+  }
+  const fmtData = d => (d instanceof Date && !isNaN(d) ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)} às ${pad(d.getHours())}:${pad(d.getMinutes())}` : '—');
+  function cardSenior() {
+    const S = G().senior;
+    let est, corpo, bt = '';
+    if (!S) { est = '<span class="pill neu">Aguardando a TI</span>'; corpo = 'A ponte já está pronta. Quando a TI da Dikma liberar um usuário de integração, basta cadastrar os dados no GitHub (veja "Integração com o Senior" no README). A partir daí, todo dia às 6h o sistema busca os colaboradores no Senior e deixa aqui para você conferir e aplicar.'; }
+    else if (S.estado === 'erro') { est = '<span class="pill bad">Erro na última leitura</span>'; corpo = `${esc(S.erro || '')}<br><span class="muted">Tentativa em ${fmtData(S.tentativaEm)}${S.recebidoEm ? ' · última leitura boa em ' + fmtData(S.recebidoEm) : ''}.</span>`; if (S.registros) bt = `<button class="btn" data-g="impSenior">Conferir a última leitura boa</button>`; }
+    else {
+      const novo = !S.aplicadoEm || (S.recebidoEm && S.aplicadoEm < S.recebidoEm);
+      est = novo ? '<span class="pill warn">Leitura nova para conferir</span>' : '<span class="pill ok">Em dia</span>';
+      corpo = `${S.total || (S.registros || []).length} colaboradores lidos em ${fmtData(S.recebidoEm)}${S.modo ? ' (' + esc(S.modo) + ')' : ''}.${S.aplicadoEm ? ` Aplicado em ${fmtData(S.aplicadoEm)}${S.aplicadoPor ? ' por ' + esc(title(S.aplicadoPor)) : ''}.` : ''}${(S.avisos || []).length ? ` ${S.avisos.length} aviso(s) na leitura.` : ''}`;
+      bt = `<button class="btn ${novo ? 'pri' : ''}" data-g="impSenior" ${ST.busy ? 'disabled' : ''}>Conferir e aplicar</button>`;
+    }
+    return `<div class="card"><header><h2>Integração Senior</h2>${est}</header><div class="body stackcol"><p class="m0 small">${corpo}</p>${bt ? `<div class="row-gap">${bt}${S && S.execucao ? `<a class="btn ghost" href="${esc(S.execucao)}" target="_blank" rel="noopener">Ver execução no GitHub</a>` : ''}</div>` : ''}</div></div>`;
+  }
   async function planilhaRH() {
     ST.busy = true; ST.erro = ''; ST.P = null; ST.arq = 'EFETIVO PARA O SISTEMA'; render();
     try {
@@ -246,6 +268,7 @@ export function criarImportador(X) {
       if (nOc) await DB.gImportarOcorrencias(P.ocorr);
       DB.log(`Efetivo: importou ${P.origem} (${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''})`);
       toast(`Importado: ${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''}`);
+      if (P.senior && DB.gSeniorAplicado) DB.gSeniorAplicado();
       ST.P = null; ST.arq = '';
     } catch (err) { ST.erro = (err && err.message) || String(err); }
     ST.busy = false; render();
@@ -261,7 +284,7 @@ export function criarImportador(X) {
 
   function view() {
     const P = ST.P; const sf = PES.semFicha();
-    let h = `<div class="grid2"><div class="card"><header><h2>Importar planilha</h2><p>Excel (.xlsx, .xlsm, .xls) ou CSV</p></header><div class="body stackcol">
+    let h = `${cardSenior()}<div class="grid2"><div class="card"><header><h2>Importar planilha</h2><p>Excel (.xlsx, .xlsm, .xls) ou CSV</p></header><div class="body stackcol">
       <p class="m0 small">O sistema procura sozinho a tabela de colaboradores (colunas <b>MATRÍCULA</b>, <b>NOME</b>, <b>FUNÇÃO</b>, <b>ÁREA</b>, <b>ROTA</b>, <b>REGIME</b>, <b>TURMA</b>, <b>LÍDER</b>, <b>ADMISSÃO</b>, <b>DEMISSÃO</b>; só nome e matrícula são obrigatórios) e, se houver, a de ocorrências. Serve a própria planilha de fichas, a aba EFETIVO das planilhas do Pátio e da Bateria ou uma lista do RH.</p>
       <div class="row-gap"><label class="btn pri">${I.file} ${ST.busy ? 'Lendo…' : 'Escolher arquivo'}<input type="file" id="impArq" accept=".xlsx,.xlsm,.xls,.csv,.txt" hidden ${ST.busy ? 'disabled' : ''}></label><button class="btn" data-g="impModelo">${I.dl} Baixar modelo</button></div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}</div></div>
@@ -295,6 +318,7 @@ export function criarImportador(X) {
       case 'impModelo': modeloCSV(); return true;
       case 'impOriginal': planilhaOriginal(); return true;
       case 'impRH': planilhaRH(); return true;
+      case 'impSenior': planilhaSenior(); return true;
       case 'impOk': confirmar(); return true;
       case 'impCancel': ST.P = null; ST.arq = ''; ST.erro = ''; render(); return true;
       case 'impCad': { const p = PES.semFicha()[+d.i]; if (p) colabForm(null, p); return true; }
