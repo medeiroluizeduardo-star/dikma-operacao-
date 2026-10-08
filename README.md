@@ -183,6 +183,7 @@ public/
   gestao.js           módulo Efetivo (fichas de acompanhamento)
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
+  movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
   seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)
   vendor/xlsx.js      leitor de planilhas SheetJS 0.18.5 (carregado só na importação)

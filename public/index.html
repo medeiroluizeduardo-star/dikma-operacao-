@@ -503,6 +503,151 @@ td.selc,th.selc{width:36px;padding-left:10px;padding-right:4px}td.selc input,th.
 @media (max-width:860px){.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.mini div{min-width:0}.syncwrap{order:-1;position:absolute;right:16px;top:12px}.top{position:sticky}.top h1{padding-right:120px}}
 @media print{#gate,.syncwrap{display:none!important}.paper{min-width:0}}
 
+/* ================= Acabamento e fluidez (v12) =================
+   Uma só linguagem de movimento: rápido, sem quique, sempre respondendo a uma ação.
+   O momento marcante é o marcador laranja do menu, que desliza até a tela aberta. */
+:root{
+  --ease:cubic-bezier(.2,.8,.2,1); --ease-in:cubic-bezier(.4,0,1,1);
+  --t1:.12s; --t2:.2s; --t3:.32s;
+  --r:10px; --rc:8px;
+  --e1:0 1px 0 rgba(22,23,46,.04),0 1px 3px rgba(22,23,46,.06);
+  --e2:0 2px 6px rgba(22,23,46,.06),0 10px 28px rgba(22,23,46,.10);
+  --e3:0 18px 50px rgba(14,15,40,.28);
+  --ring:0 0 0 3px color-mix(in srgb,var(--focus) 28%,transparent);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--e1:0 1px 0 rgba(0,0,0,.25);--e2:0 8px 28px rgba(0,0,0,.4);--e3:0 18px 50px rgba(0,0,0,.6)}}
+:root[data-theme="dark"]{--e1:0 1px 0 rgba(0,0,0,.25);--e2:0 8px 28px rgba(0,0,0,.4);--e3:0 18px 50px rgba(0,0,0,.6)}
+::selection{background:color-mix(in srgb,var(--accent) 30%,transparent)}
+html{scroll-behavior:auto;-webkit-tap-highlight-color:transparent}
+body{text-rendering:optimizeLegibility}
+*{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--ink-3) 45%,transparent) transparent}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--ink-3) 40%,transparent);border-radius:10px;border:3px solid transparent;background-clip:padding-box}
+.rail{scrollbar-color:var(--rail-2) transparent}
+
+/* superfícies */
+.card{border-radius:var(--r);box-shadow:var(--e1);border-color:var(--line-2)}
+.kpis{border-radius:var(--r);box-shadow:var(--e1);border-color:var(--line-2);background:var(--line-2)}
+.mini div{border-radius:var(--rc);border-color:var(--line-2);box-shadow:var(--e1)}
+.card>header{padding:16px 18px 0}.card .body{padding:14px 18px 18px}
+th{background:color-mix(in srgb,var(--surface-2) 92%,var(--surface))}
+td{transition:background var(--t1) linear}
+table.hoverable tbody tr:hover td{background:color-mix(in srgb,var(--accent) 5%,var(--surface-2))}
+
+/* controles */
+.btn,select.in,input.in,textarea.in,.rchip,.opt,.dbtn,.tog,.chip,.sit,.ok-btn,.no-btn,.modcard,.modsw button,.tri button,.evitem{transition:background-color var(--t1) var(--ease),border-color var(--t1) var(--ease),color var(--t1) var(--ease),box-shadow var(--t2) var(--ease),transform var(--t1) var(--ease),filter var(--t1) var(--ease)}
+.btn{border-radius:var(--rc);min-height:36px;border-color:var(--line)}
+.btn:hover{border-color:color-mix(in srgb,var(--ink-3) 70%,var(--line));background:color-mix(in srgb,var(--surface-2) 60%,var(--surface))}
+.btn.pri:hover{background:color-mix(in srgb,var(--accent) 88%,#000);border-color:color-mix(in srgb,var(--accent) 88%,#000)}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn:active:not(:disabled),.rchip:active,.opt:active,.dbtn:active,.chip:active,.ok-btn:active,.no-btn:active,.sit:active,.tog:active,.modcard:active,.tabbar button:active .ic{transform:scale(.96)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.pri:disabled{filter:saturate(.6)}
+select.in,input.in,textarea.in{border-radius:var(--rc);min-height:36px;border-color:var(--line)}
+select.in:hover,input.in:hover,textarea.in:hover{border-color:color-mix(in srgb,var(--ink-3) 60%,var(--line))}
+select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(--focus);box-shadow:var(--ring)}
+:focus-visible{outline:none;box-shadow:var(--ring)}
+.btn:focus-visible,.rchip:focus-visible,.opt:focus-visible,.chip:focus-visible,.nav button:focus-visible{box-shadow:var(--ring)}
+.rchip:hover{border-color:var(--ink-3)}
+.opt{border-radius:10px}.opt:hover{background:var(--surface-2)}
+.chip:hover{filter:brightness(1.1);transform:translateY(-1px)}
+
+/* menu lateral: marcador que desliza */
+.rail{position:sticky}
+.nav-ind{position:absolute;left:12px;right:12px;top:0;height:36px;border-radius:7px;background:var(--rail-2);pointer-events:none;opacity:0;
+  transition:transform var(--t3) var(--ease),height var(--t3) var(--ease),opacity var(--t2) linear;will-change:transform}
+.nav-ind::before{content:"";position:absolute;left:-12px;top:7px;bottom:7px;width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+.rail:has(.nav-ind) .nav button[aria-current="page"]{background:transparent}
+.rail:has(.nav-ind) .nav button[aria-current="page"]::before{display:none}
+.rail .brand,.rail .nav,.rail .who{position:relative;z-index:1}
+.nav button{transition:color var(--t1) linear,background-color var(--t1) linear}
+.nav button:hover{background:color-mix(in srgb,var(--rail-2) 55%,transparent)}
+.nav button[aria-current="page"] svg{color:var(--accent)}
+.modsw{position:relative}
+
+/* barra superior */
+.top{transition:box-shadow var(--t2) var(--ease),border-color var(--t2) linear}
+.top.rolou{box-shadow:0 6px 18px -10px rgba(22,23,46,.35);border-bottom-color:transparent}
+.syncwrap .pill{transition:background-color var(--t2) linear,color var(--t2) linear}
+.syncwrap .pill.sync::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--st-atr);animation:piscar 1s ease-in-out infinite}
+@keyframes piscar{50%{opacity:.25}}
+
+/* entrada de tela (só ao navegar) */
+@media (prefers-reduced-motion:no-preference){
+  #view.entra>*{animation:entra var(--t3) var(--ease) both}
+  #view.entra>*:nth-child(2){animation-delay:.03s}#view.entra>*:nth-child(3){animation-delay:.06s}#view.entra>*:nth-child(n+4){animation-delay:.09s}
+  #view.entra .stack i,#view.entra .meter i,#view.entra .ef i{animation:cresceX .7s var(--ease) .08s both;transform-origin:left center}
+  #view.entra .col i{animation:cresceY .6s var(--ease) .1s both;transform-origin:center bottom}
+}
+@keyframes entra{from{opacity:0;transform:translateY(6px)}}
+@keyframes cresceX{from{transform:scaleX(0)}}
+@keyframes cresceY{from{transform:scaleY(0)}}
+
+/* confirmação de apontamento */
+.pulsa{animation:pulsa .5s var(--ease)}
+.act.pulsa{animation:pulsaCard .6s var(--ease)}
+@keyframes pulsa{0%{transform:scale(1)}35%{transform:scale(1.18);box-shadow:0 0 0 6px color-mix(in srgb,currentColor 18%,transparent)}100%{transform:scale(1);box-shadow:0 0 0 0 transparent}}
+@keyframes pulsaCard{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--st-real) 0%,transparent)}30%{box-shadow:0 0 0 4px color-mix(in srgb,var(--st-real) 22%,transparent)}100%{box-shadow:0 0 0 0 transparent}}
+.act{transition:border-color var(--t2) linear}
+.act::before{transition:background-color var(--t2) linear}
+
+/* janelas */
+.layer-ghost{position:fixed;inset:0;z-index:59;pointer-events:none}
+.scrim{background:rgba(14,15,40,.42);backdrop-filter:blur(2px)}
+.sheet{box-shadow:var(--e3);border-radius:14px}
+@media (prefers-reduced-motion:no-preference){
+  .scrim{animation:scrimIn var(--t2) linear both}
+  .sheet{animation:sheetIn var(--t3) var(--ease) both}
+  .scrim.sai{animation:scrimOut .2s linear both}
+  .scrim.sai .sheet{animation:sheetOut .2s var(--ease-in) both}
+}
+@keyframes scrimIn{from{background:rgba(14,15,40,0);backdrop-filter:blur(0)}}
+@keyframes scrimOut{to{background:rgba(14,15,40,0);backdrop-filter:blur(0)}}
+@keyframes sheetIn{from{opacity:0;transform:translateY(10px) scale(.98)}}
+@keyframes sheetOut{to{opacity:0;transform:translateY(8px) scale(.98)}}
+@media (max-width:860px){
+  .sheet{border-radius:18px 18px 0 0;padding-top:24px;position:relative}
+  .sheet::before{content:"";position:absolute;top:8px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:4px;background:var(--line)}
+  @keyframes sheetIn{from{transform:translateY(100%)}}
+  @keyframes sheetOut{to{transform:translateY(100%)}}
+}
+
+/* aviso rápido */
+.toast{display:flex;align-items:center;gap:10px;border-radius:12px;padding:10px 16px 10px 10px;box-shadow:var(--e3);font-weight:500;bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.toast .ti{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;color:#fff;background:var(--st-real)}
+.toast .ti.bad{background:var(--st-nreal)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:toastIn .28s var(--ease) both}.toast.sai{animation:toastOut .25s var(--ease-in) both}}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,14px) scale(.96)}}
+@keyframes toastOut{to{opacity:0;transform:translate(-50%,8px)}}
+@media (max-width:860px){.toast{bottom:calc(86px + env(safe-area-inset-bottom,0px))}}
+
+/* carregando: esqueleto */
+.skel{padding:18px;display:flex;flex-direction:column;gap:12px}
+.skel i{display:block;height:14px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2) 0,color-mix(in srgb,var(--line) 70%,var(--surface-2)) 40%,var(--surface-2) 80%) 0 0/200% 100%;animation:brilho 1.2s linear infinite}
+.skel i:nth-child(1){width:38%;height:20px}.skel i:nth-child(2){width:92%}.skel i:nth-child(3){width:84%}.skel i:nth-child(4){width:66%}
+@keyframes brilho{to{background-position:-200% 0}}
+
+/* celular: barra de abas */
+@media (max-width:860px){
+  .tabbar{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(14px) saturate(1.4);border-top-color:var(--line-2)}
+  .tabbar button .ic{display:grid;place-items:center;width:52px;height:28px;border-radius:14px;transition:background-color var(--t2) var(--ease),transform var(--t1) var(--ease)}
+  .tabbar button[aria-current="page"]:not(.big) .ic{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+  .tabbar button[aria-current="page"]{font-weight:600}
+  .tabbar .big span.ic{width:52px;height:32px;border-radius:16px;box-shadow:0 6px 14px -6px color-mix(in srgb,var(--accent) 70%,transparent)}
+}
+
+/* tela de entrada */
+@media (prefers-reduced-motion:no-preference){
+  .gatecard{animation:gateIn .45s var(--ease) both}
+  .gatecard .brand{animation:entra .45s var(--ease) .08s both}
+}
+@keyframes gateIn{from{opacity:0;transform:translateY(14px) scale(.985)}}
+.gatecard{border-radius:16px;box-shadow:var(--e2);border-color:var(--line-2)}
+.modcard{transition:border-color var(--t1) linear,background-color var(--t1) linear,box-shadow var(--t2) var(--ease),transform var(--t1) var(--ease)}
+.modcard:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+
+@media (max-width:860px){.kpis>.kpi:last-child:nth-child(even){grid-column:span 2}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+@media print{.nav-ind,.layer-ghost,.toast{display:none!important}.card,.kpis{box-shadow:none}}
 </style>
 </head>
 <body>

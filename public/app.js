@@ -7,6 +7,7 @@ const DB = await import(DEMO ? './data-mock.js' : './data.js');
 import { criarGestao, VIEWS_G, SUB_G } from './gestao.js';
 import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas } from './pessoas.js';
+import * as M from './movimento.js';
 
 const TODAY = today();
 const CUR_WEEK = weekOf(TODAY);
@@ -91,6 +92,7 @@ function localChange(doc, i, k, c, motivo) {
 function setSt(doc, i, k, c, motivo) {
   if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
   const ch = localChange(doc, i, k, c, motivo);
+  UI.flash = { id: doc.id, i, k, t: Date.now() };
   DB.setStatusMany(doc.id, [ch]);
   const p = PL.get(doc.ids[i]); const nm = { R: 'realizada', N: 'não realizada', P: 'voltou para programada', E: 'extra', _: 'extra removida' }[c];
   DB.log(`${p ? p.ativ : doc.ids[i]} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → ${nm}${c === 'N' && motivo ? ' (' + motivo + ')' : ''}`);
@@ -194,19 +196,38 @@ function mockSwitcher() {
 }
 
 /* ---------------- shell ---------------- */
+// Desenha a tela. Trocar de tela anima a entrada; atualização de dados mantém a rolagem das tabelas.
+let ULT = '';
 function render() {
+  const view = $('view');
+  const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
+  const nav = k !== ULT || !!view.querySelector('.skel');
+  const pos = nav ? null : M.guardarRolagem(view);
+  renderTela();
+  if (AUTH.status !== 'ready') { ULT = ''; return; }
+  ULT = k;
+  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav) M.restaurarRolagem(view, pos);
+  M.moverIndicador();
+  if (UI.flash && Date.now() - UI.flash.t > 500) UI.flash = null;
+  if (UI.flash) {
+    const f = UI.flash; // vale por meio segundo: a atualização de dados que chega logo depois redesenha a tela
+    M.pulsar(view.querySelector(`[data-cell="${CSS.escape(f.id + '|' + f.i + '|' + f.k)}"]`));
+    const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
+  }
+}
+function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
   if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view); afterRender(); return; }
-  if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = ''; renderNav(); return; }
+  if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = M.ESQUELETO; renderNav(); return; }
   if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
   ensurePeriod();
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !isAdmin()) UI.view = 'painel';
   renderNav(); renderTop();
   const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir', 'relfoto'].includes(UI.view);
-  if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { $('view').innerHTML = '<div class="card"><div class="empty">Carregando a programação…</div></div>'; return; }
+  if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { $('view').innerHTML = M.ESQUELETO; return; }
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, escala: vEscala, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig }[UI.view];
   $('view').innerHTML = fn();
   afterRender();
@@ -241,7 +262,7 @@ function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
   if (DEMO) return '<span class="pill neu" title="Os dados ficam só neste navegador">Demonstração</span>';
   if (off) return `<span class="pill warn" role="status">Sem sinal${n ? ` · ${n} aguardando envio` : ''}</span>`;
-  if (n) return `<span class="pill neu" role="status">Sincronizando ${n}…</span>`;
+  if (n) return `<span class="pill neu sync" role="status">Sincronizando ${n}…</span>`;
   return '<span class="pill ok" title="Tudo salvo no servidor">Sincronizado</span>';
 }
 function periodControls({ semana = true, area = true, mes = true } = {}) {
@@ -540,7 +561,7 @@ function vRelFoto() {
     <button class="btn" data-act="rfreload" style="align-self:flex-end">Atualizar</button>
     ${!framed ? `<button class="btn pri" data-act="rfprint" style="align-self:flex-end" ${RF.preparando ? 'disabled' : ''}>${I.print} ${RF.preparando ? `Preparando ${RF.preparando}…` : 'Imprimir / salvar PDF'}</button>` : ''}
   </div>`;
-  if (RF.lista === null) return h + '<div class="card"><div class="empty">Buscando as fotos…</div></div>';
+  if (RF.lista === null) return h + M.ESQUELETO;
   if (RF.erro) h += `<p class="err">${esc(RF.erro)}</p>`;
   const gs = rfGrupos();
   const nFotos = gs.reduce((n, G) => n + G.n, 0), nAtiv = gs.reduce((n, G) => n + G.itens.length, 0);
@@ -780,7 +801,14 @@ function alterarSenhaSheet() {
     await DB.alterarSenha(a, n); toast('Senha alterada');
   });
 }
-function toast(t) { document.querySelectorAll('.toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
+function toast(t) {
+  document.querySelectorAll('.toast').forEach(x => x.remove());
+  const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status');
+  const erro = /^(erro|sem permissão|não |seu perfil não)/i.test(t);
+  el.innerHTML = `<span class="ti ${erro ? 'bad' : 'ok'}" aria-hidden="true">${erro ? '!' : '✓'}</span><span></span>`; el.lastChild.textContent = t;
+  document.body.appendChild(el);
+  setTimeout(() => el.classList.add('sai'), 2600); setTimeout(() => el.remove(), 2900);
+}
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 function cellMenu(doc, i, k) {
   const nEv = evCount(doc, doc.ids[i], k);
@@ -1014,6 +1042,7 @@ window.addEventListener('pagehide', salvarUI);
 const PES = criarPessoas(DB);
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, framed, UI });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, prepararFoto, framed, UI });
+M.iniciarJanelas(); M.iniciarTopo();
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { if (AUTH.status === 'ready') schedule(); },

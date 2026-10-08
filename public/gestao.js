@@ -110,7 +110,7 @@ export function criarGestao(X) {
 
   /* ---------- telas ---------- */
   function vazio() {
-    if (!G().loaded) return '<div class="card"><div class="empty">Carregando…</div></div>';
+    if (!G().loaded) return '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
     if (!G().config) return isAdmin()
       ? `<div class="card"><header><h2>Importar a planilha de fichas</h2><p>179 colaboradores, as ocorrências já lançadas e os 12 tipos de ocorrência com texto padrão</p></header><div class="body stackcol"><p class="m0 muted">Os colaboradores importados ficam com a integração marcada como "Anterior", como na planilha.</p><button class="btn pri" data-g="importar" style="align-self:flex-start" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Importando…' : 'Importar dados da planilha'}</button></div></div>`
       : '<div class="card"><div class="empty">O administrador ainda não importou a planilha de fichas.</div></div>';

@@ -112,7 +112,7 @@ export function criarEquip(X) {
     let h = `<div class="filters"><div class="daynav"><button class="btn" data-e="diaAnt" aria-label="Dia anterior">◀</button><label class="sel"><span>${dw}</span><input class="in" type="date" id="eDia" value="${d}"></label><button class="btn" data-e="diaProx" aria-label="Próximo dia">▶</button>${d !== TODAY ? '<button class="btn" data-e="hoje">Hoje</button>' : ''}</div>
       ${podeEditar() ? `<button class="btn pri" data-e="novoLanc" style="align-self:flex-end">${I.plus} Lançamento</button>${!linhas.length ? '<button class="btn" data-e="copiar" style="align-self:flex-end">Copiar do dia anterior</button>' : ''}` : ''}</div>
       <div class="mini"><div><b class="num">${linhas.length}</b><span>Alocações</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hoper, 0))}</b><span>Horas operadas</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hpar, 0))}</b><span>Horas paradas</span></div><div><b class="num">${pd}</b><span>Paradas no dia</span></div></div>`;
-    if (!mesesCarregados().has(d.slice(0, 7))) return h + '<div class="card"><div class="empty">Carregando…</div></div>';
+    if (!mesesCarregados().has(d.slice(0, 7))) return h + '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
     if (!linhas.length) return h + `<div class="card"><div class="empty">Nenhum lançamento em ${dBR(d)}.${podeEditar() ? ' Use "Copiar do dia anterior" para repetir as alocações do último dia lançado.' : ''}</div></div>`;
     if (matchMedia('(max-width:860px)').matches) {
       return h + `<div class="mlist">${linhas.map(l => `<div class="mcard"><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span></div>${podeEditar() ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
@@ -291,7 +291,7 @@ export function criarEquip(X) {
     const nota = (op, k, max) => `<select class="in nsel" data-av="${esc(op)}|${k}" ${ed ? '' : 'disabled'}><option value="">–</option>${Array.from({ length: max }, (_, i) => i + 1).map(v => `<option ${+((av[op] || {})[k]) === v ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
     const num = (op, k) => `<input class="in numin sm" type="number" min="0" data-av="${esc(op)}|${k}" value="${(av[op] || {})[k] ?? ''}" ${ed ? '' : 'disabled'} aria-label="${k}">`;
     let h = `<div class="filters">${selMes('eAvMes', m)}<span class="muted small" style="align-self:flex-end">Notas de 1 a 5. 5S e Segurança só contam se o operador não tiver inspeção no mês. Vazio = nota padrão ${E().config.pesos.notaPadrao}.</span></div>`;
-    if (!mesesCarregados().has(m)) return h + '<div class="card"><div class="empty">Carregando…</div></div>';
+    if (!mesesCarregados().has(m)) return h + '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
     h += `<div class="card"><div class="tw"><table><thead><tr><th>Operador</th><th class="c">Proatividade</th><th class="c">5S</th><th class="c">Segurança</th><th class="c">Faltas</th><th class="c">Atrasos</th><th class="c">Atestados</th><th>Observações</th><th class="r">Nota</th></tr></thead><tbody>
       ${l.map(x => `<tr><td><b>${esc(short(x.o.nome))}</b><div class="muted small">${x.aloc} alocações${x.ninsp ? ' · ' + x.ninsp + ' inspeções' : ''}</div></td><td class="c">${nota(x.o.nome, 'proat', 5)}</td><td class="c">${nota(x.o.nome, 's5', 5)}</td><td class="c">${nota(x.o.nome, 'seg', 5)}</td><td class="c">${num(x.o.nome, 'faltas')}</td><td class="c">${num(x.o.nome, 'atrasos')}</td><td class="c">${num(x.o.nome, 'atest')}</td><td><input class="in" data-av="${esc(x.o.nome)}|obs" value="${esc((av[x.o.nome] || {}).obs || '')}" ${ed ? '' : 'disabled'} aria-label="Observações"></td><td class="r num"><b>${x.ranked ? h1(x.nota) : '–'}</b>${x.classe ? `<div class="small muted">${x.classe.toLowerCase()}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum operador com alocação no mês.</td></tr>'}
       </tbody></table></div></div>`;
@@ -419,7 +419,7 @@ export function criarEquip(X) {
 
   return {
     render(view) {
-      if (!E().loaded) return '<div class="card"><div class="empty">Carregando…</div></div>';
+      if (!E().loaded) return '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
       if (!E().config) return vImportar();
       DB.eWatch([U.mes, addMonth(U.mes, -1), U.dia.slice(0, 7), addMonth(U.dia.slice(0, 7), -1), U.avMes, U.inMes, TODAY.slice(0, 7)]);
       return ({ epainel: vPainel, elanc: vLanc, epar: vPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
