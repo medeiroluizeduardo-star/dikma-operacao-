@@ -105,6 +105,8 @@ const I = {
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></svg>',
+  cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>',
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
@@ -303,7 +305,7 @@ function vProg() {
   });
   if (!rows.length) return h + '<div class="card"><div class="empty">Nenhuma atividade com esses filtros nesta semana.</div></div>';
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; return `<button class="chip ${c}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}" title="${DAYS[k]} ${ddmm(add(doc.ini, k))} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}">${CHIP[c]}</button>`; };
+  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const n = evCount(doc, doc.ids[i], k); return `<button class="chip ${c}${n ? ' hasev' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}${n ? ', ' + n + ' anexo(s)' : ''}" title="${DAYS[k]} ${ddmm(add(doc.ini, k))} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${n ? ' · ' + n + ' anexo(s)' : ''}">${CHIP[c]}</button>`; };
   const LIM = UI.more || (isMobile() ? 120 : 600);
   const shown = rows.slice(0, LIM);
   let g = '';
@@ -355,6 +357,7 @@ function vApontar() {
   for (const { i, p } of items) {
     const c = st(doc, i, k); const raw = doc.d[i][k]; const m = doc.m[p.id + '|' + k];
     h += `<div class="act ${c}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}</div>${m ? `<div class="m">Motivo: ${esc(m)}</div>` : ''}</div>
+    ${(() => { const n = evCount(doc, p.id, k); return `<div class="bt evbt">${edit || n ? `<button class="ev-btn${n ? ' on' : ''}" data-ev="${esc(doc.id)}|${i}|${k}" aria-label="Fotos e arquivos (${n})" title="Fotos e arquivos">${I.cam}${n ? `<span class="num">${n}</span>` : ''}</button>` : ''}</div>`; })()}
     ${edit ? `<div class="bt">${raw === 'E' ? `<button class="no-btn" data-ap="${i}|${k}|rmE" aria-label="Remover extra" title="Remover extra">✕</button>` : `<button class="ok-btn" data-ap="${i}|${k}|R" aria-pressed="${raw === 'R'}" aria-label="Realizada">✓</button><button class="no-btn" data-ap="${i}|${k}|N" aria-pressed="${raw === 'N'}" aria-label="Não realizada">✕</button>`}</div>` : `<span class="chip ${c}">${CHIP[c]}</span>`}</div>`;
   }
   return h + '</div>';
@@ -511,6 +514,7 @@ function vConfig() {
   return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
   ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><b>${esc(r.rota)}</b></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
   </tbody></table></div></div>
+  <div class="card"><header><h2>Validação por foto</h2></header><div class="body"><label class="switch"><input type="checkbox" id="cfgFoto" ${exigeFoto() ? 'checked' : ''}><span><b>Exigir foto ao marcar uma atividade como realizada</b><br><small class="muted">Ligado: ao tocar em ✓, o sistema pede a foto antes de concluir. Desligado: a foto é opcional.</small></span></label></div></div>
   <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>`;
 }
 
@@ -548,6 +552,101 @@ function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit) {
 function showErr(id, err) { const el = $(id); if (!el) return toast(msgErro(err)); el.textContent = msgErro(err); el.hidden = false; }
 const msgErro = err => (DB.erroAuth ? DB.erroAuth(err) : (err && err.message) || String(err));
 function toggleEye(b) { const i = $(b.dataset.eye); if (!i) return; i.type = i.type === 'password' ? 'text' : 'password'; b.setAttribute('aria-label', i.type === 'password' ? 'Mostrar senha' : 'Ocultar senha'); }
+/* ---------------- EVIDÊNCIAS ---------------- */
+const evCount = (doc, pid, k) => ((doc && doc.ev) || {})[pid + '|' + k] || 0;
+const exigeFoto = () => !!(DB.cache.config && DB.cache.config.exigirFoto);
+const fmtKB = n => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+const LIM_ARQ = 700 * 1024;
+function lerDataURL(file) { return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(file); }); }
+function carregarImg(file) { return new Promise((ok, ko) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => { ok(im); setTimeout(() => URL.revokeObjectURL(u), 1000); }; im.onerror = () => ko(new Error('Não foi possível abrir esta imagem.')); im.src = u; }); }
+// Reduz a foto (máx. 1600 px) e grava um carimbo com data, hora, atividade e usuário.
+async function prepararFoto(file, carimbo) {
+  const im = await carregarImg(file);
+  const sc = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
+  const w = Math.round(im.naturalWidth * sc), h = Math.round(im.naturalHeight * sc);
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const g = cv.getContext('2d'); g.drawImage(im, 0, 0, w, h);
+  const bar = Math.max(26, Math.round(Math.min(w, h) * 0.05));
+  g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(0, h - bar, w, bar);
+  g.fillStyle = '#fff'; g.font = `600 ${Math.round(bar * 0.48)}px system-ui,sans-serif`; g.textBaseline = 'middle';
+  let txt = carimbo; while (g.measureText(txt).width > w - bar * 0.6 && txt.length > 10) txt = txt.slice(0, -2);
+  if (txt !== carimbo) txt = txt.slice(0, -1) + '…';
+  g.fillText(txt, bar * 0.3, h - bar / 2);
+  let q = 0.75, dados = cv.toDataURL('image/jpeg', q);
+  while (dados.length > 880000 && q > 0.3) { q -= 0.1; dados = cv.toDataURL('image/jpeg', q); }
+  const ts = 240 / Math.max(w, h), tc = document.createElement('canvas'); tc.width = Math.round(w * ts); tc.height = Math.round(h * ts);
+  tc.getContext('2d').drawImage(cv, 0, 0, tc.width, tc.height);
+  return { dados, thumb: tc.toDataURL('image/jpeg', 0.6), tipo: 'image/jpeg', tamanho: Math.round(dados.length * 0.75) };
+}
+async function prepararArquivo(file, carimbo) {
+  if (/^image\//.test(file.type) && !/svg/.test(file.type)) return { ...(await prepararFoto(file, carimbo)), nome: file.name.replace(/\.[^.]+$/, '') + '.jpg' };
+  if (file.size > LIM_ARQ) throw new Error(`"${file.name}" tem ${fmtKB(file.size)}. Arquivos (PDF, planilha etc.) podem ter até 700 KB. Fotos não têm limite: o sistema reduz sozinho.`);
+  return { dados: await lerDataURL(file), thumb: '', tipo: file.type || 'application/octet-stream', tamanho: file.size, nome: file.name };
+}
+function evidenciasSheet(doc, i, k, opts = {}) {
+  const p = PL.get(doc.ids[i]); const dt = add(doc.ini, k); const pode = canEdit(doc.area);
+  const L = $('layer'); let lista = null; let enviando = 0;
+  const desenhar = () => {
+    const sc = $('scrim'); if (!sc) return;
+    const grid = lista === null ? '<p class="muted m0">Carregando…</p>' : !lista.length ? `<p class="muted m0">${opts.exigir ? 'Anexe uma foto para concluir esta atividade como realizada.' : 'Nenhuma foto ou arquivo anexado.'}</p>` :
+      `<div class="evgrid">${lista.map(e => `<button type="button" class="evitem" data-evopen="${e.id}" title="${esc(e.nome)} · ${esc(title(e.porNome || ''))} · ${fmtAt(e.at)}">${e.thumb ? `<img src="${e.thumb}" alt="${esc(e.nome)}">` : `<span class="evfile">${I.file}<small>${esc((e.nome.split('.').pop() || '').toUpperCase())}</small></span>`}<span class="evcap">${fmtAt(e.at)}</span></button>`).join('')}</div>`;
+    sc.querySelector('.evbody').innerHTML = grid + (enviando ? `<p class="muted m0">Preparando ${enviando} arquivo(s)…</p>` : '');
+  };
+  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Fotos e arquivos"><h3>Fotos e arquivos</h3><div class="sub">${esc(p.ativ)}<br>${esc(p.rota)} · ${DAYS[k]} ${ddmm(dt)} · <span class="mono">${p.id}</span></div>
+    <div class="evbody"></div><p class="err" id="evErr" role="alert" hidden></p>
+    ${pode ? `<div class="row-gap"><label class="btn pri">${I.cam} Tirar foto<input type="file" accept="image/*" capture="environment" id="evCam" hidden></label><label class="btn">${I.file} Galeria ou arquivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple id="evArq" hidden></label></div>` : ''}
+    <button class="btn center" type="button" data-close>${opts.exigir ? 'Cancelar' : 'Fechar'}</button></div></div>`;
+  const kd = e => { if (e.key === 'Escape') close(); };
+  const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); render(); };
+  document.addEventListener('keydown', kd);
+  $('scrim').onclick = e => {
+    e.stopPropagation();
+    if (e.target.id === 'scrim' || e.target.closest('[data-close]')) return close();
+    const o = e.target.closest('[data-evopen]'); if (o) verEvidencia(lista.find(x => x.id === o.dataset.evopen), () => { lista = lista.filter(x => x.id !== o.dataset.evopen); }, () => evidenciasSheet(doc, i, k, opts));
+  };
+  const enviar = async files => {
+    $('evErr').hidden = true;
+    const agora = new Date(); const carimbo = `${pad(agora.getDate())}/${pad(agora.getMonth() + 1)}/${agora.getFullYear()} ${pad(agora.getHours())}:${pad(agora.getMinutes())} · ${p.id} · ${p.ativ} · ${ME.login || title(ME.nome || '')}`;
+    for (const f of files) {
+      enviando++; desenhar();
+      try {
+        const a = await prepararArquivo(f, carimbo);
+        const ev = DB.addEvidencia({ docId: doc.id, area: doc.area, pid: p.id, k, ...a });
+        lista = [...(lista || []), ev];
+        DB.log(`Anexou ${a.tipo.startsWith('image/') ? 'foto' : 'arquivo'} em ${p.ativ} · ${p.rota} · ${DAYS[k]} ${ddmm(dt)}`);
+      } catch (err) { showErr('evErr', err); }
+      enviando--; desenhar();
+    }
+    if (opts.exigir && lista && lista.length && doc.d[i][k] !== 'R') { setSt(doc, i, k, 'R'); L.innerHTML = ''; toast('Foto anexada e atividade marcada como realizada'); render(); return; }
+    if (lista && lista.length) toast(navigator.onLine ? 'Anexo salvo' : 'Anexo guardado no aparelho. Sobe quando o sinal voltar.');
+  };
+  ['evCam', 'evArq'].forEach(id => { const el = $(id); if (el) el.onchange = () => { const fs = [...el.files]; el.value = ''; if (fs.length) enviar(fs); }; });
+  desenhar();
+  DB.listarEvidencias(doc.id, p.id, k).then(l => { lista = l; desenhar(); }).catch(err => { lista = []; desenhar(); showErr('evErr', err); });
+}
+function verEvidencia(ev, onDel, voltar) {
+  const L = $('layer');
+  const podeExcluir = isAdmin() || (ev.por === ME.uid && canEdit(ev.area));
+  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet viewer" role="dialog" aria-modal="true" aria-label="${esc(ev.nome)}"><h3>${esc(ev.tipo.startsWith('image/') ? 'Foto' : 'Arquivo')}</h3><div class="sub">${esc(ev.nome)} · ${fmtKB(ev.tamanho || 0)}<br>Enviado por ${esc(title(ev.porNome || ''))} em ${fmtAt(ev.at)}</div>
+    <div class="vwbody"><p class="muted m0">Abrindo…</p></div>
+    <div class="row-gap"><button class="btn" type="button" data-back>Voltar</button>${podeExcluir ? (`<button class="btn danger" type="button" data-del>Excluir</button>`) : ''}</div></div></div>`;
+  const sc = $('scrim');
+  sc.onclick = async e => {
+    e.stopPropagation();
+    if (e.target.id === 'scrim' || e.target.closest('[data-back]')) return voltar();
+    if (e.target.closest('[data-del]')) {
+      const b = e.target.closest('[data-del]');
+      if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmar exclusão'; return; }
+      await DB.removerEvidencia(ev); DB.log(`Excluiu o anexo ${ev.nome}`); onDel(); toast('Anexo excluído'); voltar();
+    }
+  };
+  DB.abrirEvidencia(ev.id).then(d => {
+    const box = sc.querySelector('.vwbody'); if (!box) return;
+    if (!d) { box.innerHTML = '<p class="muted m0">Arquivo ainda não sincronizado neste aparelho.</p>'; return; }
+    box.innerHTML = ev.tipo.startsWith('image/') ? `<img src="${d}" alt="${esc(ev.nome)}">` : `<a class="btn pri" href="${d}" download="${esc(ev.nome)}">${I.dl} Baixar ${esc(ev.nome)}</a>`;
+  }).catch(err => { const box = sc.querySelector('.vwbody'); if (box) box.innerHTML = `<p class="err">${esc(msgErro(err))}</p>`; });
+}
+
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -559,15 +658,18 @@ function alterarSenhaSheet() {
 function toast(t) { document.querySelectorAll('.toast').forEach(x => x.remove()); const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 2400); }
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 function cellMenu(doc, i, k) {
-  if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
+  const nEv = evCount(doc, doc.ids[i], k);
+  if (!canEdit(doc.area)) { if (nEv) return evidenciasSheet(doc, i, k); toast('Seu perfil não pode apontar nesta área'); return; }
   const p = PL.get(doc.ids[i]); const raw = doc.d[i][k]; const c = st(doc, i, k);
   const sub = `${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}<br>${esc(p.local)}`;
   const o = (raw === '_' || raw === 'E')
     ? [{ t: 'Registrar como extra', d: 'Feita fora da programação', v: 'E', ic: chipIc('E'), cur: raw === 'E' }, { t: 'Não programada', v: '_', ic: chipIc('X'), cur: raw === '_' }]
     : [{ t: 'Realizado', v: 'R', ic: chipIc('R'), cur: raw === 'R' }, { t: 'Não realizado', d: 'Pede o motivo', v: 'N', ic: chipIc('N'), cur: raw === 'N' }, { t: 'Programado', d: c === 'A' ? 'Continua atrasado' : 'Sem apontamento', v: 'P', ic: chipIc(c === 'A' ? 'A' : 'P'), cur: raw === 'P' }];
-  sheet(p.ativ, sub, o, x => apply(doc, i, k, x.v));
+  o.push({ t: 'Fotos e arquivos', d: nEv ? `${nEv} anexo(s)` : 'Anexar evidência', v: 'EV', ic: `<span class="opt-ic">${I.cam}</span>` });
+  sheet(p.ativ, sub, o, x => (x.v === 'EV' ? evidenciasSheet(doc, i, k) : apply(doc, i, k, x.v)));
 }
 function apply(doc, i, k, v, motivo) {
+  if (v === 'R' && exigeFoto() && !evCount(doc, doc.ids[i], k) && doc.d[i][k] !== 'R') return evidenciasSheet(doc, i, k, { exigir: true });
   if (v === 'N' && !motivo) return sheet('Motivo', esc(PL.get(doc.ids[i]).ativ), MOTIVOS.map(m => ({ t: m })), x => apply(doc, i, k, 'N', x.t));
   setSt(doc, i, k, v, motivo);
   toast({ R: 'Marcada como realizada', N: 'Marcada como não realizada', P: 'Apontamento desfeito', E: 'Extra registrada', _: 'Extra removida' }[v]);
@@ -640,6 +742,7 @@ document.addEventListener('click', async e => {
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
   }
   if (d.eye) { toggleEye(t); return; }
+  if (d.ev) { const parts = d.ev.split('|'); return evidenciasSheet(DB.cache.semanas[parts[0] + '|' + parts[1]], +parts[2], +parts[3]); }
   if (d.reset) {
     const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
     return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="6" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
@@ -747,6 +850,7 @@ document.addEventListener('change', e => {
     const patch = { papel: t.value }; if (!['lider', 'supervisor'].includes(t.value)) patch.area = null;
     DB.setUsuario(uid, patch); toast('Perfil atualizado');
   }
+  if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
   if (t.dataset.uarea) { DB.setUsuario(t.dataset.uarea, { area: t.value || null }); toast('Área atualizada'); }
 });
 matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'prog') render(); });

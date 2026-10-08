@@ -9,9 +9,9 @@ let cb = {}, me = null;
 
 const changed = () => { persist(); cb.onData && cb.onData(); };
 function persist() {
-  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid })); } catch (e) { /* sem armazenamento */ }
+  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid })); } catch (e) { /* sem armazenamento */ }
 }
-const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, d: x.ids.map(p => x.s[p] || '_______') });
+const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
 function rnd(seed) { let t = seed + 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 
@@ -112,3 +112,18 @@ export async function gerarMes(ym, planoPorArea, aPartirDe) {
   cache.monthsLoaded.add(ym); changed(); return n;
 }
 export async function importar() { /* a demonstração já começa com os dados da planilha */ }
+
+// Evidências na demonstração: ficam só na memória desta aba.
+const EV = [];
+export async function saveConfig(patch) { Object.assign(cache.config, patch); changed(); }
+export async function listarEvidencias(docId, pid, k) { return EV.filter(e => e.semana === docId && e.pid === pid && e.k === k); }
+export async function abrirEvidencia(id) { const e = EV.find(x => x.id === id); return e ? e.dados : null; }
+export function addEvidencia(e) {
+  const x = { ...e, id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), semana: e.docId, por: me.uid, porNome: me.nome, at: new Date() };
+  EV.push(x); const w = cache.semanas[e.docId]; w.ev = w.ev || {}; const key = e.pid + '|' + e.k; w.ev[key] = (w.ev[key] || 0) + 1; changed();
+  const { dados, ...meta } = x; return meta;
+}
+export async function removerEvidencia(ev) {
+  const i = EV.findIndex(x => x.id === ev.id); if (i >= 0) EV.splice(i, 1);
+  const w = cache.semanas[ev.semana]; const key = ev.pid + '|' + ev.k; w.ev[key] = Math.max(0, (w.ev[key] || 1) - 1); changed();
+}

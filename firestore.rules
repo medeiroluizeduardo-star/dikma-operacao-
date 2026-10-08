@@ -65,7 +65,23 @@ service cloud.firestore {
     match /semanas/{id} {
       allow read: if ativo();
       allow create, delete: if admin();
-      allow update: if admin() || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']));
+      allow update: if admin() || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+    }
+
+    // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
+    match /evidencias/{id} {
+      allow read: if ativo();
+      allow create: if (admin() || gestorDa(request.resource.data.area))
+        && request.resource.data.por == request.auth.uid
+        && request.resource.data.thumb.size() < 80000;
+      allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+    }
+    match /evidenciasArquivo/{id} {
+      allow read: if ativo();
+      allow create: if (admin() || gestorDa(request.resource.data.area))
+        && request.resource.data.por == request.auth.uid
+        && request.resource.data.dados.size() < 1000000;
+      allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
     }
 
     match /historico/{id} {

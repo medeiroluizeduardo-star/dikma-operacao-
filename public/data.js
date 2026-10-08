@@ -11,6 +11,8 @@
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" } }
 //   historico/{auto}          { at, uid, nome, t }
+//   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
+//   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
 
 import {
@@ -19,7 +21,7 @@ import {
   reauthenticateWithCredential, EmailAuthProvider,
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
-  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion
+  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment
 } from './vendor/firebase.js';
 import { AREAS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
@@ -193,7 +195,7 @@ function stopData() {
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
-const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
+const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
 
 // Mantém em tempo real só os meses que a tela precisa.
 export function watchMonths(meses) {
@@ -233,6 +235,34 @@ export function setSit(key, code) {
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, 'plano', area), { itens }));
 export const saveRotas = rotas => track(updateDoc(doc(db, 'config', 'sistema'), { rotas }));
+export const saveConfig = patch => track(updateDoc(doc(db, 'config', 'sistema'), patch));
+
+// ---------- evidências (fotos e arquivos) ----------
+// Guardadas no próprio Firestore (plano grátis): a foto já chega reduzida pelo app.
+const refEv = (docId, pid, k) => `${docId}#${pid}|${k}`;
+export async function listarEvidencias(docId, pid, k) {
+  const qs = await getDocs(query(collection(db, 'evidencias'), where('ref', '==', refEv(docId, pid, k))));
+  return qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at ? x.at.toDate() : new Date() }; }).sort((a, b) => a.at - b.at);
+}
+export async function abrirEvidencia(id) { const s = await getDoc(doc(db, 'evidenciasArquivo', id)); return s.exists() ? s.data().dados : null; }
+// Não espera o servidor: sem sinal, fica na fila e sobe quando a conexão voltar.
+export function addEvidencia(e) {
+  const r = doc(collection(db, 'evidencias'));
+  const meta = { ref: refEv(e.docId, e.pid, e.k), semana: e.docId, area: e.area, pid: e.pid, k: e.k, nome: e.nome, tipo: e.tipo, tamanho: e.tamanho, thumb: e.thumb || '', por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() };
+  const b = writeBatch(db);
+  b.set(r, meta);
+  b.set(doc(db, 'evidenciasArquivo', r.id), { area: e.area, por: me.uid, dados: e.dados });
+  b.update(doc(db, 'semanas', e.docId), new FieldPath('ev', e.pid + '|' + e.k), increment(1), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  track(b.commit());
+  return { id: r.id, ...meta, at: new Date() };
+}
+export function removerEvidencia(ev) {
+  const b = writeBatch(db);
+  b.delete(doc(db, 'evidencias', ev.id));
+  b.delete(doc(db, 'evidenciasArquivo', ev.id));
+  b.update(doc(db, 'semanas', ev.semana), new FieldPath('ev', ev.pid + '|' + ev.k), increment(-1), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  return track(b.commit());
+}
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 

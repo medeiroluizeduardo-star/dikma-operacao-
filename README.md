@@ -74,6 +74,16 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 
 ---
 
+## Fotos e arquivos (evidências)
+- Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
+- Na **Programação**, toque no dia da atividade e escolha **Fotos e arquivos**. Os dias com anexo têm um ponto laranja no canto.
+- A foto é reduzida automaticamente (máx. 1600 px) e recebe um carimbo com **data, hora, atividade e usuário** de quem enviou.
+- Arquivos que não são foto podem ter até **700 KB**.
+- Sem sinal, o anexo fica guardado no aparelho e sobe quando a conexão voltar.
+- Quem enviou pode excluir o próprio anexo. O administrador pode excluir qualquer um.
+- **Validação por foto:** em **Rotas e configurações**, ligue **Exigir foto ao marcar uma atividade como realizada**. Com isso, o ✓ só conclui depois de anexar uma foto.
+- Os anexos ficam no próprio Firestore, que tem 1 GB grátis. Isso dá cerca de 5 a 8 mil fotos. Se um dia precisar de mais espaço, dá para migrar para o Firebase Storage (plano Blaze).
+
 ## Perfis
 
 | Perfil | O que pode fazer |
@@ -121,6 +131,8 @@ firebase.json         configuração do Hosting
 | `situacao/{AAAA-MM}` | folgas, férias, atestados etc. do mês |
 | `semanas/{ÁREA\|AAAA-MM-DD}` | programação da semana com o status de cada dia e os motivos |
 | `historico` | registro de quem apontou o quê |
+| `evidencias/{id}` | lista de anexos com miniatura (atividade, dia, quem enviou) |
+| `evidenciasArquivo/{id}` | foto ou arquivo completo, lido só ao abrir |
 
 Um documento por área e semana mantém cada tela em poucas leituras, dentro do plano grátis (50 mil leituras por dia).
 
