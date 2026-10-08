@@ -252,6 +252,7 @@ export function setSit(key, code) {
   return track(setDoc(doc(db, 'situacao', m), { v: { [key]: code || deleteField() } }, { merge: true }));
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, 'plano', area), { itens }));
+export const salvarColabsArea = (area, itens) => track(setDoc(doc(db, 'colaboradores', area), { itens }));
 export const saveRotas = rotas => track(updateDoc(doc(db, 'config', 'sistema'), { rotas }));
 export const saveConfig = patch => track(updateDoc(doc(db, 'config', 'sistema'), patch));
 
@@ -261,6 +262,15 @@ const refEv = (docId, pid, k) => `${docId}#${pid}|${k}`;
 export async function listarEvidencias(docId, pid, k) {
   const qs = await getDocs(query(collection(db, 'evidencias'), where('ref', '==', refEv(docId, pid, k))));
   return qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at ? x.at.toDate() : new Date() }; }).sort((a, b) => a.at - b.at);
+}
+// Relatório fotográfico: lista leve (miniaturas) de várias semanas de uma vez.
+export async function listarEvidenciasSemanas(ids) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += 30) {
+    const qs = await getDocs(query(collection(db, 'evidencias'), where('semana', 'in', ids.slice(i, i + 30))));
+    qs.docs.forEach(d => { const x = d.data({ serverTimestamps: 'estimate' }); out.push({ id: d.id, ...x, at: x.at ? x.at.toDate() : new Date() }); });
+  }
+  return out;
 }
 export async function abrirEvidencia(id) { const s = await getDoc(doc(db, 'evidenciasArquivo', id)); return s.exists() ? s.data().dados : null; }
 // Não espera o servidor: sem sinal, fica na fila e sobe quando a conexão voltar.
@@ -366,7 +376,7 @@ function startEquip() {
   const g = () => { cache.e.loaded = ok.c && ok.d; cache.eVersao++; changed(); };
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   on(doc(db, 'eq', 'config'), s => { cache.e.config = s.exists() ? s.data() : null; ok.c = true; g(); });
-  on(doc(db, 'eq', 'cadastro'), s => { const d = s.exists() ? s.data() : {}; cache.e.cad = { operadores: d.operadores || [], frota: d.frota || [] }; ok.d = true; g(); });
+  on(doc(db, 'eq', 'cadastro'), s => { const d = s.exists() ? s.data() : {}; cache.e.cad = { operadores: (d.operadores || []).filter(o => !/^SITUA[ÇC][ÃA]O:/i.test(o.nome || '')), frota: d.frota || [] }; ok.d = true; g(); });
 }
 // Mantém em tempo real só os meses que a tela usa (economiza leituras do plano grátis).
 export function eWatch(meses) {

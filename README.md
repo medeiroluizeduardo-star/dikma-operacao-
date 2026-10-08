@@ -114,6 +114,12 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Controle de fichas:** grade com as datas da integração, Folha 2 (de 33), pendências e status de cada um.
 - **Impressão:** ficha (Folhas 1 e 2, com as assinaturas feitas na tela) e via de assinatura com código de controle.
 - **Tipos de ocorrência** (administrador): até 5 vão para a Folha 1, na ordem da posição.
+- **Área de atuação e função (cadastro único):** em **Colaboradores › abrir a ficha › Editar**, o administrador escolhe a **área de atuação** (Coqueria sem rota, uma das 4 áreas do Pátio com rota e regime, ou Operação de equipamentos) e a **função**. Ao salvar, a mudança vai junto para os outros módulos:
+  - **Atividades Pátio:** a pessoa sai da rota antiga e entra na nova (Escala e efetivo), com a função e o regime novos. O histórico de faltas e folgas continua com ela.
+  - **Operação:** marque **Opera equipamentos** para colocar a pessoa na equipe de operadores (com escala ADM ou 4x4 e turma). Desmarcando, ela sai da equipe; os lançamentos antigos continuam no histórico.
+  - A ligação entre os módulos é pela matrícula e, na falta dela, pelo nome completo.
+  - Quando o administrador muda a função de um operador em **Operação › Equipe e frota**, a função também é atualizada no Efetivo e no Pátio.
+- A lista de colaboradores mostra a área de atuação de cada um e tem filtro por área.
 - Quem tem acesso ao Efetivo com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
 
 ## Fotos e arquivos (evidências)
@@ -125,6 +131,7 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - Sem sinal, o anexo fica guardado no aparelho e sobe quando a conexão voltar.
 - Quem enviou pode excluir o próprio anexo. O administrador pode excluir qualquer um.
 - **Validação por foto:** em **Rotas e configurações**, ligue **Exigir foto ao marcar uma atividade como realizada**. Com isso, o ✓ só conclui depois de anexar uma foto.
+- **Relatório fotográfico** (menu Acompanhar do Atividades Pátio): mostra as fotos do mês ou de uma semana, separadas por **rota**, com a atividade, o dia e a situação. Toque na miniatura para abrir a foto. **Imprimir / salvar PDF** gera uma página por rota com as fotos em boa qualidade (até 60 fotos por impressão; para mais, filtre por semana ou rota).
 - Os anexos ficam no próprio Firestore, que tem 1 GB grátis. Isso dá cerca de 5 a 8 mil fotos. Se um dia precisar de mais espaço, dá para migrar para o Firebase Storage (plano Blaze).
 
 ## Perfis
@@ -153,6 +160,7 @@ public/
   equip.js, eqcalc.js módulo Operação (equipamentos) e as fórmulas dos indicadores
   seed-equip.json     dados da planilha de equipamentos (usados só na importação)
   gestao.js           módulo Efetivo (fichas de acompanhamento)
+  pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   seed-gestao.json    dados da planilha de fichas (usados só na importação)
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)

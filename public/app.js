@@ -6,6 +6,7 @@ const DEMO = new URLSearchParams(location.search).has('demo');
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
 import { criarGestao, VIEWS_G, SUB_G } from './gestao.js';
 import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
+import { criarPessoas } from './pessoas.js';
 
 const TODAY = today();
 const CUR_WEEK = weekOf(TODAY);
@@ -124,6 +125,7 @@ const VIEWS = [
   { id: 'escala', nome: 'Escala e efetivo', ic: 'escala', grp: 'Acompanhar', mod: 'op' },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
+  { id: 'relfoto', nome: 'Relatório fotográfico', ic: 'cam', grp: 'Acompanhar', mod: 'op' },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
@@ -193,9 +195,9 @@ function render() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !isAdmin()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir', 'relfoto'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { $('view').innerHTML = '<div class="card"><div class="empty">Carregando a programação…</div></div>'; return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, escala: vEscala, pend: vPend, imprimir: vImprimir, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig }[UI.view];
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, escala: vEscala, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig }[UI.view];
   $('view').innerHTML = fn();
   afterRender();
 }
@@ -246,7 +248,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
   if (UI.modulo !== 'operacao' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
   $('top').innerHTML = `<h1>${v.nome}<small>${sub}</small></h1>${ctr}<div class="syncwrap" id="sync">${syncPill()}</div>`;
@@ -475,6 +477,87 @@ function vImprimir() {
   ${items.map(({ i, p }) => { let r = ''; if (p.rota !== g) { g = p.rota; r += `<tr class="grp"><td colspan="11">${esc(p.rota)}</td></tr>`; } n++; return r + `<tr><td class="c">${n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td></td></tr>`; }).join('')}
   </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div></div>`;
   return h;
+}
+
+/* ---------------- RELATÓRIO FOTOGRÁFICO ---------------- */
+// Busca as fotos das semanas escolhidas e agrupa por rota → atividade → dia.
+const RF = { sig: '', lista: null, erro: null, full: {}, preparando: 0 };
+const RF_MAX_PRINT = 60;
+function rfDocs() {
+  const area = myArea() || UI.area;
+  const ws = UI.rfIni && UI.rfIni !== 'TODAS' ? [UI.rfIni] : weeksOfMonth(UI.mes);
+  return docsFor({ mes: UI.mes, area }).filter(d => ws.includes(d.ini));
+}
+function rfCarregar(force) {
+  const docs = rfDocs();
+  const sig = docs.map(d => d.id + ':' + Object.values(d.ev || {}).reduce((a, b) => a + b, 0)).sort().join(',');
+  if (!force && sig === RF.sig) return;
+  RF.sig = sig; RF.erro = null;
+  const comFoto = docs.filter(d => Object.values(d.ev || {}).some(n => n > 0)).map(d => d.id);
+  if (!comFoto.length) { RF.lista = []; return; }
+  RF.lista = null;
+  DB.listarEvidenciasSemanas(comFoto).then(l => { if (RF.sig === sig) { RF.lista = l; if (UI.view === 'relfoto') render(); } })
+    .catch(err => { if (RF.sig === sig) { RF.lista = []; RF.erro = msgErro(err); if (UI.view === 'relfoto') render(); } });
+}
+function rfGrupos() {
+  const rota = UI.rfRota || 'TODAS'; const g = new Map();
+  for (const ev of RF.lista || []) {
+    const doc = DB.cache.semanas[ev.semana]; const p = PL.get(ev.pid); if (!doc || !p) continue;
+    if (rota !== 'TODAS' && p.rota !== rota) continue;
+    const key = doc.area + '|' + p.rota;
+    if (!g.has(key)) g.set(key, { area: doc.area, rota: p.rota, itens: new Map(), n: 0 });
+    const G = g.get(key); const ik = ev.semana + '|' + ev.pid + '|' + ev.k;
+    if (!G.itens.has(ik)) { const i = doc.ids.indexOf(ev.pid); G.itens.set(ik, { p, doc, i, k: ev.k, dt: add(doc.ini, ev.k), evs: [] }); }
+    G.itens.get(ik).evs.push(ev); G.n++;
+  }
+  const out = [...g.values()].sort((a, b) => (a.area + a.rota).localeCompare(b.area + b.rota));
+  for (const G of out) { G.itens = [...G.itens.values()].sort((a, b) => (a.dt === b.dt ? a.p.ativ.localeCompare(b.p.ativ) : a.dt < b.dt ? -1 : 1)); G.itens.forEach(x => x.evs.sort((a, b) => a.at - b.at)); }
+  return out;
+}
+function vRelFoto() {
+  rfCarregar(false);
+  const area = myArea() || UI.area;
+  const ws = weeksOfMonth(UI.mes);
+  if (UI.rfIni && UI.rfIni !== 'TODAS' && !ws.includes(UI.rfIni)) UI.rfIni = 'TODAS';
+  const rts = [...new Set(rotasDa(area).map(r => r.rota))];
+  if (UI.rfRota && UI.rfRota !== 'TODAS' && !rts.includes(UI.rfRota)) UI.rfRota = 'TODAS';
+  const periodo = UI.rfIni && UI.rfIni !== 'TODAS' ? weekLabel(UI.rfIni) : monthLabel(UI.mes);
+  let h = `<div class="filters noprint">
+    <label class="sel"><span>Mês</span><select class="in" id="rfMes">${meses().map(m => `<option value="${m}" ${m === UI.mes ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>
+    <label class="sel"><span>Semana</span><select class="in" id="rfSem"><option value="TODAS">Mês inteiro</option>${ws.map(w => `<option value="${w}" ${w === UI.rfIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
+    ${myArea() ? `<label class="sel"><span>Área</span><select class="in" disabled><option>${AREA_S[myArea()]}</option></select></label>` : `<label class="sel"><span>Área</span><select class="in" id="rfArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`}
+    <label class="sel"><span>Rota</span><select class="in" id="rfRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rfRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
+    <button class="btn" data-act="rfreload" style="align-self:flex-end">Atualizar</button>
+    ${!framed ? `<button class="btn pri" data-act="rfprint" style="align-self:flex-end" ${RF.preparando ? 'disabled' : ''}>${I.print} ${RF.preparando ? `Preparando ${RF.preparando}…` : 'Imprimir / salvar PDF'}</button>` : ''}
+  </div>`;
+  if (RF.lista === null) return h + '<div class="card"><div class="empty">Buscando as fotos…</div></div>';
+  if (RF.erro) h += `<p class="err">${esc(RF.erro)}</p>`;
+  const gs = rfGrupos();
+  const nFotos = gs.reduce((n, G) => n + G.n, 0), nAtiv = gs.reduce((n, G) => n + G.itens.length, 0);
+  h += `<div class="mini noprint"><div><b class="num">${nFotos}</b><span>Fotos e arquivos</span></div><div><b class="num">${nAtiv}</b><span>Atividades com foto</span></div><div><b class="num">${gs.length}</b><span>Rotas</span></div></div>`;
+  if (!gs.length) return h + `<div class="card"><div class="empty">Nenhuma foto em ${esc(periodo)}${UI.rfRota && UI.rfRota !== 'TODAS' ? ' na rota ' + esc(UI.rfRota) : ''}. As fotos entram aqui quando são anexadas no Apontar ou na Programação.</div></div>`;
+  const stChip = x => { const c = x.i >= 0 ? st(x.doc, x.i, x.k) : 'X'; return `<span class="pill ${c === 'R' || c === 'E' ? 'ok' : c === 'N' ? 'bad' : c === 'A' ? 'warn' : 'neu'}">${ST_NOME[c]}</span>`; };
+  // tela
+  h += '<div class="stackcol noprint">' + gs.map(G => `<div class="card"><header><h2>${esc(G.rota)}</h2><p>${AREA_S[G.area]} · ${G.itens.length} atividade(s) · ${G.n} foto(s)</p></header><div class="body"><div class="rflist">
+    ${G.itens.map(x => `<div class="rfitem"><div class="rfhd"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l muted small">${DAYS[x.k]} ${ddmm(x.dt)} · ${esc(x.p.local)} · <span class="mono">${x.p.id}</span></div></div>${stChip(x)}</div>
+      <div class="evgrid">${x.evs.map(e => `<button type="button" class="evitem" data-rfev="${e.id}" title="${esc(e.nome)} · ${esc(title(e.porNome || ''))} · ${fmtAt(e.at)}">${e.thumb ? `<img src="${e.thumb}" alt="${esc(x.p.ativ)}" loading="lazy">` : `<span class="evfile">${I.file}<small>${esc((e.nome.split('.').pop() || '').toUpperCase())}</small></span>`}<span class="evcap">${fmtAt(e.at)}</span></button>`).join('')}</div></div>`).join('')}
+  </div></div></div>`).join('') + '</div>';
+  // impressão
+  const ini = UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[0], fim = add(UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[ws.length - 1], 6);
+  h += `<div class="rfprint">${gs.map(G => `<div class="paper rfpg"><div class="hd"><div><h3>RELATÓRIO FOTOGRÁFICO</h3><div class="meta"><span><b>Área:</b> ${AREA_S[G.area]}</span><span><b>Rota:</b> ${esc(G.rota)}</span><span><b>Período:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Fotos:</b> ${G.n}</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>Pátio de Carvão</div></div>
+    ${G.itens.map(x => `<div class="rfp-item"><div class="rfp-t"><b>${DAYS[x.k]} ${ddmm(x.dt)}</b> · ${esc(x.p.ativ)} · ${esc(x.p.local)} · ${ST_NOME[x.i >= 0 ? st(x.doc, x.i, x.k) : 'X']}</div><div class="rfp-grid">${x.evs.map(e => `<figure>${e.tipo && e.tipo.startsWith('image/') ? `<img src="${RF.full[e.id] || e.thumb}" alt="">` : `<div class="rfp-file">${esc(e.nome)}</div>`}<figcaption>${fmtAt(e.at)} · ${esc(title(e.porNome || ''))}</figcaption></figure>`).join('')}</div></div>`).join('')}
+    <div class="sign"><div>Líder</div><div>Supervisor</div></div></div>`).join('')}</div>`;
+  return h;
+}
+async function rfImprimir() {
+  const evs = rfGrupos().flatMap(G => G.itens.flatMap(x => x.evs)).filter(e => e.tipo && e.tipo.startsWith('image/'));
+  if (evs.length > RF_MAX_PRINT) { toast(`São ${evs.length} fotos. Escolha uma semana ou uma rota (até ${RF_MAX_PRINT} por impressão).`); return; }
+  const falta = evs.filter(e => !RF.full[e.id]);
+  RF.preparando = falta.length; if (falta.length) render();
+  for (const e of falta) { try { const d = await DB.abrirEvidencia(e.id); if (d) RF.full[e.id] = d; } catch (err) { /* usa a miniatura */ } RF.preparando--; const b = document.querySelector('[data-act="rfprint"]'); if (b && RF.preparando) b.textContent = `Preparando ${RF.preparando}…`; }
+  RF.preparando = 0; render();
+  await Promise.all([...document.querySelectorAll('.rfprint img')].map(im => (im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))));
+  window.print();
 }
 
 /* ---------------- PLANO PADRÃO ---------------- */
@@ -727,6 +810,10 @@ function afterRender() {
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; const t = $('liderTxt'); if (t) t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); });
   on('fPArea', 'change', e => { UI.pArea = e.target.value; render(); });
+  on('rfMes', 'change', e => { UI.mes = e.target.value; UI.rfIni = 'TODAS'; DB.watchMonths([UI.mes]); render(); });
+  on('rfSem', 'change', e => { UI.rfIni = e.target.value; render(); });
+  on('rfArea', 'change', e => { UI.area = e.target.value; UI.rfRota = 'TODAS'; render(); });
+  on('rfRota', 'change', e => { UI.rfRota = e.target.value; render(); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
   on('fNova', 'submit', e => {
@@ -786,6 +873,7 @@ document.addEventListener('click', async e => {
       await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
     });
   }
+  if (d.rfev) { const ev = (RF.lista || []).find(x => x.id === d.rfev); if (ev) verEvidencia(ev, () => { RF.lista = RF.lista.filter(x => x.id !== ev.id); }, () => { $('layer').innerHTML = ''; render(); }); return; }
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
     case 'loginGoogle': try { await DB.signInGoogle(); } catch (err) { toast('Não foi possível entrar: ' + msgErro(err)); } break;
@@ -838,6 +926,8 @@ document.addEventListener('click', async e => {
       UI.busy = false; render(); break;
     }
     case 'print': window.print(); break;
+    case 'rfprint': rfImprimir(); break;
+    case 'rfreload': RF.sig = ''; render(); break;
     case 'csv': exportCSV(); break;
   }
 });
@@ -902,8 +992,9 @@ window.addEventListener('online', () => { const s = $('sync'); if (s) s.innerHTM
 window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
 window.addEventListener('pagehide', salvarUI);
 
-const EQ = criarEquip({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, framed, UI });
-const GE = criarGestao({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, prepararFoto, framed, UI });
+const PES = criarPessoas(DB);
+const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, framed, UI });
+const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, prepararFoto, framed, UI });
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { if (AUTH.status === 'ready') schedule(); },

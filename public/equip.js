@@ -20,7 +20,7 @@ export const SUB_E = {
 };
 
 export function criarEquip(X) {
-  const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, UI } = X;
+  const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, UI, PES } = X;
   const $ = id => document.getElementById(id);
   const TODAY = today();
   const E = () => DB.cache.e;
@@ -237,7 +237,7 @@ export function criarEquip(X) {
     const o = nome ? E().cad.operadores.find(x => x.nome === nome) : { nome: '', funcao: E().config.funcoes[0] || '', escala: 'ADM', turma: '', fixo: true, situacao: 'TRABALHANDO', de: null, ate: null };
     formSheet(nome ? 'Operador' : 'Novo operador', nome ? esc(title(nome)) : '', `
       ${nome ? '' : '<label class="sel"><span>Nome completo</span><input class="in" id="foNome"></label>'}
-      <div class="row2"><label class="sel"><span>Função</span><select class="in" id="foFun">${E().config.funcoes.map(f => `<option ${f === o.funcao ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label><label class="sel"><span>Fixo?</span><select class="in" id="foFixo"><option value="1" ${o.fixo !== false ? 'selected' : ''}>Sim</option><option value="0" ${o.fixo === false ? 'selected' : ''}>Não</option></select></label></div>
+      <div class="row2"><label class="sel"><span>Função</span><select class="in" id="foFun">${[...new Set([...E().config.funcoes, ...(o.funcao ? [o.funcao] : [])])].map(f => `<option ${f === o.funcao ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></label><label class="sel"><span>Fixo?</span><select class="in" id="foFixo"><option value="1" ${o.fixo !== false ? 'selected' : ''}>Sim</option><option value="0" ${o.fixo === false ? 'selected' : ''}>Não</option></select></label></div>
       <div class="row2"><label class="sel"><span>Escala</span><select class="in" id="foEsc"><option ${o.escala !== '4x4' ? 'selected' : ''}>ADM</option><option ${o.escala === '4x4' ? 'selected' : ''}>4x4</option></select></label><label class="sel"><span>Turma (4x4)</span><select class="in" id="foTur"><option value="">—</option>${Object.keys(E().config.turmas || {}).map(t => `<option ${t === o.turma ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
       <label class="sel"><span>Situação</span><select class="in" id="foSit">${E().config.situacoes.map(s => `<option ${s.sit === (o.situacao || 'TRABALHANDO') ? 'selected' : ''}>${esc(s.sit)}</option>`).join('')}</select></label>
       <div class="row2"><label class="sel"><span>De (vazio = hoje)</span><input class="in" type="date" id="foDe" value="${o.de || ''}"></label><label class="sel"><span>Até (vazio = sem data)</span><input class="in" type="date" id="foAte" value="${o.ate || ''}"></label></div>
@@ -248,7 +248,7 @@ export function criarEquip(X) {
       let lista = E().cad.operadores.slice();
       if (!nome) { n.nome = $('foNome').value.trim().toUpperCase(); if (!n.nome) throw new Error('Informe o nome.'); if (lista.some(x => x.nome === n.nome)) throw new Error('Já existe esse operador.'); lista.push(n); }
       else lista = lista.map(x => (x.nome === nome ? n : x));
-      DB.eSalvarCad({ operadores: lista }); DB.log(`Operação: ${nome ? 'atualizou' : 'cadastrou'} ${short(n.nome)}${n.situacao !== 'TRABALHANDO' ? ' (' + n.situacao.toLowerCase() + ')' : ''}`); toast('Operador salvo');
+      DB.eSalvarCad({ operadores: lista }); if (nome && n.funcao !== o.funcao && PES && isAdmin()) PES.syncFuncao(n, n.funcao); DB.log(`Operação: ${nome ? 'atualizou' : 'cadastrou'} ${short(n.nome)}${n.situacao !== 'TRABALHANDO' ? ' (' + n.situacao.toLowerCase() + ')' : ''}`); toast('Operador salvo');
     });
     const del = document.querySelector('#fSheet [data-del]');
     if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar remoção'; return; } DB.eSalvarCad({ operadores: E().cad.operadores.filter(x => x.nome !== nome) }); $('layer').innerHTML = ''; toast('Operador removido'); render(); };
