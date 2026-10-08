@@ -1,6 +1,7 @@
 rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
 // Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), bloqueado (sem acesso).
+// Módulos por usuário: operacao e/ou gestao (campo modulos em usuarios/{uid}).
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -10,7 +11,11 @@ service cloud.firestore {
     function ativo() { return hasProfile() && perfil().papel in ['admin', 'supervisor', 'lider', 'leitor']; }
     function admin() { return hasProfile() && perfil().papel == 'admin'; }
     function gestor() { return hasProfile() && perfil().papel in ['supervisor', 'lider']; }
-    function gestorDa(area) { return gestor() && perfil().area == area; }
+    function mods() { return perfil().get('modulos', ['operacao']); }
+    function op() { return ativo() && (admin() || 'operacao' in mods()); }        // módulo Operação
+    function ge() { return ativo() && (admin() || 'gestao' in mods()); }          // módulo Gestão
+    function geEdita() { return ge() && (admin() || perfil().papel in ['supervisor', 'lider']); }
+    function gestorDa(area) { return gestor() && perfil().area == area && 'operacao' in mods(); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
     function boot() { return /databases/$(database)/documents/config/bootstrap; }
 
@@ -22,7 +27,7 @@ service cloud.firestore {
     }
 
     match /config/sistema {
-      allow read: if ativo();
+      allow read: if op();
       allow write: if admin();
     }
 
@@ -48,40 +53,61 @@ service cloud.firestore {
     }
 
     match /plano/{area} {
-      allow read: if ativo();
+      allow read: if op();
       allow write: if admin();
     }
 
     match /colaboradores/{area} {
-      allow read: if ativo();
+      allow read: if op();
       allow write: if admin();
     }
 
     match /situacao/{mes} {
-      allow read: if ativo();
-      allow write: if admin() || gestor();
+      allow read: if op();
+      allow write: if admin() || (gestor() && 'operacao' in mods());
     }
 
     match /semanas/{id} {
-      allow read: if ativo();
+      allow read: if op();
       allow create, delete: if admin();
       allow update: if admin() || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
 
     // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
     match /evidencias/{id} {
-      allow read: if ativo();
+      allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area))
         && request.resource.data.por == request.auth.uid
-        && request.resource.data.thumb.size() < 80000;
+        && request.resource.data.thumb.size() < 80000
+        // no máximo 6 anexos por atividade em cada dia
+        && get(/databases/$(database)/documents/semanas/$(request.resource.data.semana)).data.get('ev', {})
+             .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
       allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
     }
     match /evidenciasArquivo/{id} {
-      allow read: if ativo();
+      allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area))
         && request.resource.data.por == request.auth.uid
         && request.resource.data.dados.size() < 1000000;
       allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+    }
+
+    // ---------- Módulo Gestão: fichas de acompanhamento ----------
+    match /gestao/{docId} {
+      allow read: if ge();
+      allow write: if admin();
+    }
+    match /gocorr/{id} {
+      allow read: if ge();
+      allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid;
+      allow update: if admin() || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha']));
+      allow delete: if admin();
+    }
+    match /gassin/{id} {
+      allow read: if ge();
+      allow create: if geEdita() && request.resource.data.por == request.auth.uid;
+      allow update: if false;
+      allow delete: if admin();
     }
 
     match /historico/{id} {

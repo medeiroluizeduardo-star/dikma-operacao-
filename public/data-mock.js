@@ -3,13 +3,14 @@
 import { AREAS, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
 export const isMock = true;
-export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [] };
+export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0 };
+export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 const LS = 'coqueria-demo-v1';
 let cb = {}, me = null;
 
 const changed = () => { persist(); cb.onData && cb.onData(); };
 function persist() {
-  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid })); } catch (e) { /* sem armazenamento */ }
+  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')) })); } catch (e) { /* sem armazenamento */ }
 }
 const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -37,10 +38,14 @@ async function fresh() {
     }
     cache.config.meses.push(m);
   }
+  const sg = await (await fetch('seed-gestao.json')).json();
+  cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o, assinaturaId: null, metodo: null })) };
+  cache.gAssin = {};
   const lideres = Object.values(x.colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR');
   const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null },
-    ...lideres.map(c => { const p = slug(c.nome); return { uid: c.id, nome: c.nome, login: p[0] + '.' + p[p.length - 1], senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area }; }),
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'gestao'] },
+    { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
+    ...lideres.map(c => { const p = slug(c.nome); return { uid: c.id, nome: c.nome, login: p[0] + '.' + p[p.length - 1], senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? ['operacao', 'gestao'] : ['operacao'] }; }),
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
@@ -53,6 +58,7 @@ export async function start(callbacks) {
   if (saved && saved.config) {
     Object.assign(cache, { config: saved.config, configLoaded: true, plano: saved.plano, colabs: saved.colabs, sitByMonth: saved.sitByMonth, log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     cache.semanas = Object.fromEntries(Object.entries(saved.semanas).map(([k, v]) => [k, toLocal(k, v)]));
+    if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await (await fetch('seed-gestao.json')).json(); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
   } else await fresh();
   cache.config.meses.forEach(m => cache.monthsLoaded.add(m));
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
@@ -80,12 +86,12 @@ export async function signIn(login, senha) {
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
 export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
-export async function criarUsuario({ nome, login, senha, papel, area }) {
+export async function criarUsuario({ nome, login, senha, papel, area, modulos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
   if (String(senha).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
-  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, trocarSenha: true }); changed();
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, modulos: modulos || ['operacao'], trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');
@@ -127,3 +133,19 @@ export async function removerEvidencia(ev) {
   const i = EV.findIndex(x => x.id === ev.id); if (i >= 0) EV.splice(i, 1);
   const w = cache.semanas[ev.semana]; const key = ev.pid + '|' + ev.k; w.ev[key] = Math.max(0, (w.ev[key] || 1) - 1); changed();
 }
+
+// ---------- Gestão (demonstração) ----------
+const gch = () => { cache.gVersao++; changed(); };
+const gid = () => 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+export async function gImportar() { /* a demonstração já começa com a planilha */ }
+export async function gSalvarColabs(itens) { cache.g.colabs = itens; gch(); }
+export async function gSalvarConfig(patch) { cache.g.config = { ...cache.g.config, ...patch }; gch(); }
+export function gNovaOcorrencia(o) { const x = { id: gid(), ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '' }; cache.g.ocorr = [...cache.g.ocorr, x]; gch(); return x; }
+export function gExcluirOcorrencia(id) { cache.g.ocorr = cache.g.ocorr.filter(o => o.id !== id); gch(); }
+export function gAssinar(a) {
+  const id = gid(); cache.gAssin[id] = { ...a, por: me.uid, porNome: me.nome };
+  cache.g.ocorr = cache.g.ocorr.map(o => (a.ocorrIds.includes(o.id) ? { ...o, status: a.metodo === 'recusa' ? 'recusada' : 'assinada', assinadoEm: a.metodo === 'recusa' ? null : a.em, assinaturaId: id, metodo: a.metodo, testemunha: (a.testemunhas || []).join(' e ') } : o));
+  gch(); return id;
+}
+export async function gAbrirAssinatura(id) { return cache.gAssin[id] || null; }
+export function gCarregarAssin() { /* já está em memória */ }

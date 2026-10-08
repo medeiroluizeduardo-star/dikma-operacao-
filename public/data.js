@@ -11,6 +11,10 @@
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" } }
 //   historico/{auto}          { at, uid, nome, t }
+//   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
+//   gestao/colaboradores      { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }
+//   gocorr/{id}               { data, mat, nome, tipo, desc, lider, status, assinadoEm, assinaturaId, metodo, testemunha }
+//   gassin/{id}               { mat, ocorrIds[], metodo: tela|papel|recusa, colab, resp, respNome, foto, testemunhas[], em }
 //   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
 //   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
@@ -26,8 +30,11 @@ import {
 import { AREAS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
 export const isMock = false;
-export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [] };
+export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0 };
+export const temOperacao = u => !!u && (u.papel === 'admin' || (u.modulos || ['operacao']).includes('operacao'));
+export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 
+let gestaoOn = false;
 let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0, aux = null;
 
 export const pendingWrites = () => pending;
@@ -84,7 +91,7 @@ export async function start(callbacks) {
       if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
       if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
-      if (!dataSubs.length) startData();
+      if (!dataSubs.length) startData(); else if (temGestao(me) && !gestaoOn) startGestao();
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
@@ -120,7 +127,7 @@ export async function criarPrimeiroAdmin({ nome, login, senha }) {
   const uid = cred.user.uid;
   const b = writeBatch(db);
   b.set(doc(db, 'config', 'bootstrap'), { uid, login });
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel: 'admin', area: null, trocarSenha: false, criadoEm: serverTimestamp() });
+  b.set(doc(db, 'usuarios', uid), { nome, login, papel: 'admin', area: null, modulos: ['operacao', 'gestao'], trocarSenha: false, criadoEm: serverTimestamp() });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }
@@ -139,13 +146,13 @@ async function novaConta(login, senha) {
   return { email, uid };
 }
 
-export async function criarUsuario({ nome, login, senha, papel, area }) {
+export async function criarUsuario({ nome, login, senha, papel, area, modulos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
   const { email, uid } = await novaConta(login, senha);
   const b = writeBatch(db);
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }
@@ -177,21 +184,24 @@ export async function alterarSenha(atual, nova) {
 
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  if (temOperacao(me)) {
   on(doc(db, 'config', 'sistema'), s => { cache.config = s.exists() ? s.data() : null; cache.configLoaded = true; changed(); });
   on(collection(db, 'plano'), qs => { cache.plano = {}; qs.forEach(d => { cache.plano[d.id] = d.data().itens || []; }); changed(); });
   on(collection(db, 'colaboradores'), qs => { cache.colabs = {}; qs.forEach(d => { cache.colabs[d.id] = d.data().itens || []; }); changed(); });
+  } else { cache.configLoaded = true; }
   on(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(40)), qs => {
     cache.log = qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { ...x, at: x.at ? x.at.toDate() : new Date() }; });
     changed();
   });
+  if (temGestao(me)) startGestao();
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear(); watchMonths(keep);
 }
 function stopData() {
-  dataSubs.forEach(f => f()); dataSubs = [];
+  dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false;
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
-  Object.assign(cache, { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [] });
+  Object.assign(cache, { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {} });
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
@@ -199,6 +209,7 @@ const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, d: x.ids.m
 
 // Mantém em tempo real só os meses que a tela precisa.
 export function watchMonths(meses) {
+  if (me && !temOperacao(me)) return;
   if (!me || !ATIVOS.has(me.papel) || !db) { meses.forEach(m => monthSubs.set(m, [])); return; }
   const want = new Set(meses.filter(Boolean));
   for (const [m, fs] of monthSubs) if (!want.has(m)) {
@@ -291,4 +302,51 @@ export async function importar(seed, meses, aPartirDe) {
   for (const [m, v] of Object.entries(x.sit)) b.set(doc(db, 'situacao', m), { v });
   await b.commit();
   for (const m of meses) await gerarMes(m, x.plano, aPartirDe);
+}
+
+// ---------- módulo Gestão (fichas de acompanhamento) ----------
+function startGestao() {
+  gestaoOn = true;
+  const ok = { c: false, l: false, o: false };
+  const g = () => { cache.g.loaded = ok.c && ok.l && ok.o; cache.gVersao++; changed(); };
+  const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  on(doc(db, 'gestao', 'config'), s => { cache.g.config = s.exists() ? s.data() : null; ok.c = true; g(); });
+  on(doc(db, 'gestao', 'colaboradores'), s => { cache.g.colabs = (s.exists() && s.data().itens) || []; ok.l = true; g(); });
+  on(collection(db, 'gocorr'), qs => { cache.g.ocorr = qs.docs.map(d => ({ id: d.id, ...d.data() })); ok.o = true; g(); });
+}
+const gch = () => { cache.gVersao++; changed(); };
+export async function gImportar(seed) {
+  const b = writeBatch(db);
+  b.set(doc(db, 'gestao', 'config'), { codigo: seed.codigo, revisao: seed.revisao, declaracao: seed.declaracao, tipos: seed.tipos, importadoEm: serverTimestamp() });
+  b.set(doc(db, 'gestao', 'colaboradores'), { itens: seed.colabs });
+  for (const o of seed.ocorrencias) b.set(doc(collection(db, 'gocorr')), { ...o, metodo: o.status === 'assinada' ? 'importado' : null, assinaturaId: null, criadoPor: me.uid, criadoEm: serverTimestamp() });
+  await b.commit();
+}
+export const gSalvarColabs = itens => track(setDoc(doc(db, 'gestao', 'colaboradores'), { itens }));
+export const gSalvarConfig = patch => track(setDoc(doc(db, 'gestao', 'config'), patch, { merge: true }));
+export function gNovaOcorrencia(o) {
+  const r = doc(collection(db, 'gocorr'));
+  track(setDoc(r, { ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
+  return { id: r.id, ...o };
+}
+export function gExcluirOcorrencia(id) { const b = writeBatch(db); b.delete(doc(db, 'gocorr', id)); return track(b.commit()); }
+export function gAssinar(a) {
+  const r = doc(collection(db, 'gassin'));
+  const b = writeBatch(db);
+  const reg = { ...a, por: me.uid, porNome: me.nome || me.login || '' };
+  b.set(r, { ...reg, criadoEm: serverTimestamp() });
+  for (const id of a.ocorrIds) b.update(doc(db, 'gocorr', id), { status: a.metodo === 'recusa' ? 'recusada' : 'assinada', assinadoEm: a.metodo === 'recusa' ? null : a.em, assinaturaId: r.id, metodo: a.metodo, testemunha: (a.testemunhas || []).join(' e ') });
+  cache.gAssin[r.id] = reg;
+  track(b.commit());
+  return r.id;
+}
+export async function gAbrirAssinatura(id) {
+  if (cache.gAssin[id]) return cache.gAssin[id];
+  const s = await getDoc(doc(db, 'gassin', id)); if (!s.exists()) return null;
+  cache.gAssin[id] = s.data(); return cache.gAssin[id];
+}
+const carregando = new Set();
+export function gCarregarAssin(id) {
+  if (!id || cache.gAssin[id] || carregando.has(id)) return; carregando.add(id);
+  getDoc(doc(db, 'gassin', id)).then(s => { if (s.exists()) { cache.gAssin[id] = s.data(); gch(); } }).catch(() => {}).finally(() => carregando.delete(id));
 }

@@ -4,6 +4,7 @@ import { AREAS, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, 
 
 const DEMO = new URLSearchParams(location.search).has('demo');
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
+import { criarGestao, VIEWS_G, SUB_G } from './gestao.js';
 
 const TODAY = today();
 const CUR_WEEK = weekOf(TODAY);
@@ -19,7 +20,9 @@ const n0 = v => Number(v).toLocaleString('pt-BR');
 let AUTH = { status: 'loading' }, ME = null;
 let PLANO = [], PL = new Map(), COLABS = [];
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; } catch (e) { /* ignora */ }
+UI.modulo = 'operacao';
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; } catch (e) { /* ignora */ }
+const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo })); } catch (e) { /* ignora */ } };
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
@@ -107,24 +110,34 @@ const I = {
   dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></svg>',
   cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>',
+  swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h13l-3-3M20 16H7l3 3"/></svg>',
   key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg>',
   eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
   out: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>',
   google: '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>'
 };
 const VIEWS = [
-  { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar' },
-  { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar' },
-  { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar' },
-  { id: 'escala', nome: 'Escala e efetivo', ic: 'escala', grp: 'Acompanhar' },
-  { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar' },
-  { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar' },
-  { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true },
-  { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true },
-  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true },
-  { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true }
+  { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
+  { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar', mod: 'op' },
+  { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
+  { id: 'escala', nome: 'Escala e efetivo', ic: 'escala', grp: 'Acompanhar', mod: 'op' },
+  { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
+  { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
+  { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
+  { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true, mod: 'op' },
+  { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
+  ...VIEWS_G,
+  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' }
 ];
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
+const MODS = { operacao: { nome: 'Operação', sub: 'Programação e apontamento', key: 'op', inicio: 'painel' }, gestao: { nome: 'Gestão', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
+const modsDe = u => (!u ? [] : u.papel === 'admin' ? ['operacao', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
+const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || isAdmin()));
+function ensureModulo() {
+  const ms = modsDe(ME); if (!ms.length) return;
+  if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
+  if (!viewsDoModulo().some(v => v.id === UI.view)) UI.view = MODS[UI.modulo].inicio;
+}
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
 /* ---------------- telas de acesso ---------------- */
@@ -140,6 +153,7 @@ function renderGate() {
   if (s === 'signedOut') return gate(`<h2>Entrar</h2><form id="fLogin" class="stackform" novalidate>
     <label class="sel"><span>Usuário</span><input class="in" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
     ${senhaField('lgPass', 'Senha', 'current-password')}
+    <div class="sel"><span>Entrar em</span><div class="modsel" role="radiogroup" aria-label="Módulo">${Object.entries(MODS).map(([k, m]) => `<label class="modcard"><input type="radio" name="lgMod" value="${k}" ${UI.modulo === k ? 'checked' : ''}><b>${m.nome}</b><small>${m.sub}</small></label>`).join('')}</div></div>
     <p class="err" id="lgErr" role="alert" hidden></p>
     <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
@@ -168,7 +182,8 @@ function mockSwitcher() {
 function render() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
-  rebuild();
+  rebuild(); ensureModulo();
+  if (UI.modulo === 'gestao') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : GE.render(UI.view); afterRender(); return; }
   if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = ''; renderNav(); return; }
   if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
   ensurePeriod();
@@ -185,23 +200,26 @@ let raf = 0;
 const schedule = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id === 'fQ' ? [a.selectionStart] : null; render(); if (keep) { const n = $('fQ'); if (n) { n.focus(); n.setSelectionRange(keep[0], keep[0]); } } }); };
 
 function renderNav() {
-  const atr = DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  const ge = UI.modulo === 'gestao';
+  const atr = !ge && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  const gb = ge ? GE.badge() : 0;
   const pendUsers = 0;
-  let h = '', g = '';
-  for (const v of VIEWS) {
-    if (v.admin && !isAdmin()) continue;
+  const ms = modsDe(ME);
+  let h = ms.length > 1 ? `<div class="modsw" role="tablist" aria-label="Módulo">${ms.map(m => `<button role="tab" data-mod="${m}" aria-selected="${UI.modulo === m}">${MODS[m].nome}</button>`).join('')}</div>` : `<div class="grp">${MODS[UI.modulo].nome}</div>`, g = '';
+  for (const v of viewsDoModulo()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
-    const badge = v.id === 'pend' && atr ? atr : v.id === 'usuarios' && pendUsers ? pendUsers : 0;
+    const badge = v.id === 'pend' && atr ? atr : v.id === 'gocorr' && gb ? gb : 0;
     h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num">${badge > 999 ? '999+' : badge}</span>` : ''}</button>`;
   }
   $('nav').innerHTML = h;
   $('who').innerHTML = DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`;
-  const tb = [['painel', 'Painel', 'painel'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
-  const inMore = !['painel', 'prog', 'apontar', 'escala'].includes(UI.view);
+  const tb = ge ? [['gpainel', 'Painel', 'painel'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gcontrole', 'Fichas', 'prog'], ['__more', 'Mais', 'more']]
+    : [['painel', 'Painel', 'painel'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
+  const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
-  $('tabbar').innerHTML = tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}</button>`).join('');
+  $('tabbar').innerHTML = tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}</button>`).join('');
 }
 function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -223,6 +241,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
+  if (UI.modulo === 'gestao' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${SUB_G[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
@@ -499,12 +518,13 @@ function vUsuarios() {
    <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: edmar.araujo"></label>
    <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label>
    <label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-   <label class="sel"><span>Área</span>${areaSel('id="nuArea"', '', false)}</label>
+   <label class="sel"><span>Área (Operação)</span>${areaSel('id="nuArea"', '', false)}</label>
+   <div class="sel"><span>Módulos</span><div class="row-gap"><label class="chkl"><input type="checkbox" id="nuOp" checked> Operação</label><label class="chkl"><input type="checkbox" id="nuGe"> Gestão</label></div></div>
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar'}</button>
    <p class="err wide" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada. Bloqueado não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td>${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : u.uid === ME.uid ? '<span class="muted small">você</span>' : ''}</td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada. Bloqueado não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td class="nowrap">${u.papel === 'admin' ? '<span class="muted small">Todos</span>' : ['operacao', 'gestao'].map(m => `<label class="chkl"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}> ${MODS[m].nome}</label>`).join(' ')}</td><td>${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : u.uid === ME.uid ? '<span class="muted small">você</span>' : ''}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
@@ -557,6 +577,7 @@ const evCount = (doc, pid, k) => ((doc && doc.ev) || {})[pid + '|' + k] || 0;
 const exigeFoto = () => !!(DB.cache.config && DB.cache.config.exigirFoto);
 const fmtKB = n => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
 const LIM_ARQ = 700 * 1024;
+const MAX_EV = 6; // anexos por atividade em cada dia
 function lerDataURL(file) { return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(file); }); }
 function carregarImg(file) { return new Promise((ok, ko) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => { ok(im); setTimeout(() => URL.revokeObjectURL(u), 1000); }; im.onerror = () => ko(new Error('Não foi possível abrir esta imagem.')); im.src = u; }); }
 // Reduz a foto (máx. 1600 px) e grava um carimbo com data, hora, atividade e usuário.
@@ -591,10 +612,14 @@ function evidenciasSheet(doc, i, k, opts = {}) {
     const grid = lista === null ? '<p class="muted m0">Carregando…</p>' : !lista.length ? `<p class="muted m0">${opts.exigir ? 'Anexe uma foto para concluir esta atividade como realizada.' : 'Nenhuma foto ou arquivo anexado.'}</p>` :
       `<div class="evgrid">${lista.map(e => `<button type="button" class="evitem" data-evopen="${e.id}" title="${esc(e.nome)} · ${esc(title(e.porNome || ''))} · ${fmtAt(e.at)}">${e.thumb ? `<img src="${e.thumb}" alt="${esc(e.nome)}">` : `<span class="evfile">${I.file}<small>${esc((e.nome.split('.').pop() || '').toUpperCase())}</small></span>`}<span class="evcap">${fmtAt(e.at)}</span></button>`).join('')}</div>`;
     sc.querySelector('.evbody').innerHTML = grid + (enviando ? `<p class="muted m0">Preparando ${enviando} arquivo(s)…</p>` : '');
+    const n = lista ? lista.length : 0, cheio = n >= MAX_EV;
+    const lim = sc.querySelector('.evlim'); if (lim) lim.textContent = lista === null ? '' : cheio ? `Limite de ${MAX_EV} fotos atingido. Para trocar, exclua uma.` : `${n} de ${MAX_EV} fotos`;
+    const bt = sc.querySelector('.evbtns'); if (bt) bt.hidden = cheio || lista === null;
   };
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Fotos e arquivos"><h3>Fotos e arquivos</h3><div class="sub">${esc(p.ativ)}<br>${esc(p.rota)} · ${DAYS[k]} ${ddmm(dt)} · <span class="mono">${p.id}</span></div>
     <div class="evbody"></div><p class="err" id="evErr" role="alert" hidden></p>
-    ${pode ? `<div class="row-gap"><label class="btn pri">${I.cam} Tirar foto<input type="file" accept="image/*" capture="environment" id="evCam" hidden></label><label class="btn">${I.file} Galeria ou arquivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple id="evArq" hidden></label></div>` : ''}
+    <p class="muted small m0 evlim"></p>
+    ${pode ? `<div class="row-gap evbtns"><label class="btn pri">${I.cam} Tirar foto<input type="file" accept="image/*" capture="environment" id="evCam" hidden></label><label class="btn">${I.file} Galeria ou arquivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple id="evArq" hidden></label></div>` : ''}
     <button class="btn center" type="button" data-close>${opts.exigir ? 'Cancelar' : 'Fechar'}</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') close(); };
   const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); render(); };
@@ -607,6 +632,8 @@ function evidenciasSheet(doc, i, k, opts = {}) {
   const enviar = async files => {
     $('evErr').hidden = true;
     const agora = new Date(); const carimbo = `${pad(agora.getDate())}/${pad(agora.getMonth() + 1)}/${agora.getFullYear()} ${pad(agora.getHours())}:${pad(agora.getMinutes())} · ${p.id} · ${p.ativ} · ${ME.login || title(ME.nome || '')}`;
+    const livre = MAX_EV - (lista ? lista.length : 0);
+    if (files.length > livre) { showErr('evErr', new Error(livre > 0 ? `Limite de ${MAX_EV} fotos por atividade no dia. Só ${livre === 1 ? 'a primeira foi enviada' : 'as primeiras ' + livre + ' foram enviadas'}.` : `Limite de ${MAX_EV} fotos atingido.`)); files = files.slice(0, Math.max(0, livre)); }
     for (const f of files) {
       enviando++; desenhar();
       try {
@@ -647,6 +674,7 @@ function verEvidencia(ev, onDel, voltar) {
   }).catch(err => { const box = sc.querySelector('.vwbody'); if (box) box.innerHTML = `<p class="err">${esc(msgErro(err))}</p>`; });
 }
 
+function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -714,11 +742,15 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   if (d.go) {
     if (d.go === '__more') {
-      const vs = VIEWS.filter(v => !['painel', 'prog', 'apontar', 'escala'].includes(v.id) && (!v.admin || isAdmin()));
+      const naBarra = UI.modulo === 'gestao' ? ['gpainel', 'gcolab', 'gocorr', 'gcontrole'] : ['painel', 'prog', 'apontar', 'escala'];
+      const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
+      const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
-    UI.view = d.go; UI.confirm = null; UI.more = 0; render(); scrollTo(0, 0); return;
+    UI.view = d.go; UI.confirm = null; UI.more = 0; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
+  }
+  if (d.mod) { trocarModulo(d.mod); return;
   }
   if (d.esc) { UI.escopo = d.esc; render(); return; }
   if (d.area) { UI.area = d.area; render(); return; }
@@ -810,7 +842,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
-    if (f.id === 'fLogin') { await DB.signIn($('lgUser').value, $('lgPass').value); return; }
+    if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = MODS[mr.value].inicio; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
     if (f.id === 'fFirst') {
       const nome = $('faNome').value.trim(), login = DB.normLogin($('faUser').value), senha = $('faPass').value;
       if (!nome) throw new Error('Informe seu nome.'); if (senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
@@ -826,9 +858,11 @@ document.addEventListener('submit', async e => {
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
-      if (['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor.');
+      const modulos = [$('nuOp').checked && 'operacao', $('nuGe').checked && 'gestao'].filter(Boolean);
+      if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
+      if (modulos.includes('operacao') && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor na Operação.');
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null });
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, modulos: papel === 'admin' ? ['operacao', 'gestao'] : modulos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
       UI.busy = false; UI.senhaSug = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
@@ -851,13 +885,20 @@ document.addEventListener('change', e => {
     DB.setUsuario(uid, patch); toast('Perfil atualizado');
   }
   if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
+  if (t.dataset.umod) {
+    const [uid, m] = t.dataset.umod.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
+    const atual = modsDe(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
+    if (!novo.length) { t.checked = true; toast('Deixe pelo menos um módulo'); return; }
+    DB.setUsuario(uid, { modulos: novo }); toast('Módulos atualizados');
+  }
   if (t.dataset.uarea) { DB.setUsuario(t.dataset.uarea, { area: t.value || null }); toast('Área atualizada'); }
 });
 matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'prog') render(); });
 window.addEventListener('online', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
 window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
-window.addEventListener('pagehide', () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view })); } catch (e) { /* ignora */ } });
+window.addEventListener('pagehide', salvarUI);
 
+const GE = criarGestao({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, prepararFoto, framed, UI });
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { if (AUTH.status === 'ready') schedule(); },

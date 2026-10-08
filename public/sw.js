@@ -1,7 +1,7 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v4';
-const SHELL = ['./', 'index.html', 'app.js', 'cal.js', 'data.js', 'vendor/firebase.js', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png', 'seed.json'];
+const V = 'dikma-operacao-v6';
+const SHELL = ['./', 'index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'vendor/firebase.js', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png', 'seed.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
