@@ -1,8 +1,9 @@
 # Dikma Operação
 
-Sistema web da Dikma para a Coqueria, com dois módulos:
-- **Operação:** programação e apontamento de atividades do Pátio de Carvão.
-- **Gestão:** Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
+Sistema web da Dikma para a Coqueria, com três módulos:
+- **Atividades Pátio:** programação e apontamento de atividades do Pátio de Carvão.
+- **Operação:** controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
+- **Efetivo:** Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 Funciona no PC e no celular, com login por usuário e senha, dados em tempo real para todos e funcionamento sem sinal.
 
 - **Hospedagem:** Firebase Hosting (grátis), endereço `https://SEU-PROJETO.web.app`
@@ -77,12 +78,32 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 ---
 
 ## Módulos e acesso
-- Na tela de login a pessoa escolhe **Operação** ou **Gestão**. Se ela só tiver acesso a um módulo, entra direto nele.
+- Na tela de login a pessoa escolhe **Atividades Pátio**, **Operação** ou **Efetivo**. Se ela só tiver acesso a um módulo, entra direto nele.
 - Quem tem os dois troca de módulo pelo seletor no topo do menu (no celular: **Mais › Ir para…**).
-- Em **Usuários e acessos**, marque os módulos de cada pessoa. O administrador tem acesso aos dois.
+- Em **Usuários e acessos**, marque os módulos de cada pessoa. O administrador tem acesso a todos.
 
-## Módulo Gestão (fichas de acompanhamento)
-- **Primeiro acesso:** entre como administrador, escolha **Gestão** e clique em **Importar dados da planilha**. Isso carrega os 179 colaboradores, as ocorrências já lançadas e os 12 tipos com texto padrão.
+## Módulo Operação (controle de equipamentos)
+- **Primeiro acesso:** entre como administrador, escolha **Operação** e clique em **Importar dados da planilha**. Isso carrega os 25 operadores, as 37 identificações da frota, os turnos, as causas, as metas, os pesos, os feriados e os lançamentos e paradas de setembro e outubro.
+- **Painel:** mostra os mesmos indicadores do DASHBOARD da planilha, com semáforo pelas metas:
+  - dias operados, horas operadas, disponibilidade física, efetividade, paradas, horas paradas, MTTR e MTBF;
+  - operadores ativos, horas extras, paradas sem liberação, destaque do mês, quem está fora da coqueria hoje, nota média, avaliações pendentes e paradas do operador.
+  - Abaixo vêm a produtividade por operador, as horas por dia, o Pareto das causas, os equipamentos com mais horas paradas e reincidentes e a classificação dos operadores com a variação em relação ao mês anterior.
+- **Lançamentos:** as alocações do dia (equipamento, operador, área, status e horário). O horário vazio usa o turno. O sistema calcula a janela, as horas paradas e as horas operadas. **Copiar do dia anterior** repete as alocações do último dia, deixando de fora quem está ausente ou de folga na escala 4x4.
+- **Paradas:** registro com causa e responsabilidade. Sem horário de fim, a parada fica como **sem liberação** até alguém tocar em **Liberar**. Também avisa de inconsistências, como parada sem lançamento correspondente.
+- **Equipe e frota:**
+  - operadores com função, escala (ADM ou 4x4 por turma), fixo ou não e situação (férias, folga, atestado…) com período;
+  - **escala do mês**, que mostra quem foi lançado, quem estava escalado e não foi lançado, as folgas e as ausências;
+  - cadastro da frota.
+- **Inspeções 5S e segurança:** checklist de 9 itens. As porcentagens entram na nota do operador.
+- **Avaliação mensal:** proatividade, 5S e segurança (1 a 5), faltas, atrasos e atestados. A nota é recalculada na hora.
+- **Análises:** evolução mês a mês e verificação de consistência dos lançamentos.
+- **Configurações** (administrador): turnos, turmas 4x4, metas, pesos e faixas da classificação, causas de parada e feriados.
+- Supervisor ou Líder com o módulo Operação lança, registra paradas, inspeções e avaliações e atualiza a situação dos operadores. Somente leitura só consulta.
+- As fórmulas reproduzem as da planilha. Conferido em outubro/2026: 8 dias, 59 alocações, 432,42 h previstas, 408,54 h operadas, disponibilidade 94,3%, MTTR 1,63 h, MTBF 27,2 h e nota média 79,4.
+- **Diferença em setembro:** os números ficam um pouco diferentes da planilha. Na planilha, as paradas digitadas com apelido (ex.: "VITOR") não se ligavam ao lançamento feito com o nome completo. Na importação o sistema corrige isso, e daqui em diante o operador é escolhido da lista.
+
+## Módulo Efetivo (fichas de acompanhamento)
+- **Primeiro acesso:** entre como administrador, escolha **Efetivo** e clique em **Importar dados da planilha**. Isso carrega os 179 colaboradores, as ocorrências já lançadas e os 12 tipos com texto padrão.
 - **Painel:** fichas em dia, ativos, em experiência, integração completa, assinaturas pendentes e recusas. Mostra também as ocorrências por mês e por tipo e alertas de experiência (45 e 90 dias), integração incompleta e assinatura parada há mais de 7 dias.
 - **Colaboradores:** busca, filtros e a ficha de cada pessoa, com a Folha 1 (integração) e a Folha 2 (ocorrências). O administrador cadastra, edita e informa a demissão.
 - **Ocorrências:** registro com o texto padrão do tipo e acompanhamento da situação (aguardando, assinada ou recusada).
@@ -93,7 +114,7 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Controle de fichas:** grade com as datas da integração, Folha 2 (de 33), pendências e status de cada um.
 - **Impressão:** ficha (Folhas 1 e 2, com as assinaturas feitas na tela) e via de assinatura com código de controle.
 - **Tipos de ocorrência** (administrador): até 5 vão para a Folha 1, na ordem da posição.
-- Quem tem acesso à Gestão com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
+- Quem tem acesso ao Efetivo com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
 
 ## Fotos e arquivos (evidências)
 - Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
@@ -128,8 +149,10 @@ Edite o arquivo direto no GitHub (ícone de lápis) e salve com **Commit changes
 ```
 public/
   index.html          visual e estrutura da página
-  app.js              telas e regras de negócio (módulo Operação)
-  gestao.js           módulo Gestão (fichas de acompanhamento)
+  app.js              telas e regras de negócio (módulo Atividades Pátio)
+  equip.js, eqcalc.js módulo Operação (equipamentos) e as fórmulas dos indicadores
+  seed-equip.json     dados da planilha de equipamentos (usados só na importação)
+  gestao.js           módulo Efetivo (fichas de acompanhamento)
   seed-gestao.json    dados da planilha de fichas (usados só na importação)
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)
@@ -155,6 +178,9 @@ firebase.json         configuração do Hosting
 | `situacao/{AAAA-MM}` | folgas, férias, atestados etc. do mês |
 | `semanas/{ÁREA\|AAAA-MM-DD}` | programação da semana com o status de cada dia e os motivos |
 | `historico` | registro de quem apontou o quê |
+| `eq/config`, `eq/cadastro` | Operação: turnos, causas, metas, pesos, feriados · operadores e frota |
+| `eqlanc`, `eqpar`, `eqinsp` | Operação: lançamentos, paradas e inspeções (campo `mes`) |
+| `eqaval/{AAAA-MM}` | Operação: avaliação mensal dos operadores |
 | `gestao/config` | código e revisão da ficha, declaração, tipos de ocorrência |
 | `gestao/colaboradores` | colaboradores da Gestão (matrícula, nome, admissão, demissão…) |
 | `gocorr/{id}` | ocorrências (data, tipo, descrição, situação da assinatura) |

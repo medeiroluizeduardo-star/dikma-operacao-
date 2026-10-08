@@ -3,14 +3,15 @@
 import { AREAS, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
 export const isMock = true;
-export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0 };
+export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }, eVersao: 0 };
+export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 const LS = 'coqueria-demo-v1';
 let cb = {}, me = null;
 
 const changed = () => { persist(); cb.onData && cb.onData(); };
 function persist() {
-  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')) })); } catch (e) { /* sem armazenamento */ }
+  try { localStorage.setItem(LS, JSON.stringify({ config: cache.config, plano: cache.plano, colabs: cache.colabs, sitByMonth: cache.sitByMonth, semanas: Object.fromEntries(Object.entries(cache.semanas).map(([k, v]) => [k, { ...v, d: undefined, ev: undefined }])), log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
 }
 const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -41,9 +42,11 @@ async function fresh() {
   const sg = await (await fetch('seed-gestao.json')).json();
   cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o, assinaturaId: null, metodo: null })) };
   cache.gAssin = {};
+  await carregarE(null);
   const lideres = Object.values(x.colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR');
   const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'gestao'] },
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'equipamentos', 'gestao'] },
+    { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
     ...lideres.map(c => { const p = slug(c.nome); return { uid: c.id, nome: c.nome, login: p[0] + '.' + p[p.length - 1], senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? ['operacao', 'gestao'] : ['operacao'] }; }),
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
@@ -58,6 +61,7 @@ export async function start(callbacks) {
   if (saved && saved.config) {
     Object.assign(cache, { config: saved.config, configLoaded: true, plano: saved.plano, colabs: saved.colabs, sitByMonth: saved.sitByMonth, log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     cache.semanas = Object.fromEntries(Object.entries(saved.semanas).map(([k, v]) => [k, toLocal(k, v)]));
+    await carregarE(saved.e);
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await (await fetch('seed-gestao.json')).json(); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
   } else await fresh();
   cache.config.meses.forEach(m => cache.monthsLoaded.add(m));
@@ -149,3 +153,25 @@ export function gAssinar(a) {
 }
 export async function gAbrirAssinatura(id) { return cache.gAssin[id] || null; }
 export function gCarregarAssin() { /* já está em memória */ }
+
+// ---------- Operação / equipamentos (demonstração) ----------
+async function carregarE(salvo) {
+  let e = salvo;
+  if (!e || !e.config) {
+    const s = await (await fetch('seed-equip.json')).json(); let n = 0;
+    const id = () => 'e' + (n++).toString(36);
+    e = { config: s.config, cad: { operadores: s.operadores, frota: s.frota }, lanc: s.lanc.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), par: s.paradas.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), insp: [], aval: s.aval || {} };
+  }
+  cache.e = { loaded: true, ...e, meses: new Set([...e.lanc.map(x => x.mes), new Date().toISOString().slice(0, 7)]) };
+}
+const ech = () => { cache.eVersao++; changed(); };
+const ECOL = { lanc: 'lanc', par: 'par', insp: 'insp' };
+export function eWatch(ms) { ms.forEach(m => m && cache.e.meses.add(m)); }
+export function eAdd(t, o) { const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); cache.e[ECOL[t]] = [...cache.e[ECOL[t]], { id, ...o, mes: o.data.slice(0, 7) }]; ech(); return id; }
+export function eUpd(t, id, p) { cache.e[ECOL[t]] = cache.e[ECOL[t]].map(x => (x.id === id ? { ...x, ...p, mes: (p.data || x.data).slice(0, 7) } : x)); ech(); }
+export function eDel(t, id) { cache.e[ECOL[t]] = cache.e[ECOL[t]].filter(x => x.id !== id); ech(); }
+export async function eSalvarConfig(p) { cache.e.config = { ...cache.e.config, ...p }; ech(); }
+export async function eSalvarCad(p) { cache.e.cad = { ...cache.e.cad, ...p }; ech(); }
+export async function eSalvarAval(mes, op, v) { const a = cache.e.aval[mes] || (cache.e.aval[mes] = {}); a[op] = { ...(a[op] || {}), ...v }; ech(); }
+export async function eCarregarTudo() { return { lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp }; }
+export async function eImportar() { /* a demonstração já começa com a planilha */ }

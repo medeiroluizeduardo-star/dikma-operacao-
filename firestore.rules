@@ -1,7 +1,7 @@
 rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
 // Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), bloqueado (sem acesso).
-// Módulos por usuário: operacao e/ou gestao (campo modulos em usuarios/{uid}).
+// Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, equipamentos = Operação, gestao = Efetivo.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -14,6 +14,8 @@ service cloud.firestore {
     function mods() { return perfil().get('modulos', ['operacao']); }
     function op() { return ativo() && (admin() || 'operacao' in mods()); }        // módulo Operação
     function ge() { return ativo() && (admin() || 'gestao' in mods()); }          // módulo Gestão
+    function eqm() { return ativo() && (admin() || 'equipamentos' in mods()); }   // módulo Operação (equipamentos)
+    function eqEdita() { return eqm() && (admin() || perfil().papel in ['supervisor', 'lider']); }
     function geEdita() { return ge() && (admin() || perfil().papel in ['supervisor', 'lider']); }
     function gestorDa(area) { return gestor() && perfil().area == area && 'operacao' in mods(); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
@@ -92,7 +94,17 @@ service cloud.firestore {
       allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
     }
 
-    // ---------- Módulo Gestão: fichas de acompanhamento ----------
+    // ---------- Módulo Operação: controle de equipamentos ----------
+    match /eq/{docId} {
+      allow read: if eqm();
+      allow write: if admin() || (docId == 'cadastro' && eqEdita());
+    }
+    match /eqlanc/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
+    match /eqpar/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
+    match /eqinsp/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
+    match /eqaval/{mes} { allow read: if eqm(); allow write: if eqEdita(); }
+
+    // ---------- Módulo Efetivo: fichas de acompanhamento ----------
     match /gestao/{docId} {
       allow read: if ge();
       allow write: if admin();

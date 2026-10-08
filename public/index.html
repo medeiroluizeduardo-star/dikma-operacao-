@@ -372,16 +372,46 @@ td.today{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .rail-btn:hover{border-color:var(--rail-ink-2)}
 .who .sel span{color:var(--rail-ink-2)}
 .who select.in{background:var(--rail-2);border-color:#2B323C;color:#fff}
+/* módulo operação (equipamentos) */
+.kpis.k8{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kpi .v.vsm{font-size:22px;line-height:1.15;padding-top:6px}
+.dot.st-ok{background:var(--st-real)}.dot.st-warn{background:var(--st-atr)}.dot.st-bad{background:var(--st-nreal)}.dot.st-neu{background:var(--line)}
+.cols.cmes,.colx.cmes{grid-template-columns:repeat(31,minmax(0,1fr));gap:2px}
+.cols.cmes{height:150px}.colx.cmes b{font-size:10.5px;font-weight:500;color:var(--ink-3)}
+.barrow.par{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) 64px}.barrow.par .n{font-weight:500;font-size:12.5px}.barrow.par .p{font-size:15px}.barrow.par .p small{display:block;font-family:var(--f-body);font-size:10.5px;color:var(--ink-3);font-weight:500}
+.up{color:var(--st-real);font-weight:600}.down{color:var(--st-nreal);font-weight:600}
+.daynav{display:flex;gap:6px;align-items:flex-end}
+select.sts{font-weight:600;font-size:12px;padding:5px 6px}
+select.sts.ok{color:var(--st-real)}select.sts.bad{color:var(--st-nreal)}select.sts.warn{color:var(--st-atr)}select.sts.ext{color:var(--st-extra)}
+table.lanc td.obs{max-width:260px}
+table.escala th,table.escala td{padding:4px 3px;font-size:11px}
+td.ec{text-align:center;min-width:20px;font-weight:700}
+td.ec.lan{color:var(--st-real)}td.ec.falt{color:var(--st-atr);background:color-mix(in srgb,var(--st-atr) 8%,transparent)}td.ec.prev{color:var(--ink-3)}
+td.ec.fol{background:var(--surface-2)}td.ec.aus{background:color-mix(in srgb,var(--st-extra) 14%,transparent);color:var(--st-extra);font-size:9.5px}
+.btn.mini-x{padding:0 4px;font-size:12px}
+.chkrow{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tri{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.tri button{border:0;background:var(--surface);padding:6px 9px;font-size:12px;font-weight:600;color:var(--ink-2)}
+.tri button+button{border-left:1px solid var(--line)}
+.tri button[aria-pressed="true"][data-v="C"]{background:var(--st-real);color:#fff}
+.tri button[aria-pressed="true"][data-v="NC"]{background:var(--st-nreal);color:#fff}
+.tri button[aria-pressed="true"][data-v="NA"]{background:var(--ink-3);color:#fff}
+.nsel{width:58px;padding:5px}.numin.sm{width:58px}
+.cfg{display:flex;flex-direction:column;gap:8px}
+.cfgrow{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}
+.cfgrow .in{width:120px}
+@media (max-width:1180px){.kpis.k8{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:860px){.modsel{grid-template-columns:1fr}.cols.cmes{height:110px}}
 /* módulos */
-.modsel{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modsel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .modcard{position:relative;display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;background:var(--surface)}
 .modcard input{position:absolute;opacity:0;pointer-events:none}
 .modcard b{font-family:var(--f-display);font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
 .modcard small{font-size:12px;color:var(--ink-3)}
 .modcard:has(input:checked){border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 7%,var(--surface))}
 .modcard:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:2px}
-.modsw{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--rail-2);border-radius:8px;padding:4px;margin:4px 0 6px}
-.modsw button{border:0;background:none;color:var(--rail-ink-2);padding:7px 6px;border-radius:6px;font-weight:600;font-size:13px}
+.modsw{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--rail-2);border-radius:8px;padding:4px;margin:4px 0 6px}
+.modsw button{border:0;background:none;color:var(--rail-ink-2);padding:7px 2px;border-radius:6px;font-weight:600;font-size:11.5px;line-height:1.15}
 .modsw button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
 .chkl{display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap}
 .nowrap{white-space:nowrap}

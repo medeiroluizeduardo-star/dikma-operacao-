@@ -15,6 +15,9 @@
 //   gestao/colaboradores      { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }
 //   gocorr/{id}               { data, mat, nome, tipo, desc, lider, status, assinadoEm, assinaturaId, metodo, testemunha }
 //   gassin/{id}               { mat, ocorrIds[], metodo: tela|papel|recusa, colab, resp, respNome, foto, testemunhas[], em }
+//   eq/config, eq/cadastro    módulo Operação: turnos, causas, metas, pesos, feriados · operadores e frota
+//   eqlanc/{id} eqpar/{id} eqinsp/{id}   lançamentos, paradas e inspeções (campo mes = AAAA-MM)
+//   eqaval/{AAAA-MM}          { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }
 //   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
 //   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
@@ -30,11 +33,13 @@ import {
 import { AREAS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 
 export const isMock = false;
-export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0 };
+export const cache = { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
+function novoE() { return { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }; }
+export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
 export const temOperacao = u => !!u && (u.papel === 'admin' || (u.modulos || ['operacao']).includes('operacao'));
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 
-let gestaoOn = false;
+let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
 let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0, aux = null;
 
 export const pendingWrites = () => pending;
@@ -91,7 +96,7 @@ export async function start(callbacks) {
       if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
       if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
-      if (!dataSubs.length) startData(); else if (temGestao(me) && !gestaoOn) startGestao();
+      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); }
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
@@ -194,14 +199,16 @@ function startData() {
     changed();
   });
   if (temGestao(me)) startGestao();
+  if (temEquip(me)) startEquip();
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear(); watchMonths(keep);
 }
 function stopData() {
-  dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false;
+  dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false;
+  for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
-  Object.assign(cache, { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {} });
+  Object.assign(cache, { config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set(), log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
@@ -349,4 +356,54 @@ const carregando = new Set();
 export function gCarregarAssin(id) {
   if (!id || cache.gAssin[id] || carregando.has(id)) return; carregando.add(id);
   getDoc(doc(db, 'gassin', id)).then(s => { if (s.exists()) { cache.gAssin[id] = s.data(); gch(); } }).catch(() => {}).finally(() => carregando.delete(id));
+}
+
+// ---------- módulo Operação (controle de equipamentos) ----------
+const EQCOL = { lanc: 'eqlanc', par: 'eqpar', insp: 'eqinsp' };
+function startEquip() {
+  eqOn = true;
+  const ok = { c: false, d: false };
+  const g = () => { cache.e.loaded = ok.c && ok.d; cache.eVersao++; changed(); };
+  const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  on(doc(db, 'eq', 'config'), s => { cache.e.config = s.exists() ? s.data() : null; ok.c = true; g(); });
+  on(doc(db, 'eq', 'cadastro'), s => { const d = s.exists() ? s.data() : {}; cache.e.cad = { operadores: d.operadores || [], frota: d.frota || [] }; ok.d = true; g(); });
+}
+// Mantém em tempo real só os meses que a tela usa (economiza leituras do plano grátis).
+export function eWatch(meses) {
+  if (!db || !eqOn) return;
+  for (const m of new Set(meses.filter(Boolean))) {
+    if (eMonthSubs.has(m)) continue;
+    const st = { l: false, p: false, i: false, a: false };
+    const done = () => { if (st.l && st.p && st.i && st.a) cache.e.meses.add(m); cache.eVersao++; changed(); };
+    const err = e => cb.onError && cb.onError(e);
+    const sub = (col, key, f) => onSnapshot(query(collection(db, col), where('mes', '==', m)), qs => {
+      cache.e[key] = cache.e[key].filter(x => x.mes !== m).concat(qs.docs.map(d => ({ id: d.id, ...d.data() }))); st[f] = true; done();
+    }, err);
+    eMonthSubs.set(m, [sub('eqlanc', 'lanc', 'l'), sub('eqpar', 'par', 'p'), sub('eqinsp', 'insp', 'i'),
+      onSnapshot(doc(db, 'eqaval', m), s => { cache.e.aval[m] = (s.exists() && s.data().itens) || {}; st.a = true; done(); }, err)]);
+  }
+}
+export function eAdd(tipo, o) { const r = doc(collection(db, EQCOL[tipo])); track(setDoc(r, { ...o, mes: o.data.slice(0, 7), por: me.uid, em: serverTimestamp() })); return r.id; }
+export function eUpd(tipo, id, patch) { const p = { ...patch }; if (p.data) p.mes = p.data.slice(0, 7); return track(updateDoc(doc(db, EQCOL[tipo], id), p)); }
+export function eDel(tipo, id) { const b = writeBatch(db); b.delete(doc(db, EQCOL[tipo], id)); return track(b.commit()); }
+export const eSalvarConfig = patch => track(setDoc(doc(db, 'eq', 'config'), patch, { merge: true }));
+export const eSalvarCad = patch => track(setDoc(doc(db, 'eq', 'cadastro'), patch, { merge: true }));
+export const eSalvarAval = (mes, op, vals) => track(setDoc(doc(db, 'eqaval', mes), { itens: { [op]: vals } }, { merge: true }));
+export async function eCarregarTudo() {
+  const ler = async c => (await getDocs(collection(db, c))).docs.map(d => ({ id: d.id, ...d.data() }));
+  const [lanc, par, insp] = await Promise.all([ler('eqlanc'), ler('eqpar'), ler('eqinsp')]);
+  return { lanc, par, insp };
+}
+export async function eImportar(seed) {
+  const b0 = writeBatch(db);
+  b0.set(doc(db, 'eq', 'config'), { ...seed.config, importadoEm: serverTimestamp() });
+  b0.set(doc(db, 'eq', 'cadastro'), { operadores: seed.operadores, frota: seed.frota });
+  for (const [m, itens] of Object.entries(seed.aval || {})) b0.set(doc(db, 'eqaval', m), { itens });
+  await b0.commit();
+  const todos = [...seed.lanc.map(x => ['eqlanc', x]), ...seed.paradas.map(x => ['eqpar', x])];
+  for (let i = 0; i < todos.length; i += 400) {
+    const b = writeBatch(db);
+    for (const [c, x] of todos.slice(i, i + 400)) b.set(doc(collection(db, c)), { ...x, mes: x.data.slice(0, 7), por: me.uid, em: serverTimestamp() });
+    await b.commit();
+  }
 }
