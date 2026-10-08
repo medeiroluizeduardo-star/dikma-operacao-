@@ -1,0 +1,70 @@
+rules_version = '2';
+// Regras de segurança — Programação do Pátio de Carvão
+// Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), pendente (sem acesso).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signed() { return request.auth != null; }
+    function uref() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
+    function hasProfile() { return signed() && exists(uref()); }
+    function perfil() { return get(uref()).data; }
+    function ativo() { return hasProfile() && perfil().papel in ['admin', 'supervisor', 'lider', 'leitor']; }
+    function admin() { return hasProfile() && perfil().papel == 'admin'; }
+    function gestor() { return hasProfile() && perfil().papel in ['supervisor', 'lider']; }
+    function gestorDa(area) { return gestor() && perfil().area == area; }
+    function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
+    function boot() { return /databases/$(database)/documents/config/bootstrap; }
+
+    // Primeiro login do sistema: quem criar este documento vira administrador.
+    match /config/bootstrap {
+      allow read: if signed();
+      allow create: if signed() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /config/sistema {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+
+    match /usuarios/{uid} {
+      allow read: if signed() && (request.auth.uid == uid || admin());
+      allow create: if signed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['nome', 'email', 'foto', 'area', 'papel', 'criadoEm', 'ultimoAcesso'])
+        && request.resource.data.area == null
+        && (request.resource.data.papel == 'pendente'
+            || (request.resource.data.papel == 'admin' && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid));
+      allow update: if admin() || (request.auth.uid == uid && soAltera(['nome', 'foto', 'ultimoAcesso']));
+      allow delete: if admin();
+    }
+
+    match /plano/{area} {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+
+    match /colaboradores/{area} {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+
+    match /situacao/{mes} {
+      allow read: if ativo();
+      allow write: if admin() || gestor();
+    }
+
+    match /semanas/{id} {
+      allow read: if ativo();
+      allow create, delete: if admin();
+      allow update: if admin() || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']));
+    }
+
+    match /historico/{id} {
+      allow read: if ativo();
+      allow create: if ativo()
+        && request.resource.data.keys().hasOnly(['at', 'uid', 'nome', 't'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time;
+      allow update, delete: if false;
+    }
+  }
+}
