@@ -139,6 +139,20 @@ const VIEWS = [
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
 const MODS = { operacao: { nome: 'Atividades Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
 const TODOS_MODS = Object.keys(MODS);
+// Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
+const MOD_IC = {
+  operacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 19h18M5 19l4.5-8 3 4.5L15 12l4 7"/><circle cx="16.5" cy="6.5" r="1.8"/></svg>',
+  bateria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M9 20V9M13 20V9M17 20V9M7 9V5h10v4"/></svg>',
+  equipamentos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17h2l2-6h7l3 6h4v3H3z"/><circle cx="7.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/><path d="M14 11V6h3"/></svg>',
+  gestao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.6 0 4.4 1.6 5 4.3"/></svg>'
+};
+function menuModulos(abrir) {
+  UI.modOpen = abrir;
+  const p = document.querySelector('.modpick'); if (!p) return;
+  p.classList.toggle('aberto', abrir);
+  const b = p.querySelector('[data-modmenu]'); if (b) b.setAttribute('aria-expanded', abrir);
+  if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
+}
 const modsDe = u => (!u ? [] : u.papel === 'admin' ? TODOS_MODS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
 const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || isAdmin()));
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
@@ -241,7 +255,12 @@ function renderNav() {
   const gb = ge ? GE.badge() : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
-  let h = ms.length > 1 ? `<div class="modsw" role="tablist" aria-label="Módulo">${ms.map(m => `<button role="tab" data-mod="${m}" aria-selected="${UI.modulo === m}">${MODS[m].nome}</button>`).join('')}</div>` : `<div class="grp">${MODS[UI.modulo].nome}</div>`, g = '';
+  const cur = MODS[UI.modulo];
+  const linha = m => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${MODS[m].sub}</small></span>`;
+  let h = `<div class="modpick${UI.modOpen ? ' aberto' : ''}">
+    <button class="modbtn" ${ms.length > 1 ? `data-modmenu="1" aria-haspopup="menu" aria-expanded="${!!UI.modOpen}" aria-label="Módulo atual: ${cur.nome}. Trocar de módulo"` : 'tabindex="-1" aria-disabled="true"'}>${linha(UI.modulo)}${ms.length > 1 ? `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 10l4-4 4 4M8 14l4 4 4-4"/></svg>` : ''}</button>
+    ${ms.length > 1 ? `<div class="modmenu" role="menu" aria-label="Módulos">${ms.map(m => `<button role="menuitemradio" aria-checked="${UI.modulo === m}" data-mod="${m}">${linha(m)}${UI.modulo === m ? '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</button>`).join('')}</div>` : ''}
+  </div>`, g = '';
   for (const v of viewsDoModulo()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
     const badge = v.id === 'pend' && atr ? atr : (v.id === 'gocorr' || v.id === 'epar') && gb ? gb : 0;
@@ -866,6 +885,14 @@ function afterRender() {
   });
 }
 
+// Menu de módulos: fecha ao clicar fora ou com Esc; setas sobem e descem.
+document.addEventListener('pointerdown', e => { if (UI.modOpen && !e.target.closest('.modpick')) menuModulos(false); });
+document.addEventListener('keydown', e => {
+  if (!UI.modOpen) return;
+  const itens = [...document.querySelectorAll('.modmenu button')]; const i = itens.indexOf(document.activeElement);
+  if (e.key === 'Escape') { menuModulos(false); const b = document.querySelector('[data-modmenu]'); if (b) b.focus(); }
+  else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); const n = itens[(i + (e.key === 'ArrowDown' ? 1 : -1) + itens.length) % itens.length]; if (n) n.focus(); }
+});
 document.addEventListener('click', async e => {
   const t = e.target.closest('button,[data-area]'); if (!t || t.closest('#layer')) return;
   const d = t.dataset;
@@ -879,7 +906,8 @@ document.addEventListener('click', async e => {
     }
     UI.view = d.go; UI.confirm = null; UI.more = 0; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
   }
-  if (d.mod) { trocarModulo(d.mod); return;
+  if (d.modmenu) { menuModulos(!UI.modOpen); if (!UI.modOpen) t.focus(); return; }
+  if (d.mod) { UI.modOpen = false; trocarModulo(d.mod); return;
   }
   if (d.esc) { UI.escopo = d.esc; render(); return; }
   if (d.area) { UI.area = d.area; render(); return; }
