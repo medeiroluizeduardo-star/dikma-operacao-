@@ -1187,4 +1187,25 @@ DB.start({
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });
 
-if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+// Versão nova publicada: o navegador baixa em segundo plano e o sistema troca sozinho.
+// Logo ao abrir (até 15 s) recarrega direto; depois disso mostra a barra "Atualizar" para não interromper ninguém.
+if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') {
+  const tinhaControle = !!navigator.serviceWorker.controller, t0 = Date.now(); let trocou = false;
+  const ocupado = () => DB.pendingWrites() > 0 || !!$('layer').children.length || !!(document.activeElement && document.activeElement.matches('input:not([type=checkbox]):not([type=radio]),textarea'));
+  const barra = () => {
+    if (document.querySelector('.updbar')) return;
+    const el = document.createElement('div'); el.className = 'updbar noprint'; el.setAttribute('role', 'status');
+    el.innerHTML = '<span>Nova versão do sistema disponível</span><button class="btn pri sm" type="button">Atualizar agora</button>';
+    el.querySelector('button').onclick = () => location.reload();
+    document.body.appendChild(el);
+  };
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!tinhaControle || trocou) return; trocou = true;
+    if (Date.now() - t0 < 15000 && !ocupado()) location.reload(); else barra();
+  });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    const ver = () => reg.update().catch(() => {});
+    setInterval(ver, 20 * 60e3);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ver(); });
+  }).catch(() => {});
+}
