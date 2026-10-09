@@ -23,7 +23,9 @@ export function resumoAtividades(d) {
     });
     for (const w of Object.values(d.semanas)) {
       if (w.area !== area) continue;
-      w.ids.forEach((pid, i) => { const s = linha(w, i); for (let j = 0; j < 7; j++) if (s[j] === 'P' && add(w.ini, j) < hoje) atrasadas++; });
+      if (w.ini > hoje) continue;
+      const ds = [0, 1, 2, 3, 4, 5, 6].map(j => add(w.ini, j));
+      w.ids.forEach((pid, i) => { const s = linha(w, i); for (let j = 0; j < 7; j++) if (s[j] === 'P' && ds[j] < hoje) atrasadas++; });
     }
   }
   // quem falta hoje

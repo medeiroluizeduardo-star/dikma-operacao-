@@ -180,12 +180,12 @@ function amostras() {
     if (w.ini > hoje || w.ini < add(hoje, -40)) continue;
     w.ids.forEach((pid, i) => {
       for (let k = 0; k < 7; k++) {
-        if (n >= 30 || w.d[i][k] !== 'R' || add(w.ini, k) >= hoje) continue;
+        if (n >= 18 || w.d[i][k] !== 'R' || add(w.ini, k) >= hoje) continue;
         const r = rnd(hash('ev' + w.id + pid + k)); if (r > .02) continue;
         const p = plano.get(pid); if (!p) continue;
         const q = 1 + Math.floor(r * 150) % 3;
         for (let j = 0; j < q; j++) {
-          const dados = fotoExemplo(p.ativ, cores[(n + j) % 4], 960, 720), thumb = fotoExemplo(p.ativ, cores[(n + j) % 4], 240, 180);
+          const dados = fotoExemplo(p.ativ, cores[(n + j) % 4], 640, 480), thumb = fotoExemplo(p.ativ, cores[(n + j) % 4], 240, 180);
           EV.push({ id: 'ex' + sk + n + '_' + j, semana: w.id, area: w.area, pid, k, nome: `foto-${j + 1}.jpg`, tipo: 'image/jpeg', tamanho: Math.round(dados.length * .75), thumb, dados, por: 'admin', porNome: 'Demonstração', at: new Date(add(w.ini, k) + 'T' + String(8 + j).padStart(2, '0') + ':15:00') });
         }
         w.ev[pid + '|' + k] = (w.ev[pid + '|' + k] || 0) + q; n++;

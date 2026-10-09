@@ -12,7 +12,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
+<!-- Baixa todos os módulos em paralelo (sem esperar um pedir o outro). -->
+<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
 <style>
 :root{padding-top:env(safe-area-inset-top,0px)}
 body{margin:0}
@@ -573,12 +575,11 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 
 /* entrada de tela (só ao navegar) */
 @media (prefers-reduced-motion:no-preference){
-  #view.entra>*{animation:entra var(--t3) var(--ease) both}
-  #view.entra>*:nth-child(2){animation-delay:.03s}#view.entra>*:nth-child(3){animation-delay:.06s}#view.entra>*:nth-child(n+4){animation-delay:.09s}
-  #view.entra .stack i,#view.entra .meter i,#view.entra .ef i{animation:cresceX .7s var(--ease) .08s both;transform-origin:left center}
-  #view.entra .col i{animation:cresceY .6s var(--ease) .1s both;transform-origin:center bottom}
+  #view.entra{animation:entra .18s var(--ease) both}
+  #view.entra .stack i,#view.entra .meter i,#view.entra .ef i,#view.entra .md-bar i{animation:cresceX .4s var(--ease) both;transform-origin:left center}
+  #view.entra .col i{animation:cresceY .4s var(--ease) both;transform-origin:center bottom}
 }
-@keyframes entra{from{opacity:0;transform:translateY(6px)}}
+@keyframes entra{from{opacity:.0;transform:translateY(3px)}}
 @keyframes cresceX{from{transform:scaleX(0)}}
 @keyframes cresceY{from{transform:scaleY(0)}}
 
@@ -596,9 +597,9 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .sheet{box-shadow:var(--e3);border-radius:14px}
 @media (prefers-reduced-motion:no-preference){
   .scrim{animation:scrimIn var(--t2) linear both}
-  .sheet{animation:sheetIn var(--t3) var(--ease) both}
-  .scrim.sai{animation:scrimOut .2s linear both}
-  .scrim.sai .sheet{animation:sheetOut .2s var(--ease-in) both}
+  .sheet{animation:sheetIn .2s var(--ease) both}
+  .scrim.sai{animation:scrimOut .15s linear both}
+  .scrim.sai .sheet{animation:sheetOut .15s var(--ease-in) both}
 }
 @keyframes scrimIn{from{background:rgba(14,15,40,0);backdrop-filter:blur(0)}}
 @keyframes scrimOut{to{background:rgba(14,15,40,0);backdrop-filter:blur(0)}}
@@ -718,6 +719,10 @@ td.uacts .btn+.btn{margin-left:4px}
 .avst.on .dot{background:var(--st-real);box-shadow:0 0 0 4px color-mix(in srgb,var(--st-real) 20%,transparent)}
 .avst b{display:block;font-size:13.5px}.avst small{font-size:12px;color:var(--ink-3)}.avst .minw{flex:1}
 @media (max-width:860px){.md-hero h2{font-size:27px}.md-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.md-tile{padding:12px 12px 12px 14px}.md-tile b{font-size:30px}.md-grid{grid-template-columns:minmax(0,1fr)}.md-rota{grid-template-columns:minmax(0,1fr) 84px}.md-rota .md-bar{display:none}}
+.md-tile.skel{min-height:96px;gap:10px;justify-content:center}.md-tile.skel::before{background:var(--line)}
+.md-tile.skel i,.skel-hero i{display:block;height:14px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2) 0,color-mix(in srgb,var(--line) 70%,var(--surface-2)) 40%,var(--surface-2) 80%) 0 0/200% 100%;animation:brilho 1.2s linear infinite}
+.md-tile.skel i:first-child{width:40%;height:26px}.md-tile.skel i:last-child{width:75%}
+.skel-hero .skel{padding:0;background:none}.skel-hero i:first-child{width:320px;max-width:80%;height:30px}.skel-hero i:last-child{width:180px}
 /* seletor de módulo (menu lateral) */
 .modpick{position:relative;margin:2px 0 8px}
 .modbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--rail-ink-2) 30%,transparent);background:color-mix(in srgb,var(--rail-2) 70%,transparent);color:#fff;text-align:left;transition:background-color var(--t1) linear,border-color var(--t1) linear}

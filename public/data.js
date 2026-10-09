@@ -34,7 +34,7 @@ import {
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
   getMessaging, getToken, deleteToken, mensagensSuportadas
 } from './vendor/firebase.js';
-import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea } from './cal.js';
+import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth } from './cal.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -223,6 +223,7 @@ function startData() {
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear();
+  // já liga os meses de todos os conjuntos da pessoa: trocar de módulo ou abrir o Meu dia não espera o servidor
   for (const k of SET_KEYS) watchSet(k, keep.filter(x => x.startsWith(k + '|')).map(x => x.slice(k.length + 1)));
 }
 function stopData() {
@@ -237,19 +238,18 @@ function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
 const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
 
-// Mantém em tempo real só os meses que a tela precisa (do conjunto ativo).
+// Meses em tempo real. O mês anterior, o atual e o próximo ficam sempre ligados (Meu dia, Painel, avisos);
+// os outros que a pessoa abrir ficam ligados até 4 de cada vez (os mais antigos saem). Assim, voltar a uma
+// tela já vista não recarrega nada.
+const mesesBase = () => { const m = today().slice(0, 7); return [addMonth(m, -1), m, addMonth(m, 1)]; };
+const usoMes = new Map(); // "conjunto|mês" → último uso
 export function watchMonths(meses) { watchSet(cur, meses); }
 function watchSet(k, meses) {
   const st = S[k], key = m => k + '|' + m;
   if (me && !temSet(me, k)) return;
-  if (!me || !ATIVOS.has(me.papel) || !db) { meses.forEach(m => monthSubs.set(key(m), [])); return; }
-  const want = new Set(meses.filter(Boolean));
-  for (const [mk, fs] of monthSubs) {
-    if (!mk.startsWith(k + '|')) continue; const m = mk.slice(k.length + 1);
-    if (want.has(m)) continue;
-    fs.forEach(f => f()); monthSubs.delete(mk); st.monthsLoaded.delete(m); delete st.sitByMonth[m];
-    for (const id of Object.keys(st.semanas)) if (st.semanas[id].mes === m) delete st.semanas[id];
-  }
+  const want = [...new Set([...mesesBase(), ...meses.filter(Boolean)])];
+  if (!me || !ATIVOS.has(me.papel) || !db) { want.forEach(m => monthSubs.set(key(m), [])); return; }
+  const agora = Date.now(); meses.filter(Boolean).forEach(m => usoMes.set(key(m), agora));
   for (const m of want) if (!monthSubs.has(key(m)) || !monthSubs.get(key(m)).length) {
     const a = onSnapshot(query(collection(db, C('semanas', k)), where('mes', '==', m)), qs => {
       qs.docChanges().forEach(c => { if (c.type === 'removed') delete st.semanas[c.doc.id]; else st.semanas[c.doc.id] = toLocal(c.doc.id, c.doc.data()); });
@@ -257,6 +257,14 @@ function watchSet(k, meses) {
     }, e => cb.onError && cb.onError(e));
     const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; changed(); });
     monthSubs.set(key(m), [a, b]);
+  }
+  // limita os meses extras (fora da base) a 4 por conjunto
+  const base = new Set(mesesBase());
+  const extras = [...monthSubs.keys()].filter(x => x.startsWith(k + '|') && !base.has(x.slice(k.length + 1))).sort((x, y) => (usoMes.get(y) || 0) - (usoMes.get(x) || 0));
+  for (const mk of extras.slice(4)) {
+    const m = mk.slice(k.length + 1); if (want.includes(m)) continue;
+    (monthSubs.get(mk) || []).forEach(f => f()); monthSubs.delete(mk); st.monthsLoaded.delete(m); delete st.sitByMonth[m];
+    for (const id of Object.keys(st.semanas)) if (st.semanas[id].mes === m) delete st.semanas[id];
   }
 }
 
@@ -460,6 +468,7 @@ function startEquip() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   on(doc(db, 'eq', 'config'), s => { cache.e.config = s.exists() ? s.data() : null; ok.c = true; g(); });
   on(doc(db, 'eq', 'cadastro'), s => { const d = s.exists() ? s.data() : {}; cache.e.cad = { operadores: (d.operadores || []).filter(o => !/^SITUA[ÇC][ÃA]O:/i.test(o.nome || '')), frota: d.frota || [] }; ok.d = true; g(); });
+  { const m = today().slice(0, 7); eWatch([addMonth(m, -1), m]); } // paradas e lançamentos já chegam antes de abrir a tela
 }
 // Mantém em tempo real só os meses que a tela usa (economiza leituras do plano grátis).
 export function eWatch(meses) {

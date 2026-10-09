@@ -65,7 +65,9 @@ function ensurePeriod() {
 
 /* ---------------- consultas ---------------- */
 const docsFor = ({ mes, ini, area }) => Object.values(DB.cache.semanas).filter(d => (!mes || d.mes === mes) && (!ini || d.ini === ini) && (!area || area === 'TODAS' || d.area === area));
-function st(doc, i, k) { const c = doc.d[i][k]; if (c === 'P' && add(doc.ini, k) < TODAY) return 'A'; return c === '_' ? 'X' : c; }
+// Datas dos 7 dias de cada semana, calculadas uma vez só (as telas grandes chamam isso milhares de vezes).
+const diasDe = doc => (doc._dias && doc._dias.ini === doc.ini ? doc._dias.v : (doc._dias = { ini: doc.ini, v: DAYS.map((_, k) => add(doc.ini, k)) }).v);
+function st(doc, i, k) { const c = doc.d[i][k]; if (c === 'P' && diasDe(doc)[k] < TODAY) return 'A'; return c === '_' ? 'X' : c; }
 function stats(docs, { rota = 'TODAS', tipo = 'TODOS' } = {}) {
   const s = { prog: 0, R: 0, N: 0, P: 0, A: 0, E: 0, progHoje: 0, Rhoje: 0, day: Array.from({ length: 7 }, () => ({ R: 0, N: 0, P: 0, A: 0, E: 0 })) };
   for (const doc of docs) for (let i = 0; i < doc.ids.length; i++) {
@@ -74,7 +76,7 @@ function stats(docs, { rota = 'TODAS', tipo = 'TODOS' } = {}) {
     const str = doc.d[i];
     for (let k = 0; k < 7; k++) {
       const c = str[k]; if (c === '_') continue;
-      const dt = add(doc.ini, k);
+      const dt = diasDe(doc)[k];
       if (c === 'E') { s.E++; s.day[k].E++; continue; }
       s.prog++; if (dt <= TODAY) s.progHoje++;
       if (c === 'R') { s.R++; s.day[k].R++; if (dt <= TODAY) s.Rhoje++; }
@@ -88,7 +90,7 @@ const rotasDa = area => rotas().filter(r => area === 'TODAS' || r.area === area)
 function atrasadasAll(area) {
   const out = [];
   for (const doc of docsFor({ area })) for (let i = 0; i < doc.ids.length; i++) for (let k = 0; k < 7; k++)
-    if (doc.d[i][k] === 'P' && add(doc.ini, k) < TODAY) out.push({ doc, i, k, dt: add(doc.ini, k) });
+    if (doc.d[i][k] === 'P' && diasDe(doc)[k] < TODAY) out.push({ doc, i, k, dt: diasDe(doc)[k] });
   return out.sort((a, b) => (a.dt < b.dt ? -1 : 1));
 }
 
@@ -184,9 +186,11 @@ function ensureModulo() {
 }
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
+// Só troca o HTML de um bloco quando ele mudou: atualização de dados que não muda a tela não mexe em nada (sem piscar).
+function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>OPERAÇÃO</b></div></div>${html}</div>`; }
+function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>OPERAÇÃO</b></div></div>${html}</div>`; }
 const GOOGLE = new URLSearchParams(location.search).has('google');
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="6"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
@@ -246,22 +250,23 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view); afterRender(); return; }
-  if (UI.view === 'meudia') { renderNav(); renderTop(); $('view').innerHTML = MD.view(); afterRender(); return; }
-  if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = M.ESQUELETO; renderNav(); return; }
-  if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
+  if (UI.view === 'meudia') { renderNav(); renderTop(); pintar('view', MD.view()); afterRender(); return; }
+  if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
+  if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
   ensurePeriod();
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
   const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir', 'relfoto'].includes(UI.view);
-  if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { $('view').innerHTML = M.ESQUELETO; return; }
+  if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, escala: vEscala, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig }[UI.view];
-  $('view').innerHTML = fn();
+  pintar('view', fn());
   afterRender();
 }
 let raf = 0;
-const schedule = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id === 'fQ' ? [a.selectionStart] : null; render(); if (keep) { const n = $('fQ'); if (n) { n.focus(); n.setSelectionRange(keep[0], keep[0]); } } }); };
+// Atualizações de dados chegam em rajadas (várias coleções de uma vez): junta tudo num só desenho.
+const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id === 'fQ' ? [a.selectionStart] : null; render(); if (keep) { const n = $('fQ'); if (n && document.activeElement !== n) { n.focus(); n.setSelectionRange(keep[0], keep[0]); } } }), 40); };
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
@@ -280,16 +285,16 @@ function renderNav() {
     const badge = v.id === 'pend' && atr ? atr : (v.id === 'gocorr' || v.id === 'epar') && gb ? gb : 0;
     h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num">${badge > 999 ? '999+' : badge}</span>` : ''}</button>`;
   }
-  $('nav').innerHTML = h;
-  $('who').innerHTML = DEMO
+  pintar('nav', h);
+  pintar('who', DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
-    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`;
+    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
-  $('tabbar').innerHTML = tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join('');
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
 }
 function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -311,11 +316,11 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
-  $('top').innerHTML = `<h1>${v.nome}<small>${sub}</small></h1>${ctr}<div class="syncwrap" id="sync">${syncPill()}</div>`;
+  pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}<div class="syncwrap" id="sync">${syncPill()}</div>`);
 }
 
 /* ---------------- PAINEL ---------------- */
@@ -394,8 +399,8 @@ function vProg() {
   });
   if (!rows.length) return h + '<div class="card"><div class="empty">Nenhuma atividade com esses filtros nesta semana.</div></div>';
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const n = evCount(doc, doc.ids[i], k); return `<button class="chip ${c}${n ? ' hasev' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}${n ? ', ' + n + ' anexo(s)' : ''}" title="${DAYS[k]} ${ddmm(add(doc.ini, k))} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${n ? ' · ' + n + ' anexo(s)' : ''}">${CHIP[c]}</button>`; };
-  const LIM = UI.more || (isMobile() ? 120 : 600);
+  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const n = evCount(doc, doc.ids[i], k); return `<button class="chip ${c}${n ? ' hasev' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}${n ? ', ' + n + ' anexo(s)' : ''}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${n ? ' · ' + n + ' anexo(s)' : ''}">${CHIP[c]}</button>`; };
+  const LIM = UI.more || (isMobile() ? 80 : 250); // o resto aparece em "Mostrar mais" (abre mais rápido)
   const shown = rows.slice(0, LIM);
   let g = '';
   if (isMobile()) {
@@ -871,7 +876,7 @@ function exportCSV() {
 }
 
 function afterRender() {
-  const on = (id, ev, fn) => { const e = $(id); if (e) e.addEventListener(ev, fn); };
+  const on = (id, ev, fn) => { const e = $(id); if (e && !e['_on_' + ev]) { e['_on_' + ev] = 1; e.addEventListener(ev, fn); } };
   on('fMes', 'change', e => { UI.mes = e.target.value; const ws = weeksOfMonth(UI.mes); UI.ini = ws.includes(CUR_WEEK) ? CUR_WEEK : ws[0]; UI.more = 0; UI.dia = null; render(); });
   on('fSem', 'change', e => { UI.ini = e.target.value; UI.dia = null; UI.more = 0; render(); });
   on('fArea', 'change', e => { UI.area = e.target.value; UI.rota = 'TODAS'; UI.more = 0; render(); });

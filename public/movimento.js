@@ -26,7 +26,7 @@ export function moverIndicador() {
 export function entrarTela(view) {
   if (reduzir()) return;
   view.classList.remove('entra'); void view.offsetWidth; view.classList.add('entra');
-  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra'), 700);
+  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra'), 450);
   contarNumeros(view);
 }
 
@@ -40,7 +40,7 @@ function contarNumeros(root) {
     const bruto = m[2]; const dec = (bruto.split(',')[1] || '').length; const alvo = parseFloat(bruto.replace(/\./g, '').replace(',', '.'));
     if (!isFinite(alvo) || alvo === 0) return;
     const fmt = v => m[1] + v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + m[3];
-    const t0 = performance.now(), dur = 520;
+    const t0 = performance.now(), dur = 350;
     const passo = agora => {
       if (!el.isConnected) return;
       const p = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - p, 3);
@@ -82,7 +82,7 @@ export function iniciarJanelas() {
       if (n.nodeType !== 1 || !n.classList.contains('scrim')) continue;
       n.removeAttribute('id'); n.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
       n.classList.add('sai'); ghost.innerHTML = ''; ghost.appendChild(n);
-      setTimeout(() => { if (n.parentNode === ghost) n.remove(); }, 220);
+      setTimeout(() => { if (n.parentNode === ghost) n.remove(); }, 170);
     }
   }).observe(layer, { childList: true });
 }

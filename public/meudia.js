@@ -11,6 +11,7 @@ export function criarMeuDia(X) {
   const sitNome = c => (SITS.find(s => s[0] === c) || [c, c])[1];
   const h1 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const ST = { suportado: null, ocupado: false, erro: '' };
+  DB.avisosSuportados().then(v => { ST.suportado = v; }).catch(() => { ST.suportado = false; });
 
   // O que a pessoa enxerga em cada módulo
   const temMod = m => X.modsDe(ME()).includes(m);
@@ -21,13 +22,17 @@ export function criarMeuDia(X) {
     const u = ME(); return [...new Set([u.area, u.papel === 'supervisor' ? u.area2 : null].filter(a => a && SETS[k].areas.includes(a)))];
   }
 
-  // Garante em tempo real os meses de que a tela precisa, em cada conjunto (sem mexer no módulo aberto).
-  function vigiar() {
-    const cur = DB.setAtual ? DB.setAtual() : 'patio', m = today().slice(0, 7);
-    for (const k of SET_KEYS) if (temMod(SETS[k].mod)) { DB.useSet(k); DB.watchMonths([addMonth(m, -1), m, addMonth(m, 1)]); }
-    DB.useSet(cur);
-    if (temMod('equipamentos') && DB.eWatch) DB.eWatch([addMonth(m, -1), m]);
+  // Os meses e as paradas já são carregados no login (data.js); aqui só esperamos chegar tudo,
+  // para desenhar a tela uma vez só, sem números pulando.
+  let esperaDesde = 0;
+  function pronto() {
+    const m = today().slice(0, 7);
+    for (const k of SET_KEYS) if (temMod(SETS[k].mod)) { const st = DB.dados(k); if (!st || !st.configLoaded) return false; if (st.config && !st.monthsLoaded.has(m)) return false; }
+    if (temMod('equipamentos') && !(DB.cache.e && DB.cache.e.loaded)) return false;
+    if (temMod('gestao') && !(DB.cache.g && DB.cache.g.loaded)) return false;
+    return true;
   }
+  const ESQ = '<div class="md-hero skel-hero"><div class="skel"><i></i><i></i></div></div><div class="md-tiles">' + '<div class="md-tile skel"><i></i><i></i></div>'.repeat(4) + '</div><div class="md-grid"><div class="card skel"><i></i><i></i><i></i><i></i></div><div class="card skel"><i></i><i></i><i></i><i></i></div></div>';
 
   function dadosDoSet(k) {
     const st = DB.dados(k); if (!st || !st.config) return null;
@@ -42,7 +47,6 @@ export function criarMeuDia(X) {
   const vazio = t => `<p class="muted small m0">${t}</p>`;
 
   function cardAvisos() {
-    if (ST.suportado === null) { ST.suportado = false; DB.avisosSuportados().then(v => { ST.suportado = v; render(); }); }
     const cfg = DB.cache.avisosCfg || {}; const meus = DB.cache.meusAvisos; const ativo = DB.avisoAtivoAqui();
     const prefs = { ...PREFS_PADRAO, ...((meus && meus.prefs) || {}) };
     const opcoes = [
@@ -64,7 +68,11 @@ export function criarMeuDia(X) {
   }
 
   function view() {
-    vigiar();
+    if (!pronto()) {
+      if (!esperaDesde) esperaDesde = Date.now();
+      if (Date.now() - esperaDesde < 5000) { setTimeout(() => render(), 400); return ESQ; } // sem sinal: depois de 5 s mostra o que tiver
+    }
+    esperaDesde = 0;
     const u = ME(); const hoje = today(); const agora = new Date();
     const blocos = []; const tiles = [];
     // atividades (Pátio e Bateria)
