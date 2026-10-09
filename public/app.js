@@ -271,7 +271,7 @@ function renderTela() {
 }
 let raf = 0;
 // Atualizações de dados chegam em rajadas (várias coleções de uma vez): junta tudo num só desenho.
-const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id === 'fQ' ? [a.selectionStart] : null; render(); if (keep) { const n = $('fQ'); if (n && document.activeElement !== n) { n.focus(); n.setSelectionRange(keep[0], keep[0]); } } }), 40); };
+const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id && a.matches('input[type=search],input[type=text],input:not([type])') ? [a.id, a.selectionStart] : null; render(); if (keep) { const n = $(keep[0]); if (n && document.activeElement !== n) { n.focus(); try { n.setSelectionRange(keep[1], keep[1]); } catch (e) { /* ignora */ } } } }), 40); };
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';

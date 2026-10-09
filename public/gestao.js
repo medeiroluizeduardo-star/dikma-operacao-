@@ -259,14 +259,54 @@ export function criarGestao(X) {
       <div class="fsign"><div><div class="ln"></div>Testemunha 1 – nome e matrícula</div><div><div class="ln"></div>Testemunha 2 – nome e matrícula</div></div>
       <p class="small muted">Via vinculada à ficha ${esc(cfg().codigo || 'FO-RED-COQ-004')}. Depois de assinada, fotografe e registre em Dikma Operação › Gestão › Assinar › Via em papel.</p></div>`;
   }
+  // Impressão: lista de fichas com busca (nome, matrícula, função, área) ao lado do documento.
+  // A busca filtra a lista na hora, sem redesenhar a tela (o cursor não sai do campo).
+  const semAcento = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const chaveBusca = x => semAcento([x.c.mat, x.c.nome, x.c.funcao, x.c.setor, x.c.subsetor, (lot().get(String(x.c.mat)) || {}).txt].filter(Boolean).join(' '));
+  const casaBusca = (k, q) => { const t = semAcento(q).trim().split(/\s+/).filter(Boolean); return t.every(p => k.includes(p)); };
+  function filtrarListaImpr() {
+    const box = $('gImpLista'); if (!box) return;
+    let n = 0;
+    box.querySelectorAll('.imp-it').forEach(el => { const ok = casaBusca(el.dataset.k, U.impQ || ''); el.hidden = !ok; if (ok) n++; });
+    const vz = $('gImpVazio'); if (vz) vz.hidden = n > 0;
+    const ct = $('gImpN'); if (ct) ct.textContent = `${n} ficha${n === 1 ? '' : 's'}`;
+    // Sobrou uma ficha só: abre ela sozinha quando a pessoa para de digitar.
+    clearTimeout(filtrarListaImpr.t);
+    const um = n === 1 ? box.querySelector('.imp-it:not([hidden])') : null;
+    if (um && um.dataset.mat !== U.impMat) filtrarListaImpr.t = setTimeout(() => {
+      const q = $('gImpQ'); const foco = document.activeElement === q; const pos = q ? q.selectionStart : 0;
+      U.impMat = um.dataset.mat; render();
+      const nq = $('gImpQ'); if (foco && nq) { nq.focus(); try { nq.setSelectionRange(pos, pos); } catch (e) { /* ignora */ } }
+    }, 450);
+  }
   function vImpr() {
-    const idx = indice(); const ativos = [...idx.values()].sort((a, b) => a.c.nome.localeCompare(b.c.nome));
-    if (!U.impMat || !idx.has(U.impMat)) U.impMat = (ativos[0] || { c: {} }).c.mat;
-    let h = `<div class="filters noprint"><label class="sel grow"><span>Colaborador</span><select class="in" id="gImpMat">${ativos.map(x => `<option value="${x.c.mat}" ${x.c.mat === U.impMat ? 'selected' : ''}>${esc(title(x.c.nome))} · ${x.c.mat}${x.pend.length ? ' · ' + x.pend.length + ' pendente(s)' : ''}</option>`).join('')}</select></label>
-      <label class="sel"><span>Documento</span><select class="in" id="gImpDoc"><option value="ficha" ${U.impDoc === 'ficha' ? 'selected' : ''}>Ficha (Folhas 1 e 2)</option><option value="via" ${U.impDoc === 'via' ? 'selected' : ''}>Via de assinatura</option></select></label>
-      ${!framed ? `<button class="btn pri" data-act="print" style="align-self:flex-end">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
-    if (!U.impMat) return h;
-    return h + `<div class="tw docs">${U.impDoc === 'via' ? docVia(U.impMat, title(ME().nome || '')) : docFicha(U.impMat)}</div>`;
+    const idx = indice(); const fa = filtroArea();
+    const F = { ativos: x => x.ativo, pend: x => x.ativo && x.pend.length > 0, deslig: x => !x.ativo, todos: () => true };
+    U.impF = U.impF || 'ativos';
+    const base = [...idx.values()].filter(x => fa(x.c)).filter(F[U.impF]).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+    if (!U.impMat || !idx.has(U.impMat)) U.impMat = (base.find(x => casaBusca(chaveBusca(x), U.impQ || '')) || base[0] || { c: {} }).c.mat;
+    const nPend = [...idx.values()].filter(x => fa(x.c) && F.pend(x)).length;
+    const chip = (k, t) => `<button type="button" class="rchip" data-g="impF" data-v="${k}" aria-pressed="${U.impF === k}">${t}</button>`;
+    let vis = 0;
+    const itens = base.map(x => {
+      const k = chaveBusca(x); const ok = casaBusca(k, U.impQ || ''); if (ok) vis++;
+      const sel = x.c.mat === U.impMat;
+      const tag = !x.ativo ? '<span class="pill neu">desligado</span>' : x.pend.length ? `<span class="pill warn">${x.pend.length} p/ assinar</span>` : x.rec.length ? '<span class="pill bad">recusou</span>' : '';
+      return `<button type="button" class="imp-it" data-g="impSel" data-mat="${x.c.mat}" data-k="${esc(k)}" ${ok ? '' : 'hidden'} ${sel ? 'aria-current="true"' : ''}><span class="minw"><b>${esc(title(x.c.nome))}</b><small><span class="mono">${x.c.mat}</span>${x.c.funcao ? ' · ' + esc(title(x.c.funcao)) : ''}</small></span>${tag}</button>`;
+    }).join('');
+    const atual = idx.get(U.impMat);
+    const lista = `<aside class="card imp-lista noprint">
+      <div class="imp-busca"><label class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input class="in" type="search" id="gImpQ" value="${esc(U.impQ || '')}" placeholder="Buscar nome, matrícula ou função" autocomplete="off" spellcheck="false" aria-label="Buscar ficha"></label>
+      ${selArea('gImpArea')}
+      <div class="rchips imp-chips">${chip('ativos', 'Ativos')}${chip('pend', `Para assinar${nPend ? ' · ' + nPend : ''}`)}${chip('deslig', 'Desligados')}${chip('todos', 'Todos')}</div>
+      <p class="muted small m0" id="gImpN">${vis} ficha${vis === 1 ? '' : 's'}</p></div>
+      <div class="tw imp-scroll" id="gImpLista">${itens}<p class="empty small" id="gImpVazio" ${vis ? 'hidden' : ''}>Nenhuma ficha encontrada.${U.impQ ? ' Confira a grafia ou busque pela matrícula.' : ''}${U.impF !== 'todos' ? ' Tente o filtro <b>Todos</b>.' : ''}</p></div></aside>`;
+    if (!atual) return `<div class="imp-grid">${lista}<div class="card"><div class="empty">Escolha um colaborador na lista.</div></div></div>`;
+    const segDoc = `<div class="seg imp-seg" role="tablist" aria-label="Documento"><button type="button" role="tab" data-g="impDoc" data-v="ficha" aria-selected="${U.impDoc !== 'via'}">Ficha (Folhas 1 e 2)</button><button type="button" role="tab" data-g="impDoc" data-v="via" aria-selected="${U.impDoc === 'via'}">Via de assinatura${atual.pend.length ? ' · ' + atual.pend.length : ''}</button></div>`;
+    return `<div class="imp-grid">${lista}<section class="imp-doc" id="gImpDocBox">
+      <div class="card imp-hd noprint"><div class="minw"><h2 class="disp">${esc(title(atual.c.nome))}</h2><p class="muted small m0">Matrícula <b class="mono">${atual.c.mat}</b>${atual.c.funcao ? ' · ' + esc(title(atual.c.funcao)) : ''} · ${atual.oc.length} ocorrência${atual.oc.length === 1 ? '' : 's'} · ${esc(atual.status)}</p></div>
+      <div class="imp-acts">${segDoc}${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / PDF</button>` : ''}</div></div>
+      <div class="tw docs">${U.impDoc === 'via' ? docVia(U.impMat, title(ME().nome || '')) : docFicha(U.impMat)}</div></section></div>`;
   }
 
   function vTipos() {
@@ -478,6 +518,9 @@ export function criarGestao(X) {
     switch (d.g) {
       case 'ficha': UI.view = 'gcolab'; U.mat = d.mat; render(); scrollTo(0, 0); break;
       case 'voltar': U.mat = null; render(); break;
+      case 'impSel': U.impMat = d.mat; render(); if (matchMedia('(max-width:860px)').matches) { const b = $('gImpDocBox'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); } break;
+      case 'impF': U.impF = d.v; U.impMat = ''; render(); break;
+      case 'impDoc': U.impDoc = d.v; render(); break;
       case 'novaOc': novaOcorrencia(d.mat || null); break;
       case 'assinar': assinarSheet(d.mat, d.oc ? [d.oc] : null); break;
       case 'verAss': verAssinatura(d.id); break;
@@ -507,8 +550,11 @@ export function criarGestao(X) {
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('tr[data-g="ficha"]')) e.target.click(); });
+  // Enter na busca da Impressão abre a primeira ficha encontrada.
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'gImpQ') { e.preventDefault(); const it = document.querySelector('#gImpLista .imp-it:not([hidden])'); if (it) it.click(); } });
   document.addEventListener('input', e => {
     const t = e.target; const map = { gQ: 'q', gOcQ: 'ocQ', gCQ: 'cq' };
+    if (t.id === 'gImpQ') { U.impQ = t.value; filtrarListaImpr(); return; }
     if (map[t.id]) { U[map[t.id]] = t.value; clearTimeout(window._gq); window._gq = setTimeout(() => { const pos = t.selectionStart; render(); const n = $(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 250); }
   });
   document.addEventListener('change', e => {
