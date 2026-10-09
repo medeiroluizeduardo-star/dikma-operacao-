@@ -9,6 +9,7 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
+import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao } from './permissoes.js';
 
 const TODAY = today();
 const CUR_WEEK = weekOf(TODAY);
@@ -149,7 +150,8 @@ const VIEWS = [
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
   ...VIEWS_E,
   ...VIEWS_G,
-  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' }
+  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' },
+  { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Administração', admin: true, mod: 'all' }
 ];
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
 const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
@@ -169,7 +171,8 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 const modsDe = u => (!u ? [] : u.papel === 'admin' ? TODOS_MODS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
-const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())));
+const permCfg = () => DB.cache.permissoes || {};
+const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && podeVer(ME, v, permCfg()));
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   const k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
@@ -182,7 +185,9 @@ function aplicarSet() {
 function ensureModulo() {
   const ms = modsDe(ME); if (!ms.length) return;
   if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
-  if (!viewsDoModulo().some(v => v.id === UI.view)) UI.view = MODS[UI.modulo].inicio;
+  // Aba desligada para o perfil some do menu e não abre nem por link: cai na primeira aba liberada do módulo.
+  const vs = viewsDoModulo();
+  if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs[0] || { id: MODS[UI.modulo].inicio }).id;
 }
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
@@ -250,8 +255,8 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
-  if (UI.view === 'meudia') { renderNav(); renderTop(); pintar('view', MD.view()); afterRender(); return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
+  if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
   ensurePeriod();
@@ -292,6 +297,7 @@ function renderNav() {
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
+  { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
   pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
@@ -316,7 +322,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
@@ -681,10 +687,61 @@ function vUsuarios() {
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
+// Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
+const KEY_MOD = { operacao: 'op', bateria: 'op', equipamentos: 'eq', gestao: 'ge' };
+const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v)); };
+function celulaAbas(u) {
+  if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
+  if (u.papel === 'bloqueado') return '<span class="muted small">—</span>';
+  const r = resumoExcecao(u, viewsDaPessoa(u), permCfg());
+  const txt = [r.menos ? `${r.menos} a menos` : '', r.mais ? `${r.mais} a mais` : ''].filter(Boolean).join(' · ');
+  return `<div class="row-gap nowrap">${r.tem ? `<span class="pill exc" title="Esta pessoa tem abas diferentes do perfil">Personalizado · ${txt}</span>` : '<span class="pill neu">Padrão do perfil</span>'}<button class="btn sm" data-uabas="${u.uid}">${r.tem ? 'Editar' : 'Personalizar'}</button></div>`;
+}
+function abasPessoaSheet(uid) {
+  const u = DB.cache.usuarios.find(x => x.uid === uid); if (!u) return;
+  const cfg = permCfg(); const vs = viewsDaPessoa(u);
+  const grupos = GRUPOS_ABAS.map(g => [g, vs.filter(v => v.mod === g.mod)]).filter(([, l]) => l.length);
+  const html = `<div class="abas-p">${grupos.map(([g, l]) => `<div class="abas-g"><b>${esc(g.t)}</b>${l.map(v => { const base = doPerfil(u.papel, v, cfg); const on = podeVer(u, v, cfg); return `<label class="tgl-row"><span>${esc(v.nome)}${on !== base ? ' <small class="exc-t">exceção</small>' : ''}</span><input type="checkbox" class="tgl" data-pabas="${v.id}" ${on ? 'checked' : ''} aria-label="${esc(v.nome)}"></label>`; }).join('')}</div>`).join('')}</div>
+    <label class="switch"><input type="checkbox" id="paReset"><span>Voltar ao padrão do perfil (${esc(papelNome(u.papel))})</span></label>`;
+  formSheet('Abas de ' + title(u.nome), `${papelNome(u.papel)} · o que for diferente do perfil fica como exceção só desta pessoa`, html, 'Salvar', async () => {
+    let abas = null;
+    if (!$('paReset').checked) {
+      abas = {};
+      document.querySelectorAll('[data-pabas]').forEach(i => { const v = VIEWS.find(x => x.id === i.dataset.pabas); if (i.checked !== doPerfil(u.papel, v, cfg)) abas[v.id] = i.checked; });
+      if (!Object.keys(abas).length) abas = null;
+    }
+    await DB.setUsuario(uid, { abas });
+    DB.log(`Ajustou as abas de ${u.nome}${abas ? '' : ' (padrão do perfil)'}`);
+    toast(abas ? 'Abas personalizadas salvas' : 'Voltou ao padrão do perfil');
+  });
+}
+
+/* ---------------- PERFIS E PERMISSÕES ---------------- */
+// Rascunho em UI.perm até salvar; Pátio e Bateria dividem a mesma configuração.
+function rascunhoPerm() {
+  if (!UI.perm) { const c = permCfg(); UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, { ...(c[p] || {}) }])); }
+  return UI.perm;
+}
+function vPerfis() {
+  const R = rascunhoPerm(); const cfg = permCfg();
+  const mudou = PERFIS_ABAS.some(([p]) => VIEWS.some(v => configuravel(p, v) && doPerfil(p, v, R) !== doPerfil(p, v, cfg)));
+  const us = DB.cache.usuarios.filter(u => !['admin', 'bloqueado'].includes(u.papel));
+  const comExc = us.filter(u => resumoExcecao(u, viewsDaPessoa(u), cfg).tem);
+  const linhas = GRUPOS_ABAS.map(g => {
+    const vs = VIEWS.filter(v => v.mod === g.mod && !['usuarios', 'perfis'].includes(v.id));
+    return `<tr class="grp-row"><th colspan="${PERFIS_ABAS.length + 2}">${esc(g.t)}</th></tr>` + vs.map(v => `<tr><td><b>${esc(v.nome)}</b>${v.admin ? ' <span class="tag-adm">Administração</span>' : ''}</td><td class="c muted" aria-label="Administrador sempre vê">✓</td>${PERFIS_ABAS.map(([p, n]) => { const ok = configuravel(p, v); const on = doPerfil(p, v, R); return `<td class="c"><input type="checkbox" class="tgl" data-perm="${p}|${v.id}" ${on ? 'checked' : ''} ${ok ? '' : 'disabled'} aria-label="${esc(v.nome)} para ${n}"></td>`; }).join('')}</tr>`).join('');
+  }).join('');
+  return `<div class="card"><header><h2>Abas por perfil</h2><p>Desligado = a aba some do menu para esse perfil e não abre nem por link. O administrador vê tudo sempre. Pátio e Bateria usam a mesma configuração.</p></header>
+  <div class="tw"><table class="perm"><thead><tr><th>Aba</th><th class="c">Admin<br><small>sempre tudo</small></th>${PERFIS_ABAS.map(([, n]) => `<th class="c">${n}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table></div>
+  <div class="body row-gap"><button class="btn pri" data-act="permSalvar" ${mudou ? '' : 'disabled'}>${mudou ? 'Salvar permissões' : 'Tudo salvo'}</button><button class="btn" data-act="permPadrao">Voltar ao padrão</button>${mudou ? '<button class="btn ghost" data-act="permDesfazer">Desfazer</button>' : ''}<span class="muted small">Abas de administração só podem ser ligadas para o Gestor. O que cada perfil pode alterar continua valendo pelo perfil.</span></div></div>
+  <div class="card"><header><h2>Exceção por pessoa</h2><p>Opcional. Abra <b>Usuários e acessos</b> e use <b>Personalizar</b> na coluna Abas para dar ou tirar abas de uma pessoa sem mudar o perfil inteiro.</p></header>
+  ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Módulos</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${papelNome(u.papel)}</td><td>${modsDe(u).map(m => MODS[m].curto).join(' · ')}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
+}
+
 function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
 
 /* ---------------- CONFIG ---------------- */
@@ -925,7 +982,7 @@ document.addEventListener('click', async e => {
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
-    UI.view = d.go; UI.confirm = null; UI.more = 0; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
+    UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
   }
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
@@ -970,6 +1027,7 @@ document.addEventListener('click', async e => {
     });
   }
   if (d.rfev) { const ev = (RF.lista || []).find(x => x.id === d.rfev); if (ev) verEvidencia(ev, () => { RF.lista = RF.lista.filter(x => x.id !== ev.id); }, () => { $('layer').innerHTML = ''; render(); }); return; }
+  if (d.uabas) { abasPessoaSheet(d.uabas); return; }
   if (d.udel) {
     const u = DB.cache.usuarios.find(x => x.uid === d.udel); if (!u) return;
     if (u.papel === 'admin' && DB.cache.usuarios.filter(x => x.papel === 'admin').length < 2) { toast('Não dá para apagar o único administrador'); return; }
@@ -983,6 +1041,13 @@ document.addEventListener('click', async e => {
     case 'loginGoogle': try { await DB.signInGoogle(); } catch (err) { toast('Não foi possível entrar: ' + msgErro(err)); } break;
     case 'senha': alterarSenhaSheet(); break;
     case 'logout': DB.signOut(); break;
+    case 'permSalvar': {
+      const R = rascunhoPerm(); const out = {};
+      for (const [p] of PERFIS_ABAS) { out[p] = {}; for (const v of VIEWS) if (configuravel(p, v) && !doPerfil(p, v, R)) out[p][v.id] = false; else if (configuravel(p, v) && v.admin) out[p][v.id] = true; }
+      await DB.salvarPermissoes(out); UI.perm = null; DB.log('Alterou as abas por perfil'); toast('Permissões salvas'); render(); break;
+    }
+    case 'permPadrao': UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, {}])); render(); toast('Padrão carregado. Salve para aplicar'); break;
+    case 'permDesfazer': UI.perm = null; render(); break;
     case 'mockReset': await DB.mockReset(); toast('Demonstração restaurada'); break;
     case 'hoje': UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; UI.dia = null; render(); break;
     case 'more': UI.more = +d.n; render(); break;
@@ -1079,6 +1144,7 @@ document.addEventListener('submit', async e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.mdPref) { MD.onChange(t); return; }
+  if (t.dataset.perm) { const [p, id] = t.dataset.perm.split('|'); rascunhoPerm()[p][id] = t.checked; render(); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
   if (t.dataset.upapel) {

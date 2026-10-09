@@ -223,6 +223,14 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 | Somente leitura | Vê tudo e não altera nada |
 | Bloqueado | Não entra |
 
+## Perfis e permissões (administrador)
+
+Menu **Administração › Perfis e permissões**: liga e desliga, perfil por perfil, quais abas aparecem em cada módulo. Aba desligada some do menu e não abre nem por link. O administrador vê tudo sempre; abas de administração só podem ser ligadas para o Gestor. Pátio e Bateria usam a mesma configuração. Sem nada configurado, todos veem todas as abas comuns dos seus módulos.
+
+**Exceção por pessoa (opcional):** em **Usuários e acessos**, coluna **Abas**, botão **Personalizar**. O que ficar diferente do perfil vale só para aquela pessoa; **Voltar ao padrão do perfil** apaga a exceção.
+
+A permissão controla as abas. O que cada perfil pode alterar no banco continua definido pelo perfil (regras do Firestore).
+
 ## No celular
 Abra o endereço no Chrome (Android) ou Safari (iPhone) e use **Adicionar à tela inicial**. O sistema abre como um aplicativo. Sem sinal, os apontamentos ficam guardados no aparelho e são enviados quando a conexão voltar. O topo da tela mostra **Sem sinal · N aguardando envio**.
 
@@ -241,6 +249,7 @@ public/
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
   meudia.js, hoje.js  tela Meu dia e as contas que ela usa (as mesmas dos avisos)
+  permissoes.js       abas por perfil e exceção por pessoa
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
   seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)

@@ -169,6 +169,13 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Abas que cada perfil vê (tela Perfis e permissões). Todos leem; só o administrador muda.
+    // A exceção por pessoa fica no campo abas de usuarios/{uid}, que só o administrador altera.
+    match /config/permissoes {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+
     // Avisos no celular: chave pública do Web Push (config/avisos) e os aparelhos/preferências de cada pessoa.
     match /config/avisos {
       allow read: if ativo();

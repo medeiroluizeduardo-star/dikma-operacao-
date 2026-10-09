@@ -219,6 +219,8 @@ function startData() {
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
+  // Abas por perfil (tela Perfis e permissões).
+  on(doc(db, 'config', 'permissoes'), s => { cache.permissoes = s.exists() ? (s.data().abas || {}) : {}; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
@@ -365,6 +367,7 @@ export async function desativarAvisos() {
   await setDoc(doc(db, 'avisos', me.uid), { tokens: atual.filter(x => x !== t), atualizadoEm: serverTimestamp() }, { merge: true });
 }
 export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid), { prefs, atualizadoEm: serverTimestamp() }, { merge: true }));
+export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));

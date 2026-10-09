@@ -136,7 +136,8 @@ export async function savePlano(area, itens) { cache.plano[area] = itens; change
 export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].colabs[area] = itens; changed(); }
 export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); }
 // Avisos na demonstração: não há servidor de mensagens; mostra um aviso local para testar.
-cache.avisosCfg = { vapid: 'demonstracao' }; cache.meusAvisos = null;
+cache.avisosCfg = { vapid: 'demonstracao' }; cache.meusAvisos = null; cache.permissoes = {};
+export async function salvarPermissoes(abas) { cache.permissoes = abas; changed(); }
 export async function avisosSuportados() { return 'Notification' in window; }
 export async function ativarAvisos(prefs) {
   if ('Notification' in window && Notification.permission !== 'granted') { try { await Notification.requestPermission(); } catch (e) { /* ignora */ } }
