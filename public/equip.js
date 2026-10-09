@@ -25,7 +25,7 @@ export function criarEquip(X) {
   const TODAY = today();
   const E = () => DB.cache.e;
   const ME = () => X.ME;
-  const podeEditar = () => isAdmin() || ['supervisor', 'lider'].includes(ME().papel);
+  const podeEditar = () => isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel);
   const U = UI.e || (UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null });
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const mesNome = ym => `${MESES_L[+ym.slice(5, 7) - 1]}/${ym.slice(0, 4)}`;
@@ -172,12 +172,23 @@ export function criarEquip(X) {
     const ps = E().par.filter(p => p.data.slice(0, 7) === U.mes || (U.pf === 'aberta' && !p.fim)).map(p => ({ ...p, dur: C.duracao(p), resp: C.resp(p), sit: C.situacao(p) }));
     const al = new Map(C.alertas(E().lanc, E().par, TODAY).filter(a => a.aba === 'Paradas').map(a => [a.ref.id, a.tipo]));
     const F = { aberta: p => !p.fim, todas: () => true, EQUIPAMENTO: p => p.resp === 'EQUIPAMENTO', OPERADOR: p => p.resp === 'OPERADOR', OPERACIONAL: p => p.resp === 'OPERACIONAL' };
-    const l = ps.filter(F[U.pf] || F.todas).sort((a, b) => (a.data + (a.ini || '') > b.data + (b.ini || '') ? -1 : 1));
+    const base = ps.filter(F[U.pf] || F.todas);
+    if (U.pdia && U.pdia.slice(0, 7) !== U.mes) U.pdia = '';
+    const l = base.filter(p => !U.pdia || p.data === U.pdia).sort((a, b) => (a.data + (a.ini || '') > b.data + (b.ini || '') ? -1 : 1));
     const n = k => ps.filter(F[k]).length;
+    // Faixa de dias do mês: quantas paradas (no filtro escolhido) e horas paradas em cada dia.
+    const porDia = new Map(); for (const p of base) if (p.data.slice(0, 7) === U.mes) { const x = porDia.get(p.data) || { n: 0, h: 0 }; x.n++; x.h += p.dur || 0; porDia.set(p.data, x); }
+    const fim = fimMes(U.mes), dias = []; for (let d = U.mes + '-01'; d <= fim; d = add(d, 1)) dias.push(d);
+    const semana = d => DAYS[(new Date(d + 'T12:00').getDay() + 6) % 7];
+    const faixa = `<div class="dstrip" role="toolbar" aria-label="Filtrar por dia"><button class="dchip todos" data-epdia="" aria-pressed="${!U.pdia}"><small>Mês</small><b>Todos</b><i>${base.length}</i></button>${dias.map(d => { const x = porDia.get(d); return `<button class="dchip${d === TODAY ? ' hoje' : ''}${x ? '' : ' vazio'}${d > TODAY ? ' futuro' : ''}" data-epdia="${d}" aria-pressed="${U.pdia === d}" title="${dBR(d)}${x ? ` · ${x.n} parada(s) · ${h2(x.h)} h` : ' · sem paradas'}"><small>${semana(d)}</small><b>${d.slice(8)}</b><i>${x ? x.n : ''}</i></button>`; }).join('')}</div>`;
+    setTimeout(() => { const st = document.querySelector('.dstrip'); if (!st) return; const alvo = st.querySelector('[aria-pressed="true"]:not(.todos)') || st.querySelector('.hoje'); if (alvo) st.scrollLeft = Math.max(0, alvo.offsetLeft - st.clientWidth / 2 + alvo.offsetWidth / 2); }, 0);
     let h = `<div class="filters">${selMes('eMes', U.mes)}${podeEditar() ? `<button class="btn pri" data-e="novaPar" style="align-self:flex-end">${I.plus} Parada</button>` : ''}</div>
-      <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
-    if (!l.length) return h + '<div class="card"><div class="empty">Nenhuma parada com esse filtro.</div></div>';
-    h += `<div class="card"><div class="body"><div class="plist">${l.map(p => `<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
+      <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>${faixa}`;
+    if (!l.length) return h + `<div class="card"><div class="empty">${U.pdia ? `Nenhuma parada em ${dBR(U.pdia)} com esse filtro.` : 'Nenhuma parada com esse filtro.'}</div></div>`;
+    // Agrupa por dia: cabeçalho com o total do dia.
+    let diaAnt = '';
+    const cab = p => { if (p.data === diaAnt) return ''; diaAnt = p.data; const doDia = l.filter(x => x.data === p.data); return `<div class="pgrp"><b>${semana(p.data)} ${dBR(p.data).slice(0, 5)}</b><span>${doDia.length} parada${doDia.length > 1 ? 's' : ''} · ${h2(doDia.reduce((t, x) => t + (x.dur || 0), 0))} h${doDia.some(x => !x.fim) ? ` · <em>${doDia.filter(x => !x.fim).length} sem liberação</em>` : ''}</span></div>`; };
+    h += `<div class="card"><div class="body"><div class="plist">${l.map(p => `${cab(p)}<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
       <div class="l">${dBR(p.data)} · ${p.ini || '—'} às ${p.fim || '…'} · <b>${h2(p.dur)} h</b> · ${esc(short(p.op))}${p.desc ? ' · ' + esc(p.desc) : ''}${p.os ? ' · OS ' + esc(p.os) : ''}</div>
       ${al.has(p.id) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
       <div class="row-gap">${!p.fim ? (podeEditar() ? `<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill warn">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeEditar() ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`).join('')}</div></div></div>`;
@@ -350,7 +361,8 @@ export function criarEquip(X) {
   const acharL = id => E().lanc.find(x => x.id === id) || (U.hist && U.hist.lanc.find(x => x.id === id));
   const acharP = id => E().par.find(x => x.id === id) || (U.hist && U.hist.par.find(x => x.id === id));
   document.addEventListener('click', async e => {
-    const t = e.target.closest('[data-e],[data-epf]'); if (!t || t.closest('#layer')) return;
+    const t = e.target.closest('[data-e],[data-epf],[data-epdia]'); if (!t || t.closest('#layer')) return;
+    if (t.dataset.epdia !== undefined) { U.pdia = t.dataset.epdia; return render(); }
     const d = t.dataset;
     if (d.epf) { U.pf = d.epf; return render(); }
     switch (d.e) {
@@ -394,7 +406,7 @@ export function criarEquip(X) {
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('tr[data-e="editOp"]')) e.target.click(); });
   document.addEventListener('change', e => {
     const t = e.target;
-    if (t.id === 'eMes') { U.mes = t.value; render(); }
+    if (t.id === 'eMes') { U.mes = t.value; U.pdia = ''; render(); }
     else if (t.id === 'eDia') { if (t.value) { U.dia = t.value; render(); } }
     else if (t.id === 'eAvMes') { U.avMes = t.value; render(); }
     else if (t.id === 'eInMes') { U.inMes = t.value; render(); }

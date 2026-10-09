@@ -111,6 +111,8 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - As fórmulas reproduzem as da planilha. Conferido em outubro/2026: 8 dias, 59 alocações, 432,42 h previstas, 408,54 h operadas, disponibilidade 94,3%, MTTR 1,63 h, MTBF 27,2 h e nota média 79,4.
 - **Diferença em setembro:** os números ficam um pouco diferentes da planilha. Na planilha, as paradas digitadas com apelido (ex.: "VITOR") não se ligavam ao lançamento feito com o nome completo. Na importação o sistema corrige isso, e daqui em diante o operador é escolhido da lista.
 
+- **Paradas:** além dos filtros por situação e responsável, a faixa de dias do mês mostra quantas paradas houve em cada dia; toque num dia para ver só ele. A lista fica agrupada por dia, com o total de paradas e de horas.
+
 ## Módulo Efetivo (fichas de acompanhamento)
 - **Primeiro acesso:** entre como administrador, escolha **Efetivo** e clique em **Importar dados da planilha**. Isso carrega os 179 colaboradores, as ocorrências já lançadas e os 12 tipos com texto padrão.
 - **Painel:** fichas em dia, ativos, em experiência, integração completa, assinaturas pendentes e recusas. Mostra também as ocorrências por mês e por tipo e alertas de experiência (45 e 90 dias), integração incompleta e assinatura parada há mais de 7 dias.
@@ -185,15 +187,15 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 - Os anexos ficam no próprio Firestore, que tem 1 GB grátis. Isso dá cerca de 5 a 8 mil fotos. Se um dia precisar de mais espaço, dá para migrar para o Firebase Storage (plano Blaze).
 
 ## Perfis
-
-| Perfil | O que pode fazer |
+| Perfil | O que faz |
 |---|---|
-| Administrador | Tudo: plano padrão, gerador de meses, rotas, usuários e apontamento em todas as áreas |
-| Supervisor / Líder | Vê tudo da própria área, aponta atividades e marca a situação do efetivo |
-| Somente leitura | Vê todas as áreas, não altera nada |
-| Bloqueado | Não entra no sistema |
-
-As permissões são garantidas pelo servidor (arquivo `firestore.rules`), não só pela tela.
+| Administrador | Tudo, inclusive cadastrar, redefinir senha e apagar usuários |
+| Gestor | Aponta e edita em todas as áreas e usa as telas de administração dos módulos marcados (plano padrão, gerador de meses, rotas, configurações, tipos de ocorrência, importar dados, cadastro de colaboradores). Não mexe em usuários |
+| Coordenador | Aponta e edita em todas as áreas dos módulos marcados, sem as telas de administração |
+| Supervisor | Aponta em até 2 áreas (podem ser uma do Pátio e outra da Bateria). Com duas áreas no mesmo módulo, escolhe a área no filtro |
+| Líder | Aponta em 1 área |
+| Somente leitura | Vê tudo e não altera nada |
+| Bloqueado | Não entra |
 
 ## No celular
 Abra o endereço no Chrome (Android) ou Safari (iPhone) e use **Adicionar à tela inicial**. O sistema abre como um aplicativo. Sem sinal, os apontamentos ficam guardados no aparelho e são enviados quando a conexão voltar. O topo da tela mostra **Sem sinal · N aguardando envio**.

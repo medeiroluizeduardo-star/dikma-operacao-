@@ -165,13 +165,13 @@ async function novaConta(login, senha) {
   return { email, uid };
 }
 
-export async function criarUsuario({ nome, login, senha, papel, area, modulos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
   const { email, uid } = await novaConta(login, senha);
   const b = writeBatch(db);
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }

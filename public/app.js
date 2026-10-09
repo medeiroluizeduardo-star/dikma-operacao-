@@ -32,10 +32,20 @@ const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
 const meses = () => ((DB.cache.config && DB.cache.config.meses) || []).slice().sort();
 const isAdmin = () => ME && ME.papel === 'admin';
-const myArea = () => (ME && (ME.papel === 'lider' || ME.papel === 'supervisor') && AREAS.includes(ME.area) ? ME.area : null);
+// Perfis: admin (tudo) · gestor (todas as áreas + administração dos módulos dele, menos usuários)
+// coordenador (aponta em todas as áreas dos módulos dele) · supervisor (até 2 áreas) · líder (1 área) · leitor · bloqueado
+const ehDoModulo = () => !!ME && modsDe(ME).includes(UI.modulo);
+const admMod = () => isAdmin() || (!!ME && ME.papel === 'gestor' && ehDoModulo());
+const todasAreas = () => isAdmin() || (!!ME && ['gestor', 'coordenador'].includes(ME.papel) && ehDoModulo());
+const myAreas = () => (ME && (ME.papel === 'lider' || ME.papel === 'supervisor') ? [...new Set([ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS.includes(a)))] : []);
+const myArea = () => { const l = myAreas(); return l.length ? (l.includes(UI.area) ? UI.area : l[0]) : null; };
 const areaScope = () => myArea() || UI.area;
-const canEdit = area => isAdmin() || (!!myArea() && myArea() === area);
-const canEditSit = area => isAdmin() || (!!myArea() && myArea() === area);
+const canEdit = area => todasAreas() || myAreas().includes(area);
+const canEditSit = area => todasAreas() || myAreas().includes(area);
+// Seletor de área para quem tem área fixa: uma área = travado; duas (supervisor) = escolhe entre as dele.
+const selMinhaArea = (id, rot = 'Área') => myAreas().length > 1
+  ? `<label class="sel"><span>${rot}</span><select class="in" id="${id}">${myAreas().map(a => `<option value="${a}" ${a === myArea() ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`
+  : `<label class="sel"><span>${rot}</span><select class="in" disabled><option>${AREA_S[myArea()]}</option></select></label>`;
 const papelNome = p => (PAPEIS.find(x => x[0] === p) || [p, p])[1];
 
 function rebuild() {
@@ -137,7 +147,7 @@ const VIEWS = [
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' }
 ];
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -154,7 +164,7 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 const modsDe = u => (!u ? [] : u.papel === 'admin' ? TODOS_MODS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
-const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || isAdmin()));
+const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())));
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   const k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
@@ -238,7 +248,7 @@ function renderTela() {
   if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
   ensurePeriod();
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
-  if (v.admin && !isAdmin()) UI.view = 'painel';
+  if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
   const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir', 'relfoto'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { $('view').innerHTML = M.ESQUELETO; return; }
@@ -289,7 +299,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
   if (mes) h += `<label class="sel"><span>Mês</span><select class="in" id="fMes">${meses().map(m => `<option value="${m}" ${m === UI.mes ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>`;
   if (semana) h += `<label class="sel"><span>Semana</span><select class="in" id="fSem">${weeksOfMonth(UI.mes).map(w => `<option value="${w}" ${w === UI.ini ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>`;
   if (area) {
-    if (myArea()) h += `<label class="sel"><span>Área</span><select class="in" disabled><option>${AREA_S[myArea()]}</option></select></label>`;
+    if (myArea()) h += selMinhaArea('fArea');
     else h += `<label class="sel"><span>Área</span><select class="in" id="fArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`;
   }
   if (semana && UI.ini !== CUR_WEEK && meses().includes(CUR_MONTH)) h += `<button class="btn" data-act="hoje" style="align-self:flex-end">Semana atual</button>`;
@@ -486,6 +496,7 @@ function vPend() {
   for (const x of at) { const p = PL.get(x.doc.ids[x.i]); if (!p) continue; const key = x.doc.area + '|' + p.rota; if (!byR.has(key)) byR.set(key, []); byR.get(key).push(x); }
   const lista = [...byR.entries()].sort((a, b) => b[1].length - a[1].length);
   let h = '';
+  if (myAreas().length > 1) h += `<div class="filters">${selMinhaArea('fArea')}</div>`;
   if (!myArea()) h += `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label></div>`;
   h += `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${at.length}</b><span>Atrasadas</span></div><div><b class="num">${lista.length}</b><span>Rotas com atraso</span></div><div><b class="num">${at.length ? ddmm(at[0].dt) : '—'}</b><span>Mais antiga</span></div></div><p class="muted small m0">Considera o mês atual e o anterior.</p>`;
   if (!at.length) h += '<div class="card"><div class="empty">Tudo apontado. Nenhuma atividade atrasada.</div></div>';
@@ -514,7 +525,7 @@ function vImprimir() {
   const lid = COLABS.find(c => c.area === area && /^L[IÍ]DER/.test(c.funcao || ''));
   const lider = UI.lider || (lid ? title(lid.nome) : '');
   let h = `<div class="filters noprint">
-   ${!myArea() ? `<label class="sel"><span>Área da folha</span><select class="in" id="fArea">${AREAS.map(a => `<option value="${a}" ${a === area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>` : ''}
+   ${myAreas().length > 1 ? selMinhaArea('fArea', 'Área da folha') : ''}${!myArea() ? `<label class="sel"><span>Área da folha</span><select class="in" id="fArea">${AREAS.map(a => `<option value="${a}" ${a === area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>` : ''}
    <label class="sel"><span>Rota</span><select class="in" id="fIRota"><option value="TODAS">Todas</option>${rts.map(r => `<option ${r === UI.iRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
    <label class="sel"><span>Líder</span><input class="in" id="fLider" value="${esc(lider)}"></label>
    ${!framed ? `<button class="btn pri" data-act="print" style="align-self:flex-end">${I.print} Imprimir / salvar PDF</button>` : ''}
@@ -575,7 +586,7 @@ function vRelFoto() {
   let h = `<div class="filters noprint">
     <label class="sel"><span>Mês</span><select class="in" id="rfMes">${meses().map(m => `<option value="${m}" ${m === UI.mes ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>
     <label class="sel"><span>Semana</span><select class="in" id="rfSem"><option value="TODAS">Mês inteiro</option>${ws.map(w => `<option value="${w}" ${w === UI.rfIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
-    ${myArea() ? `<label class="sel"><span>Área</span><select class="in" disabled><option>${AREA_S[myArea()]}</option></select></label>` : `<label class="sel"><span>Área</span><select class="in" id="rfArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`}
+    ${myArea() ? selMinhaArea('rfArea') : `<label class="sel"><span>Área</span><select class="in" id="rfArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`}
     <label class="sel"><span>Rota</span><select class="in" id="rfRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rfRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
     <button class="btn" data-act="rfreload" style="align-self:flex-end">Atualizar</button>
     ${!framed ? `<button class="btn pri" data-act="rfprint" style="align-self:flex-end" ${RF.preparando ? 'disabled' : ''}>${I.print} ${RF.preparando ? `Preparando ${RF.preparando}…` : 'Imprimir / salvar PDF'}</button>` : ''}
@@ -650,18 +661,19 @@ function vUsuarios() {
   const ativos = us.filter(u => u.papel !== 'bloqueado').length;
   const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${Object.values(SETS).map(st => `<optgroup label="${st.nome}">${st.areas.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select>`;
   return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div></div>
-  <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="form" novalidate>
-   <label class="sel wide"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Edmar Lucas Gomes de Araujo"></label>
+  <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="uform" novalidate>
+   <div class="ur r1"><label class="sel"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Edmar Lucas Gomes de Araujo"></label>
    <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: edmar.araujo"></label>
-   <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label>
-   <label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-   <label class="sel"><span>Área (Atividades Pátio ou Bateria)</span>${areaSel('id="nuArea"', '', false)}</label>
-   <div class="sel"><span>Módulos</span><div class="row-gap">${TODOS_MODS.map(m => `<label class="chkl"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}> ${MODS[m].nome}</label>`).join('')}</div></div>
-   <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar'}</button>
-   <p class="err wide" id="nuErr" role="alert" hidden></p>
+   <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label></div>
+   <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+   <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
+   <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
+   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
+   <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
+   <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p>Líder e supervisor apontam só na área deles. Somente leitura vê tudo e não altera nada. Bloqueado não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td>${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}</td><td class="nowrap">${u.papel === 'admin' ? '<span class="muted small">Todos</span>' : TODOS_MODS.map(m => `<label class="chkl"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}> ${MODS[m].nome}</label>`).join(' ')}</td><td><div class="row-gap tight">${u.login && u.uid !== ME.uid ? `<button class="btn" data-reset="${u.uid}">${I.key} Redefinir senha</button>` : ''}${u.uid !== ME.uid ? `<button class="btn ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="muted small">você</span>'}</div></td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
@@ -677,7 +689,7 @@ function vConfig() {
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */
 function vImportar() {
-  if (!isAdmin()) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
+  if (!admMod()) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
   const ws = []; for (const m of [CUR_MONTH]) for (const w of weeksOfMonth(m)) ws.push(w);
   return `<div class="card"><header><h2>Importar dados da planilha · ${esc(SETS[SK].nome)}</h2><p>Plano padrão, rotas, colaboradores e as situações já lançadas no efetivo diário da planilha ${SK === 'bateria' ? 'PLANEJAMENTO DE ATIVIDADES BATERIA (Bateria 1, Bateria 2, Trilho e CDQ)' : 'do Pátio de Carvão'}</p></header><div class="body stackcol">
    <label class="sel"><span>Começar a programação na semana</span><select class="in" id="impIni">${ws.map(w => `<option value="${w}" ${w === UI.impIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
@@ -790,7 +802,7 @@ function evidenciasSheet(doc, i, k, opts = {}) {
 }
 function verEvidencia(ev, onDel, voltar) {
   const L = $('layer');
-  const podeExcluir = isAdmin() || (ev.por === ME.uid && canEdit(ev.area));
+  const podeExcluir = admMod() || (ev.por === ME.uid && canEdit(ev.area));
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet viewer" role="dialog" aria-modal="true" aria-label="${esc(ev.nome)}"><h3>${esc(ev.tipo.startsWith('image/') ? 'Foto' : 'Arquivo')}</h3><div class="sub">${esc(ev.nome)} · ${fmtKB(ev.tamanho || 0)}<br>Enviado por ${esc(title(ev.porNome || ''))} em ${fmtAt(ev.at)}</div>
     <div class="vwbody"><p class="muted m0">Abrindo…</p></div>
     <div class="row-gap"><button class="btn" type="button" data-back>Voltar</button>${podeExcluir ? (`<button class="btn danger" type="button" data-del>Excluir</button>`) : ''}</div></div></div>`;
@@ -1023,6 +1035,9 @@ document.addEventListener('submit', async e => {
     }
     if (f.id === 'fNovoUser') {
       const nome = $('nuNome').value.trim(), login = DB.normLogin($('nuLogin').value), senha = $('nuSenha').value.trim(), papel = $('nuPapel').value, area = $('nuArea').value || null;
+      const area2 = papel === 'supervisor' ? ($('nuArea2').value || null) : null;
+      if (area2 && area2 === area) throw new Error('A 2ª área precisa ser diferente da primeira.');
+      if (area2 && !area) throw new Error('Escolha a primeira área antes da segunda.');
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
@@ -1031,7 +1046,7 @@ document.addEventListener('submit', async e => {
       if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
       if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, modulos: papel === 'admin' ? TODOS_MODS : modulos });
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? TODOS_MODS : modulos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
       UI.busy = false; UI.senhaSug = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
@@ -1050,7 +1065,7 @@ document.addEventListener('change', e => {
   if (t.dataset.upapel) {
     const uid = t.dataset.upapel; const admins = DB.cache.usuarios.filter(u => u.papel === 'admin').length;
     if (uid === ME.uid && t.value !== 'admin' && admins < 2) { toast('Antes, deixe outra pessoa como administrador'); t.value = 'admin'; return; }
-    const patch = { papel: t.value }; if (!['lider', 'supervisor'].includes(t.value)) patch.area = null;
+    const patch = { papel: t.value }; if (!['lider', 'supervisor'].includes(t.value)) patch.area = null; if (t.value !== 'supervisor') patch.area2 = null;
     DB.setUsuario(uid, patch); toast('Perfil atualizado');
   }
   if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
@@ -1061,6 +1076,12 @@ document.addEventListener('change', e => {
     DB.setUsuario(uid, { modulos: novo }); toast('Módulos atualizados');
   }
   if (t.dataset.uarea) { DB.setUsuario(t.dataset.uarea, { area: t.value || null }); toast('Área atualizada'); }
+  if (t.dataset.uarea2) {
+    const u = DB.cache.usuarios.find(x => x.uid === t.dataset.uarea2);
+    if (t.value && u && t.value === u.area) { toast('A 2ª área precisa ser diferente da primeira'); t.value = u.area2 || ''; return; }
+    DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
+  }
+  if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; }
 });
 matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'prog' || UI.view === 'elanc') render(); });
 window.addEventListener('online', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
@@ -1068,8 +1089,8 @@ window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHT
 window.addEventListener('pagehide', salvarUI);
 
 const PES = criarPessoas(DB);
-const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, framed, UI });
-const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin, prepararFoto, framed, UI });
+const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
+const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },

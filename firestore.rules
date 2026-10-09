@@ -1,6 +1,8 @@
 rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
-// Perfis: admin (tudo), supervisor/lider (apontam só na própria área), leitor (só lê), bloqueado (sem acesso).
+// Perfis: admin (tudo), gestor (todas as áreas + administração dos módulos dele, menos usuários),
+// coordenador (aponta em todas as áreas dos módulos dele), supervisor (até 2 áreas: area e area2),
+// lider (1 área), leitor (só lê), bloqueado (sem acesso).
 // Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, bateria = Atividades Bateria,
 // equipamentos = Operação, gestao = Efetivo. A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
@@ -9,18 +11,21 @@ service cloud.firestore {
     function uref() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
     function hasProfile() { return signed() && exists(uref()); }
     function perfil() { return get(uref()).data; }
-    function ativo() { return hasProfile() && perfil().papel in ['admin', 'supervisor', 'lider', 'leitor']; }
+    function ativo() { return hasProfile() && perfil().papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor']; }
     function admin() { return hasProfile() && perfil().papel == 'admin'; }
-    function gestor() { return hasProfile() && perfil().papel in ['supervisor', 'lider']; }
+    function gestor() { return hasProfile() && perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']; }   // quem aponta
+    function todasAreas() { return hasProfile() && perfil().papel in ['gestor', 'coordenador']; }
+    function minhaArea(area) { return perfil().get('area', '') == area || (perfil().papel == 'supervisor' && perfil().get('area2', '') == area); }
     function mods() { return perfil().get('modulos', ['operacao']); }
+    function admMod(m) { return admin() || (ativo() && perfil().papel == 'gestor' && m in mods()); }   // administração do módulo
     function op() { return ativo() && (admin() || 'operacao' in mods()); }        // módulo Operação
     function ge() { return ativo() && (admin() || 'gestao' in mods()); }          // módulo Gestão
     function eqm() { return ativo() && (admin() || 'equipamentos' in mods()); }   // módulo Operação (equipamentos)
-    function eqEdita() { return eqm() && (admin() || perfil().papel in ['supervisor', 'lider']); }
-    function geEdita() { return ge() && (admin() || perfil().papel in ['supervisor', 'lider']); }
-    function gestorDa(area) { return gestor() && perfil().area == area && 'operacao' in mods(); }
+    function eqEdita() { return eqm() && (admin() || perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']); }
+    function geEdita() { return ge() && (admin() || perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']); }
+    function gestorDa(area) { return gestor() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
     function ba() { return ativo() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
-    function gestorDaB(area) { return gestor() && perfil().area == area && 'bateria' in mods(); }
+    function gestorDaB(area) { return gestor() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
     function boot() { return /databases/$(database)/documents/config/bootstrap; }
 
@@ -33,7 +38,7 @@ service cloud.firestore {
 
     match /config/sistema {
       allow read: if op();
-      allow write: if admin();
+      allow write: if admMod('operacao');
     }
 
     // Liga o usuário digitado na tela de login à conta interna. Leitura pública só de um item por vez.
@@ -59,12 +64,12 @@ service cloud.firestore {
 
     match /plano/{area} {
       allow read: if op();
-      allow write: if admin();
+      allow write: if admMod('operacao');
     }
 
     match /colaboradores/{area} {
       allow read: if op();
-      allow write: if admin();
+      allow write: if admMod('operacao') || admMod('gestao');
     }
 
     match /situacao/{mes} {
@@ -74,8 +79,8 @@ service cloud.firestore {
 
     match /semanas/{id} {
       allow read: if op();
-      allow create, delete: if admin();
-      allow update: if admin() || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+      allow create, delete: if admMod('operacao');
+      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
 
     // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
@@ -87,28 +92,28 @@ service cloud.firestore {
         // no máximo 6 anexos por atividade em cada dia
         && get(/databases/$(database)/documents/semanas/$(request.resource.data.semana)).data.get('ev', {})
              .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
-      allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+      allow delete: if admMod('operacao') || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
     }
     match /evidenciasArquivo/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area))
         && request.resource.data.por == request.auth.uid
         && request.resource.data.dados.size() < 1000000;
-      allow delete: if admin() || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+      allow delete: if admMod('operacao') || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
     }
 
     // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
     match /b_config/sistema {
       allow read: if ba();
-      allow write: if admin();
+      allow write: if admMod('bateria');
     }
     match /b_plano/{area} {
       allow read: if ba();
-      allow write: if admin();
+      allow write: if admMod('bateria');
     }
     match /b_colaboradores/{area} {
       allow read: if ba();
-      allow write: if admin();
+      allow write: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
       allow read: if ba();
@@ -116,8 +121,8 @@ service cloud.firestore {
     }
     match /b_semanas/{id} {
       allow read: if ba();
-      allow create, delete: if admin();
-      allow update: if admin() || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+      allow create, delete: if admMod('bateria');
+      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
     match /b_evidencias/{id} {
       allow read: if ba();
@@ -126,20 +131,20 @@ service cloud.firestore {
         && request.resource.data.thumb.size() < 80000
         && get(/databases/$(database)/documents/b_semanas/$(request.resource.data.semana)).data.get('ev', {})
              .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
-      allow delete: if admin() || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
+      allow delete: if admMod('bateria') || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
     }
     match /b_evidenciasArquivo/{id} {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area))
         && request.resource.data.por == request.auth.uid
         && request.resource.data.dados.size() < 1000000;
-      allow delete: if admin() || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
+      allow delete: if admMod('bateria') || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------
     match /eq/{docId} {
       allow read: if eqm();
-      allow write: if admin() || (docId == 'cadastro' && eqEdita());
+      allow write: if admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')));
     }
     match /eqlanc/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
     match /eqpar/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
@@ -149,13 +154,13 @@ service cloud.firestore {
     // ---------- Módulo Efetivo: fichas de acompanhamento ----------
     match /gestao/{docId} {
       allow read: if ge();
-      allow write: if admin();
+      allow write: if admMod('gestao');
     }
     match /gocorr/{id} {
       allow read: if ge();
       allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid;
-      allow update: if admin() || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha']));
-      allow delete: if admin();
+      allow update: if admMod('gestao') || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha']));
+      allow delete: if admMod('gestao');
     }
     match /gassin/{id} {
       allow read: if ge();

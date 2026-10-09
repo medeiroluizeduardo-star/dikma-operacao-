@@ -65,6 +65,9 @@ async function fresh() {
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
     ...lideres.map(c => ({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
+    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
+    { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'] },
+    { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
@@ -108,12 +111,12 @@ export async function signIn(login, senha) {
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
 export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
-export async function criarUsuario({ nome, login, senha, papel, area, modulos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
   if (String(senha).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
-  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, modulos: modulos || ['operacao'], trocarSenha: true }); changed();
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');

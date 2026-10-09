@@ -30,7 +30,7 @@ export function criarGestao(X) {
   const TODAY = today();
   const G = () => DB.cache.g;
   const ME = () => X.ME;
-  const podeEditar = () => isAdmin() || ['supervisor', 'lider'].includes(ME().papel);
+  const podeEditar = () => isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel);
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const dias = (a, b) => Math.round((pd(b) - pd(a)) / 864e5);
   const U = UI.g || (UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' });
