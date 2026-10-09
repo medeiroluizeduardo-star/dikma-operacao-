@@ -31,7 +31,8 @@ import {
   reauthenticateWithCredential, EmailAuthProvider,
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
-  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment
+  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
+  getMessaging, getToken, deleteToken, mensagensSuportadas
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea } from './cal.js';
 
@@ -53,6 +54,7 @@ export const temOperacao = u => temSet(u, 'patio');
 export const temBateria = u => temSet(u, 'bateria');
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
 
+let fbApp = null;
 let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
 let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0, aux = null;
 
@@ -94,7 +96,7 @@ export async function start(callbacks) {
   cb = callbacks;
   cfg = await loadConfig();
   if (!cfg) { cb.onAuth({ status: 'noConfig' }); return; }
-  const app = initializeApp(cfg);
+  const app = fbApp = initializeApp(cfg);
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
   getRedirectResult(auth).catch(e => cb.onError && cb.onError(e));
@@ -216,6 +218,9 @@ function startData() {
   });
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
+  // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
+  on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
+  on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear();
   for (const k of SET_KEYS) watchSet(k, keep.filter(x => x.startsWith(k + '|')).map(x => x.slice(k.length + 1)));
@@ -326,6 +331,34 @@ export async function excluirUsuario(uid) {
   if (u && u.login) { const l = await getDoc(doc(db, 'logins', u.login)); if (l.exists() && l.data().uid === uid) b.delete(l.ref); }
   await track(b.commit());
 }
+// ---------- avisos no celular ----------
+const TOKEN_LS = 'dikma-aviso-token';
+export async function avisosSuportados() {
+  try { return 'Notification' in window && 'serviceWorker' in navigator && location.protocol === 'https:' && await mensagensSuportadas(); } catch (e) { return false; }
+}
+export async function ativarAvisos(prefs) {
+  const vapid = cache.avisosCfg && cache.avisosCfg.vapid;
+  if (!vapid) throw new Error('O administrador ainda não configurou os avisos (falta a chave Web Push).');
+  if (!(await avisosSuportados())) throw new Error('Este navegador não recebe avisos. No iPhone, primeiro adicione o sistema à tela de início (Compartilhar › Adicionar à Tela de Início) e abra por lá.');
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') throw new Error('Os avisos foram bloqueados neste aparelho. Libere nas configurações do navegador (cadeado ao lado do endereço › Notificações).');
+  const reg = await navigator.serviceWorker.register('sw.js');
+  await navigator.serviceWorker.ready;
+  const token = await getToken(getMessaging(fbApp), { vapidKey: vapid, serviceWorkerRegistration: reg });
+  if (!token) throw new Error('Não foi possível ativar os avisos neste aparelho.');
+  try { localStorage.setItem(TOKEN_LS, token); } catch (e) { /* ignora */ }
+  await setDoc(doc(db, 'avisos', me.uid), { tokens: arrayUnion(token), prefs, atualizadoEm: serverTimestamp() }, { merge: true });
+}
+export const avisoAtivoAqui = () => { try { const t = localStorage.getItem(TOKEN_LS); return !!t && !!(cache.meusAvisos && (cache.meusAvisos.tokens || []).includes(t)); } catch (e) { return false; } };
+export async function desativarAvisos() {
+  let t = null; try { t = localStorage.getItem(TOKEN_LS); localStorage.removeItem(TOKEN_LS); } catch (e) { /* ignora */ }
+  try { await deleteToken(getMessaging(fbApp)); } catch (e) { /* já estava sem token */ }
+  const atual = (cache.meusAvisos && cache.meusAvisos.tokens) || [];
+  await setDoc(doc(db, 'avisos', me.uid), { tokens: atual.filter(x => x !== t), atualizadoEm: serverTimestamp() }, { merge: true });
+}
+export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid), { prefs, atualizadoEm: serverTimestamp() }, { merge: true }));
+export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
+
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 

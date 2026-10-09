@@ -80,6 +80,32 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 
 - **Apagar usuário:** em **Usuários e acessos**, botão **Apagar** na linha da pessoa (pede confirmação). Ela perde o acesso na hora e o nome de usuário fica livre; o que ela registrou continua no sistema. Não dá para apagar a si mesmo nem o único administrador. Para só suspender, use o perfil **Bloqueado**. A conta interna fica no Firebase Authentication e pode ser apagada no console, se quiser (não é obrigatório).
 
+## Meu dia
+- É a primeira tela depois de entrar (e o primeiro item do menu em todos os módulos; no celular, a aba **Hoje**).
+- Mostra só o que é da pessoa hoje, nos módulos dela e nas áreas dela: atividades para apontar e atrasadas (Pátio e Bateria, por rota), quem falta hoje, déficit de efetivo amanhã, paradas sem liberação, operadores fora, assinaturas pendentes e experiências vencendo.
+- Cada número leva direto para a tela certa (Apontar, Pendências, Escala, Paradas, Ocorrências).
+- Líder vê a área dele; supervisor, as duas; coordenador, gestor, somente leitura e administrador veem todas as áreas dos módulos deles.
+
+## Avisos no celular
+Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows/avisos.yml`) roda de hora em hora, das 6h às 22h, e manda avisos para quem ligou no aparelho:
+- **Parada sem liberação há mais de 2 horas** (uma vez por parada) — para quem tem o módulo Operação.
+- **Assinatura pendente há mais de 7 dias** (um resumo por dia, a partir das 8h) — para quem tem o Efetivo.
+- **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
+
+**Ligar (uma vez só, administrador)**
+1. Firebase › ⚙ Configurações do projeto › **Cloud Messaging** › Configuração da Web › **Certificados push da Web** › **Gerar par de chaves**. Copie a chave (começa com B…).
+2. No sistema, abra **Meu dia** › **Avisos no celular**, cole a chave e clique em **Salvar chave**. É uma chave pública; pode ficar no sistema.
+3. No GitHub, crie o arquivo `.github/workflows/avisos.yml` (Add file › Create new file) com o conteúdo do zip. Ele usa o `FIREBASE_SERVICE_ACCOUNT` que já existe.
+
+**Cada pessoa, no próprio celular**
+- Abrir o sistema, ir em **Meu dia** › **Ligar avisos** e permitir as notificações. Dá para marcar quais avisos quer receber.
+- Android (Chrome): funciona direto. iPhone: primeiro **Compartilhar › Adicionar à Tela de Início** e abrir o sistema por esse ícone (iOS 16.4 ou mais novo).
+- Tocar no aviso abre o **Meu dia**.
+
+**Testar:** GitHub › Actions › **Avisos no celular** › Run workflow com **Só testar** marcado: o registro mostra quem receberia o quê, sem enviar.
+
+Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em repositório privado, o GitHub dá 2.000 minutos grátis por mês; esta rotina usa cerca de 500. Em repositório público, não há limite, mas o GitHub pausa rotinas agendadas depois de 60 dias sem nenhuma alteração no repositório (basta reativar em Actions).
+
 ## Módulos e acesso
 - Na tela de login a pessoa escolhe **Atividades Pátio**, **Atividades Bateria**, **Operação** ou **Efetivo**. Se ela só tiver acesso a um módulo, entra direto nele.
 - Quem tem os dois troca de módulo pelo seletor no topo do menu (no celular: **Mais › Ir para…**).
@@ -214,6 +240,7 @@ public/
   gestao.js           módulo Efetivo (fichas de acompanhamento)
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
+  meudia.js, hoje.js  tela Meu dia e as contas que ela usa (as mesmas dos avisos)
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
   seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)
@@ -266,5 +293,7 @@ Um documento por área e semana mantém cada tela em poucas leituras, dentro do 
 Outros arquivos fora de `public`:
 ```
 integracao/senior/            ponte com o Senior (roda no GitHub Actions, não vai para o site)
+integracao/avisos/            avisos no celular (roda no GitHub Actions)
+.github/workflows/avisos.yml  agenda dos avisos (de hora em hora, 6h às 22h)
 .github/workflows/senior-sync.yml   agenda da ponte (seg a sáb, 6h)
 ```

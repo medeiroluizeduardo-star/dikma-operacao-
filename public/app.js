@@ -8,6 +8,7 @@ import { criarGestao, VIEWS_G, SUB_G } from './gestao.js';
 import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas } from './pessoas.js';
 import * as M from './movimento.js';
+import { criarMeuDia } from './meudia.js';
 
 const TODAY = today();
 const CUR_WEEK = weekOf(TODAY);
@@ -120,6 +121,7 @@ const I = {
   gerador: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></svg>',
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
   users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>',
+  sol: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   dl: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></svg>',
@@ -132,6 +134,7 @@ const I = {
   google: '<svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>'
 };
 const VIEWS = [
+  { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
   { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar', mod: 'op' },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
@@ -243,7 +246,8 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view); afterRender(); return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); $('view').innerHTML = UI.view === 'usuarios' ? vUsuarios() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view); afterRender(); return; }
+  if (UI.view === 'meudia') { renderNav(); renderTop(); $('view').innerHTML = MD.view(); afterRender(); return; }
   if (!DB.cache.configLoaded) { $('top').innerHTML = '<h1>Carregando…</h1>'; $('view').innerHTML = M.ESQUELETO; renderNav(); return; }
   if (!DB.cache.config) { renderNav(); $('top').innerHTML = `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`; $('view').innerHTML = vImportar(); return; }
   ensurePeriod();
@@ -280,9 +284,9 @@ function renderNav() {
   $('who').innerHTML = DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`;
-  const tb = ge ? [['gpainel', 'Painel', 'painel'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gcontrole', 'Fichas', 'prog'], ['__more', 'Mais', 'more']]
-    : eqm ? [['epainel', 'Painel', 'painel'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['eequipe', 'Equipe', 'escala'], ['__more', 'Mais', 'more']]
-    : [['painel', 'Painel', 'painel'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
+  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+    : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+    : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
   $('tabbar').innerHTML = tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join('');
@@ -307,7 +311,7 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { $('top').innerHTML = `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`; return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
@@ -910,13 +914,22 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   if (d.go) {
     if (d.go === '__more') {
-      const naBarra = UI.modulo === 'gestao' ? ['gpainel', 'gcolab', 'gocorr', 'gcontrole'] : UI.modulo === 'equipamentos' ? ['epainel', 'elanc', 'epar', 'eequipe'] : ['painel', 'prog', 'apontar', 'escala'];
+      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : ['meudia', 'prog', 'apontar', 'escala'];
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     UI.view = d.go; UI.confirm = null; UI.more = 0; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
+  }
+  if (d.mdAv) { MD.onClick(t); return; }
+  if (d.md) {
+    const [mod, view, area] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
+    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = view; UI.confirm = null;
+    if (area && (mod === 'operacao' || mod === 'bateria')) { UI.area = area; UI.aRota = null; UI.eRota = null; }
+    if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.ocSt = 'pendente'; }
+    if (view === 'epar' && UI.e) UI.e.pf = 'aberta';
+    salvarUI(); render(); scrollTo(0, 0); return;
   }
   if (d.modmenu) { menuModulos(!UI.modOpen); if (!UI.modOpen) t.focus(); return; }
   if (d.mod) { UI.modOpen = false; trocarModulo(d.mod); return;
@@ -1022,7 +1035,7 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
-    if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = MODS[mr.value].inicio; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
+    if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = 'meudia'; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
     if (f.id === 'fFirst') {
       const nome = $('faNome').value.trim(), login = DB.normLogin($('faUser').value), senha = $('faPass').value;
       if (!nome) throw new Error('Informe seu nome.'); if (senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
@@ -1060,6 +1073,7 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset.mdPref) { MD.onChange(t); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
   if (t.dataset.upapel) {
@@ -1089,6 +1103,10 @@ window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHT
 window.addEventListener('pagehide', salvarUI);
 
 const PES = criarPessoas(DB);
+const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe });
+// Aberto por um aviso do celular: vai direto para o Meu dia.
+if (new URLSearchParams(location.search).get('v') === 'meudia') { UI.view = 'meudia'; history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : '')); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.tipo === 'abrir' && AUTH.status === 'ready') { UI.view = 'meudia'; render(); scrollTo(0, 0); } });
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();

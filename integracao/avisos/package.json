@@ -1,0 +1,9 @@
+{
+  "name": "dikma-avisos",
+  "private": true,
+  "type": "module",
+  "description": "Avisos no celular do Dikma Operação (roda no GitHub Actions)",
+  "scripts": { "enviar": "node avisos.mjs", "testar": "node avisos.mjs --testar" },
+  "engines": { "node": ">=20" },
+  "dependencies": { "firebase-admin": "^12.7.0" }
+}

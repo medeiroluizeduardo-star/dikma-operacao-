@@ -169,6 +169,16 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Avisos no celular: chave pública do Web Push (config/avisos) e os aparelhos/preferências de cada pessoa.
+    match /config/avisos {
+      allow read: if ativo();
+      allow write: if admin();
+    }
+    match /avisos/{uid} {
+      allow read, write: if ativo() && request.auth.uid == uid;
+      allow read: if admin();
+    }
+
     // Ponte com o Senior: a rotina do GitHub grava com a chave de serviço; só o administrador lê e marca como aplicado.
     match /integracao/{docId} {
       allow read: if admin();

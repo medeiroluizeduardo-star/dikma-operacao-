@@ -688,6 +688,36 @@ td.uacts{white-space:nowrap;text-align:right}
 td.uacts .btn+.btn{margin-left:4px}
 .btn.sm{min-height:30px;padding:4px 10px;font-size:12.5px}.btn.sm svg{width:14px;height:14px}
 @media (max-width:860px){.ur.r1,.ur.r2,.ur.r3{grid-template-columns:minmax(0,1fr)}}
+/* meu dia */
+.md-hero h2{font-family:var(--f-display);font-size:34px;font-weight:700;letter-spacing:.01em;line-height:1.05}
+.md-hero p{margin:4px 0 0;color:var(--ink-3);font-size:14px}
+.md-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.md-tile{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px 14px 18px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--surface);box-shadow:var(--e1);position:relative;overflow:hidden;transition:transform var(--t1) var(--ease),box-shadow var(--t2) var(--ease),border-color var(--t1) linear}
+.md-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--st-prog)}
+.md-tile.bad::before{background:var(--st-nreal)}.md-tile.warn::before{background:var(--st-atr)}.md-tile.ok::before{background:var(--st-real)}
+.md-tile b{font-family:var(--f-display);font-size:38px;line-height:1}
+.md-tile.bad b{color:var(--st-nreal)}.md-tile.warn b{color:var(--st-atr)}.md-tile.ok b{color:var(--st-real)}
+.md-tile span{font-weight:600;font-size:13.5px}
+.md-tile small{font-size:12px;color:var(--ink-3)}
+.md-tile:hover{border-color:var(--ink-3);box-shadow:var(--e2);transform:translateY(-1px)}
+.md-tile:active{transform:scale(.98)}
+.md-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:20px;align-items:start}
+.md-sub{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:6px}
+.md-sub.bad{color:var(--st-nreal)}
+.md-rotas{display:flex;flex-direction:column;gap:6px}
+.md-rota{display:grid;grid-template-columns:minmax(0,1fr) 90px 92px;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);text-align:left;transition:border-color var(--t1) linear,background-color var(--t1) linear}
+.md-rota:hover{border-color:var(--ink-3);background:var(--surface-2)}
+.md-rota b{display:block;font-size:13px}.md-rota small{color:var(--ink-3);font-size:11.5px}
+.md-rota .num{font-size:12.5px;text-align:right;color:var(--ink-2)}.md-rota .num b{display:inline;color:var(--st-atr);font-size:15px}.md-rota .ok{color:var(--st-real);font-weight:600}
+.md-bar{height:6px;border-radius:3px;background:var(--line-2);overflow:hidden}.md-bar i{display:block;height:100%;background:var(--st-real);border-radius:3px}
+.md-pessoas{display:flex;flex-wrap:wrap;gap:6px}
+.md-pessoa{display:flex;flex-direction:column;padding:6px 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface-2)}
+.md-pessoa b{font-size:12.5px}.md-pessoa small{font-size:11.5px;color:var(--ink-3)}.md-pessoa .sit{width:auto;height:auto;padding:0 4px;font-size:10.5px}
+.avst{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line-2)}
+.avst .dot{width:10px;height:10px;border-radius:50%;background:var(--ink-3);flex:none}
+.avst.on .dot{background:var(--st-real);box-shadow:0 0 0 4px color-mix(in srgb,var(--st-real) 20%,transparent)}
+.avst b{display:block;font-size:13.5px}.avst small{font-size:12px;color:var(--ink-3)}.avst .minw{flex:1}
+@media (max-width:860px){.md-hero h2{font-size:27px}.md-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.md-tile{padding:12px 12px 12px 14px}.md-tile b{font-size:30px}.md-grid{grid-template-columns:minmax(0,1fr)}.md-rota{grid-template-columns:minmax(0,1fr) 84px}.md-rota .md-bar{display:none}}
 /* seletor de módulo (menu lateral) */
 .modpick{position:relative;margin:2px 0 8px}
 .modbtn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--rail-ink-2) 30%,transparent);background:color-mix(in srgb,var(--rail-2) 70%,transparent);color:#fff;text-align:left;transition:background-color var(--t1) linear,border-color var(--t1) linear}
