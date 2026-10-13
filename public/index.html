@@ -322,6 +322,23 @@ table.calesc th.fds{color:var(--ink-3)}
 .turi .tl{flex:none;width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:var(--surface-2)}
 .turi.add .in{max-width:90px}
 .savebar{border-top:1px solid var(--line);align-items:center}
+/* Substituição e origem da hora extra */
+.sit{position:relative;min-width:34px;width:auto!important;padding:0 5px!important;white-space:nowrap}
+.sitleg .sit{min-width:26px}
+.sit sup{font-size:8.5px;font-weight:800;margin-left:1px;vertical-align:4px}
+.sit .cobi{position:absolute;top:-6px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-style:normal;font-size:9px;line-height:15px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.sitleg .sit .cobi{top:-5px;right:-5px;width:12px;height:12px;line-height:12px;font-size:8px}
+.sp-cob{font-size:12.5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 9px;border-radius:8px;background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.sp-cob.none{background:var(--surface-2);color:var(--ink-2)}
+.sp-cob svg{width:13px;height:13px}
+.sp-cob .btn.link{padding:0;font-size:12.5px}
+.sp-heo{display:flex;gap:6px;flex-wrap:wrap}
+.sp-heo .btn{flex:1;justify-content:center;min-width:110px}
+.sp-ok{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--st-real)}
+.sp-ok svg{width:14px;height:14px}
+.sitpop .sel{margin:0}
+@media (max-width:860px){.sitpop{left:8px!important;right:8px;width:auto;max-width:none;top:auto!important;bottom:calc(74px + env(safe-area-inset-bottom,0px));max-height:calc(100vh - 150px);overflow:auto}}
+.sitpop .cbx-l{max-height:200px}
 /* Perfis e permissões: chave liga/desliga */
 .tgl{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);position:relative;cursor:pointer;margin:0;flex:none;transition:background-color var(--t1,.15s),border-color var(--t1,.15s)}
 .tgl::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink-3,#999);transition:transform .15s,background-color .15s}

@@ -38,7 +38,7 @@ import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaA
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, semanas: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -259,7 +259,7 @@ function watchSet(k, meses) {
       qs.docChanges().forEach(c => { if (c.type === 'removed') delete st.semanas[c.doc.id]; else st.semanas[c.doc.id] = toLocal(c.doc.id, c.doc.data()); });
       st.monthsLoaded.add(m); changed();
     }, e => cb.onError && cb.onError(e));
-    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; changed(); });
+    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {} }; changed(); });
     monthSubs.set(key(m), [a, b]);
   }
   // limita os meses extras (fora da base) a 4 por conjunto
@@ -273,6 +273,9 @@ function watchSet(k, meses) {
 }
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
+// Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
+export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '' }; };
+export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {} };
 
 
 // ---------- gravações ----------
@@ -289,6 +292,10 @@ export function setStatusMany(docId, changes) {
 export function setSit(key, code) {
   const m = key.split('|')[1].slice(0, 7);
   return track(setDoc(doc(db, C('situacao'), m), { v: { [key]: code || deleteField() } }, { merge: true }));
+}
+export function setSitExtra(campo, key, val) {
+  const m = key.split('|')[1].slice(0, 7);
+  return track(setDoc(doc(db, C('situacao'), m), { [campo]: { [key]: val || deleteField() } }, { merge: true }));
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, C('plano'), area), { itens }));
 // k = conjunto (patio | bateria); o cadastro do Efetivo grava nos dois, seja qual for o módulo aberto.

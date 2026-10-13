@@ -139,6 +139,12 @@ Reúne o que era a aba "Escala e efetivo" das Atividades, para Pátio e Bateria 
 - **Dimensionamento:** disponíveis × necessários por rota e dia.
 - **Balanço e ausências:** ausências de hoje, balanço semanal (quadro, ausências por motivo, disponíveis, necessários, saldo, rotas em déficit) e quem tem ausência na semana.
 
+### Substituição e hora extra (Efetivo diário)
+
+- **Substituir colaborador:** ao lançar falta, atestado, afastado, férias, treinamento ou folga num dia de trabalho, o sistema pergunta **quem vai cobrir** (opcional). A lista mostra primeiro quem é da mesma rota, depois quem está de folga pela escala (vira **hora extra**) e quem está trabalhando em outra rota. O substituto passa a contar na rota de quem faltou e sai da dele; no dimensionamento e no balanço a conta já sai certa. Célula com ⇄ = tem substituição (passe o mouse para ver quem).
+- **Hora extra:** ao marcar HE, escolha **a pedido da Dikma ou da ArcelorMittal** (D ou A ao lado do HE). O balanço semanal separa as horas extras por origem. Em Operação › Lançamentos, horas extras também pedem a origem.
+- Tudo fica no mesmo documento de situação do mês (campos `cob` e `he`); "Desfazer" e "remover" desfazem a hora extra criada pela cobertura.
+
 ## Operação › Troca de equipamento (danificado → reserva)
 
 Em **Lançamentos** (botão de troca na linha) ou em **Paradas** (botão **Substituir** numa parada sem liberação): informe a hora, o equipamento reserva e a causa. O sistema encerra o lançamento original na hora da troca, registra a parada do danificado (sem liberação) e lança o mesmo operador no reserva a partir dali. A parada conta contra a disponibilidade do equipamento, mas não tira horas do operador. Ao **Liberar** o danificado, dá para devolver o operador a ele automaticamente. Tudo tem **Desfazer** por alguns segundos.
