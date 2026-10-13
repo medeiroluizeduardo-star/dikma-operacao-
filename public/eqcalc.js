@@ -78,7 +78,9 @@ export function criarCalc(cfg, cad) {
     const A = aval || {};
     // horas paradas de cada alocação (mesma data, equipamento e operador)
     const parKey = new Map();
-    for (const p of parTodos) { const k = p.data + '|' + p.eq + '|' + p.op; if (!parKey.has(k)) parKey.set(k, []); parKey.get(k).push(p); }
+    // Parada com substituição (p.subst): o operador seguiu em outro equipamento, então ela não tira horas dele —
+    // continua contando contra a disponibilidade do equipamento parado.
+    for (const p of parTodos) { if (p.subst) continue; const k = p.data + '|' + p.eq + '|' + p.op; if (!parKey.has(k)) parKey.set(k, []); parKey.get(k).push(p); }
     const linhas = L.map(l => {
       const jan = janela(l); const ps = parKey.get(l.data + '|' + l.eq + '|' + l.op) || [];
       const hpar = Math.min(jan, ps.reduce((s, p) => s + duracao(p), 0));

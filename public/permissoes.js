@@ -6,6 +6,7 @@ export const PERFIS_ABAS = [['gestor', 'Gestor'], ['coordenador', 'Coordenador']
 export const GRUPOS_ABAS = [
   { t: 'Todos os módulos', mod: 'all' },
   { t: 'Atividades Pátio · Atividades Bateria', mod: 'op' },
+  { t: 'Escala e Efetivo', mod: 'es' },
   { t: 'Operação (equipamentos)', mod: 'eq' },
   { t: 'Efetivo', mod: 'ge' }
 ];

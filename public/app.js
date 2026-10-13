@@ -9,6 +9,7 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
+import { semAcento, casa, caixaBusca } from './busca.js';
 import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao } from './permissoes.js';
 
 const TODAY = today();
@@ -27,8 +28,8 @@ let PLANO = [], PL = new Map(), COLABS = [];
 let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (patio | bateria)
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; } catch (e) { /* ignora */ }
-const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo })); } catch (e) { /* ignora */ } };
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; if (v.esSet) UI.esSet = v.esSet; } catch (e) { /* ignora */ }
+const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet })); } catch (e) { /* ignora */ } };
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
@@ -114,6 +115,7 @@ function setSt(doc, i, k, c, motivo) {
 
 /* ---------------- ícones ---------------- */
 const I = {
+  ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   painel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   prog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7 13h3M7 17h3M14 13h3"/></svg>',
   apontar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12.5l5 5L20 6.5"/></svg>',
@@ -141,25 +143,28 @@ const VIEWS = [
   { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar', mod: 'op' },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
-  { id: 'escala', nome: 'Escala e efetivo', ic: 'escala', grp: 'Acompanhar', mod: 'op' },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
   { id: 'relfoto', nome: 'Relatório fotográfico', ic: 'cam', grp: 'Acompanhar', mod: 'op' },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
+  { id: 'esdia', nome: 'Efetivo diário', ic: 'escala', grp: 'Escala e efetivo', mod: 'es' },
+  { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Escala e efetivo', mod: 'es' },
+  { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e efetivo', mod: 'es' },
   ...VIEWS_E,
   ...VIEWS_G,
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' },
   { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Administração', admin: true, mod: 'all' }
 ];
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, escala: { nome: 'Escala e Efetivo', curto: 'Escala', sub: 'Efetivo diário e dimensionamento', key: 'es', inicio: 'esdia' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
   operacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 19h18M5 19l4.5-8 3 4.5L15 12l4 7"/><circle cx="16.5" cy="6.5" r="1.8"/></svg>',
   bateria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M9 20V9M13 20V9M17 20V9M7 9V5h10v4"/></svg>',
+  escala: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="9" cy="15" r="1.6"/><path d="M13 15.5l1.6 1.6 3-3.2"/></svg>',
   equipamentos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17h2l2-6h7l3 6h4v3H3z"/><circle cx="7.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/><path d="M14 11V6h3"/></svg>',
   gestao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.6 0 4.4 1.6 5 4.3"/></svg>'
 };
@@ -170,12 +175,16 @@ function menuModulos(abrir) {
   const b = p.querySelector('[data-modmenu]'); if (b) b.setAttribute('aria-expanded', abrir);
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
-const modsDe = u => (!u ? [] : u.papel === 'admin' ? TODOS_MODS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m]));
+// Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
+const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'escala');
+const modsDe = u => { if (!u) return []; const b = u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m] && m !== 'escala'); return TODOS_MODS.filter(m => b.includes(m) || (m === 'escala' && (b.includes('operacao') || b.includes('bateria')))); };
+const setsDe = u => ['patio', 'bateria'].filter(k => modsDe(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
 const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && podeVer(ME, v, permCfg()));
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
-  const k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
+  let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
+  if (UI.modulo === 'escala') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
   if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', rfRota: 'TODAS', rfIni: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
   if (!AREAS.includes(UI.pArea)) UI.pArea = AREAS[0];
@@ -263,9 +272,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'escala', 'imprimir', 'relfoto'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'esdia', 'esdim', 'esbal', 'imprimir', 'relfoto'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, escala: vEscala, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig }[UI.view];
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -275,7 +284,7 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  const atr = !ge && !eqm && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'escala' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
   const gb = ge ? GE.badge() : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
@@ -296,7 +305,8 @@ function renderNav() {
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
-    : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['escala', 'Escala', 'escala'], ['__more', 'Mais', 'more']];
+    : UI.modulo === 'escala' ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Efetivo', 'escala'], ['esdim', 'Rotas', 'painel'], ['esbal', 'Balanço', 'prog'], ['__more', 'Mais', 'more']]
+    : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
@@ -323,9 +333,10 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
   if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas' }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
-  if (['painel', 'prog', 'escala', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
+  if (['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
+  if (UI.modulo === 'escala' && setsDe(ME).length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}<div class="syncwrap" id="sync">${syncPill()}</div>`);
 }
 
@@ -524,31 +535,115 @@ function cardBalanco(area, ini) {
     <tr class="saldo"><th scope="row">Saldo</th>${dias.map((d, k) => cel(k, sinal(d.saldo), d.saldo < 0 ? 'neg' : 'pos')).join('')}<td class="c num tot"></td></tr>
     <tr><th scope="row">Rotas em déficit</th>${dias.map((d, k) => cel(k, d.def ? `<span class="pill bad">${d.def}</span>` : '0')).join('')}<td class="c num tot">${soma(d => d.def)}</td></tr>
     </tbody></table></div>
-    <div class="body pt0"><p class="muted small m0">Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-go="escala">Abrir Escala e efetivo</button></p></div></div>`;
+    <div class="body pt0"><p class="muted small m0">Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
 }
-function vEscala() {
+// Seletor rápido da situação: abre colado no dia tocado, um toque aplica. "Repetir" leva até o fim da semana.
+function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
+function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSitPop(); } }
+function sitPop(btn) {
+  fecharSitPop();
+  const key = btn.dataset.sit; const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
+  const cur = DB.sit(key) || 'P'; const k = (pd(dt).getDay() + 6) % 7; const fim = add(dt, 6 - k);
+  const pop = document.createElement('div'); pop.className = 'sitpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Situação de ' + title(c.nome));
+  pop.innerHTML = `<div class="sp-h"><b>${esc(title(c.nome))}</b><small>${DAYS[k]} ${ddmm(dt)}</small></div>
+    <div class="sp-g">${SITS.map(([v, n]) => `<button type="button" class="sp-o" data-sp="${v}" ${v === cur ? 'aria-current="true"' : ''}><span class="sit ${v}">${v === 'P' ? I.ok : v}</span><span>${n}</span></button>`).join('')}</div>
+    ${k < 6 ? `<label class="sp-rep"><input type="checkbox" id="spRep"> Repetir até ${DAYS[6].toLowerCase()} ${ddmm(fim)}</label>` : ''}`;
+  document.body.appendChild(pop);
+  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
+  let x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  let y = r.bottom + 6; if (y + hgt > innerHeight - 8) y = Math.max(8, r.top - hgt - 6);
+  pop.style.left = x + 'px'; pop.style.top = y + 'px';
+  const at = pop.querySelector('[aria-current="true"]') || pop.querySelector('.sp-o'); at.focus();
+  pop.addEventListener('click', e => {
+    const o = e.target.closest('[data-sp]'); if (!o) return;
+    const v = o.dataset.sp; const rep = pop.querySelector('#spRep'); const dias = [dt]; if (rep && rep.checked) for (let d = add(dt, 1); d <= fim; d = add(d, 1)) dias.push(d);
+    const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null]);
+    dias.forEach(d => DB.setSit(id + '|' + d, v === 'P' ? null : v));
+    const nome = SIT_NOME[v];
+    DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
+    fecharSitPop(); render();
+    toast(dias.length > 1 ? `${title(c.nome).split(' ')[0]}: ${nome.toLowerCase()} em ${dias.length} dias` : `${title(c.nome).split(' ')[0]}: ${nome.toLowerCase()}`, { desfazer: () => { antes.forEach(([d, x]) => DB.setSit(id + '|' + d, x)); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); } });
+    const nb = document.querySelector(`[data-sit="${CSS.escape(key)}"]`); if (nb) { nb.focus({ preventScroll: true }); M.pulsar(nb); }
+  });
+  // setas movem entre as opções
+  pop.addEventListener('keydown', e => { const os = [...pop.querySelectorAll('.sp-o')]; const i = os.indexOf(document.activeElement); if (i < 0) return; const col = 2; const m = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: col, ArrowUp: -col }[e.key]; if (m) { e.preventDefault(); const n = os[Math.min(os.length - 1, Math.max(0, i + m))]; n.focus(); } });
+  document.addEventListener('keydown', sitPopEsc, true);
+  setTimeout(() => { const fora = e => { if (!pop.contains(e.target)) { fecharSitPop(); document.removeEventListener('pointerdown', fora, true); } }; document.addEventListener('pointerdown', fora, true); addEventListener('scroll', () => fecharSitPop(), { once: true, passive: true }); }, 0);
+}
+/* ---------------- MÓDULO ESCALA E EFETIVO ---------------- */
+// Usa o conjunto (Pátio ou Bateria) escolhido no topo do módulo. Dados e permissões são os mesmos das atividades.
+function dimRotas(area) {
+  const rs = rotasDa(area); let def = 0, ausT = 0;
+  const rows = rs.map(r => { const e = escalaRota(r, UI.ini); const dd = e.days.filter(d => d.prog > 0 && d.disp < d.nec).length; if (dd && r.rota !== 'GESTÃO') def++; ausT += e.days.reduce((n, d) => n + (d.aloc - d.disp), 0); return { r, e, dd }; });
+  return { rs, rows, def, ausT };
+}
+function miniEscala(area) {
+  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
+  const aus = cs.filter(c => AUSENTE.has(DB.sit(c.id + '|' + TODAY))).length;
+  const { def } = dimRotas(area);
+  return `<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
+}
+// Abre o módulo Escala e Efetivo no conjunto atual, já na rota (area|rota) quando vier de um link.
+function irEscala(rota) {
+  if (!modsDe(ME).includes('escala')) return;
+  if (UI.modulo === 'operacao' || UI.modulo === 'bateria') UI.esSet = SK;
+  UI.modulo = 'escala'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
+  salvarUI(); render(); scrollTo(0, 0);
+}
+function vEsDim() {
+  const area = areaScope(); const { rows } = dimRotas(area);
+  const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
+  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão. Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
+  ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes">${d.disp}/${d.nec}</span></td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+}
+function vEsBal() {
+  const area = areaScope();
+  // quem tem alguma ausência na semana, com os dias
+  const cs = colabsDa(area);
+  const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => DB.sit(c.id + '|' + add(UI.ini, k)) || 'P') })).filter(x => x.d.some(v => AUSENTE.has(v) && v !== 'DS')).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+  const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
+  return miniEscala(area) + `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>
+  <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência</p></header>${sem.length ? `<div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Rota</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
+    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((v, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="sit ${v} ro">${v === 'P' ? I.ok : v}</span></td>`).join('')}</tr>`).join('')}
+  </tbody></table></div>` : '<div class="body"><div class="empty">Ninguém ausente nesta semana.</div></div>'}</div>`;
+}
+function vEsDia() {
   const area = areaScope();
   const rs = rotasDa(area);
-  let def = 0, ausT = 0;
-  const rows = rs.map(r => { const e = escalaRota(r, UI.ini); const dd = e.days.filter(d => d.prog > 0 && d.disp < d.nec).length; if (dd) def++; ausT += e.days.reduce((n, d) => n + (d.aloc - d.disp), 0); return { r, e, dd }; });
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  const totalCol = COLABS.filter(c => area === 'TODAS' || c.area === area).length;
-  let h = `<div class="mini"><div><b class="num">${totalCol}</b><span>Colaboradores</span></div><div><b class="num">${rs.length}</b><span>Rotas</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit</span></div><div><b class="num">${ausT}</b><span>Ausências (pessoa-dia)</span></div></div>`;
-  const dim = `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários. Necessário = efetivo padrão × atividades do dia ÷ carga padrão</p></header><div class="tw"><table><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
-  ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-erota="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados">${d.disp}/${d.nec}</span></td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
-  </tbody></table></div></div>`;
   const opts = rs.map(r => r.area + '|' + r.rota);
-  if (!opts.includes(UI.eRota)) { const f = rows.find(x => x.dd); UI.eRota = f ? f.r.area + '|' + f.r.rota : opts[0]; }
-  if (!UI.eRota) return h + dim;
-  const [ea, er] = UI.eRota.split('|');
-  const cs = COLABS.filter(c => c.area === ea && c.rota === er);
-  const ed = canEditSit(ea);
-  h += `<div class="card"><header><h2>Efetivo diário</h2><p>${ed ? 'Toque no dia para mudar a situação. Vazio = presente' : 'Somente leitura'}</p><span class="r"><select class="in" id="fERota" aria-label="Rota">${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></span></header>
-  <div class="body pb0"><div class="legend">${SITS.filter(s => s[0] !== 'P').map(s => `<span><b>${s[0]}</b> ${s[1]}</span>`).join('')}</div></div>
-  <div class="tw"><table><thead><tr><th>Colaborador</th><th>Função</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
-  ${cs.length ? cs.map(c => `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${esc(title(c.regime))}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => { const v = DB.sit(c.id + '|' + add(UI.ini, k)) || 'P'; return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}" ${ed ? `data-sit="${c.id}|${add(UI.ini, k)}"` : 'disabled'} aria-label="${(SITS.find(s => s[0] === v) || [v, v])[1]}">${v === 'P' ? '' : v}</button></td>`; }).join('')}</tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhum colaborador nesta rota.</td></tr>'}
-  </tbody></table></div></div>`;
-  return h + dim;
+  if (UI.eRota !== '*' && !opts.includes(UI.eRota)) UI.eRota = '*';
+  // Busca: com texto, mostra quem casar em todas as rotas da área escolhida no topo.
+  const q = UI.eQ || '';
+  const kC = c => semAcento([c.nome, c.funcao, c.rota, c.regime, AREA_S[c.area]].filter(Boolean).join(' '));
+  const todas = UI.eRota === '*' || !!q.trim();
+  const ordem = new Map(rs.map((r, i) => [r.area + '|' + r.rota, i]));
+  let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
+  cs = cs.slice().sort((x, y) => (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
+  const pres = DAYS.map((_, k) => cs.filter(c => { const v = DB.sit(c.id + '|' + add(UI.ini, k)) || 'P'; return v !== 'DS' && !AUSENTE.has(v); }).length);
+  const quadro = DAYS.map((_, k) => cs.filter(c => DB.sit(c.id + '|' + add(UI.ini, k)) !== 'DS').length);
+  const celula = (c, k) => {
+    const dt = add(UI.ini, k); const v = DB.sit(c.id + '|' + dt) || 'P'; const ed = canEditSit(c.area);
+    return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${SIT_NOME[v] || v}" title="${SIT_NOME[v] || v}">${v === 'P' ? I.ok : v}</button></td>`;
+  };
+  // agrupa por rota quando mostra várias rotas
+  let ant = '';
+  const linhas = cs.map(c => {
+    const g = c.area + '|' + c.rota; let cab = '';
+    if (todas && !q.trim() && g !== ant) {
+      ant = g; const doG = cs.filter(x => x.area + '|' + x.rota === g); const kh = DAYS.findIndex((_, k) => tk[k]);
+      const ph = kh >= 0 ? doG.filter(x => { const v = DB.sit(x.id + '|' + TODAY) || 'P'; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
+      cab = `<tr class="grp-row"><th colspan="9"><button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}<span class="gcount">${ph != null ? `${ph}/${doG.length} presentes hoje` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
+    }
+    return cab + `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''}` : esc(title(c.regime))}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
+  }).join('');
+  return miniEscala(area) + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
+  <div class="body lbar efbar">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}</div>
+  <div class="body pb0 pt0"><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></div>
+  <div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Função</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
+  ${cs.length ? linhas : `<tr><td colspan="9" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
+  </tbody>${cs.length ? `<tfoot><tr><th colspan="2">Presentes</th>${DAYS.map((_, k) => `<td class="c num ${tk[k] ? 'today' : ''}"><b class="${pres[k] < quadro[k] ? 'menos' : ''}">${pres[k]}</b><span class="muted">/${quadro[k]}</span></td>`).join('')}</tr></tfoot>` : ''}</table></div></div>`;
 }
 
 /* ---------------- PENDÊNCIAS ---------------- */
@@ -731,16 +826,16 @@ function vUsuarios() {
    <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
    <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
    <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
-   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
+   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
   <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${TODOS_MODS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { operacao: 'op', bateria: 'op', equipamentos: 'eq', gestao: 'ge' };
+const KEY_MOD = { operacao: 'op', bateria: 'op', escala: 'es', equipamentos: 'eq', gestao: 'ge' };
 const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v)); };
 function celulaAbas(u) {
   if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
@@ -937,7 +1032,7 @@ function verEvidencia(ev, onDel, voltar) {
   }).catch(err => { const box = sc.querySelector('.vwbody'); if (box) box.innerHTML = `<p class="err">${esc(msgErro(err))}</p>`; });
 }
 
-function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
+function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'escala' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -946,13 +1041,16 @@ function alterarSenhaSheet() {
     await DB.alterarSenha(a, n); toast('Senha alterada');
   });
 }
-function toast(t) {
+// Aviso rápido no rodapé. Com { desfazer }, mostra o botão Desfazer por alguns segundos.
+function toast(t, o = {}) {
   document.querySelectorAll('.toast').forEach(x => x.remove());
   const el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status');
   const erro = /^(erro|sem permissão|não |seu perfil não)/i.test(t);
-  el.innerHTML = `<span class="ti ${erro ? 'bad' : 'ok'}" aria-hidden="true">${erro ? '!' : '✓'}</span><span></span>`; el.lastChild.textContent = t;
+  el.innerHTML = `<span class="ti ${erro ? 'bad' : 'ok'}" aria-hidden="true">${erro ? '!' : '✓'}</span><span></span>${o.desfazer ? '<button type="button" class="tbtn">Desfazer</button>' : ''}`; el.children[1].textContent = t;
+  const dur = o.desfazer ? 6000 : 2600;
+  if (o.desfazer) el.querySelector('.tbtn').onclick = () => { el.remove(); o.desfazer(); };
   document.body.appendChild(el);
-  setTimeout(() => el.classList.add('sai'), 2600); setTimeout(() => el.remove(), 2900);
+  setTimeout(() => el.classList.add('sai'), dur); setTimeout(() => el.remove(), dur + 300);
 }
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 function cellMenu(doc, i, k) {
@@ -989,6 +1087,7 @@ function afterRender() {
   on('fTipo', 'change', e => { UI.tipo = e.target.value; render(); });
   on('fPend', 'change', e => { UI.soPend = e.target.checked; render(); });
   on('fQ', 'input', e => { UI.q = e.target.value; clearTimeout(window._qt); window._qt = setTimeout(schedule, 250); });
+  on('fEQ', 'input', e => { UI.eQ = e.target.value; clearTimeout(window._eqt); window._eqt = setTimeout(schedule, 180); });
   on('fERota', 'change', e => { UI.eRota = e.target.value; render(); });
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; const t = $('liderTxt'); if (t) t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); });
@@ -1024,7 +1123,7 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   if (d.go) {
     if (d.go === '__more') {
-      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : ['meudia', 'prog', 'apontar', 'escala'];
+      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : UI.modulo === 'escala' ? ['meudia', 'esdia', 'esdim', 'esbal'] : ['meudia', 'prog', 'apontar', 'pend'];
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
@@ -1035,6 +1134,7 @@ document.addEventListener('click', async e => {
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
     const [mod, view, area] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
+    if (view === 'escala') { UI.esSet = mod === 'bateria' ? 'bateria' : 'patio'; UI.area = area || UI.area; irEscala(''); return; }
     UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = view; UI.confirm = null;
     if (area && (mod === 'operacao' || mod === 'bateria')) { UI.area = area; UI.aRota = null; UI.eRota = null; }
     if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.ocSt = 'pendente'; }
@@ -1056,12 +1156,11 @@ document.addEventListener('click', async e => {
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
   if (d.goprog) { const [a, r, ini] = d.goprog.split('|'); UI.view = 'prog'; if (!myArea()) UI.area = a; UI.rota = r; UI.ini = ini; UI.mes = monthOfWeek(ini); UI.soPend = true; render(); scrollTo(0, 0); return; }
-  if (d.goescala) { UI.eRota = d.goescala; UI.view = 'escala'; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }
+  if (d.goescala !== undefined) { irEscala(d.goescala); return; }
+  if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-  if (d.sit) {
-    const [id, dt] = d.sit.split('|'); const c = COLABS.find(x => x.id === id); const cur = DB.sit(d.sit) || 'P';
-    return sheet(title(c.nome), `${DAYS[(pd(dt).getDay() + 6) % 7]} ${ddmm(dt)}`, SITS.map(s => ({ t: s[1], v: s[0], ic: `<span class="sit ${s[0]}">${s[0] === 'P' ? '' : s[0]}</span>`, cur: s[0] === cur })), o => { DB.setSit(d.sit, o.v === 'P' ? null : o.v); DB.log(`${title(c.nome)} · ${ddmm(dt)} → ${o.t}`); render(); });
-  }
+  if (d.sit) { sitPop(t); return; }
+
   if (d.ptog) {
     const [id, k] = d.ptog.split('|'); const p = PL.get(id); const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, dias: [...x.dias].map((c, j) => (j === +k ? (c === '1' ? '0' : '1') : c)).join('') } : x));
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
@@ -1097,6 +1196,7 @@ document.addEventListener('click', async e => {
     }
     case 'permPadrao': UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, {}])); render(); toast('Padrão carregado. Salve para aplicar'); break;
     case 'permDesfazer': UI.perm = null; render(); break;
+    case 'limparEQ': UI.eQ = ''; render(); { const n = $('fEQ'); if (n) n.focus(); } break;
     case 'mockReset': await DB.mockReset(); toast('Demonstração restaurada'); break;
     case 'hoje': UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; UI.dia = null; render(); break;
     case 'more': UI.more = +d.n; render(); break;
@@ -1173,12 +1273,12 @@ document.addEventListener('submit', async e => {
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
-      const modulos = TODOS_MODS.filter(m => $('nuM_' + m).checked);
+      const modulos = MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked);
       if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
       if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
       if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? TODOS_MODS : modulos });
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
       UI.busy = false; UI.senhaSug = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
@@ -1216,6 +1316,13 @@ document.addEventListener('change', e => {
     DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
   }
   if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; }
+});
+// Atalho: "/" leva para a busca da tela (quando não está digitando em outro campo).
+document.addEventListener('keydown', e => {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const a = document.activeElement; if (a && a.matches('input,textarea,select,[contenteditable]')) return;
+  const b = document.querySelector('#layer input[type=search], #view input[type=search], #view #fQ, #top #fQ'); if (!b) return;
+  e.preventDefault(); b.focus(); b.select();
 });
 matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'prog' || UI.view === 'elanc') render(); });
 window.addEventListener('online', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });

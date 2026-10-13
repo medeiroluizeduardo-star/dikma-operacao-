@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" onload="this.media='all'">
 <!-- Baixa todos os módulos em paralelo (sem esperar um pedir o outro). -->
-<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
+<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="busca.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
 <style>
 :root{padding-top:env(safe-area-inset-top,0px)}
 body{margin:0}
@@ -219,6 +219,75 @@ table.bal tr.saldo td.neg{color:var(--st-nreal);font-weight:700}
 table.bal tr.saldo td.pos{color:var(--st-real);font-weight:700}
 table.bal td.tot{background:var(--surface-2);font-weight:600}
 .pt0{padding-top:0}
+/* Busca com lista abaixo do campo (operadores, equipamentos) */
+.cbx{position:relative;display:flex;flex-direction:column}
+.cbx-in{position:relative}
+.cbx-in svg{position:absolute;left:11px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--ink-3);pointer-events:none}
+.cbx-in .in{width:100%;padding-left:34px;padding-right:34px}
+.cbx-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--ink-3);width:26px;height:26px;border-radius:6px;cursor:pointer}
+.cbx-x:hover{background:var(--surface-2);color:var(--ink)}
+.cbx-l{margin-top:6px;border:1px solid var(--line);border-radius:10px;background:var(--surface);max-height:232px;overflow:auto;padding:4px;box-shadow:var(--shadow)}
+.cbx-o{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;border:0;background:none;color:var(--ink);text-align:left;padding:7px 9px;border-radius:7px;cursor:pointer}
+.cbx-o b{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cbx-o small{display:block;font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cbx-o:hover,.cbx-o[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.cbx span{font-size:inherit;letter-spacing:normal;text-transform:none;color:inherit;font-weight:inherit}
+.cbx .pill{font-size:11px;font-weight:600}
+.cbx-vz{margin:0;padding:8px 10px;font-size:12.5px;color:var(--ink-3)}
+.lbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lbar .srch{flex:1;min-width:220px;max-width:460px}
+.opbar .rchips{flex:1 1 auto}
+.ajuda{line-height:1.5}
+.avisos:empty{display:none}
+.avisos{display:flex;flex-direction:column;gap:6px}
+.aviso{margin:0;padding:8px 10px;border-radius:8px;font-size:12.5px;background:color-mix(in srgb,var(--st-atr) 13%,transparent);color:var(--ink);border-left:3px solid var(--st-atr)}
+.conf .body{display:flex;flex-direction:column;gap:10px}
+.conf-l{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.conf-l small{color:var(--ink-3)}
+.conf-f{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rchip.add{cursor:pointer;border-style:dashed}.rchip.add svg{width:13px;height:13px}
+.rchip.add:hover{border-color:var(--accent);color:var(--accent)}
+.rchip.mut{opacity:.75}
+table.lanc tr.parado td{background:color-mix(in srgb,var(--st-nreal) 6%,transparent)}
+.pitem.aberta{border-left:3px solid var(--st-nreal);padding-left:10px}
+.pday[hidden],.pitem[hidden],tr[hidden],.mcard[hidden]{display:none}
+/* Efetivo diário: presente com ✓ verde e seletor rápido */
+.sit.P{color:var(--st-real);background:color-mix(in srgb,var(--st-real) 13%,transparent);border-color:transparent;border-style:solid}
+.sit.P svg{width:15px;height:15px;vertical-align:middle}
+.sit.fut{opacity:.55}
+.sit:not([disabled]){cursor:pointer;transition:transform .12s var(--ease),box-shadow .12s}
+.sit:not([disabled]):hover{transform:scale(1.08);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}
+.sitleg .sit{width:26px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;margin-right:2px}
+.sitleg .sit.P svg{width:12px;height:12px}
+.sitleg>span{display:inline-flex;align-items:center;gap:4px}
+table.efd tfoot th,table.efd tfoot td{border-top:2px solid var(--line);font-size:12.5px}
+table.efd tfoot b.menos{color:var(--st-nreal)}
+.efbar .efrota{margin:0;min-width:240px}
+.sitpop{position:fixed;z-index:90;width:300px;max-width:calc(100vw - 16px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--e3,0 12px 32px rgba(0,0,0,.2));padding:12px;display:flex;flex-direction:column;gap:10px}
+@media (prefers-reduced-motion:no-preference){.sitpop{animation:spIn .14s var(--ease) both}@keyframes spIn{from{opacity:0;transform:translateY(-4px) scale(.98)}}}
+.sp-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.sp-h b{font-size:13.5px}.sp-h small{color:var(--ink-3);font-size:12px;white-space:nowrap}
+.sp-g{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.sp-o{display:flex;align-items:center;gap:8px;border:1px solid transparent;background:none;color:var(--ink);border-radius:8px;padding:5px 6px;font-size:13px;text-align:left;cursor:pointer}
+.sp-o:hover,.sp-o:focus-visible{background:var(--surface-2);outline:none;border-color:var(--line)}
+.sp-o[aria-current="true"]{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent)}
+.sp-o .sit{width:30px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex:none;pointer-events:none}
+.sp-rep{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);border-top:1px solid var(--line);padding-top:9px;cursor:pointer}
+.sp-rep input{width:16px;height:16px;accent-color:var(--accent)}
+.pill svg{width:12px;height:12px;vertical-align:-2px;margin-right:2px}
+.btn svg{flex:none}
+/* Módulo Escala e Efetivo */
+.setsw{display:inline-grid;grid-template-columns:repeat(2,auto);align-self:flex-end}
+.setsw button{padding:7px 16px}
+table.efd tr.grp-row th{background:var(--surface-2);text-align:left;padding-top:8px;padding-bottom:8px;font-size:13px}
+table.efd tr.grp-row .btn.link{font-weight:700;padding:0}
+table.efd tr.grp-row .gcount{float:right;font-weight:500;font-size:12px;color:var(--ink-3)}
+.sit.ro{display:inline-flex;align-items:center;justify-content:center;cursor:default}
+.tbtn{margin-left:6px;border:0;background:color-mix(in srgb,var(--surface) 18%,transparent);color:inherit;font-weight:700;font-size:12.5px;padding:5px 10px;border-radius:7px;cursor:pointer}
+.tbtn:hover{background:color-mix(in srgb,var(--surface) 30%,transparent)}
+table.efd tr.grp-row .gcount{text-transform:none;letter-spacing:0}
+.btn.ic{width:34px;height:32px;padding:0;justify-content:center}
+.btn.ic svg{width:16px;height:16px}
+td.acts{white-space:nowrap}td.acts .btn+.btn{margin-left:4px}
+.ajuda svg{width:13px;height:13px;vertical-align:-2px}
 /* Perfis e permissões: chave liga/desliga */
 .tgl{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);position:relative;cursor:pointer;margin:0;flex:none;transition:background-color var(--t1,.15s),border-color var(--t1,.15s)}
 .tgl::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink-3,#999);transition:transform .15s,background-color .15s}
@@ -285,7 +354,6 @@ table.perm tr.grp-row th{background:var(--surface-2);text-align:left;font-size:1
 .cell.bad{background:color-mix(in srgb,var(--st-nreal) 15%,transparent);color:var(--st-nreal)}
 .cell.neu{color:var(--ink-3)}
 .sit{width:34px;height:28px;border-radius:5px;border:1px solid var(--line);background:none;font-size:11.5px;font-weight:600;padding:0}
-.sit.P{color:var(--ink-3);border-style:dashed}
 .sit.F,.sit.FE{background:color-mix(in srgb,var(--st-prog) 16%,transparent);color:var(--ink-2);border-color:transparent}
 .sit.AT,.sit.AF,.sit.FT,.sit.DS{background:color-mix(in srgb,var(--st-nreal) 16%,transparent);color:var(--st-nreal);border-color:transparent}
 .sit.TR,.sit.HE{background:color-mix(in srgb,var(--st-extra) 16%,transparent);color:var(--st-extra);border-color:transparent}

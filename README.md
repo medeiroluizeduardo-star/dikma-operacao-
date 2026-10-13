@@ -117,6 +117,18 @@ Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em r
 - Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
 
+## Módulo Escala e Efetivo
+
+Reúne o que era a aba "Escala e efetivo" das Atividades, para Pátio e Bateria (botão **Pátio | Bateria** no topo). Não precisa marcar no usuário: quem tem Atividades Pátio ou Bateria já vê este módulo, nas mesmas áreas.
+
+- **Efetivo diário:** todas as rotas da área de uma vez (agrupadas, com "presentes hoje" de cada rota) ou uma rota só; busca por nome, função ou rota; ✓ verde = presente; toque no dia para trocar a situação (com "Repetir até domingo" e **Desfazer**).
+- **Dimensionamento:** disponíveis × necessários por rota e dia.
+- **Balanço e ausências:** ausências de hoje, balanço semanal (quadro, ausências por motivo, disponíveis, necessários, saldo, rotas em déficit) e quem tem ausência na semana.
+
+## Operação › Troca de equipamento (danificado → reserva)
+
+Em **Lançamentos** (botão de troca na linha) ou em **Paradas** (botão **Substituir** numa parada sem liberação): informe a hora, o equipamento reserva e a causa. O sistema encerra o lançamento original na hora da troca, registra a parada do danificado (sem liberação) e lança o mesmo operador no reserva a partir dali. A parada conta contra a disponibilidade do equipamento, mas não tira horas do operador. Ao **Liberar** o danificado, dá para devolver o operador a ele automaticamente. Tudo tem **Desfazer** por alguns segundos.
+
 ## Módulo Operação (controle de equipamentos)
 - **Primeiro acesso:** entre como administrador, escolha **Operação** e clique em **Importar dados da planilha**. Isso carrega os 25 operadores, as 37 identificações da frota, os turnos, as causas, as metas, os pesos, os feriados e os lançamentos e paradas de setembro e outubro.
 - **Painel:** mostra os mesmos indicadores do DASHBOARD da planilha, com semáforo pelas metas:
@@ -138,6 +150,10 @@ Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em r
 - **Diferença em setembro:** os números ficam um pouco diferentes da planilha. Na planilha, as paradas digitadas com apelido (ex.: "VITOR") não se ligavam ao lançamento feito com o nome completo. Na importação o sistema corrige isso, e daqui em diante o operador é escolhido da lista.
 
 - **Paradas:** além dos filtros por situação e responsável, a faixa de dias do mês mostra quantas paradas houve em cada dia; toque num dia para ver só ele. A lista fica agrupada por dia, com o total de paradas e de horas.
+
+**Lançamentos:** busca por equipamento, operador ou área; quadro com os operadores escalados que ainda não foram lançados (toque no nome para lançar) e quem está fora no dia. No formulário, operador e equipamento são escolhidos digitando, com a situação de cada um no dia (disponível, em outro equipamento, folga na escala, ausente; livre, com alguém, parado), e avisos antes de salvar.
+
+**Paradas:** parados agora e há quanto tempo, busca por equipamento, operador, causa ou OS, causas agrupadas por responsável (Equipamento, Operador, Operacional) com a explicação de cada uma, botão "Agora" para a hora da liberação e operador preenchido pelo lançamento do equipamento no dia.
 
 ## Módulo Efetivo (fichas de acompanhamento)
 - **Primeiro acesso:** entre como administrador, escolha **Efetivo** e clique em **Importar dados da planilha**. Isso carrega os 179 colaboradores, as ocorrências já lançadas e os 12 tipos com texto padrão.
@@ -250,6 +266,7 @@ public/
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
   meudia.js, hoje.js  tela Meu dia e as contas que ela usa (as mesmas dos avisos)
   permissoes.js       abas por perfil e exceção por pessoa
+  busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
   seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)

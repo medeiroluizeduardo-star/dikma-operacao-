@@ -1,6 +1,7 @@
 // Dikma Operação — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 // Telas: Painel, Lançamentos, Paradas, Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
 import { add, pad, today, MESES_L, addMonth, DAYS } from './cal.js';
+import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 
 export const VIEWS_E = [
@@ -102,62 +103,166 @@ export function criarEquip(X) {
 
   /* ---------- lançamentos ---------- */
   const STATUS_CLS = { 'OPERAÇÃO FINALIZADA': 'ok', 'EM OPERAÇÃO': 'neu', 'HORA EXTRA': 'ext', 'HE NOTURNA': 'ext', 'FORA DE OPERAÇÃO': 'bad', 'EM MANUTENÇÃO': 'warn' };
+  // Texto de busca de um lançamento: equipamento, tipo, operador, área, status e observação.
+  const kLanc = l => semAcento([l.eq, l.tipo, l.op, l.sub, l.area, l.status, l.obs, l.trocaPara, l.eqOrig, l.trocaPara || l.eqOrig ? 'substituicao troca reserva' : ''].filter(Boolean).join(' '));
+  const trocaTxt = l => `${l.trocaPara ? `<div><span class="pill neu" title="Equipamento substituído">${I.swap} trocado por ${esc(l.trocaPara)} às ${esc(l.fim || '')}</span></div>` : ''}${l.eqOrig ? `<div><span class="pill ext" title="Equipamento reserva">${I.swap} reserva de ${esc(l.eqOrig)}</span></div>` : ''}${l.voltaDe ? `<div><span class="pill ok">${I.swap} voltou do ${esc(l.voltaDe)}</span></div>` : ''}`;
+  const desdeH = p => { if (!p.ini) return 0; const t = new Date(`${p.data}T${p.ini}:00`).getTime(); return Math.max(0, (Date.now() - t) / 36e5); };
+  const tempoTxt = h => (h >= 24 ? `${Math.floor(h / 24)} d ${Math.floor(h % 24)} h` : `${Math.floor(h)} h ${pad(Math.round((h % 1) * 60) % 60)} min`);
   function vLanc() {
     const C = calc(); const d = U.dia;
     const all = E().lanc; const al = C.alertas(all.filter(l => l.data === d), E().par.filter(p => p.data === d), TODAY);
     const alMap = new Map(); al.filter(a => a.aba === 'Lançamentos').forEach(a => alMap.set(a.ref.id, a.tipo));
-    const linhas = all.filter(l => l.data === d).map(l => { const jan = C.janela(l); const hp = Math.min(jan, E().par.filter(p => p.data === d && p.eq === l.eq && p.op === l.op).reduce((s, p) => s + C.duracao(p), 0)); return { ...l, jan, hpar: hp, hoper: Math.max(0, jan - hp) }; }).sort((a, b) => a.eq.localeCompare(b.eq));
-    const pd = E().par.filter(p => p.data === d).length;
+    const parDia = E().par.filter(p => p.data === d);
+    const linhas = all.filter(l => l.data === d).map(l => { const jan = C.janela(l); const ps = parDia.filter(p => p.eq === l.eq && p.op === l.op && !p.subst); const hp = Math.min(jan, ps.reduce((s, p) => s + C.duracao(p), 0)); return { ...l, jan, hpar: hp, hoper: Math.max(0, jan - hp), nPar: ps.length, aberta: l.trocaPara ? null : ps.find(p => !p.fim) }; }).sort((a, b) => a.eq.localeCompare(b.eq));
     const dw = DAYS[(new Date(d + 'T12:00').getDay() + 6) % 7];
+    const ed = podeEditar();
+    // Quem estava previsto e não foi lançado · quem está fora
+    const alocados = new Set(linhas.map(l => l.op));
+    const ops = E().cad.operadores;
+    const semLanc = ops.filter(o => !C.ausenteEm(o, d) && C.escalado(o, d) && !alocados.has(o.nome)).sort((a, b) => a.nome.localeCompare(b.nome));
+    const fora = ops.filter(o => C.ausenteEm(o, d));
+    const q = U.lq || '';
     let h = `<div class="filters"><div class="daynav"><button class="btn" data-e="diaAnt" aria-label="Dia anterior">◀</button><label class="sel"><span>${dw}</span><input class="in" type="date" id="eDia" value="${d}"></label><button class="btn" data-e="diaProx" aria-label="Próximo dia">▶</button>${d !== TODAY ? '<button class="btn" data-e="hoje">Hoje</button>' : ''}</div>
-      ${podeEditar() ? `<button class="btn pri" data-e="novoLanc" style="align-self:flex-end">${I.plus} Lançamento</button>${!linhas.length ? '<button class="btn" data-e="copiar" style="align-self:flex-end">Copiar do dia anterior</button>' : ''}` : ''}</div>
-      <div class="mini"><div><b class="num">${linhas.length}</b><span>Alocações</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hoper, 0))}</b><span>Horas operadas</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hpar, 0))}</b><span>Horas paradas</span></div><div><b class="num">${pd}</b><span>Paradas no dia</span></div></div>`;
+      ${ed ? `<button class="btn pri" data-e="novoLanc" style="align-self:flex-end">${I.plus} Lançamento</button>${!linhas.length ? '<button class="btn" data-e="copiar" style="align-self:flex-end">Copiar do dia anterior</button>' : ''}` : ''}</div>
+      <div class="mini"><div><b class="num">${linhas.length}</b><span>Alocações</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hoper, 0))}</b><span>Horas operadas</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hpar, 0))}</b><span>Horas paradas</span></div><div><b class="num" style="color:${parDia.some(p => !p.fim) ? 'var(--st-nreal)' : 'inherit'}">${parDia.length}</b><span>Paradas no dia${parDia.some(p => !p.fim) ? ` · ${parDia.filter(p => !p.fim).length} sem liberação` : ''}</span></div></div>`;
     if (!mesesCarregados().has(d.slice(0, 7))) return h + '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
-    if (!linhas.length) return h + `<div class="card"><div class="empty">Nenhum lançamento em ${dBR(d)}.${podeEditar() ? ' Use "Copiar do dia anterior" para repetir as alocações do último dia lançado.' : ''}</div></div>`;
-    if (matchMedia('(max-width:860px)').matches) {
-      return h + `<div class="mlist">${linhas.map(l => `<div class="mcard"><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span></div>${podeEditar() ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
-        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
-        ${podeEditar() ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(x => `<option ${x === l.status ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}
-        <div class="row-between small"><span class="num">${l.ini || 'turno'} – ${l.fim || 'turno'} · janela ${h2(l.jan)} h${l.hpar ? ' · paradas ' + h2(l.hpar) + ' h' : ''}</span><b class="num">${h2(l.hoper)} h</b></div>
-        ${l.obs ? `<div class="muted small">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}
-        ${podeEditar() ? `<button class="btn" data-e="parDe" data-id="${l.id}">${I.pend} Registrar parada</button>` : ''}</div>`).join('')}</div>`;
+    // Conferência do dia: escalados sem lançamento (toque para lançar) e operadores fora
+    if (semLanc.length || fora.length) {
+      h += `<div class="card conf"><div class="body"><div class="conf-l"><b>${semLanc.length ? `${semLanc.length} operador${semLanc.length > 1 ? 'es' : ''} escalado${semLanc.length > 1 ? 's' : ''} sem lançamento` : 'Todos os escalados foram lançados'}</b>${semLanc.length && ed ? '<small>Toque no nome para lançar</small>' : ''}</div>
+        ${semLanc.length ? `<div class="rchips">${semLanc.map(o => ed ? `<button class="rchip add" data-e="lancOp" data-op="${esc(o.nome)}">${I.plus}${esc(short(o.nome))}<span class="c">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></button>` : `<span class="rchip">${esc(short(o.nome))}</span>`).join('')}</div>` : ''}
+        ${fora.length ? `<div class="conf-f"><span class="muted small">${d === TODAY ? 'Fora hoje' : 'Fora neste dia'}:</span> ${fora.map(o => `<span class="rchip mut">${esc(short(o.nome))}<span class="c">${esc(title(C.ausenteEm(o, d)))}</span></span>`).join('')}</div>` : ''}</div></div>`;
     }
-    h += `<div class="card"><div class="tw"><table class="lanc"><thead><tr><th>Identificação</th><th>Operador</th><th>Área</th><th>Status</th><th class="c">Horário</th><th class="r">Janela</th><th class="r">Paradas</th><th class="r">Operadas</th><th>Observação</th><th></th></tr></thead><tbody>
-      ${linhas.map(l => `<tr><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div></td><td>${esc(short(l.op))}${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</td><td class="small">${esc(title(l.area))}</td>
-        <td>${podeEditar() ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}</td>
-        <td class="c num small">${l.ini || '—'} – ${l.fim || '—'}${l.he ? `<div class="pill ext">HE ${hhmm(l.he)}</div>` : ''}</td><td class="r num">${h2(l.jan)}</td><td class="r num">${l.hpar ? h2(l.hpar) : ''}</td><td class="r num"><b>${h2(l.hoper)}</b></td>
-        <td class="small obs">${esc(l.obs || '')}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td>
-        <td class="nowrap">${podeEditar() ? `<button class="btn ghost" data-e="parDe" data-id="${l.id}" title="Registrar parada">${I.pend}</button><button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</td></tr>`).join('')}
-      </tbody></table></div></div>`;
+    if (!linhas.length) return h + `<div class="card"><div class="empty">Nenhum lançamento em ${dBR(d)}.${ed ? ' Use "Copiar do dia anterior" para repetir as alocações do último dia lançado, ou toque num operador acima.' : ''}</div></div>`;
+    const busca = `<div class="lbar">${caixaBusca('eLQ', q, 'Buscar equipamento, operador ou área')}<span class="muted small"><b id="eLN">${linhas.filter(l => casa(kLanc(l), q)).length}</b> de ${linhas.length}</span></div>`;
+    const parTxt = l => (l.aberta ? `<span class="pill bad">parado desde ${l.aberta.ini}</span>` : l.nPar ? `<span class="pill neu">${l.nPar} parada${l.nPar > 1 ? 's' : ''} · ${h2(l.hpar)} h</span>` : '');
+    const ajuda = '<p class="muted small m0 ajuda">Cada linha é um operador num equipamento no dia. <b>Janela</b> = horário do lançamento (vazio = turno da escala). <b>Operadas</b> = janela − paradas desse operador nesse equipamento. Ações: ${I.pend} registra uma parada · ${I.swap} troca o equipamento danificado por um reserva (o operador segue sem perder horas) · ✎ edita.</p>';
+    if (matchMedia('(max-width:860px)').matches) {
+      return h + busca + `<div class="mlist" id="eLList">${linhas.map(l => `<div class="mcard" data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'}><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span>${trocaTxt(l)}</div>${ed ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
+        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
+        ${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(x => `<option ${x === l.status ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}
+        <div class="row-between small"><span class="num">${l.ini || 'turno'} – ${l.fim || 'turno'} · janela ${h2(l.jan)} h</span><b class="num">${h2(l.hoper)} h operadas</b></div>
+        ${parTxt(l)}${l.obs ? `<div class="muted small">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}
+        ${ed && !l.trocaPara ? `<div class="row-gap">${l.aberta ? `<button class="btn pri grow" data-e="liberar" data-id="${l.aberta.id}">Liberar ${esc(l.eq)}</button>` : `<button class="btn grow" data-e="parDe" data-id="${l.id}">${I.pend} Parada</button>`}<button class="btn grow" data-e="trocar" data-id="${l.id}">${I.swap} Trocar equipamento</button></div>` : ''}</div>`).join('')}<p class="empty" data-vazio ${linhas.some(l => casa(kLanc(l), q)) ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div>${ajuda}`;
+    }
+    h += `<div class="card">${busca.replace('class="lbar"', 'class="lbar body"')}<div class="tw" id="eLList"><table class="lanc"><thead><tr><th>Equipamento</th><th>Operador</th><th>Área</th><th>Status</th><th class="c">Horário</th><th class="r">Janela</th><th class="r">Paradas</th><th class="r">Operadas</th><th class="r">Ações</th></tr></thead><tbody>
+      ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}</td>
+        <td>${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}</td>
+        <td class="c num small">${l.ini || '—'} – ${l.fim || '—'}${l.he ? `<div class="pill ext">HE ${hhmm(l.he)}</div>` : ''}</td><td class="r num">${h2(l.jan)}</td><td class="r num">${l.hpar ? h2(l.hpar) : ''}${l.aberta ? '<div><span class="pill bad">aberta</span></div>' : ''}</td><td class="r num"><b>${h2(l.hoper)}</b></td>
+        <td class="nowrap r acts">${ed ? `${l.trocaPara ? '' : l.aberta ? `<button class="btn sm pri" data-e="liberar" data-id="${l.aberta.id}">Liberar</button>` : `<button class="btn sm ic" data-e="parDe" data-id="${l.id}" title="Registrar parada" aria-label="Registrar parada de ${esc(l.eq)}">${I.pend}</button>`}${l.trocaPara ? '' : `<button class="btn sm ic" data-e="trocar" data-id="${l.id}" title="Trocar equipamento (danificado → reserva)" aria-label="Trocar ${esc(l.eq)} por um reserva">${I.swap}</button>`}<button class="btn sm ic ghost" data-e="editLanc" data-id="${l.id}" title="Editar" aria-label="Editar">✎</button>` : ''}</td></tr>`).join('')}
+      </tbody></table><p class="empty" data-vazio ${linhas.some(l => casa(kLanc(l), q)) ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div><div class="body pt0">${ajuda}</div></div>`;
     return h;
   }
   const dl = (id, arr) => `<datalist id="${id}">${arr.map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist>`;
-  const selOp = (id, v, vazio) => `<select class="in" id="${id}">${vazio ? '<option value="">—</option>' : ''}${E().cad.operadores.slice().sort((a, b) => a.nome.localeCompare(b.nome)).map(o => `<option value="${esc(o.nome)}" ${o.nome === v ? 'selected' : ''}>${esc(title(o.nome))}${o.escala === '4x4' ? ' · 4x4 ' + o.turma : ''}</option>`).join('')}</select>`;
-  function lancForm(l) {
-    const novo = !l; l = l || { data: U.dia, eq: '', op: '', area: E().config.areas[0] || '', status: 'EM OPERAÇÃO', ini: '', fim: '', he: 0, sub: '', obs: '' };
-    formSheet(novo ? 'Novo lançamento' : 'Editar lançamento', novo ? dBR(l.data) : `${dBR(l.data)} · ${esc(l.eq)}`, `
-      <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="flData" value="${l.data}"></label><label class="sel"><span>Identificação (frota)</span><input class="in" id="flEq" list="dlFrota" value="${esc(l.eq)}" autocomplete="off" placeholder="DKMP25001">${dl('dlFrota', E().cad.frota.map(f => f.id))}</label></div>
-      <label class="sel"><span>Operador</span>${selOp('flOp', l.op)}</label>
-      <div class="row2"><label class="sel"><span>Área</span><select class="in" id="flArea">${E().config.areas.map(a => `<option ${a === l.area ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label><label class="sel"><span>Status</span><select class="in" id="flSt">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label></div>
+  // Operadores para escolher, já dizendo a situação no dia: disponível, em outro equipamento, folga na escala ou ausente.
+  function opcoesOp(dataFn, excetoId) {
+    return () => {
+      const dia = dataFn() || U.dia; const C = calc(); const lan = E().lanc.filter(l => l.data === dia && l.id !== excetoId);
+      return E().cad.operadores.map(o => {
+        const aus = C.ausenteEm(o, dia); const em = lan.filter(l => l.op === o.nome).map(l => l.eq); const escd = C.escalado(o, dia);
+        const tag = aus ? `<span class="pill warn">${esc(title(aus))}</span>` : em.length ? `<span class="pill neu">em ${esc(em.join(', '))}</span>` : !escd ? '<span class="pill neu">folga na escala</span>' : '<span class="pill ok">disponível</span>';
+        return { v: o.nome, t: title(o.nome), d: `${title(o.funcao || '')}${o.funcao ? ' · ' : ''}${o.escala === '4x4' ? '4x4 · turma ' + (o.turma || '?') : 'ADM'}`, tag, ord: aus ? 3 : em.length ? 2 : !escd ? 1 : 0 };
+      }).sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
+    };
+  }
+  // Equipamentos: tipo, quem está com ele no dia e se está parado.
+  function opcoesEq(dataFn, excetoId) {
+    return () => {
+      const dia = dataFn() || U.dia; const lan = E().lanc.filter(l => l.data === dia && l.id !== excetoId); const abertas = new Set(E().par.filter(p => !p.fim).map(p => p.eq));
+      return E().cad.frota.map(f => { const com = lan.filter(l => l.eq === f.id).map(l => short(l.op)); return { v: f.id, t: f.id, d: title(f.tipo || ''), tag: abertas.has(f.id) ? '<span class="pill bad">parado</span>' : com.length ? `<span class="pill neu">com ${esc(com.join(', '))}</span>` : '<span class="pill ok">livre</span>', ord: abertas.has(f.id) ? 2 : com.length ? 1 : 0 }; })
+        .sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
+    };
+  }
+  function lancForm(l, pre) {
+    const novo = !l; l = l || { data: U.dia, eq: '', op: (pre && pre.op) || '', area: E().config.areas[0] || '', status: 'EM OPERAÇÃO', ini: '', fim: '', he: 0, sub: '', obs: '' };
+    const dia = () => ($('flData') && $('flData').value) || l.data;
+    formSheet(novo ? 'Novo lançamento' : 'Editar lançamento', novo ? 'Um operador num equipamento no dia' : `${dBR(l.data)} · ${esc(l.eq)}`, `
+      <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="flData" value="${l.data}"></label><label class="sel"><span>Status</span><select class="in" id="flSt">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label></div>
+      <div class="sel"><span>Equipamento (frota)</span>${campoBusca('flEq', l.eq, opcoesEq(dia, l.id), { livre: true, maiusculas: true, placeholder: 'Digite a identificação ou o tipo' })}</div>
+      <div class="sel"><span>Operador</span>${campoBusca('flOp', l.op, opcoesOp(dia, l.id), { placeholder: 'Digite nome, função ou turma' })}</div>
+      <label class="sel"><span>Área</span><select class="in" id="flArea">${E().config.areas.map(a => `<option ${a === l.area ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
       <div class="row2"><label class="sel"><span>Início (vazio = turno)</span><input class="in" type="time" id="flIni" value="${l.ini || ''}"></label><label class="sel"><span>Fim (vazio = turno)</span><input class="in" type="time" id="flFim" value="${l.fim || ''}"></label></div>
-      <div class="row2"><label class="sel"><span>Horas extras (h)</span><input class="in" type="number" min="0" step="0.25" id="flHe" value="${l.he || ''}"></label><label class="sel"><span>Substituiu (opcional)</span>${selOp('flSub', l.sub, true)}</label></div>
+      <div class="row2"><label class="sel"><span>Horas extras (h)</span><input class="in" type="number" min="0" step="0.25" id="flHe" value="${l.he || ''}"></label><div class="sel"><span>Substituiu (opcional)</span>${campoBusca('flSub', l.sub, opcoesOp(dia, l.id), { vazio: '—', placeholder: 'Ninguém' })}</div></div>
       <label class="sel"><span>Observação</span><textarea class="in ta" id="flObs" rows="2">${esc(l.obs || '')}</textarea></label>
+      <div id="flAviso" class="avisos" aria-live="polite"></div>
       ${novo ? '' : `<button type="button" class="btn danger" data-del="${l.id}">Excluir lançamento</button>`}`, 'Salvar', async () => {
-      const eq = $('flEq').value.trim().toUpperCase(); const data = $('flData').value;
-      if (!data || !eq) throw new Error('Informe a data e a identificação.');
-      const n = { data, mes: data.slice(0, 7), eq, tipo: (calc().frotaMap.get(eq) || {}).tipo || '', op: $('flOp').value, area: $('flArea').value, status: $('flSt').value, ini: $('flIni').value || null, fim: $('flFim').value || null, he: +$('flHe').value || 0, sub: $('flSub').value || '', obs: $('flObs').value.trim() };
+      const eq = $('flEq').value.trim().toUpperCase(); const data = $('flData').value; const op = $('flOp').value;
+      if (!data || !eq) throw new Error('Informe a data e o equipamento.');
+      if (!op) throw new Error('Escolha o operador da lista.');
+      const n = { data, mes: data.slice(0, 7), eq, tipo: (calc().frotaMap.get(eq) || {}).tipo || '', op, area: $('flArea').value, status: $('flSt').value, ini: $('flIni').value || null, fim: $('flFim').value || null, he: +$('flHe').value || 0, sub: $('flSub').value || '', obs: $('flObs').value.trim() };
       if (novo) { DB.eAdd('lanc', n); DB.log(`Operação: lançou ${eq} · ${short(n.op)} em ${dBR(data)}`); } else { DB.eUpd('lanc', l.id, n); }
       toast(novo ? 'Lançamento salvo' : 'Lançamento atualizado');
     });
     const del = document.querySelector('#fSheet [data-del]');
-    if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar exclusão'; return; } DB.eDel('lanc', l.id); $('layer').innerHTML = ''; toast('Lançamento excluído'); render(); };
-    const eqi = $('flEq'), opi = $('flOp');
-    if (novo && eqi) eqi.onchange = () => { const ult = E().lanc.filter(x => x.eq === eqi.value.trim().toUpperCase()).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; if (ult) { opi.value = ult.op; $('flArea').value = ult.area; } };
+    if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar exclusão'; return; } DB.eDel('lanc', l.id); $('layer').innerHTML = ''; const { id: _i, ...dados } = l; toast('Lançamento excluído', { desfazer: () => { DB.eAdd('lanc', dados); toast('Lançamento restaurado'); } }); render(); };
+    // Avisos ao vivo (não impedem salvar): operador fora/de folga/em outro equipamento, equipamento já alocado ou parado.
+    const avisar = () => {
+      const box = $('flAviso'); if (!box) return; const C = calc(); const d = dia(); const eq = ($('flEq').value || '').toUpperCase(); const op = $('flOp').value;
+      const lan = E().lanc.filter(x => x.data === d && x.id !== l.id); const av = [];
+      const o = C.opMap.get(op);
+      if (o) { const aus = C.ausenteEm(o, d); if (aus) av.push(`${short(op)} está em ${title(aus).toLowerCase()} nesta data.`); else if (!C.escalado(o, d)) av.push(`${short(op)} está de folga na escala nesta data.`); }
+      const opEm = lan.filter(x => x.op === op).map(x => x.eq); if (op && opEm.length) av.push(`${short(op)} já está lançado em ${opEm.join(', ')} neste dia.`);
+      const eqCom = lan.filter(x => x.eq === eq).map(x => short(x.op)); if (eq && eqCom.length) av.push(`${eq} já tem lançamento com ${eqCom.join(', ')} neste dia.`);
+      const ab = E().par.find(p => p.eq === eq && !p.fim); if (ab) av.push(`${eq} está parado desde ${ab.ini} de ${dBR(ab.data)} (sem liberação).`);
+      if (eq && !calc().frotaMap.has(eq)) av.push(`${eq} não está cadastrado na frota.`);
+      box.innerHTML = av.map(t => `<p class="aviso">${esc(t)}</p>`).join('');
+    };
+    ['flData', 'flEq', 'flOp', 'flSub'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', avisar); });
+    // Ao escolher o equipamento num lançamento novo, sugere o último operador e a área dele.
+    const eqi = $('flEq');
+    if (novo && eqi) eqi.addEventListener('change', () => { if ($('flOp').value) return; const ult = E().lanc.filter(x => x.eq === eqi.value).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; if (ult) { definirValor('flOp', ult.op); $('flArea').value = ult.area; avisar(); } });
+    avisar();
+  }
+  // Equipamento danificado: o operador passa para um reserva a partir da hora da troca.
+  // Grava: parada do equipamento (sem liberação, marcada com o reserva), fim do lançamento original na hora da troca
+  // e um lançamento novo do mesmo operador no reserva. A parada não tira horas do operador (ele seguiu trabalhando).
+  function substForm({ lanc, par }) {
+    const base = lanc || par; const A = base.eq, op = base.op, data = base.data;
+    const L1 = lanc || E().lanc.find(x => x.data === data && x.eq === A && x.op === op && !x.trocaPara);
+    const causas = E().config.causas; const ord = ['EQUIPAMENTO', 'OPERADOR', 'OPERACIONAL'];
+    formSheet('Substituir equipamento', `<span class="mono">${esc(A)}</span>${op ? ' · ' + esc(short(op)) : ''} · ${dBR(data)}`, `
+      <p class="muted small m0">${esc(A)} fica parado (sem liberação) e ${op ? esc(short(op)) : 'o operador'} segue no reserva a partir da hora da troca, sem perder horas. Quando ${esc(A)} for liberado, dá para devolver o operador a ele.</p>
+      <div class="row2"><label class="sel"><span>${par ? 'Parou às' : 'Hora da troca'}</span><input class="in" type="time" id="fsHora" value="${par ? par.ini : data === TODAY ? agoraHM() : ''}" ${par ? 'disabled' : ''}></label><div class="sel"><span>Equipamento reserva</span>${campoBusca('fsEq', '', () => opcoesEq(() => data)().filter(o => o.v !== A), { livre: true, maiusculas: true, placeholder: 'Digite a identificação' })}</div></div>
+      ${par ? `<p class="small m0">Parada já registrada: <b>${esc(par.causa || 'sem causa')}</b> desde ${esc(par.ini)}.</p>` : `<label class="sel"><span>Causa da parada de ${esc(A)}</span><select class="in" id="fsCausa"><option value="">Escolha a causa</option>${ord.filter(rp => causas.some(c => c.resp === rp)).map(rp => `<optgroup label="${title(rp)}">${causas.filter(c => c.resp === rp).map(c => `<option value="${esc(c.causa)}">${esc(title(c.causa))}</option>`).join('')}</optgroup>`).join('')}</select></label>
+      <div class="row2"><label class="sel"><span>O que aconteceu</span><input class="in" id="fsDesc" placeholder="Ex.: pneu furado"></label><label class="sel"><span>Nº da OS</span><input class="in" id="fsOs"></label></div>`}
+      <div id="fsAviso" class="avisos" aria-live="polite"></div>`, 'Substituir', async () => {
+      const B = $('fsEq').value.trim().toUpperCase(); const hora = par ? par.ini : $('fsHora').value;
+      if (!B) throw new Error('Escolha o equipamento reserva.');
+      if (B === A) throw new Error('O reserva precisa ser outro equipamento.');
+      if (!hora) throw new Error('Informe a hora da troca.');
+      const causa = par ? par.causa : $('fsCausa').value; if (!causa) throw new Error('Escolha a causa da parada.');
+      const fimOrig = L1 ? L1.fim : null;
+      let id2 = null;
+      if (op) id2 = DB.eAdd('lanc', { data, mes: data.slice(0, 7), eq: B, tipo: (calc().frotaMap.get(B) || {}).tipo || '', op, area: L1 ? L1.area : (E().config.areas[0] || ''), status: 'EM OPERAÇÃO', ini: hora, fim: fimOrig || null, he: 0, sub: '', obs: `Reserva de ${A} (${String(causa).toLowerCase()})`, eqOrig: A });
+      if (L1) DB.eUpd('lanc', L1.id, { fim: hora, trocaPara: B });
+      let pid = par ? par.id : null;
+      if (par) DB.eUpd('par', par.id, { subst: B, lancSub: id2 });
+      else pid = DB.eAdd('par', { data, mes: data.slice(0, 7), eq: A, op, ini: hora, fim: null, causa, desc: $('fsDesc').value.trim().toUpperCase(), os: $('fsOs').value.trim(), subst: B, lancSub: id2 });
+      DB.log(`Operação: ${A} danificado, ${op ? short(op) + ' seguiu' : 'substituído'} no ${B} às ${hora}`);
+      // Desfazer: volta tudo como estava (lançamento original, parada e reserva).
+      const desfazer = () => {
+        if (id2) DB.eDel('lanc', id2);
+        if (L1) DB.eUpd('lanc', L1.id, { fim: fimOrig || null, trocaPara: null });
+        if (par) DB.eUpd('par', par.id, { subst: null, lancSub: null }); else if (pid) DB.eDel('par', pid);
+        DB.log(`Operação: desfez a troca de ${A} por ${B}`); toast('Troca desfeita');
+      };
+      toast(`${A} parado · ${op ? short(op).split(' ')[0] + ' segue' : 'segue'} no ${B}`, { desfazer });
+    });
+    const avisar = () => {
+      const box = $('fsAviso'); if (!box) return; const B = ($('fsEq').value || '').toUpperCase(); const av = [];
+      if (B) {
+        const com = E().lanc.filter(x => x.data === data && x.eq === B && !x.trocaPara).map(x => short(x.op)); if (com.length) av.push(`${B} já está com ${com.join(', ')} neste dia.`);
+        const ab = E().par.find(p => p.eq === B && !p.fim); if (ab) av.push(`${B} também está parado (desde ${ab.ini} de ${dBR(ab.data)}).`);
+        if (!calc().frotaMap.has(B)) av.push(`${B} não está cadastrado na frota.`);
+      }
+      if (!L1 && op) av.push(`Não há lançamento de ${A} com ${short(op)} neste dia: será criado só o lançamento no reserva.`);
+      box.innerHTML = av.map(t => `<p class="aviso">${esc(t)}</p>`).join('');
+    };
+    $('fsEq').addEventListener('change', avisar); avisar();
   }
   function copiarDiaAnterior() {
     const d = U.dia; const ant = E().lanc.filter(l => l.data < d).map(l => l.data).sort().pop();
     if (!ant) { toast('Não há dia anterior com lançamentos'); return; }
-    const base = E().lanc.filter(l => l.data === ant);
+    const base = E().lanc.filter(l => l.data === ant && !l.trocaPara); // de cada troca, copia só o equipamento em que o operador terminou o dia
     const C = calc();
     const lista = base.filter(l => { const o = C.opMap.get(l.op); return !o || (!C.ausenteEm(o, d) && C.escalado(o, d)); });
     sheet('Copiar lançamentos', `${lista.length} alocações de ${dBR(ant)} para ${dBR(d)} (status "Em operação", horário do turno). Operadores ausentes ou de folga na escala ficam de fora.`, [{ t: `Copiar ${lista.length} alocações`, v: 'ok' }], () => {
@@ -167,6 +272,8 @@ export function criarEquip(X) {
   }
 
   /* ---------- paradas ---------- */
+  const RESP_TXT = { EQUIPAMENTO: 'falha do equipamento · reduz a disponibilidade física', OPERADOR: 'causada pelo operador · conta na nota dele', OPERACIONAL: 'da operação (sem carga, frente parada…) · não conta contra ninguém' };
+  const kPar = p => semAcento([p.eq, p.op, p.causa, p.resp, p.desc, p.os, p.subst, p.subst ? 'substituicao troca reserva' : '', (calc().frotaMap.get(p.eq) || {}).tipo].filter(Boolean).join(' '));
   function vPar() {
     const C = calc();
     const ps = E().par.filter(p => p.data.slice(0, 7) === U.mes || (U.pf === 'aberta' && !p.fim)).map(p => ({ ...p, dur: C.duracao(p), resp: C.resp(p), sit: C.situacao(p) }));
@@ -176,43 +283,61 @@ export function criarEquip(X) {
     if (U.pdia && U.pdia.slice(0, 7) !== U.mes) U.pdia = '';
     const l = base.filter(p => !U.pdia || p.data === U.pdia).sort((a, b) => (a.data + (a.ini || '') > b.data + (b.ini || '') ? -1 : 1));
     const n = k => ps.filter(F[k]).length;
+    const abertas = E().par.filter(p => !p.fim);
+    const maisLonga = abertas.reduce((m, p) => Math.max(m, desdeH(p)), 0);
+    const doMes = ps.filter(p => p.data.slice(0, 7) === U.mes);
     // Faixa de dias do mês: quantas paradas (no filtro escolhido) e horas paradas em cada dia.
     const porDia = new Map(); for (const p of base) if (p.data.slice(0, 7) === U.mes) { const x = porDia.get(p.data) || { n: 0, h: 0 }; x.n++; x.h += p.dur || 0; porDia.set(p.data, x); }
     const fim = fimMes(U.mes), dias = []; for (let d = U.mes + '-01'; d <= fim; d = add(d, 1)) dias.push(d);
     const semana = d => DAYS[(new Date(d + 'T12:00').getDay() + 6) % 7];
     const faixa = `<div class="dstrip" role="toolbar" aria-label="Filtrar por dia"><button class="dchip todos" data-epdia="" aria-pressed="${!U.pdia}"><small>Mês</small><b>Todos</b><i>${base.length}</i></button>${dias.map(d => { const x = porDia.get(d); return `<button class="dchip${d === TODAY ? ' hoje' : ''}${x ? '' : ' vazio'}${d > TODAY ? ' futuro' : ''}" data-epdia="${d}" aria-pressed="${U.pdia === d}" title="${dBR(d)}${x ? ` · ${x.n} parada(s) · ${h2(x.h)} h` : ' · sem paradas'}"><small>${semana(d)}</small><b>${d.slice(8)}</b><i>${x ? x.n : ''}</i></button>`; }).join('')}</div>`;
     setTimeout(() => { const st = document.querySelector('.dstrip'); if (!st) return; const alvo = st.querySelector('[aria-pressed="true"]:not(.todos)') || st.querySelector('.hoje'); if (alvo) st.scrollLeft = Math.max(0, alvo.offsetLeft - st.clientWidth / 2 + alvo.offsetWidth / 2); }, 0);
-    let h = `<div class="filters">${selMes('eMes', U.mes)}${podeEditar() ? `<button class="btn pri" data-e="novaPar" style="align-self:flex-end">${I.plus} Parada</button>` : ''}</div>
-      <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>${faixa}`;
-    if (!l.length) return h + `<div class="card"><div class="empty">${U.pdia ? `Nenhuma parada em ${dBR(U.pdia)} com esse filtro.` : 'Nenhuma parada com esse filtro.'}</div></div>`;
-    // Agrupa por dia: cabeçalho com o total do dia.
-    let diaAnt = '';
-    const cab = p => { if (p.data === diaAnt) return ''; diaAnt = p.data; const doDia = l.filter(x => x.data === p.data); return `<div class="pgrp"><b>${semana(p.data)} ${dBR(p.data).slice(0, 5)}</b><span>${doDia.length} parada${doDia.length > 1 ? 's' : ''} · ${h2(doDia.reduce((t, x) => t + (x.dur || 0), 0))} h${doDia.some(x => !x.fim) ? ` · <em>${doDia.filter(x => !x.fim).length} sem liberação</em>` : ''}</span></div>`; };
-    h += `<div class="card"><div class="body"><div class="plist">${l.map(p => `${cab(p)}<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
-      <div class="l">${dBR(p.data)} · ${p.ini || '—'} às ${p.fim || '…'} · <b>${h2(p.dur)} h</b> · ${esc(short(p.op))}${p.desc ? ' · ' + esc(p.desc) : ''}${p.os ? ' · OS ' + esc(p.os) : ''}</div>
-      ${al.has(p.id) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
-      <div class="row-gap">${!p.fim ? (podeEditar() ? `<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill warn">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeEditar() ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`).join('')}</div></div></div>`;
+    const q = U.pq || '';
+    let h = `<div class="filters">${selMes('eMes', U.mes)}${podeEditar() ? `<button class="btn pri" data-e="novaPar" style="align-self:flex-end">${I.plus} Registrar parada</button>` : ''}</div>
+      <div class="mini"><div><b class="num" style="color:${abertas.length ? 'var(--st-nreal)' : 'inherit'}">${abertas.length}</b><span>Parados agora</span></div><div><b class="num">${abertas.length ? tempoTxt(maisLonga) : '—'}</b><span>Mais tempo parado</span></div><div><b class="num">${doMes.length}</b><span>Paradas no mês</span></div><div><b class="num">${h1(doMes.reduce((t, p) => t + (p.dur || 0), 0))}</b><span>Horas paradas no mês</span></div><div><b class="num">${doMes.filter(p => p.subst).length}</b><span>Trocas por reserva</span></div></div>
+      <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${k === 'aberta' ? abertas.length : n(k)}</span></button>`).join('')}</div>
+      ${RESP_TXT[U.pf] ? `<p class="muted small m0 ajuda"><b>${title(U.pf)}:</b> ${RESP_TXT[U.pf]}.</p>` : U.pf === 'aberta' ? '<p class="muted small m0 ajuda"><b>Sem liberação</b> = o equipamento continua parado. Quando voltar a operar, toque em <b>Liberar</b> e informe a hora.</p>' : ''}
+      ${faixa}`;
+    if (!l.length) return h + `<div class="card"><div class="empty">${U.pdia ? `Nenhuma parada em ${dBR(U.pdia)} com esse filtro.` : U.pf === 'aberta' ? 'Nenhum equipamento parado agora.' : 'Nenhuma parada com esse filtro.'}</div></div>`;
+    const grupos = []; for (const p of l) { const g = grupos[grupos.length - 1]; if (g && g.d === p.data) g.l.push(p); else grupos.push({ d: p.data, l: [p] }); }
+    const vis = l.filter(p => casa(kPar(p), q)).length;
+    const item = p => { const k = kPar(p); const desde = !p.fim ? desdeH(p) : 0; const tipo = (C.frotaMap.get(p.eq) || {}).tipo;
+      return `<div class="pitem ${!p.fim ? 'aberta' : ''}" data-k="${esc(k)}" ${casa(k, q) ? '' : 'hidden'}><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span>${tipo ? ` <span class="muted small">${esc(title(tipo))}</span>` : ''} · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
+      <div class="l">${p.ini || '—'} às ${p.fim || '…'} · <b>${p.fim ? h2(p.dur) + ' h' : p.ini ? 'parado há ' + tempoTxt(desde) : 'sem hora de início'}</b> · ${esc(short(p.op))}${p.desc ? ' · ' + esc(p.desc) : ''}${p.os ? ' · OS ' + esc(p.os) : ''}</div>
+      ${p.subst ? `<div style="margin-top:4px"><span class="pill ext">${I.swap} ${esc(short(p.op) || 'operador')} seguiu no ${esc(p.subst)}</span></div>` : ''}${al.has(p.id) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
+      <div class="row-gap">${!p.fim ? (podeEditar() ? `${!p.subst ? `<button class="btn" data-e="substPar" data-id="${p.id}" title="Passar o operador para um equipamento reserva">${I.swap} Substituir</button>` : ''}<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill bad">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeEditar() ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`; };
+    h += `<div class="card"><div class="lbar body">${caixaBusca('ePQ', q, 'Buscar equipamento, operador, causa ou OS')}<span class="muted small"><b id="ePN">${vis}</b> de ${l.length}</span></div><div class="body pt0" id="ePList"><div class="plist">${grupos.map(g => { const ab = g.l.filter(x => !x.fim).length; return `<div class="pday" data-grupo ${g.l.some(p => casa(kPar(p), q)) ? '' : 'hidden'}><div class="pgrp"><b>${semana(g.d)} ${dBR(g.d).slice(0, 5)}</b><span>${g.l.length} parada${g.l.length > 1 ? 's' : ''} · ${h2(g.l.reduce((t, x) => t + (x.dur || 0), 0))} h${ab ? ` · <em>${ab} sem liberação</em>` : ''}</span></div>${g.l.map(item).join('')}</div>`; }).join('')}<p class="empty" data-vazio ${vis ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div></div></div>`;
     return h;
   }
   function parForm(p, deLanc) {
     const novo = !p;
     p = p || { data: deLanc ? deLanc.data : U.dia, eq: deLanc ? deLanc.eq : '', op: deLanc ? deLanc.op : '', ini: agoraHM(), fim: '', causa: '', desc: '', os: '' };
-    formSheet(novo ? 'Nova parada' : 'Editar parada', '', `
-      <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="fpData" value="${p.data}"></label><label class="sel"><span>Identificação (frota)</span><input class="in" id="fpEq" list="dlFrota2" value="${esc(p.eq)}" autocomplete="off">${dl('dlFrota2', E().cad.frota.map(f => f.id))}</label></div>
-      <label class="sel"><span>Operador</span>${selOp('fpOp', p.op)}</label>
-      <div class="row2"><label class="sel"><span>Início</span><input class="in" type="time" id="fpIni" value="${p.ini || ''}"></label><label class="sel"><span>Fim (vazio = sem liberação)</span><input class="in" type="time" id="fpFim" value="${p.fim || ''}"></label></div>
-      <label class="sel"><span>Causa</span><select class="in" id="fpCausa"><option value="">—</option>${E().config.causas.map(c => `<option value="${esc(c.causa)}" ${c.causa === p.causa ? 'selected' : ''}>${esc(c.causa)} · ${esc(c.resp.toLowerCase())}</option>`).join('')}</select></label>
-      <div class="row2"><label class="sel"><span>Descrição</span><input class="in" id="fpDesc" value="${esc(p.desc || '')}"></label><label class="sel"><span>Nº da OS</span><input class="in" id="fpOs" value="${esc(p.os || '')}"></label></div>
+    const dia = () => ($('fpData') && $('fpData').value) || p.data;
+    const causas = E().config.causas; const grupos = ['EQUIPAMENTO', 'OPERADOR', 'OPERACIONAL'].filter(r => causas.some(c => c.resp === r));
+    const outras = causas.filter(c => !grupos.includes(c.resp));
+    formSheet(novo ? 'Registrar parada' : 'Editar parada', novo ? 'Equipamento que parou de operar' : `${esc(p.eq)} · ${dBR(p.data)}`, `
+      <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="fpData" value="${p.data}"></label><label class="sel"><span>Parou às</span><input class="in" type="time" id="fpIni" value="${p.ini || ''}"></label></div>
+      <div class="sel"><span>Equipamento (frota)</span>${campoBusca('fpEq', p.eq, opcoesEq(dia), { livre: true, maiusculas: true, placeholder: 'Digite a identificação ou o tipo' })}</div>
+      <div class="sel"><span>Operador</span>${campoBusca('fpOp', p.op, opcoesOp(dia), { placeholder: 'Digite nome, função ou turma' })}</div>
+      <label class="sel"><span>Causa</span><select class="in" id="fpCausa"><option value="">Escolha a causa</option>${grupos.map(r => `<optgroup label="${title(r)}">${causas.filter(c => c.resp === r).map(c => `<option value="${esc(c.causa)}" ${c.causa === p.causa ? 'selected' : ''}>${esc(title(c.causa))}</option>`).join('')}</optgroup>`).join('')}${outras.map(c => `<option value="${esc(c.causa)}" ${c.causa === p.causa ? 'selected' : ''}>${esc(title(c.causa))}</option>`).join('')}</select></label>
+      <p class="muted small m0" id="fpResp"></p>
+      <div class="sel"><span>Liberado às</span><div class="row-gap nowrap"><input class="in grow" type="time" id="fpFim" value="${p.fim || ''}"><button type="button" class="btn" id="fpAgora">Agora</button></div><small class="muted">Vazio = ainda parado (sem liberação)</small></div>
+      <div class="row2"><label class="sel"><span>Descrição</span><input class="in" id="fpDesc" value="${esc(p.desc || '')}" placeholder="O que aconteceu"></label><label class="sel"><span>Nº da OS</span><input class="in" id="fpOs" value="${esc(p.os || '')}"></label></div>
       ${novo ? '' : `<button type="button" class="btn danger" data-del="${p.id}">Excluir parada</button>`}`, 'Salvar', async () => {
       const eq = $('fpEq').value.trim().toUpperCase(); const data = $('fpData').value; const ini = $('fpIni').value;
-      if (!data || !eq || !ini) throw new Error('Informe data, identificação e início.');
+      if (!data || !eq || !ini) throw new Error('Informe data, equipamento e a hora em que parou.');
       if (!$('fpCausa').value) throw new Error('Escolha a causa.');
       const n = { data, mes: data.slice(0, 7), eq, op: $('fpOp').value, ini, fim: $('fpFim').value || null, causa: $('fpCausa').value, desc: $('fpDesc').value.trim().toUpperCase(), os: $('fpOs').value.trim() };
       if (novo) { DB.eAdd('par', n); DB.log(`Operação: parada ${eq} · ${n.causa.toLowerCase()}`); } else DB.eUpd('par', p.id, n);
-      toast(n.fim ? 'Parada salva' : 'Parada registrada como sem liberação');
+      toast(n.fim ? 'Parada salva' : `${eq} registrado como parado (sem liberação)`);
     });
     const del = document.querySelector('#fSheet [data-del]');
-    if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar exclusão'; return; } DB.eDel('par', p.id); $('layer').innerHTML = ''; toast('Parada excluída'); render(); };
+    if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar exclusão'; return; } DB.eDel('par', p.id); $('layer').innerHTML = ''; const { id: _i, dur: _d, resp: _r, sit: _s, ...dados } = p; toast('Parada excluída', { desfazer: () => { DB.eAdd('par', dados); toast('Parada restaurada'); } }); render(); };
+    const resp = () => { const c = causas.find(x => x.causa === $('fpCausa').value); $('fpResp').textContent = c ? `${title(c.resp)}: ${RESP_TXT[c.resp] || ''}` : ''; };
+    $('fpCausa').addEventListener('change', resp); resp();
+    $('fpAgora').onclick = () => { $('fpFim').value = agoraHM(); };
+    // Escolheu o equipamento: traz quem estava operando ele no dia.
+    $('fpEq').addEventListener('change', () => { const l = E().lanc.find(x => x.data === dia() && x.eq === $('fpEq').value); if (l && !$('fpOp').value) definirValor('fpOp', l.op); });
   }
 
   /* ---------- equipe ---------- */
@@ -223,11 +348,19 @@ export function criarEquip(X) {
     const fora = ops.filter(o => C.ausenteEm(o, TODAY));
     const ult = n => E().lanc.filter(l => l.op === n).map(l => l.data).sort().pop();
     const sitTxt = o => { if (!o.situacao || o.situacao === 'TRABALHANDO') return '<span class="pill ok">Trabalhando</span>'; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
+    // Busca e filtro de operadores: valem para a lista e para a escala do mês.
+    const kOp = o => semAcento([o.nome, o.funcao, o.escala, o.turma ? 'turma ' + o.turma : '', o.situacao].filter(Boolean).join(' '));
+    const FO = { todos: () => true, trab: o => !C.ausenteEm(o, TODAY), fora: o => !!C.ausenteEm(o, TODAY), x4: o => o.escala === '4x4', adm: o => o.escala !== '4x4' };
+    U.of = U.of || 'todos'; const q = U.oq || '';
+    const opsF = ops.filter(FO[U.of] || FO.todos).slice().sort((a, b) => a.nome.localeCompare(b.nome));
+    const visOp = opsF.filter(o => casa(kOp(o), q)).length;
     let h = `<div class="filters">${selMes('eMes', U.mes)}${isAdmin() || podeEditar() ? `<button class="btn pri" data-e="novoOp" style="align-self:flex-end">${I.plus} Operador</button>` : ''}</div>
       <div class="mini"><div><b class="num">${ops.length - fora.length}</b><span>Trabalhando hoje</span></div><div><b class="num" style="color:${fora.length ? 'var(--st-atr)' : 'inherit'}">${fora.length}</b><span>Fora da coqueria</span></div><div><b class="num">${ops.filter(o => o.escala === '4x4').length}</b><span>Escala 4x4</span></div><div><b class="num">${E().cad.frota.length}</b><span>Equipamentos</span></div></div>
-      <div class="card"><header><h2>Operadores</h2><p>${mesNome(U.mes)}: dias previstos, ausências e alocações</p></header><div class="tw"><table class="hoverable"><thead><tr><th>Operador</th><th>Função</th><th>Escala</th><th>Situação</th><th class="r">Dias prev.</th><th class="r">Ausente</th><th class="r">Alocações</th><th>Último lançamento</th></tr></thead><tbody>
-      ${ops.map(o => { const x = stMap.get(o.nome) || {}; return `<tr ${podeEditar() ? `data-e="editOp" data-nome="${esc(o.nome)}" tabindex="0"` : ''}><td><b>${esc(title(o.nome))}</b>${o.fixo === false ? ' <span class="pill neu">não fixo</span>' : ''}</td><td class="small muted">${esc(title(o.funcao))}</td><td>${o.escala === '4x4' ? `<span class="tag">4x4 · ${esc(o.turma || '?')}</span>` : '<span class="tag">ADM</span>'}</td><td>${sitTxt(o)}</td><td class="r num">${x.diasOp ?? ''}</td><td class="r num">${x.diasOp != null ? x.diasOp - x.dprev || '' : ''}</td><td class="r num">${x.aloc || ''}</td><td class="num small">${dBR(ult(o.nome))}</td></tr>`; }).join('')}
-      </tbody></table></div></div>`;
+      <div class="card"><header><h2>Operadores</h2><p>${mesNome(U.mes)}: dias previstos, ausências e alocações${podeEditar() ? ' · toque para editar' : ''}</p></header>
+      <div class="body lbar opbar">${caixaBusca('eOQ', q, 'Buscar operador, função ou turma')}<div class="rchips">${[['todos', 'Todos', ops.length], ['trab', 'Trabalhando', ops.filter(FO.trab).length], ['fora', 'Fora hoje', ops.filter(FO.fora).length], ['x4', '4x4', ops.filter(FO.x4).length], ['adm', 'ADM', ops.filter(FO.adm).length]].map(([k, t, nn]) => `<button class="rchip" data-eof="${k}" aria-pressed="${U.of === k}">${t}<span class="c num">${nn}</span></button>`).join('')}</div><span class="muted small"><b id="eON">${visOp}</b> operador${visOp === 1 ? '' : 'es'}</span></div>
+      <div class="tw" id="eOList"><table class="hoverable"><thead><tr><th>Operador</th><th>Função</th><th>Escala</th><th>Situação</th><th class="r">Dias prev.</th><th class="r">Ausente</th><th class="r">Alocações</th><th>Último lançamento</th></tr></thead><tbody>
+      ${opsF.map(o => { const x = stMap.get(o.nome) || {}; return `<tr data-k="${esc(kOp(o))}" ${casa(kOp(o), q) ? '' : 'hidden'} ${podeEditar() ? `data-e="editOp" data-nome="${esc(o.nome)}" tabindex="0"` : ''}><td><b>${esc(title(o.nome))}</b>${o.fixo === false ? ' <span class="pill neu">não fixo</span>' : ''}</td><td class="small muted">${esc(title(o.funcao))}</td><td>${o.escala === '4x4' ? `<span class="tag">4x4 · ${esc(o.turma || '?')}</span>` : '<span class="tag">ADM</span>'}</td><td>${sitTxt(o)}</td><td class="r num">${x.diasOp ?? ''}</td><td class="r num">${x.diasOp != null ? x.diasOp - x.dprev || '' : ''}</td><td class="r num">${x.aloc || ''}</td><td class="num small">${dBR(ult(o.nome))}</td></tr>`; }).join('')}
+      </tbody></table><p class="empty" data-vazio ${visOp ? 'hidden' : ''}>Nenhum operador encontrado.</p></div></div>`;
     // escala do mês
     const dias = []; for (let d = U.mes + '-01'; d <= fimMes(U.mes); d = add(d, 1)) dias.push(d);
     const lk = new Set(E().lanc.filter(l => l.mes === U.mes || l.data.slice(0, 7) === U.mes).map(l => l.op + '|' + l.data));
@@ -238,8 +371,8 @@ export function criarEquip(X) {
       if (!escd) return '<td class="ec fol"></td>';
       return `<td class="ec ${d < TODAY ? 'falt' : 'prev'}" title="${d < TODAY ? 'Escalado sem lançamento' : 'Escalado'}">${d < TODAY ? '!' : '·'}</td>`;
     };
-    h += `<div class="card"><header><h2>Escala do mês</h2><p>● lançado · ! escalado sem lançamento · · escalado · vazio = folga · siglas = situação</p></header><div class="tw"><table class="escala"><thead><tr><th>Operador</th>${dias.map(d => `<th class="c ${d === TODAY ? 'today' : ''}">${d.slice(8)}</th>`).join('')}</tr></thead><tbody>
-      ${ops.map(o => `<tr><td class="nowrap"><b>${esc(short(o.nome))}</b> <span class="muted small">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></td>${dias.map(d => cel(o, d)).join('')}</tr>`).join('')}
+    h += `<div class="card"><header><h2>Escala do mês</h2><p>● lançado · ! escalado sem lançamento · · escalado · vazio = folga · siglas = situação</p></header><div class="tw" id="eOEsc"><table class="escala"><thead><tr><th>Operador</th>${dias.map(d => `<th class="c ${d === TODAY ? 'today' : ''}">${d.slice(8)}</th>`).join('')}</tr></thead><tbody>
+      ${opsF.map(o => `<tr data-k="${esc(kOp(o))}" ${casa(kOp(o), q) ? '' : 'hidden'}><td class="nowrap"><b>${esc(short(o.nome))}</b> <span class="muted small">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></td>${dias.map(d => cel(o, d)).join('')}</tr>`).join('')}
       </tbody></table></div></div>
       <div class="card"><header><h2>Frota</h2><p>${E().cad.frota.length} equipamentos</p>${isAdmin() || podeEditar() ? `<span class="r"><button class="btn" data-e="novoEq">${I.plus} Equipamento</button></span>` : ''}</header><div class="body"><div class="rchips">${E().cad.frota.map(f => `<span class="rchip"><b class="mono">${esc(f.id)}</b><span class="c">${esc(title(f.tipo))}</span>${isAdmin() ? `<button class="btn ghost danger mini-x" data-e="delEq" data-id="${esc(f.id)}" aria-label="Remover ${esc(f.id)}">✕</button>` : ''}</span>`).join('')}</div></div></div>`;
     return h;
@@ -281,7 +414,7 @@ export function criarEquip(X) {
     const linha = ([k, n]) => `<div class="chkrow"><span>${n}</span><div class="tri" data-k="${k}">${['C', 'NC', 'NA'].map(v => `<button type="button" data-v="${v}" aria-pressed="${v === 'C'}">${v === 'C' ? 'Conforme' : v === 'NC' ? 'Não conforme' : 'N/A'}</button>`).join('')}</div></div>`;
     formSheet('Nova inspeção', '', `
       <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="fiData" value="${TODAY}"></label><label class="sel"><span>Identificação</span><input class="in" id="fiEq" list="dlFrota3" autocomplete="off">${dl('dlFrota3', E().cad.frota.map(f => f.id))}</label></div>
-      <label class="sel"><span>Operador</span>${selOp('fiOp', '')}</label>
+      <div class="sel"><span>Operador</span>${campoBusca('fiOp', '', opcoesOp(() => $('fiData') && $('fiData').value), { placeholder: 'Digite o nome' })}</div>
       <p class="lbl m0">5S no equipamento</p>${ITENS_5S.map(linha).join('')}
       <p class="lbl m0">Segurança</p>${ITENS_SEG.map(linha).join('')}
       <div class="row2"><label class="sel"><span>Inspetor</span><input class="in" id="fiInsp" value="${esc((ME().nome || '').toUpperCase())}"></label><label class="sel"><span>Observações</span><input class="in" id="fiObs"></label></div>`, 'Salvar inspeção', async () => {
@@ -361,7 +494,8 @@ export function criarEquip(X) {
   const acharL = id => E().lanc.find(x => x.id === id) || (U.hist && U.hist.lanc.find(x => x.id === id));
   const acharP = id => E().par.find(x => x.id === id) || (U.hist && U.hist.par.find(x => x.id === id));
   document.addEventListener('click', async e => {
-    const t = e.target.closest('[data-e],[data-epf],[data-epdia]'); if (!t || t.closest('#layer')) return;
+    const t = e.target.closest('[data-e],[data-epf],[data-epdia],[data-eof]'); if (!t || t.closest('#layer')) return;
+    if (t.dataset.eof) { U.of = t.dataset.eof; return render(); }
     if (t.dataset.epdia !== undefined) { U.pdia = t.dataset.epdia; return render(); }
     const d = t.dataset;
     if (d.epf) { U.pf = d.epf; return render(); }
@@ -373,16 +507,28 @@ export function criarEquip(X) {
       case 'novoLanc': lancForm(null); break;
       case 'editLanc': lancForm(acharL(d.id)); break;
       case 'copiar': copiarDiaAnterior(); break;
+      case 'lancOp': lancForm(null, { op: d.op }); break;
       case 'parDe': parForm(null, acharL(d.id)); break;
       case 'novaPar': parForm(null); break;
       case 'editPar': { const p = acharP(d.id); if (p) parForm(p); break; }
       case 'liberar': {
-        const p = acharP(d.id);
-        formSheet('Liberar equipamento', `<span class="mono">${esc(p.eq)}</span> · parado desde ${p.ini} de ${dBR(p.data)}`, `<label class="sel"><span>Hora da liberação</span><input class="in" type="time" id="lbFim" value="${p.data === TODAY ? agoraHM() : ''}"></label>${p.data !== TODAY ? '<p class="small muted m0">A parada é de outro dia: informe a hora em que o equipamento voltou naquele dia (até o fim do turno).</p>' : ''}`, 'Liberar', async () => {
+        const p = acharP(d.id); if (!p) break;
+        const L2 = p.lancSub ? E().lanc.find(x => x.id === p.lancSub) : null; const volta = !!(L2 && !L2.trocaPara && p.op);
+        formSheet('Liberar equipamento', `<span class="mono">${esc(p.eq)}</span> · parado desde ${p.ini} de ${dBR(p.data)}`, `<label class="sel"><span>Hora da liberação</span><div class="row-gap nowrap"><input class="in grow" type="time" id="lbFim" value="${p.data === TODAY ? agoraHM() : ''}"><button type="button" class="btn" id="lbAgora">Agora</button></div></label>${p.data !== TODAY ? '<p class="small muted m0">A parada é de outro dia: informe a hora em que o equipamento voltou a operar naquele dia.</p>' : ''}
+          ${volta ? `<label class="switch"><input type="checkbox" id="lbVolta" checked><span><b>Devolver ${esc(short(p.op))} ao ${esc(p.eq)}</b><br><small class="muted">Encerra o reserva ${esc(L2.eq)} na hora da liberação e lança ${esc(short(p.op))} de volta no ${esc(p.eq)}.</small></span></label>` : ''}`, 'Liberar', async () => {
           const f = $('lbFim').value; if (!f) throw new Error('Informe a hora.');
-          DB.eUpd('par', p.id, { fim: f }); DB.log(`Operação: liberou ${p.eq} às ${f}`); toast(`${p.eq} liberado`);
-        }); break;
+          DB.eUpd('par', p.id, { fim: f });
+          if (volta && $('lbVolta').checked) {
+            DB.eUpd('lanc', L2.id, { fim: f, trocaPara: p.eq });
+            DB.eAdd('lanc', { data: L2.data, mes: L2.data.slice(0, 7), eq: p.eq, tipo: (calc().frotaMap.get(p.eq) || {}).tipo || '', op: p.op, area: L2.area, status: 'EM OPERAÇÃO', ini: f, fim: L2.fim || null, he: 0, sub: '', obs: `Voltou do reserva ${L2.eq}`, voltaDe: L2.eq });
+          }
+          DB.log(`Operação: liberou ${p.eq} às ${f}`); toast(`${p.eq} liberado`);
+        });
+        const ag = $('lbAgora'); if (ag) ag.onclick = () => { $('lbFim').value = agoraHM(); };
+        break;
       }
+      case 'trocar': { const l = acharL(d.id); if (l) substForm({ lanc: l }); break; }
+      case 'substPar': { const p = acharP(d.id); if (p) substForm({ par: p }); break; }
       case 'novoOp': opForm(null); break;
       case 'editOp': opForm(d.nome); break;
       case 'novoEq': formSheet('Novo equipamento', '', `<div class="row2"><label class="sel"><span>Identificação</span><input class="in" id="neId" placeholder="DKMP25013"></label><label class="sel"><span>Tipo</span><select class="in" id="neTipo">${E().config.tiposEquip.map(x => `<option>${esc(x)}</option>`).join('')}</select></label></div>`, 'Adicionar', async () => {
@@ -404,6 +550,13 @@ export function criarEquip(X) {
     }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches && e.target.matches('tr[data-e="editOp"]')) e.target.click(); });
+  // Buscas das telas: filtram na hora, sem redesenhar (o cursor não sai do campo).
+  document.addEventListener('input', e => {
+    const t = e.target;
+    if (t.id === 'eLQ') { U.lq = t.value; filtrarLista($('eLList'), t.value, $('eLN')); }
+    else if (t.id === 'ePQ') { U.pq = t.value; filtrarLista($('ePList'), t.value, $('ePN')); }
+    else if (t.id === 'eOQ') { U.oq = t.value; filtrarLista($('eOList'), t.value, $('eON')); filtrarLista($('eOEsc'), t.value); }
+  });
   document.addEventListener('change', e => {
     const t = e.target;
     if (t.id === 'eMes') { U.mes = t.value; U.pdia = ''; render(); }
