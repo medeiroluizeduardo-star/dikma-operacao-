@@ -202,6 +202,23 @@ td.today{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 @media print{.imp-grid{display:block}.imp-doc{display:block}}
 .updbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:80;display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--surface);padding:10px 12px 10px 16px;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.25);font-size:14px;font-weight:600;max-width:calc(100vw - 32px)}
 @media (max-width:860px){.updbar{bottom:calc(76px + env(safe-area-inset-bottom))}}
+/* Painel: ausências de hoje e balanço semanal do efetivo */
+.g-ef{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr)}
+@media (max-width:1180px){.g-ef{grid-template-columns:minmax(0,1fr)}}
+.aus-mini{margin:0 0 12px}
+.aus-l{display:flex;flex-direction:column;max-height:300px;overflow:auto;margin-top:10px;border-top:1px solid var(--line)}
+.aus-it{display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);text-align:left;padding:8px 4px;cursor:pointer}
+.aus-it:hover{background:var(--surface-2)}
+.aus-it b{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aus-it small{display:block;font-size:11.5px;color:var(--ink-3)}
+table.bal th[scope=row]{text-align:left;font-weight:600;white-space:nowrap}
+table.bal tr.mot th,table.bal tr.mot td{color:var(--ink-3);font-weight:400;font-size:12.5px;padding-top:3px;padding-bottom:3px}
+table.bal tr.mot .sub{padding-left:12px}
+table.bal tr.aus td{color:var(--st-nreal);font-weight:600}
+table.bal tr.saldo td.neg{color:var(--st-nreal);font-weight:700}
+table.bal tr.saldo td.pos{color:var(--st-real);font-weight:700}
+table.bal td.tot{background:var(--surface-2);font-weight:600}
+.pt0{padding-top:0}
 /* Perfis e permissões: chave liga/desliga */
 .tgl{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);position:relative;cursor:pointer;margin:0;flex:none;transition:background-color var(--t1,.15s),border-color var(--t1,.15s)}
 .tgl::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--ink-3,#999);transition:transform .15s,background-color .15s}

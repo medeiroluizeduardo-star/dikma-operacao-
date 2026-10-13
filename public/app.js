@@ -364,6 +364,7 @@ function vPainel() {
     right = `<div class="card"><header><h2>Semana a semana</h2><p>${monthLabel(UI.mes)}</p></header><div class="body">${legend}<div class="bars">${weeksOfMonth(UI.mes).map(w => { const x = stats(docsFor({ ini: w, area })); return `<div class="barrow"><span class="n">${weekLabel(w).split(' · ')[0]}<small>${weekLabel(w).split(' · ')[1]}</small></span>${bar(x)}<span class="p num">${x.progHoje ? pct(x.Rhoje, x.progHoje) + '%' : '—'}</span></div>`; }).join('')}</div></div></div>`;
   }
   h += `<div class="grid2">${left}${right}</div>`;
+  h += `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>`;
   const rs = rotasDa(area).filter(r => r.carga > 0).map(r => ({ r, x: stats(docsFor({ ...scope, area: r.area }), { rota: r.rota }) })).sort((a, b) => b.x.A - a.x.A || pct(a.x.Rhoje, a.x.progHoje) - pct(b.x.Rhoje, b.x.progHoje));
   h += `<div class="card"><header><h2>Rotas que pedem atenção</h2><p>Ordenadas por atrasadas</p></header><div class="tw"><table><thead><tr><th>Rota</th><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realiz.</th><th class="r">Atrasadas</th><th>Eficiência até hoje</th></tr></thead><tbody>
   ${rs.map(({ r, x }) => { const e = pct(x.Rhoje, x.progHoje); return `<tr><td><b>${esc(r.rota)}</b></td><td class="muted">${AREA_S[r.area]}</td><td class="r num">${x.prog}</td><td class="r num">${x.R}</td><td class="r num">${x.N}</td><td class="r num">${x.A ? `<span class="pill warn">${x.A}</span>` : '0'}</td><td><span class="ef"><i style="width:${e}%"></i></span><span class="num">${e}%</span></td></tr>`; }).join('')}
@@ -478,6 +479,53 @@ function escalaRota(r, ini) {
   }
   return { cs, days: out };
 }
+/* ---------------- EFETIVO NO PAINEL ---------------- */
+const SIT_NOME = Object.fromEntries(SITS);
+const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad' };
+const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area);
+// Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
+function cardAusencias(area) {
+  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
+  const aus = cs.map(c => ({ c, v: DB.sit(c.id + '|' + TODAY) })).filter(x => AUSENTE.has(x.v)).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
+  const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length;
+  const por = {}; aus.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
+  const pres = cs.length - aus.length;
+  const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente hoje.</div>';
+  return `<div class="card"><header><h2>Ausências de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
+    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length)}%</b><span>Presença</span></div></div>
+    ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}</div>` : ''}
+    ${lista}</div></div>`;
+}
+// Balanço da semana: quadro, ausências por motivo, disponíveis × necessários e rotas em déficit, dia a dia.
+function cardBalanco(area, ini) {
+  const cs = colabsDa(area); const rs = rotasDa(area); const tk = DAYS.map((_, k) => add(ini, k) === TODAY);
+  const esc7 = rs.map(r => escalaRota(r, ini));
+  const dias = DAYS.map((_, k) => {
+    const dt = add(ini, k); const quadro = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS');
+    const mot = {}; let aus = 0;
+    quadro.forEach(c => { const v = DB.sit(c.id + '|' + dt); if (AUSENTE.has(v)) { aus++; mot[v] = (mot[v] || 0) + 1; } });
+    const nec = esc7.reduce((n, e) => n + e.days[k].nec, 0);
+    const def = rs.filter((r, i) => r.rota !== 'GESTÃO' && esc7[i].days[k].prog > 0 && esc7[i].days[k].disp < esc7[i].days[k].nec).length;
+    return { q: quadro.length, aus, mot, disp: quadro.length - aus, nec, saldo: quadro.length - aus - nec, def };
+  });
+  const motivos = [...AUSENTE].filter(m => m !== 'DS' && dias.some(d => d.mot[m]));
+  const soma = f => dias.reduce((n, d) => n + f(d), 0);
+  const cel = (k, v, cls = '') => `<td class="c num ${tk[k] ? 'today' : ''} ${cls}">${v}</td>`;
+  const linha = (rot, f, tot, cls) => `<tr${cls ? ` class="${cls}"` : ''}><th scope="row">${rot}</th>${dias.map((d, k) => cel(k, f(d))).join('')}<td class="c num tot">${tot}</td></tr>`;
+  const sinal = v => (v > 0 ? '+' + v : String(v));
+  const pDisp = soma(d => d.disp), pQ = soma(d => d.q);
+  return `<div class="card"><header><h2>Balanço semanal do efetivo</h2><p>${weekLabel(ini)} · pessoas por dia</p></header>
+    <div class="tw"><table class="bal"><thead><tr><th></th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(ini, k).slice(8)}</span></th>`).join('')}<th class="c">Semana</th></tr></thead><tbody>
+    ${linha('Quadro', d => d.q, '')}
+    ${motivos.map(m => linha(`<span class="sub">${SIT_NOME[m]}</span>`, d => d.mot[m] || '·', soma(d => d.mot[m] || 0), 'mot')).join('')}
+    ${linha('Ausências', d => d.aus, soma(d => d.aus), 'aus')}
+    ${linha('Disponíveis', d => d.disp, pQ ? `${(Math.floor(pDisp / pQ * 1000) / 10).toLocaleString('pt-BR')}%` : '')}
+    ${linha('Necessários', d => d.nec, '')}
+    <tr class="saldo"><th scope="row">Saldo</th>${dias.map((d, k) => cel(k, sinal(d.saldo), d.saldo < 0 ? 'neg' : 'pos')).join('')}<td class="c num tot"></td></tr>
+    <tr><th scope="row">Rotas em déficit</th>${dias.map((d, k) => cel(k, d.def ? `<span class="pill bad">${d.def}</span>` : '0')).join('')}<td class="c num tot">${soma(d => d.def)}</td></tr>
+    </tbody></table></div>
+    <div class="body pt0"><p class="muted small m0">Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-go="escala">Abrir Escala e efetivo</button></p></div></div>`;
+}
 function vEscala() {
   const area = areaScope();
   const rs = rotasDa(area);
@@ -485,13 +533,13 @@ function vEscala() {
   const rows = rs.map(r => { const e = escalaRota(r, UI.ini); const dd = e.days.filter(d => d.prog > 0 && d.disp < d.nec).length; if (dd) def++; ausT += e.days.reduce((n, d) => n + (d.aloc - d.disp), 0); return { r, e, dd }; });
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
   const totalCol = COLABS.filter(c => area === 'TODAS' || c.area === area).length;
-  let h = `<div class="mini"><div><b class="num">${totalCol}</b><span>Colaboradores</span></div><div><b class="num">${rs.length}</b><span>Rotas</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit</span></div><div><b class="num">${ausT}</b><span>Ausências (pessoa-dia)</span></div></div>
-  <div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários. Necessário = efetivo padrão × atividades do dia ÷ carga padrão</p></header><div class="tw"><table><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
+  let h = `<div class="mini"><div><b class="num">${totalCol}</b><span>Colaboradores</span></div><div><b class="num">${rs.length}</b><span>Rotas</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit</span></div><div><b class="num">${ausT}</b><span>Ausências (pessoa-dia)</span></div></div>`;
+  const dim = `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários. Necessário = efetivo padrão × atividades do dia ÷ carga padrão</p></header><div class="tw"><table><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
   ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-erota="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados">${d.disp}/${d.nec}</span></td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
   const opts = rs.map(r => r.area + '|' + r.rota);
   if (!opts.includes(UI.eRota)) { const f = rows.find(x => x.dd); UI.eRota = f ? f.r.area + '|' + f.r.rota : opts[0]; }
-  if (!UI.eRota) return h;
+  if (!UI.eRota) return h + dim;
   const [ea, er] = UI.eRota.split('|');
   const cs = COLABS.filter(c => c.area === ea && c.rota === er);
   const ed = canEditSit(ea);
@@ -500,7 +548,7 @@ function vEscala() {
   <div class="tw"><table><thead><tr><th>Colaborador</th><th>Função</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? cs.map(c => `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${esc(title(c.regime))}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => { const v = DB.sit(c.id + '|' + add(UI.ini, k)) || 'P'; return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}" ${ed ? `data-sit="${c.id}|${add(UI.ini, k)}"` : 'disabled'} aria-label="${(SITS.find(s => s[0] === v) || [v, v])[1]}">${v === 'P' ? '' : v}</button></td>`; }).join('')}</tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhum colaborador nesta rota.</td></tr>'}
   </tbody></table></div></div>`;
-  return h;
+  return h + dim;
 }
 
 /* ---------------- PENDÊNCIAS ---------------- */
@@ -1008,6 +1056,7 @@ document.addEventListener('click', async e => {
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
   if (d.goprog) { const [a, r, ini] = d.goprog.split('|'); UI.view = 'prog'; if (!myArea()) UI.area = a; UI.rota = r; UI.ini = ini; UI.mes = monthOfWeek(ini); UI.soPend = true; render(); scrollTo(0, 0); return; }
+  if (d.goescala) { UI.eRota = d.goescala; UI.view = 'escala'; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (d.sit) {
     const [id, dt] = d.sit.split('|'); const c = COLABS.find(x => x.id === id); const cur = DB.sit(d.sit) || 'P';
