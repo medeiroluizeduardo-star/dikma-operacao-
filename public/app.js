@@ -9,7 +9,8 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
-import { semAcento, casa, caixaBusca } from './busca.js';
+import { semAcento, casa, caixaBusca, filtrarLista } from './busca.js';
+import { criarEscala, normRegime, letra, fatorRota } from './escala.js';
 import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao } from './permissoes.js';
 
 const TODAY = today();
@@ -28,8 +29,8 @@ let PLANO = [], PL = new Map(), COLABS = [];
 let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (patio | bateria)
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; if (v.esSet) UI.esSet = v.esSet; } catch (e) { /* ignora */ }
-const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet })); } catch (e) { /* ignora */ } };
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; } catch (e) { /* ignora */ }
+const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet })); } catch (e) { /* ignora */ } };
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
@@ -155,10 +156,25 @@ const VIEWS = [
   ...VIEWS_E,
   ...VIEWS_G,
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' },
-  { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Administração', admin: true, mod: 'all' }
+  { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Administração', admin: true, mod: 'all' },
+  { id: 'cfgeral', nome: 'Visão geral', ic: 'painel', grp: 'Geral', admin: true, mod: 'cf' },
+  { id: 'cfescala', nome: 'Escalas e turnos', ic: 'escala', grp: 'Geral', admin: true, mod: 'cf' }
 ];
+// As telas de administração de cada módulo passam a morar no módulo Configurações (mesmas telas, mesmos dados).
+{
+  const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsDe(ME).includes(m));
+  const gestorAtiv = () => isAdmin() || (!!ME && ME.papel === 'gestor' && setsDe(ME).length > 0);
+  const CFV = {
+    cfgeral: { ord: 1 }, cfescala: { ord: 2 },
+    config: { ord: 3, grp: 'Atividades', req: gestorAtiv }, plano: { ord: 4, grp: 'Atividades', req: gestorAtiv }, gerador: { ord: 5, grp: 'Atividades', req: gestorAtiv },
+    econfig: { ord: 6, grp: 'Operação', nome: 'Operação (equipamentos)', req: gestorDe('equipamentos') },
+    gtipos: { ord: 7, grp: 'Efetivo', req: gestorDe('gestao') }, gimport: { ord: 8, grp: 'Efetivo', req: () => isAdmin() },
+    usuarios: { ord: 9, grp: 'Acesso', req: () => isAdmin() }, perfis: { ord: 10, grp: 'Acesso', req: () => isAdmin() }
+  };
+  for (const v of VIEWS) if (CFV[v.id]) Object.assign(v, { mod: 'cf', admin: true }, CFV[v.id]);
+}
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, escala: { nome: 'Escala e Efetivo', curto: 'Escala', sub: 'Efetivo diário e dimensionamento', key: 'es', inicio: 'esdia' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } };
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, escala: { nome: 'Escala e Efetivo', curto: 'Escala', sub: 'Efetivo diário e dimensionamento', key: 'es', inicio: 'esdia' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } , config: { nome: 'Configurações', curto: 'Config.', sub: 'Ajustes de todos os módulos', key: 'cf', inicio: 'cfgeral' }};
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -166,6 +182,7 @@ const MOD_IC = {
   bateria: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M9 20V9M13 20V9M17 20V9M7 9V5h10v4"/></svg>',
   escala: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><circle cx="9" cy="15" r="1.6"/><path d="M13 15.5l1.6 1.6 3-3.2"/></svg>',
   equipamentos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17h2l2-6h7l3 6h4v3H3z"/><circle cx="7.5" cy="19.5" r="1.5"/><circle cx="17.5" cy="19.5" r="1.5"/><path d="M14 11V6h3"/></svg>',
+  config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>',
   gestao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.6 0 4.4 1.6 5 4.3"/></svg>'
 };
 function menuModulos(abrir) {
@@ -176,15 +193,16 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 // Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
-const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'escala');
-const modsDe = u => { if (!u) return []; const b = u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m] && m !== 'escala'); return TODOS_MODS.filter(m => b.includes(m) || (m === 'escala' && (b.includes('operacao') || b.includes('bateria')))); };
+const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'escala' && m !== 'config');
+const modsDe = u => { if (!u) return []; const b = u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m] && m !== 'escala' && m !== 'config'); return TODOS_MODS.filter(m => b.includes(m) || (m === 'escala' && (b.includes('operacao') || b.includes('bateria'))) || (m === 'config' && (u.papel === 'admin' || u.papel === 'gestor'))); };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsDe(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
-const viewsDoModulo = () => VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && podeVer(ME, v, permCfg()));
+const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
   if (UI.modulo === 'escala') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
+  if (UI.modulo === 'config') { const ss = setsDe(ME); k = ss.includes(UI.cfSet) ? UI.cfSet : (ss[0] || 'patio'); UI.cfSet = k; }
   if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', rfRota: 'TODAS', rfIni: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
   if (!AREAS.includes(UI.pArea)) UI.pArea = AREAS[0];
@@ -264,6 +282,7 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
+  if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
@@ -284,7 +303,7 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  const atr = !ge && !eqm && UI.modulo !== 'escala' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'escala' && UI.modulo !== 'config' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
   const gb = ge ? GE.badge() : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
@@ -306,6 +325,7 @@ function renderNav() {
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'escala' ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Efetivo', 'escala'], ['esdim', 'Rotas', 'painel'], ['esbal', 'Balanço', 'prog'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'config' ? [['meudia', 'Hoje', 'sol'], ['cfgeral', 'Geral', 'config'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   const inMore = !tb.some(x => x[0] === UI.view);
@@ -332,6 +352,11 @@ function periodControls({ semana = true, area = true, mes = true } = {}) {
 }
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
+  if (UI.modulo === 'config' && v.mod === 'cf') {
+    const sub = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, usuarios: 'Quem acessa o sistema e o que pode fazer', perfis: 'Quais abas cada perfil vê, módulo por módulo' }[v.id] || '';
+    const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
+    pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
+  }
   if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
@@ -476,16 +501,46 @@ function vApontar() {
 }
 
 /* ---------------- ESCALA ---------------- */
+/* ---------------- ESCALA DE TURNO ---------------- */
+// Fonte única (config/escalas, com as turmas da Operação como reserva). Sem lançamento no dia, a situação vem da escala:
+// administrativo folga no fim de semana e feriado; turno folga nos dias de folga da letra da turma.
+let ESC = null, ESCc = undefined, ESCe = undefined;
+function escala() { const c = DB.cache.escalas || null; const e = (DB.cache.e && DB.cache.e.config) || null; if (!ESC || ESCc !== c || ESCe !== e) { ESC = criarEscala(c || {}, e && e.turmas, []); ESCc = c; ESCe = e; } return ESC; }
+const nk = s => semAcento(s).replace(/\s+/g, ' ').trim();
+let TURk = '', TUR = new Map();
+// Turma pela ficha do Efetivo ou pelo cadastro da Operação (mesmo nome), quando a pessoa não tem letra nas Atividades.
+function turmaFicha(nome) {
+  const g = (DB.cache.g && DB.cache.g.colabs) || []; const ops = (DB.cache.e && DB.cache.e.cad && DB.cache.e.cad.operadores) || [];
+  const k = `${g.length}|${ops.length}|${DB.cache.gVersao || 0}|${DB.cache.eVersao || 0}`;
+  if (TURk !== k) { TUR = new Map(); ops.forEach(o => { const l = letra(o.turma); if (l && o.escala === '4x4') TUR.set(nk(o.nome), l); }); g.forEach(c => { const l = letra(c.turma); if (l) TUR.set(nk(c.nome), l); }); TURk = k; }
+  return TUR.get(nk(nome)) || '';
+}
+const turmaDe = c => letra(c.turma) || turmaFicha(c.nome);
+const regimeDe = c => normRegime(c.regime, escala().regimes);
+const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.nome : title(c.regime || ''); };
+// { v: código, auto: veio da escala, motivo, semTurma }
+function sitDia(c, dt) {
+  const m = DB.sit(c.id + '|' + dt); if (m) return { v: m, auto: false };
+  const p = escala().previsto(regimeDe(c), turmaDe(c), dt);
+  if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
+  return { v: 'P', auto: false, semTurma: !p };
+}
+const folgaEscala = (c, dt) => { const p = escala().previsto(regimeDe(c), turmaDe(c), dt); return !!(p && !p.trab); };
+// mesma regra para outros conjuntos (Meu dia): get(chave) devolve o lançado
+const sitDiaDe = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); return p && !p.trab ? 'F' : undefined; };
+const indisponivel = (c, dt) => { const v = sitDia(c, dt).v; return v !== 'DS' && AUSENTE.has(v); };
 function escalaRota(r, ini) {
   const cs = COLABS.filter(c => c.area === r.area && c.rota === r.rota);
   const doc = DB.cache.semanas[r.area + '|' + ini];
+  const fator = fatorRota(cs, escala().regimes); // rota de turno: só parte do quadro trabalha por dia
   const out = [];
   for (let k = 0; k < 7; k++) {
     const dt = add(ini, k);
     const aloc = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS').length;
-    const aus = cs.filter(c => AUSENTE.has(DB.sit(c.id + '|' + dt))).length;
+    const aus = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS' && indisponivel(c, dt)).length;
+    const escd = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS' && !sitDia(c, dt).auto).length;
     let prog = 0; if (doc) doc.ids.forEach((id, i) => { if (PL.get(id) && PL.get(id).rota === r.rota && doc.d[i][k] !== '_') prog++; });
-    const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga) : (r.rota === 'GESTÃO' ? Math.min(r.ef, aloc) : 0);
+    const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * fator) : (r.rota === 'GESTÃO' ? Math.min(r.ef, escd) : 0);
     out.push({ disp: aloc - aus, nec, prog, aloc });
   }
   return { cs, days: out };
@@ -497,13 +552,14 @@ const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area)
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 function cardAusencias(area) {
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
+  const folgaHoje = cs.filter(c => sitDia(c, TODAY).auto).length;
   const aus = cs.map(c => ({ c, v: DB.sit(c.id + '|' + TODAY) })).filter(x => AUSENTE.has(x.v)).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
   const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length;
   const por = {}; aus.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
-  const pres = cs.length - aus.length;
+  const pres = cs.length - aus.length - folgaHoje;
   const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente hoje.</div>';
   return `<div class="card"><header><h2>Ausências de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
-    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length)}%</b><span>Presença</span></div></div>
+    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga da escala</span></div><div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje)}%</b><span>Presença dos escalados</span></div></div>
     ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}</div>` : ''}
     ${lista}</div></div>`;
 }
@@ -513,21 +569,23 @@ function cardBalanco(area, ini) {
   const esc7 = rs.map(r => escalaRota(r, ini));
   const dias = DAYS.map((_, k) => {
     const dt = add(ini, k); const quadro = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS');
-    const mot = {}; let aus = 0;
-    quadro.forEach(c => { const v = DB.sit(c.id + '|' + dt); if (AUSENTE.has(v)) { aus++; mot[v] = (mot[v] || 0) + 1; } });
+    const mot = {}; let aus = 0, fe = 0;
+    quadro.forEach(c => { const x = sitDia(c, dt); if (x.auto) { fe++; return; } const v = x.v; if (AUSENTE.has(v)) { aus++; mot[v] = (mot[v] || 0) + 1; } });
     const nec = esc7.reduce((n, e) => n + e.days[k].nec, 0);
     const def = rs.filter((r, i) => r.rota !== 'GESTÃO' && esc7[i].days[k].prog > 0 && esc7[i].days[k].disp < esc7[i].days[k].nec).length;
-    return { q: quadro.length, aus, mot, disp: quadro.length - aus, nec, saldo: quadro.length - aus - nec, def };
+    return { q: quadro.length, fe, esc: quadro.length - fe, aus, mot, disp: quadro.length - fe - aus, nec, saldo: quadro.length - fe - aus - nec, def };
   });
   const motivos = [...AUSENTE].filter(m => m !== 'DS' && dias.some(d => d.mot[m]));
   const soma = f => dias.reduce((n, d) => n + f(d), 0);
   const cel = (k, v, cls = '') => `<td class="c num ${tk[k] ? 'today' : ''} ${cls}">${v}</td>`;
   const linha = (rot, f, tot, cls) => `<tr${cls ? ` class="${cls}"` : ''}><th scope="row">${rot}</th>${dias.map((d, k) => cel(k, f(d))).join('')}<td class="c num tot">${tot}</td></tr>`;
   const sinal = v => (v > 0 ? '+' + v : String(v));
-  const pDisp = soma(d => d.disp), pQ = soma(d => d.q);
+  const pDisp = soma(d => d.disp), pQ = soma(d => d.esc);
   return `<div class="card"><header><h2>Balanço semanal do efetivo</h2><p>${weekLabel(ini)} · pessoas por dia</p></header>
     <div class="tw"><table class="bal"><thead><tr><th></th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(ini, k).slice(8)}</span></th>`).join('')}<th class="c">Semana</th></tr></thead><tbody>
     ${linha('Quadro', d => d.q, '')}
+    ${linha('<span class="sub">Folga da escala</span>', d => d.fe || '·', soma(d => d.fe), 'mot')}
+    ${linha('Escalados', d => d.esc, '')}
     ${motivos.map(m => linha(`<span class="sub">${SIT_NOME[m]}</span>`, d => d.mot[m] || '·', soma(d => d.mot[m] || 0), 'mot')).join('')}
     ${linha('Ausências', d => d.aus, soma(d => d.aus), 'aus')}
     ${linha('Disponíveis', d => d.disp, pQ ? `${(Math.floor(pDisp / pQ * 1000) / 10).toLocaleString('pt-BR')}%` : '')}
@@ -535,7 +593,7 @@ function cardBalanco(area, ini) {
     <tr class="saldo"><th scope="row">Saldo</th>${dias.map((d, k) => cel(k, sinal(d.saldo), d.saldo < 0 ? 'neg' : 'pos')).join('')}<td class="c num tot"></td></tr>
     <tr><th scope="row">Rotas em déficit</th>${dias.map((d, k) => cel(k, d.def ? `<span class="pill bad">${d.def}</span>` : '0')).join('')}<td class="c num tot">${soma(d => d.def)}</td></tr>
     </tbody></table></div>
-    <div class="body pt0"><p class="muted small m0">Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
+    <div class="body pt0"><p class="muted small m0">Escalados = quadro − folga da escala (pela turma e pelo regime). Disponíveis = escalados − ausências. Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
 }
 // Seletor rápido da situação: abre colado no dia tocado, um toque aplica. "Repetir" leva até o fim da semana.
 function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
@@ -543,9 +601,11 @@ function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSit
 function sitPop(btn) {
   fecharSitPop();
   const key = btn.dataset.sit; const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
-  const cur = DB.sit(key) || 'P'; const k = (pd(dt).getDay() + 6) % 7; const fim = add(dt, 6 - k);
+  const sx = sitDia(c, dt); const cur = sx.v; const k = (pd(dt).getDay() + 6) % 7; const fim = add(dt, 6 - k);
+  const prev = escala().previsto(regimeDe(c), turmaDe(c), dt); const manual = !!DB.sit(key);
   const pop = document.createElement('div'); pop.className = 'sitpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Situação de ' + title(c.nome));
   pop.innerHTML = `<div class="sp-h"><b>${esc(title(c.nome))}</b><small>${DAYS[k]} ${ddmm(dt)}</small></div>
+    <div class="sp-esc">${prev ? (prev.trab ? `Pela escala: <b>trabalha</b>${turmaDe(c) ? ` (turma ${esc(turmaDe(c))})` : ''}` : `Pela escala: <b>folga</b> · ${esc(prev.motivo)}`) : `Sem turma definida: a escala não marca folga sozinha`}${manual ? ' · <button type="button" class="btn ghost link" data-sp="__esc">voltar ao da escala</button>' : ''}</div>
     <div class="sp-g">${SITS.map(([v, n]) => `<button type="button" class="sp-o" data-sp="${v}" ${v === cur ? 'aria-current="true"' : ''}><span class="sit ${v}">${v === 'P' ? I.ok : v}</span><span>${n}</span></button>`).join('')}</div>
     ${k < 6 ? `<label class="sp-rep"><input type="checkbox" id="spRep"> Repetir até ${DAYS[6].toLowerCase()} ${ddmm(fim)}</label>` : ''}`;
   document.body.appendChild(pop);
@@ -558,8 +618,10 @@ function sitPop(btn) {
     const o = e.target.closest('[data-sp]'); if (!o) return;
     const v = o.dataset.sp; const rep = pop.querySelector('#spRep'); const dias = [dt]; if (rep && rep.checked) for (let d = add(dt, 1); d <= fim; d = add(d, 1)) dias.push(d);
     const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null]);
-    dias.forEach(d => DB.setSit(id + '|' + d, v === 'P' ? null : v));
-    const nome = SIT_NOME[v];
+    // Grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não.
+    const gravar = d => { if (v === '__esc') return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
+    dias.forEach(d => DB.setSit(id + '|' + d, gravar(d)));
+    const nome = v === '__esc' ? 'como na escala' : SIT_NOME[v];
     DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
     fecharSitPop(); render();
     toast(dias.length > 1 ? `${title(c.nome).split(' ')[0]}: ${nome.toLowerCase()} em ${dias.length} dias` : `${title(c.nome).split(' ')[0]}: ${nome.toLowerCase()}`, { desfazer: () => { antes.forEach(([d, x]) => DB.setSit(id + '|' + d, x)); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); } });
@@ -570,6 +632,92 @@ function sitPop(btn) {
   document.addEventListener('keydown', sitPopEsc, true);
   setTimeout(() => { const fora = e => { if (!pop.contains(e.target)) { fecharSitPop(); document.removeEventListener('pointerdown', fora, true); } }; document.addEventListener('pointerdown', fora, true); addEventListener('scroll', () => fecharSitPop(), { once: true, passive: true }); }, 0);
 }
+/* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
+// Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
+// vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação, Efetivo e Meu dia.
+const ehGestor = () => !!ME && ME.papel === 'gestor';
+const temMod = m => modsDe(ME).includes(m);
+function vCfGeral() {
+  const E = escala(); const card = (ic, t, sub, corpo, botoes) => `<div class="card cfc"><header><span class="cfi">${ic}</span><div class="minw"><h2>${t}</h2><p>${sub}</p></div></header><div class="body">${corpo}<div class="row-gap cfb">${botoes}</div></div></div>`;
+  const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
+  const kv = l => `<dl class="cfkv">${l.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
+  let h = '<div class="cfgrid">';
+  // Escalas
+  const semT = setsDe(ME).reduce((n, k) => n + SETS[k].areas.flatMap(a => (DB.dados(k).colabs || {})[a] || []).filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); }).length, 0);
+  const hoje = Object.entries(E.regimes).filter(([, r]) => r.tipo === 'ciclo').map(([k]) => { const l = E.turmasDoDia(k, TODAY); return `<span class="tchip">${esc(k)} · ${l.length ? l.join(' ') : '—'}</span>`; }).join('');
+  h += card(I.escala, 'Escalas e turnos', 'Regimes, turmas e feriados de todos os módulos', `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${hoje}</div>${kv([['Regimes', Object.values(E.regimes).map(r => esc(r.nome)).join(', ')], ['Feriados cadastrados', E.feriados.size], ['Turno sem turma', semT ? `<span class="semt">${semT} pessoa${semT > 1 ? 's' : ''}</span>` : 'nenhum']])}`, ir('cfescala', 'Abrir escalas'));
+  // Atividades
+  for (const k of setsDe(ME)) {
+    const st = DB.dados(k); const c = st.config;
+    const nPlano = SETS[k].areas.reduce((n, a) => n + ((st.plano || {})[a] || []).length, 0);
+    const ms = ((c && c.meses) || []).slice().sort();
+    h += card(MOD_IC[SETS[k].mod], SETS[k].nome, SETS[k].areas.map(a => AREA_S[a]).join(' · '), c ? kv([['Rotas', (c.rotas || []).length], ['Atividades no plano', nPlano], ['Meses gerados', ms.length ? ms.slice(-3).map(monthLabel).join(', ') : '—'], ['Foto ao concluir', c.exigirFoto ? 'obrigatória' : 'opcional']]) : '<p class="muted m0">Planilha ainda não importada.</p>', `${ir('config', 'Rotas e configurações', k)}${ir('plano', 'Plano padrão', k)}${ir('gerador', 'Gerador de meses', k)}`);
+  }
+  // Operação
+  if (VIEWS.find(v => v.id === 'econfig').req()) { const e = DB.cache.e; const c = e && e.config; h += card(MOD_IC.equipamentos, 'Operação', 'Equipamentos e operadores', c ? kv([['Operadores', (e.cad.operadores || []).length], ['Frota', (e.cad.frota || []).length], ['Causas de parada', (c.causas || []).length], ['Turno ADM · 4x4', `${c.turno.admIni}–${c.turno.admFim} · ${c.turno.x4Ini}–${c.turno.x4Fim}`]]) : '<p class="muted m0">Planilha ainda não importada.</p>', ir('econfig', 'Configurações da Operação')); }
+  // Efetivo
+  if (VIEWS.find(v => v.id === 'gtipos').req()) { const g = DB.cache.g; h += card(MOD_IC.gestao, 'Efetivo', 'Fichas de acompanhamento', kv([['Fichas', (g.colabs || []).length], ['Tipos de ocorrência', ((g.config && g.config.tipos) || []).length], ['Na Folha 1', ((g.config && g.config.tipos) || []).filter(t => t.f1).length]]), `${ir('gtipos', 'Tipos de ocorrência')}${isAdmin() ? ir('gimport', 'Importar dados') : ''}`); }
+  // Acesso
+  if (isAdmin()) { const us = DB.cache.usuarios; const exc = us.filter(u => u.abas && Object.keys(u.abas).length).length; const av = DB.cache.avisosCfg && DB.cache.avisosCfg.vapid; h += card(I.users, 'Acesso', 'Usuários, perfis e avisos', kv([['Usuários ativos', us.filter(u => u.papel !== 'bloqueado').length], ['Bloqueados', us.filter(u => u.papel === 'bloqueado').length], ['Com abas personalizadas', exc], ['Avisos no celular', av ? 'chave configurada' : '<span class="semt">sem chave</span>']]), `${ir('usuarios', 'Usuários e acessos')}${ir('perfis', 'Perfis e permissões')}`); }
+  return h + '</div>';
+}
+
+// Rascunho da escala até salvar (para mexer em várias coisas e gravar de uma vez).
+function rascEsc() {
+  if (!UI.escR) { const E = escala(); UI.escR = { regimes: JSON.parse(JSON.stringify(E.regimes)), feriados: JSON.parse(JSON.stringify((DB.cache.escalas && DB.cache.escalas.feriados) || [])) }; }
+  return UI.escR;
+}
+function vCfEscala() {
+  const R = rascEsc(); const E = criarEscala(R, {}, []); const ed = isAdmin() || ehGestor();
+  const salvo = JSON.stringify({ r: escala().regimes, f: (DB.cache.escalas && DB.cache.escalas.feriados) || [] }) === JSON.stringify({ r: R.regimes, f: R.feriados });
+  // calendário dos próximos 14 dias
+  const dias = []; for (let i = 0; i < 14; i++) dias.push(add(TODAY, i));
+  const linhasCal = [];
+  for (const [k, r] of Object.entries(R.regimes)) {
+    if (r.tipo === 'semana') linhasCal.push({ rot: esc(r.nome), cel: dias.map(d => E.previsto(k, '', d)) });
+    else for (const l of Object.keys(r.turmas || {})) linhasCal.push({ rot: `${esc(r.nome)} · <b>${esc(l)}</b>`, cel: dias.map(d => E.previsto(k, l, d)) });
+  }
+  const cal = `<div class="card"><header><h2>Próximos 14 dias</h2><p>● trabalha · ○ folga · ? turma sem data · é assim que o sistema marca a folga sozinho no Efetivo diário</p></header><div class="tw"><table class="calesc"><thead><tr><th></th>${dias.map(d => { const w = pd(d).getDay(); return `<th class="c ${d === TODAY ? 'today' : ''} ${w === 0 || w === 6 ? 'fds' : ''}">${['D', 'S', 'T', 'Q', 'Q', 'S', 'S'][w]}<br><span class="thd">${d.slice(8)}</span></th>`; }).join('')}</tr></thead><tbody>
+    ${linhasCal.map(x => `<tr><th scope="row">${x.rot}</th>${x.cel.map((p, i) => `<td class="c ${dias[i] === TODAY ? 'today' : ''}"><span class="cdot ${p ? (p.trab ? 'on' : 'off') : 'nd'}" title="${p ? (p.trab ? 'trabalha' : esc(p.motivo)) : 'sem data da turma'}">${p ? (p.trab ? '●' : '○') : '?'}</span></td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  // regimes
+  const dis = ed ? '' : 'disabled';
+  const reg = Object.entries(R.regimes).map(([k, r]) => r.tipo === 'semana'
+    ? `<div class="regc"><div class="regh"><b>${esc(r.nome)}</b><span class="muted small">trabalha nos dias marcados</span></div><div class="mchips">${[1, 2, 3, 4, 5, 6, 0].map(d => `<label class="mchip"><input type="checkbox" data-escdia="${k}|${d}" ${(r.dias || []).includes(d) ? 'checked' : ''} ${dis}><span>${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d]}</span></label>`).join('')}</div><p class="muted small m0">Feriados da lista abaixo também são folga.</p></div>`
+    : `<div class="regc"><div class="regh"><b>${esc(r.nome)}</b><span class="row-gap nowrap small"><label class="mini-in">trabalha <input class="in numin" type="number" min="1" max="15" data-escn="${k}|trab" value="${r.trab}" ${dis}></label><label class="mini-in">folga <input class="in numin" type="number" min="1" max="15" data-escn="${k}|folga" value="${r.folga}" ${dis}></label></span></div>
+      <p class="muted small m0">Para cada turma, informe qualquer dia em que ela <b>começou</b> um bloco de ${r.trab} dias de trabalho.</p>
+      <div class="turl">${Object.entries(r.turmas || {}).map(([l, d]) => `<label class="turi"><span class="tl">${esc(l)}</span><input class="in" type="date" data-esct="${k}|${l}" value="${d || ''}" ${dis}>${ed ? `<button type="button" class="btn ghost sm" data-escdel="${k}|${l}" aria-label="Remover turma ${esc(l)}">✕</button>` : ''}</label>`).join('')}
+      ${ed ? `<span class="turi add"><input class="in" maxlength="2" placeholder="Letra" data-escnova="${k}" aria-label="Nova turma"><button type="button" class="btn sm" data-escadd="${k}">${I.plus} Turma</button></span>` : ''}</div></div>`).join('');
+  const fer = R.feriados.slice().sort((a, b) => (a.data < b.data ? -1 : 1));
+  const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data));
+  const ferH = `<div class="regc"><div class="regh"><b>Feriados</b><span class="muted small">folga do administrativo (turno segue a escala)</span></div>
+    ${fer.length ? `<div class="rchips">${fer.map(f => `<span class="rchip">${dBRs(f.data)} · ${esc(f.desc || 'feriado')}${ed ? `<button type="button" class="btn ghost mini-x" data-escferdel="${f.data}" aria-label="Remover">✕</button>` : ''}</span>`).join('')}</div>` : '<p class="muted small m0">Nenhum feriado cadastrado.</p>'}
+    ${ed ? `<div class="row-gap"><input class="in" type="date" id="escFerD"><input class="in grow" id="escFerT" placeholder="Descrição"><button type="button" class="btn" data-escfer="1">${I.plus} Feriado</button>${eqF.length ? `<button type="button" class="btn ghost" data-escfereq="1">Copiar ${eqF.length} da Operação</button>` : ''}</div>` : ''}</div>`;
+  const barra = ed ? `<div class="body row-gap savebar"><button class="btn pri" data-act="escSalvar" ${salvo ? 'disabled' : ''}>${salvo ? 'Tudo salvo' : 'Salvar escalas'}</button>${salvo ? '' : '<button class="btn ghost" data-act="escDescartar">Descartar mudanças</button><span class="muted small">As mudanças só valem depois de salvar.</span>'}</div>` : '';
+  // pessoas de turno e suas turmas
+  const q = UI.escQ || '';
+  const pessoas = []; for (const k of setsDe(ME)) for (const a of SETS[k].areas) for (const c of ((DB.dados(k).colabs || {})[a] || [])) { const rg = normRegime(c.regime, escala().regimes); const r = escala().regimes[rg]; if (r && r.tipo === 'ciclo') pessoas.push({ k, c, rg, r, t: letra(c.turma), tf: turmaFicha(c.nome) }); }
+  pessoas.sort((x, y) => x.c.nome.localeCompare(y.c.nome));
+  const kP = x => semAcento([x.c.nome, x.c.rota, AREA_S[x.c.area], SETS[x.k].curto, x.rg, x.t || x.tf || 'sem turma'].join(' '));
+  const sem = pessoas.filter(x => !x.t && !x.tf).length; const daFicha = pessoas.filter(x => !x.t && x.tf).length;
+  const tab = `<div class="card"><header><h2>Turma de cada pessoa de turno</h2><p>${pessoas.length} pessoa${pessoas.length === 1 ? '' : 's'} em regime de turno · ${sem ? `<span class="semt">${sem} sem turma</span>` : 'todas com turma'}${daFicha ? ` · ${daFicha} usando a turma da ficha do Efetivo` : ''}</p></header>
+    <div class="body lbar">${caixaBusca('escQ', q, 'Buscar pessoa, rota ou turma')}${ed && daFicha ? `<button class="btn" data-act="escFicha">Gravar as ${daFicha} turmas das fichas</button>` : ''}</div>
+    <div class="tw" id="escLista"><table><thead><tr><th>Colaborador</th><th>Onde</th><th>Regime</th><th>Turma</th><th>Hoje</th></tr></thead><tbody>
+    ${pessoas.map(x => { const t = x.t || x.tf; const p = t ? escala().previsto(x.rg, t, TODAY) : null; return `<tr data-k="${esc(kP(x))}" ${casa(kP(x), q) ? '' : 'hidden'}><td><b>${esc(title(x.c.nome))}</b></td><td class="small">${esc(SETS[x.k].curto)} · ${esc(AREA_S[x.c.area])}<div class="muted">${esc(x.c.rota)}</div></td><td class="small">${esc(x.r.nome)}</td>
+      <td>${ed ? `<select class="in" data-escpes="${x.k}|${esc(x.c.area)}|${esc(x.c.id)}" aria-label="Turma de ${esc(title(x.c.nome))}"><option value="">${x.tf && !x.t ? `Da ficha (${esc(x.tf)})` : 'Sem turma'}</option>${Object.keys(x.r.turmas || {}).map(l => `<option ${l === x.t ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : esc(t || '—')}</td>
+      <td>${p ? (p.trab ? '<span class="pill ok">trabalha</span>' : '<span class="pill neu">folga</span>') : '<span class="pill warn">sem turma</span>'}</td></tr>`; }).join('')}
+    </tbody></table><p class="empty" data-vazio ${pessoas.some(x => casa(kP(x), q)) ? 'hidden' : ''}>${pessoas.length ? 'Ninguém encontrado.' : 'Nenhuma pessoa em regime de turno nas Atividades.'}</p></div></div>`;
+  return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Escala e Efetivo, Atividades, Operação, Meu dia e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
+}
+const dBRs = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
+function vConfigModulo(view) {
+  if (view === 'cfescala') return vCfEscala();
+  if (view === 'usuarios') return vUsuarios();
+  if (view === 'perfis') return vPerfis();
+  if (view === 'econfig') return EQ.render('econfig');
+  if (view === 'gtipos' || view === 'gimport') return GE.render(view);
+  return vCfGeral();
+}
+
 /* ---------------- MÓDULO ESCALA E EFETIVO ---------------- */
 // Usa o conjunto (Pátio ou Bateria) escolhido no topo do módulo. Dados e permissões são os mesmos das atividades.
 function dimRotas(area) {
@@ -579,9 +727,29 @@ function dimRotas(area) {
 }
 function miniEscala(area) {
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
-  const aus = cs.filter(c => AUSENTE.has(DB.sit(c.id + '|' + TODAY))).length;
+  const fe = cs.filter(c => sitDia(c, TODAY).auto).length;
+  const aus = cs.filter(c => !sitDia(c, TODAY).auto && indisponivel(c, TODAY)).length;
   const { def } = dimRotas(area);
-  return `<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
+  const t4 = escala().turmasDoDia('4x4', TODAY), t3 = escala().turmasDoDia('3x3', TODAY);
+  return `${t4.length || t3.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${t4.length ? `<span class="tchip">4x4 · ${t4.join(' ')}</span>` : ''}${t3.length ? `<span class="tchip">3x3 · ${t3.join(' ')}</span>` : ''}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
+}
+// Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
+const podeTurma = () => isAdmin() || (!!ME && ME.papel === 'gestor');
+function turmaTag(c) {
+  const rg = regimeDe(c); const r = escala().regimes[rg]; const t = turmaDe(c);
+  if (!r || r.tipo !== 'ciclo') return esc(regimeNome(c));
+  const txt = t ? `${esc(r.nome)} · turma <b>${esc(t)}</b>` : `${esc(r.nome)} · <span class="semt">sem turma</span>`;
+  return podeTurma() ? `<button class="btn ghost link turma-b" data-turma="${esc(c.id)}" title="Escolher a turma">${txt}</button>` : txt;
+}
+function turmaSheet(id) {
+  const c = COLABS.find(x => x.id === id); if (!c) return;
+  const rg = regimeDe(c); const r = escala().regimes[rg]; if (!r || r.tipo !== 'ciclo') return;
+  const letras = Object.keys(r.turmas || {}); const atual = turmaDe(c);
+  const prox = l => { const ds = []; for (let i = 0; i < 8; i++) { const d = add(TODAY, i); const p = escala().previsto(rg, l, d); ds.push(p ? (p.trab ? '●' : '○') : '?'); } return ds.join(' '); };
+  sheet(`Turma de ${title(c.nome)}`, `${esc(r.nome)} · ● trabalha ○ folga, a partir de hoje`, [...letras.map(l => ({ t: `Turma ${l}`, d: prox(l), v: l, cur: l === atual })), { t: 'Sem turma', d: 'A folga não é marcada sozinha', v: '' }], o => {
+    const itens = (DB.cache.colabs[c.area] || []).map(x => (x.id === c.id ? { ...x, turma: o.v } : x));
+    DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
+  });
 }
 // Abre o módulo Escala e Efetivo no conjunto atual, já na rota (area|rota) quando vier de um link.
 function irEscala(rota) {
@@ -593,7 +761,7 @@ function irEscala(rota) {
 function vEsDim() {
   const area = areaScope(); const { rows } = dimRotas(area);
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão. Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
+  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão (em rota de turno, só a parte do quadro que trabalha por dia). Disponível já desconta a folga da escala. Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
   ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes">${d.disp}/${d.nec}</span></td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
@@ -601,11 +769,11 @@ function vEsBal() {
   const area = areaScope();
   // quem tem alguma ausência na semana, com os dias
   const cs = colabsDa(area);
-  const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => DB.sit(c.id + '|' + add(UI.ini, k)) || 'P') })).filter(x => x.d.some(v => AUSENTE.has(v) && v !== 'DS')).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+  const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => sitDia(c, add(UI.ini, k))) })).filter(x => x.d.some(y => !y.auto && AUSENTE.has(y.v) && y.v !== 'DS')).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
   return miniEscala(area) + `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>
   <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência</p></header>${sem.length ? `<div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Rota</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
-    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((v, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="sit ${v} ro">${v === 'P' ? I.ok : v}</span></td>`).join('')}</tr>`).join('')}
+    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="sit ${y.v} ro${y.auto ? ' auto' : ''}" title="${y.auto ? esc(y.motivo) : SIT_NOME[y.v] || y.v}">${y.v === 'P' ? I.ok : y.v}</span></td>`).join('')}</tr>`).join('')}
   </tbody></table></div>` : '<div class="body"><div class="empty">Ninguém ausente nesta semana.</div></div>'}</div>`;
 }
 function vEsDia() {
@@ -621,11 +789,12 @@ function vEsDia() {
   const ordem = new Map(rs.map((r, i) => [r.area + '|' + r.rota, i]));
   let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
   cs = cs.slice().sort((x, y) => (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
-  const pres = DAYS.map((_, k) => cs.filter(c => { const v = DB.sit(c.id + '|' + add(UI.ini, k)) || 'P'; return v !== 'DS' && !AUSENTE.has(v); }).length);
-  const quadro = DAYS.map((_, k) => cs.filter(c => DB.sit(c.id + '|' + add(UI.ini, k)) !== 'DS').length);
+  const pres = DAYS.map((_, k) => cs.filter(c => { const v = sitDia(c, add(UI.ini, k)).v; return v !== 'DS' && !AUSENTE.has(v); }).length);
+  const quadro = DAYS.map((_, k) => cs.filter(c => { const dt = add(UI.ini, k); return DB.sit(c.id + '|' + dt) !== 'DS' && !folgaEscala(c, dt); }).length);
   const celula = (c, k) => {
-    const dt = add(UI.ini, k); const v = DB.sit(c.id + '|' + dt) || 'P'; const ed = canEditSit(c.area);
-    return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${SIT_NOME[v] || v}" title="${SIT_NOME[v] || v}">${v === 'P' ? I.ok : v}</button></td>`;
+    const dt = add(UI.ini, k); const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
+    const tt = x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v;
+    return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${x.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${esc(tt)}" title="${esc(tt)}">${v === 'P' ? I.ok : v}</button></td>`;
   };
   // agrupa por rota quando mostra várias rotas
   let ant = '';
@@ -633,14 +802,15 @@ function vEsDia() {
     const g = c.area + '|' + c.rota; let cab = '';
     if (todas && !q.trim() && g !== ant) {
       ant = g; const doG = cs.filter(x => x.area + '|' + x.rota === g); const kh = DAYS.findIndex((_, k) => tk[k]);
-      const ph = kh >= 0 ? doG.filter(x => { const v = DB.sit(x.id + '|' + TODAY) || 'P'; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
-      cab = `<tr class="grp-row"><th colspan="9"><button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}<span class="gcount">${ph != null ? `${ph}/${doG.length} presentes hoje` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      const ph = kh >= 0 ? doG.filter(x => { const v = sitDia(x, TODAY).v; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
+      const eh = kh >= 0 ? doG.filter(x => DB.sit(x.id + '|' + TODAY) !== 'DS' && !folgaEscala(x, TODAY)).length : null;
+      cab = `<tr class="grp-row"><th colspan="9"><button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
     }
-    return cab + `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''}` : esc(title(c.regime))}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
+    return cab + `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
   }).join('');
   return miniEscala(area) + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
   <div class="body lbar efbar">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}</div>
-  <div class="body pb0 pt0"><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></div>
+  <div class="body pb0 pt0"><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></div>
   <div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Função</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="9" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
   </tbody>${cs.length ? `<tfoot><tr><th colspan="2">Presentes</th>${DAYS.map((_, k) => `<td class="c num ${tk[k] ? 'today' : ''}"><b class="${pres[k] < quadro[k] ? 'menos' : ''}">${pres[k]}</b><span class="muted">/${quadro[k]}</span></td>`).join('')}</tr></tfoot>` : ''}</table></div></div>`;
@@ -835,7 +1005,7 @@ function vUsuarios() {
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { operacao: 'op', bateria: 'op', escala: 'es', equipamentos: 'eq', gestao: 'ge' };
+const KEY_MOD = { operacao: 'op', bateria: 'op', escala: 'es', config: 'cf', equipamentos: 'eq', gestao: 'ge' };
 const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v)); };
 function celulaAbas(u) {
   if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
@@ -1087,6 +1257,7 @@ function afterRender() {
   on('fTipo', 'change', e => { UI.tipo = e.target.value; render(); });
   on('fPend', 'change', e => { UI.soPend = e.target.checked; render(); });
   on('fQ', 'input', e => { UI.q = e.target.value; clearTimeout(window._qt); window._qt = setTimeout(schedule, 250); });
+  on('escQ', 'input', e => { UI.escQ = e.target.value; filtrarLista($('escLista'), e.target.value); });
   on('fEQ', 'input', e => { UI.eQ = e.target.value; clearTimeout(window._eqt); window._eqt = setTimeout(schedule, 180); });
   on('fERota', 'change', e => { UI.eRota = e.target.value; render(); });
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
@@ -1123,14 +1294,23 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   if (d.go) {
     if (d.go === '__more') {
-      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : UI.modulo === 'escala' ? ['meudia', 'esdia', 'esdim', 'esbal'] : ['meudia', 'prog', 'apontar', 'pend'];
+      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : UI.modulo === 'escala' ? ['meudia', 'esdia', 'esdim', 'esbal'] : UI.modulo === 'config' ? ['meudia', 'cfgeral', 'cfescala', 'usuarios'] : ['meudia', 'prog', 'apontar', 'pend'];
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
+    { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || UI.modulo === 'escala') UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
   }
+  if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }
+  if (d.cfset) { UI.cfSet = d.cfset; salvarUI(); render(); return; }
+  // Escalas e turnos (rascunho até salvar)
+  if (d.escdel) { const [k, l] = d.escdel.split('|'); delete rascEsc().regimes[k].turmas[l]; render(); return; }
+  if (d.escadd) { const inp = document.querySelector(`[data-escnova="${d.escadd}"]`); const l = letra(inp && inp.value); if (!l) { toast('Informe a letra da turma (A a Z)'); return; } const tt = rascEsc().regimes[d.escadd].turmas || (rascEsc().regimes[d.escadd].turmas = {}); if (tt[l] !== undefined) { toast('Essa turma já existe'); return; } tt[l] = ''; render(); return; }
+  if (d.escfer) { const dt = $('escFerD').value, ds = $('escFerT').value.trim(); if (!dt) { toast('Informe a data do feriado'); return; } const R = rascEsc(); R.feriados = R.feriados.filter(f => f.data !== dt).concat([{ data: dt, desc: ds || 'Feriado', semOp: true }]); render(); return; }
+  if (d.escferdel) { const R = rascEsc(); R.feriados = R.feriados.filter(f => f.data !== d.escferdel); render(); return; }
+  if (d.escfereq) { const R = rascEsc(); const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data)); R.feriados = R.feriados.concat(eqF.map(f => ({ data: f.data, desc: f.desc, semOp: true }))); render(); toast(`${eqF.length} feriado(s) copiados · salve para valer`); return; }
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
     const [mod, view, area] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
@@ -1160,6 +1340,7 @@ document.addEventListener('click', async e => {
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (d.sit) { sitPop(t); return; }
+  if (d.turma) { turmaSheet(d.turma); return; }
 
   if (d.ptog) {
     const [id, k] = d.ptog.split('|'); const p = PL.get(id); const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, dias: [...x.dias].map((c, j) => (j === +k ? (c === '1' ? '0' : '1') : c)).join('') } : x));
@@ -1196,6 +1377,23 @@ document.addEventListener('click', async e => {
     }
     case 'permPadrao': UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, {}])); render(); toast('Padrão carregado. Salve para aplicar'); break;
     case 'permDesfazer': UI.perm = null; render(); break;
+    case 'escSalvar': {
+      const R = rascEsc(); DB.salvarEscalas({ regimes: R.regimes, feriados: R.feriados });
+      // mantém a Operação igual: turmas 4x4 também no cadastro dela
+      const t4 = (R.regimes['4x4'] || {}).turmas || {};
+      if (VIEWS.find(v => v.id === 'econfig').req() && DB.cache.e && DB.cache.e.config) DB.eSalvarConfig({ turmas: Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) });
+      UI.escR = null; DB.log('Atualizou as escalas e turnos'); toast('Escalas salvas · valem para todos os módulos'); render(); break;
+    }
+    case 'escDescartar': UI.escR = null; render(); break;
+    case 'escFicha': {
+      let n = 0;
+      for (const k of setsDe(ME)) for (const a of SETS[k].areas) {
+        const itens = (DB.dados(k).colabs || {})[a] || []; let mudou = false;
+        const novos = itens.map(c => { const rg = escala().regimes[normRegime(c.regime, escala().regimes)]; if (rg && rg.tipo === 'ciclo' && !letra(c.turma)) { const tf = turmaFicha(c.nome); if (tf) { mudou = true; n++; return { ...c, turma: tf }; } } return c; });
+        if (mudou) DB.salvarColabsArea(a, novos, k);
+      }
+      DB.log(`Gravou ${n} turma(s) a partir das fichas do Efetivo`); toast(`${n} turma(s) gravadas`); render(); break;
+    }
     case 'limparEQ': UI.eQ = ''; render(); { const n = $('fEQ'); if (n) n.focus(); } break;
     case 'mockReset': await DB.mockReset(); toast('Demonstração restaurada'); break;
     case 'hoje': UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; UI.dia = null; render(); break;
@@ -1291,6 +1489,11 @@ document.addEventListener('submit', async e => {
   } finally { const b = f.querySelector('[type=submit]'); if (b && f.isConnected) b.disabled = false; }
 });
 document.addEventListener('change', e => {
+  { const t = e.target; const dd = t.dataset || {};
+    if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
+    if (dd.escn) { const [k, f] = dd.escn.split('|'); rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
+    if (dd.esct) { const [k, l] = dd.esct.split('|'); rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
+    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? { ...c, turma: t.value } : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
   if (t.dataset.mdPref) { MD.onChange(t); return; }
   if (t.dataset.perm) { const [p, id] = t.dataset.perm.split('|'); rascunhoPerm()[p][id] = t.checked; render(); return; }
@@ -1330,7 +1533,7 @@ window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHT
 window.addEventListener('pagehide', salvarUI);
 
 const PES = criarPessoas(DB);
-const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe });
+const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 if (new URLSearchParams(location.search).get('v') === 'meudia') { UI.view = 'meudia'; history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : '')); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.tipo === 'abrir' && AUTH.status === 'ready') { UI.view = 'meudia'; render(); scrollTo(0, 0); } });

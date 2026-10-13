@@ -31,6 +31,8 @@ async function freshSet(k) {
   const x = seedParaBanco(seed, SETS[k].areas);
   const st = S[k] = novoSet();
   Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sit, semanas: {} });
+  // demonstração: quem é de turno 4x4 recebe uma letra (A a D), para a folga automática da escala aparecer
+  { let i = 0; for (const a of Object.keys(x.colabs)) x.colabs[a].forEach(c => { if (/4\s*X\s*4/i.test(c.regime || '') && !c.turma) c.turma = 'ABCD'[i++ % 4]; }); }
   const hoje = today(), cur0 = monthOfWeek(weekOf(hoje));
   for (const m of [addMonth(cur0, -1), cur0, addMonth(cur0, 1), addMonth(cur0, 2)]) {
     for (const ini of weeksOfMonth(m)) for (const a of SETS[k].areas) {
@@ -138,6 +140,9 @@ export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); 
 // Avisos na demonstração: não há servidor de mensagens; mostra um aviso local para testar.
 cache.avisosCfg = { vapid: 'demonstracao' }; cache.meusAvisos = null; cache.permissoes = {};
 export async function salvarPermissoes(abas) { cache.permissoes = abas; changed(); }
+// Escala na demonstração: 3x3 com datas de exemplo (o 4x4 vem das turmas da Operação).
+cache.escalas = { regimes: { '3x3': { turmas: { I: '2026-10-01', J: '2026-10-04' } } } }; cache.escalasLoaded = true;
+export async function salvarEscalas(cfg) { cache.escalas = JSON.parse(JSON.stringify(cfg)); changed(); }
 export async function avisosSuportados() { return 'Notification' in window; }
 export async function ativarAvisos(prefs) {
   if ('Notification' in window && Notification.permission !== 'granted') { try { await Notification.requestPermission(); } catch (e) { /* ignora */ } }

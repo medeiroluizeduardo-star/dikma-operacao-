@@ -7,7 +7,9 @@ const diaSemana = data => (new Date(data + 'T12:00:00').getDay() + 6) % 7; // 0 
 
 // Atividades de um conjunto (Pátio ou Bateria) nas áreas da pessoa.
 // d = { areas[], plano[] (itens do plano), semanas {id: doc}, colabs[], sit (chave "id|data" → código), rotas[] (config), hoje }
+// d.sitDe(c, data) opcional: situação considerando a escala de turno (folga automática da turma). Sem ela, só o que foi lançado.
 export function resumoAtividades(d) {
+  const sd = d.sitDe || ((c, dt) => d.sit[c.id + '|' + dt]);
   const PL = new Map(d.plano.map(p => [p.id, p]));
   const hoje = d.hoje, k = diaSemana(hoje), ini = weekOf(hoje);
   const amanha = add(hoje, 1), kA = diaSemana(amanha), iniA = weekOf(amanha);
@@ -37,11 +39,11 @@ export function resumoAtividades(d) {
   for (const r of d.rotas) {
     if (!d.areas.includes(r.area)) continue;
     const cs = d.colabs.filter(c => c.area === r.area && c.rota === r.rota);
-    const aloc = cs.filter(c => d.sit[c.id + '|' + amanha] !== 'DS').length;
-    const aus = cs.filter(c => AUSENTE.has(d.sit[c.id + '|' + amanha])).length;
+    const aloc = cs.filter(c => sd(c, amanha) !== 'DS').length;
+    const aus = cs.filter(c => { const v = sd(c, amanha); return v !== 'DS' && AUSENTE.has(v); }).length;
     const doc = docA(r.area); let prog = 0;
     if (doc) doc.ids.forEach((pid, i) => { const p = PL.get(pid); if (p && p.rota === r.rota && linha(doc, i)[kA] !== '_') prog++; });
-    const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga) : 0;
+    const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * (d.fator ? d.fator(cs) : 1)) : 0;
     if (prog > 0 && aloc - aus < nec) deficit.push({ area: r.area, rota: r.rota, disp: aloc - aus, nec, prog });
   }
   const rotas = [...porRota.values()].sort((a, b) => b.P - a.P || a.rota.localeCompare(b.rota));

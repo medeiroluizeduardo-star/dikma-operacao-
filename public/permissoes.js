@@ -8,9 +8,10 @@ export const GRUPOS_ABAS = [
   { t: 'Atividades Pátio · Atividades Bateria', mod: 'op' },
   { t: 'Escala e Efetivo', mod: 'es' },
   { t: 'Operação (equipamentos)', mod: 'eq' },
-  { t: 'Efetivo', mod: 'ge' }
+  { t: 'Efetivo', mod: 'ge' },
+  { t: 'Configurações', mod: 'cf' }
 ];
-const SO_ADMIN = ['usuarios', 'perfis'];
+const SO_ADMIN = ['usuarios', 'perfis', 'gimport'];
 export const configuravel = (papel, v) => !SO_ADMIN.includes(v.id) && (!v.admin || papel === 'gestor');
 const padrao = () => true;
 

@@ -117,6 +117,20 @@ Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em r
 - Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
 
+## Módulo Configurações
+
+Para administrador e gestor. Junta as telas de ajuste de todos os módulos (as mesmas telas e os mesmos dados de antes): **Visão geral** (resumo de cada módulo com atalhos), **Escalas e turnos**, Rotas e configurações, Plano padrão e Gerador de meses (botão Pátio | Bateria), Configurações da Operação, Tipos de ocorrência, Importar dados, Usuários e acessos e Perfis e permissões. O gestor vê só a parte dos módulos dele.
+
+### Escalas e turnos (fonte única)
+
+Fica em `config/escalas` e vale para Escala e Efetivo, Atividades, Operação, Meu dia e avisos no celular.
+- **Administrativo:** dias da semana de trabalho (padrão seg a sex) e lista de feriados = folga.
+- **Turnos em ciclo (4x4, 3x3, e outros):** dias de trabalho e de folga, e para cada turma (letra) um dia em que ela começou um bloco de trabalho. Dá para incluir turmas.
+- **Próximos 14 dias:** quadro de quem trabalha e quem folga, por turma.
+- **Turma de cada pessoa de turno:** escolha a letra; sem letra, o sistema usa a da ficha do Efetivo ou do cadastro da Operação (botão para gravar todas de uma vez).
+
+Sem lançamento no dia, o **Efetivo diário marca a folga sozinho** pela escala (F tracejado). Marcar presente num dia de folga fica gravado; "voltar ao da escala" apaga o lançamento. Escalados, presentes, dimensionamento, balanço, déficit do Meu dia e avisos já descontam a folga da escala. Em rotas de turno, o necessário considera só a parte do quadro que trabalha por dia (4x4 = metade).
+
 ## Módulo Escala e Efetivo
 
 Reúne o que era a aba "Escala e efetivo" das Atividades, para Pátio e Bateria (botão **Pátio | Bateria** no topo). Não precisa marcar no usuário: quem tem Atividades Pátio ou Bateria já vê este módulo, nas mesmas áreas.
@@ -267,6 +281,7 @@ public/
   meudia.js, hoje.js  tela Meu dia e as contas que ela usa (as mesmas dos avisos)
   permissoes.js       abas por perfil e exceção por pessoa
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
+  escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   seed-bateria.json   dados da planilha da Bateria (usados só na importação)
   seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)

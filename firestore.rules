@@ -169,6 +169,12 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Escala de turno (regimes, turmas e feriados) usada por todos os módulos. Todos leem; administrador e gestor alteram.
+    match /config/escalas {
+      allow read: if ativo();
+      allow write: if admin() || (ativo() && perfil().papel == 'gestor');
+    }
+
     // Abas que cada perfil vê (tela Perfis e permissões). Todos leem; só o administrador muda.
     // A exceção por pessoa fica no campo abas de usuarios/{uid}, que só o administrador altera.
     match /config/permissoes {

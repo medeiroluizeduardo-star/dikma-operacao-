@@ -39,7 +39,11 @@ export function criarEquip(X) {
   const opcoesMes = () => { const l = []; for (let i = -12; i <= 1; i++) l.push(addMonth(TODAY.slice(0, 7), i)); return l.reverse(); };
   const selMes = (id, v) => `<label class="sel"><span>Mês</span><select class="in" id="${id}">${opcoesMes().map(m => `<option value="${m}" ${m === v ? 'selected' : ''}>${mesNome(m)}</option>`).join('')}</select></label>`;
   let CALC = null, CALCv = -1;
-  const calc = () => { if (!CALC || CALCv !== DB.cache.eVersao) { CALC = criarCalc(E().config, E().cad); CALCv = DB.cache.eVersao; } return CALC; };
+  // Turmas 4x4 e feriados vêm da escala central (Configurações › Escalas e turnos) quando preenchidos — mesma conta em todos os módulos.
+  let CALCesc;
+  const cfgOp = () => { const c = E().config; const esc = DB.cache.escalas; const t4 = esc && esc.regimes && esc.regimes['4x4'] && esc.regimes['4x4'].turmas; const tem = t4 && Object.values(t4).some(Boolean);
+    return { ...c, turmas: tem ? { ...Object.fromEntries(Object.entries(c.turmas || {}).filter(([k]) => /^[A-Z]{1,2}$/.test(k))), ...Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) } : c.turmas, feriados: [...(c.feriados || []), ...((esc && esc.feriados) || [])] }; };
+  const calc = () => { if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas) { CALC = criarCalc(cfgOp(), E().cad); CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; } return CALC; };
   const mesesCarregados = () => E().meses || new Set();
   const lancMes = ym => E().lanc.filter(l => l.data.slice(0, 7) === ym);
 
@@ -467,7 +471,7 @@ export function criarEquip(X) {
         ${row('ADM · início', inp('turno', 'admIni', t.admIni, 'time'))}${row('ADM · fim (seg a qui)', inp('turno', 'admFim', t.admFim, 'time'))}${row('ADM · fim na sexta', inp('turno', 'admFimSex', t.admFimSex, 'time'))}
         ${row('Almoço · início', inp('turno', 'almIni', t.almIni, 'time'))}${row('Almoço · fim', inp('turno', 'almFim', t.almFim, 'time'))}
         ${row('4x4 · início', inp('turno', 'x4Ini', t.x4Ini, 'time'))}${row('4x4 · fim', inp('turno', 'x4Fim', t.x4Fim, 'time'))}${row('4x4 · intervalo (h, turno > 6 h)', inp('turno', 'x4Int', t.x4Int))}
-        <p class="lbl m0">Turmas 4x4 · 1º dia de trabalho de um ciclo</p>${Object.keys(c.turmas || {}).map(k => row('Turma ' + k, inp('turmas', k, c.turmas[k], 'date'))).join('')}</div></div>
+        <p class="lbl m0">Turmas 4x4</p><p class="muted small m0">As turmas agora ficam em <b>Configurações › Escalas e turnos</b>, valendo para todos os módulos. <button class="btn ghost link" data-go="cfescala">Abrir</button></p></div></div>
       <div class="card"><header><h2>Metas do painel</h2></header><div class="body cfg">
         ${row('Disponibilidade física ≥', inp('metas', 'disp', m.disp, 'number', '0.01'))}${row('Efetividade ≥', inp('metas', 'efet', m.efet, 'number', '0.01'))}${row('Aproveitamento de horas ≥', inp('metas', 'aprov', m.aprov, 'number', '0.01'))}
         ${row('MTTR ≤ (h)', inp('metas', 'mttr', m.mttr))}${row('MTBF ≥ (h)', inp('metas', 'mtbf', m.mtbf))}${row('Paradas sem liberação ≤', inp('metas', 'semlib', m.semlib))}${row('Paradas por causa do operador ≤', inp('metas', 'parop', m.parop))}

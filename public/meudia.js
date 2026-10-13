@@ -39,7 +39,8 @@ export function criarMeuDia(X) {
     const sit = {}; for (const v of Object.values(st.sitByMonth || {})) Object.assign(sit, v);
     return resumoAtividades({
       areas: areasDe(k), plano: SETS[k].areas.flatMap(a => st.plano[a] || []), semanas: st.semanas,
-      colabs: SETS[k].areas.flatMap(a => st.colabs[a] || []), sit, rotas: st.config.rotas || [], hoje: today()
+      colabs: SETS[k].areas.flatMap(a => st.colabs[a] || []), sit, rotas: st.config.rotas || [], hoje: today(),
+      sitDe: X.sitEscala ? X.sitEscala(key => sit[key]) : undefined, fator: X.fatorRota
     });
   }
 

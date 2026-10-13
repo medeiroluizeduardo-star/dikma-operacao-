@@ -11,12 +11,13 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje']) {
+for (const f of ['cal', 'hoje', 'escala']) {
   const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
 }
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
+const { criarEscala, normRegime, letra, fatorRota } = await import('./lib/escala.mjs');
 
 const soTestar = process.env.AVISOS_SO_TESTAR === '1' || process.argv.includes('--testar');
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -54,6 +55,12 @@ for (const k of SET_KEYS) {
   sets[k] = { plano, colabs, semanas, sit, rotas: cfg.data().rotas || [] };
 }
 
+// Escala de turno: quem está de folga pela letra da turma não conta como disponível amanhã.
+const cfgEsc = (await db.doc('config/escalas').get()).data() || {};
+const eqCfg = (await db.doc('eq/config').get()).data() || {};
+const ESC = criarEscala(cfgEsc, eqCfg.turmas, []);
+const sitEscala = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; const p = ESC.previsto(normRegime(c.regime, ESC.regimes), letra(c.turma), dt); return p && !p.trab ? 'F' : undefined; };
+for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};
 const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, agora: new Date() });
