@@ -117,7 +117,17 @@ Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3
 
 - **Apagar usuário:** em **Usuários e acessos**, botão **Apagar** na linha da pessoa (pede confirmação). Ela perde o acesso na hora e o nome de usuário fica livre; o que ela registrou continua no sistema. Não dá para apagar a si mesmo nem o único administrador. Para só suspender, use o perfil **Bloqueado**. A conta interna fica no Firebase Authentication e pode ser apagada no console, se quiser (não é obrigatório).
 
+## Uso no dia a dia (telas)
+- **Busca rápida:** lupa no topo (no computador, Ctrl+K ou /). Acha pessoa, ficha, equipamento, rota ou tela e leva direto para lá.
+- **Filtro no celular:** mês, semana e área ficam numa linha só no topo; tocar abre o painel para escolher.
+- **Apontar:** abre direto na área e na rota (a última usada, ou a que tem mais coisa para apontar). Áreas e rotas ficam numa linha que desliza para o lado, com a quantidade pendente. O progresso fica preso no topo ao rolar. Ao terminar uma rota, o sistema oferece a próxima.
+- **Programação:** cada rota abre fechada, com "feitas de programadas" e as atrasadas; toque para ver as atividades (ou **Abrir todas**). Com busca ou uma rota escolhida, tudo aparece aberto.
+- **Efetivo diário:** com muitas rotas na tela, elas começam fechadas com "presentes hoje"; toque para ver as pessoas. A legenda das siglas fica em **Legenda das siglas**.
+- **Pendências:** o número no menu conta só os atrasos dos últimos 7 dias da sua área.
+
 ## Meu dia
+- **Agora:** até 3 itens, do mais urgente para o menos, cada um com o botão que resolve (Apontar, Recolher, Abrir…). O resto fica em **Mais**.
+- **Hoje:** o progresso do dia por módulo e os números de apoio (quem falta, etc.).
 - É a primeira tela depois de entrar (e o primeiro item do menu em todos os módulos; no celular, a aba **Hoje**).
 - Mostra só o que é da pessoa hoje, nos módulos dela e nas áreas dela: atividades para apontar e atrasadas (Pátio e Bateria, por rota), quem falta hoje, déficit de efetivo amanhã, paradas sem liberação, operadores fora, assinaturas pendentes e experiências vencendo.
 - Cada número leva direto para a tela certa (Apontar, Pendências, Escala, Paradas, Ocorrências).

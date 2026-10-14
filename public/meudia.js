@@ -87,7 +87,7 @@ export function criarMeuDia(X) {
     }
     esperaDesde = 0;
     const u = ME(); const hoje = today(); const agora = new Date();
-    const blocos = []; const tiles = [];
+    const blocos = []; const tiles = []; const progresso = [];
     // atividades (Pátio e Bateria)
     for (const k of SET_KEYS) {
       const mod = SETS[k].mod; if (!temMod(mod)) continue;
@@ -96,7 +96,7 @@ export function criarMeuDia(X) {
       if (!r) { blocos.push(`<div class="card"><header><h2>${SETS[k].nome}</h2></header><div class="body">${vazio('Programação ainda não importada.')}</div></div>`); continue; }
       if (!areas.length) continue;
       const nomeAreas = areas.length === SETS[k].areas.length ? 'todas as áreas' : areas.map(a => AREA_S[a]).join(' e ');
-      if (r.hoje.total) tiles.push({ n: r.hoje.P, t: `para apontar hoje · ${SETS[k].curto}`, s: `${r.hoje.R + r.hoje.E} feitas de ${r.hoje.total}`, tom: r.hoje.P ? 'warn' : 'ok', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
+      if (r.hoje.total) progresso.push({ nome: `${SETS[k].curto} · hoje`, sub: nomeAreas, feitas: r.hoje.R + r.hoje.E + r.hoje.N, total: r.hoje.total, go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
       if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
       if (r.deficit.length) tiles.push({ n: r.deficit.length, t: `rota(s) com déficit amanhã · ${SETS[k].curto}`, s: `${ddmm(r.amanha)}`, tom: 'bad', go: [mod, 'escala', r.deficit[0].area] });
       const pend = r.rotas.filter(x => x.total);
@@ -128,7 +128,7 @@ export function criarMeuDia(X) {
         const exp = (G.colabs || []).filter(c => (!c.dem || c.dem > hoje) && c.adm).map(c => ({ c, d: Math.round((new Date(hoje) - new Date(c.adm)) / 864e5) })).filter(x => (x.d >= 38 && x.d <= 45) || (x.d >= 83 && x.d <= 90));
         const nk = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
         const comigo = (G.ocorr || []).filter(o => o.status === 'pendente' && o.recolhe && nk(o.recolhe) === nk(ME().nome));
-        if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: 'warn', go: ['gestao', 'gocorr', ''] });
+        if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: comigo.some(o => o.data <= add(hoje, -7)) ? 'bad' : 'warn', go: ['gestao', 'gocorr', ''], acao: 'Recolher' });
         if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['gestao', 'gocorr', ''] });
         if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['gestao', 'gpainel', ''] });
         blocos.push(`<div class="card md-card"><header><h2>Efetivo</h2><p>Fichas de acompanhamento</p><span class="r">${ir('gestao', 'gocorr', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
@@ -140,9 +140,20 @@ export function criarMeuDia(X) {
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };
-    tiles.sort((a, b) => ordem[a.tom] - ordem[b.tom]);
+    tiles.sort((a, b) => ordem[a.tom] - ordem[b.tom] || b.n - a.n);
+    const ACAO = { apontar: 'Apontar', pend: 'Apontar', escala: 'Ver escala', epar: 'Abrir', gocorr: 'Ver', gpainel: 'Ver fichas' };
+    const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn ${t.tom === 'bad' ? 'pri' : ''} sm" data-md="${t.go.join('|')}">${t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
+    const urgentes = tiles.filter(t => t.tom === 'bad' || t.tom === 'warn');
+    const chips = tiles.filter(t => t.tom === 'neu');
     let h = `<div class="md-hero"><div><h2>${saud}, ${esc(nome)}.</h2><p>${(DIAS_L[d.getDay()][0].toUpperCase() + DIAS_L[d.getDay()].slice(1))}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}</p></div></div>`;
-    h += tiles.length ? `<div class="md-tiles">${tiles.map(t => `<button class="md-tile ${t.tom}" data-md="${t.go.join('|')}"><b class="num">${t.n}</b><span>${esc(t.t)}</span><small>${esc(t.s)}</small></button>`).join('')}</div>` : '<div class="card"><div class="empty"><b>Tudo em dia.</b><br>Nada pendente nos seus módulos hoje.</div></div>';
+    h += `<div class="md-top"><div class="card md-agora"><header><h2>Agora</h2><p>${urgentes.length ? 'Do mais urgente para o menos' : 'Nada pedindo ação'}</p></header><div class="body">${urgentes.length
+      ? urgentes.slice(0, 3).map(linha).join('') + (urgentes.length > 3 ? `<details class="md-mais"><summary>Mais ${urgentes.length - 3}</summary>${urgentes.slice(3).map(linha).join('')}</details>` : '')
+      : '<p class="md-ok m0"><b>Tudo em dia.</b> Nada pendente nos seus módulos agora.</p>'}</div></div>`;
+    if (progresso.length || chips.length) {
+      h += `<div class="card md-hoje"><header><h2>Hoje</h2></header><div class="body stackcol" style="gap:12px">${progresso.map(p => { const pc = Math.round(p.feitas / p.total * 100); return `<button class="md-prog" data-md="${p.go.join('|')}"><div class="row-between"><b>${esc(p.nome)}</b><span class="num">${p.feitas} de ${p.total}</span></div><div class="md-bar"><i style="width:${pc}%"></i></div><small class="muted">${esc(p.sub)}${p.feitas < p.total ? ` · faltam ${p.total - p.feitas}` : ' · tudo apontado'}</small></button>`; }).join('')}
+        ${chips.length ? `<div class="md-chips">${chips.map(t => `<button class="md-chip" data-md="${t.go.join('|')}"><b class="num">${t.n}</b> ${esc(t.t)}</button>`).join('')}</div>` : ''}</div></div>`;
+    }
+    h += '</div>';
     h += `<div class="md-grid">${blocos.join('')}${cardAvisos()}</div>`;
     return h;
   }
