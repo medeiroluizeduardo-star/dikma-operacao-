@@ -2,7 +2,10 @@
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 
-const DEMO = new URLSearchParams(location.search).has('demo');
+// Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
+// Assim a prévia nunca mexe nos dados reais.
+const PREVIA = location.hostname.includes('--');
+const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
 // Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
 { const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
