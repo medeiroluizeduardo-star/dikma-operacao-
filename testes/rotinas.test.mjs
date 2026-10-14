@@ -9,6 +9,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const projeto = process.env.GCLOUD_PROJECT || 'demo-dikma';
@@ -162,4 +163,24 @@ test('divisão do Efetivo por área: cada ficha vai para a área onde a pessoa e
   assert.equal((await db.doc('gassin/sb').get()).get('area'), 'OPERAÇÃO DE EQUIPAMENTOS');
   assert.ok(!(await db.doc('gestao/colaboradores').get()).exists, 'lista antiga apagada');
   assert.match(rodar('migrar-areas.mjs'), /Nada a fazer/);
+});
+
+test('limpar contas: apaga só a conta sem usuário e sem login ligado; sem "apagar", só lista', async () => {
+  const auth = getAuth();
+  const mk = async uid => { try { await auth.deleteUser(uid); } catch (e) { /* não existia */ } await auth.createUser({ uid, email: uid + '@usuarios.dikma.app', password: 'senha-teste-123' }); };
+  for (const uid of ['comPerfil', 'soLogin', 'sobra1', 'sobra2']) await mk(uid);
+  await db.doc('usuarios/comPerfil').set({ nome: 'Com perfil', papel: 'lider' });
+  await db.doc('logins/so.login').set({ uid: 'soLogin', email: 'soLogin@usuarios.dikma.app' });
+  const lista = rodar('limpar-contas.mjs', { LIMPAR_DIAS: '0' });
+  assert.match(lista, /\d+ sobra\(s\)/);
+  assert.match(lista, /Nada foi apagado/);
+  assert.ok(await auth.getUser('sobra1'));
+  const s = rodar('limpar-contas.mjs', { LIMPAR_DIAS: '0', LIMPAR_APAGAR: 'sim' });
+  assert.ok(+(s.match(/(\d+) apagada\(s\)/) || [])[1] >= 2, 'apagou as sobras');
+  await assert.rejects(auth.getUser('sobra1'));
+  await assert.rejects(auth.getUser('sobra2'));
+  assert.ok(await auth.getUser('comPerfil'));
+  assert.ok(await auth.getUser('soLogin'));
+  const recente = rodar('limpar-contas.mjs', { LIMPAR_DIAS: '30', LIMPAR_APAGAR: 'sim' });
+  assert.match(recente, /0 sobra\(s\)/, 'conta recente nunca é apagada');
 });

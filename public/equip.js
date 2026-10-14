@@ -2,6 +2,7 @@
 // Telas: Painel, Lançamentos, Paradas, Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
 import { add, pad, today, MESES_L, addMonth, DAYS } from './cal.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';
+import { baixarExcel, dataBR } from './exportar.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 
 export const VIEWS_E = [
@@ -22,6 +23,7 @@ export const SUB_E = {
 
 export function criarEquip(X) {
   const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, UI, PES } = X;
+  const podeExportar = () => !X.framed && !matchMedia('(max-width:860px)').matches;
   const $ = id => document.getElementById(id);
   const TODAY = today();
   const E = () => DB.cache.e;
@@ -127,6 +129,7 @@ export function criarEquip(X) {
     const fora = ops.filter(o => C.ausenteEm(o, d));
     const q = U.lq || '';
     let h = `<div class="filters"><div class="daynav"><button class="btn" data-e="diaAnt" aria-label="Dia anterior">◀</button><label class="sel"><span>${dw}</span><input class="in" type="date" id="eDia" value="${d}"></label><button class="btn" data-e="diaProx" aria-label="Próximo dia">▶</button>${d !== TODAY ? '<button class="btn" data-e="hoje">Hoje</button>' : ''}</div>
+      ${podeExportar() ? `<button class="btn" data-e="expLanc" style="align-self:flex-end" title="Todos os lançamentos do mês">${I.dl} Exportar mês</button>` : ''}
       ${ed ? `<button class="btn pri" data-e="novoLanc" style="align-self:flex-end">${I.plus} Lançamento</button>${!linhas.length ? '<button class="btn" data-e="copiar" style="align-self:flex-end">Copiar do dia anterior</button>' : ''}` : ''}</div>
       <div class="mini"><div><b class="num">${linhas.length}</b><span>Alocações</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hoper, 0))}</b><span>Horas operadas</span></div><div><b class="num">${h1(linhas.reduce((s, l) => s + l.hpar, 0))}</b><span>Horas paradas</span></div><div><b class="num" style="color:${parDia.some(p => !p.fim) ? 'var(--st-nreal)' : 'inherit'}">${parDia.length}</b><span>Paradas no dia${parDia.some(p => !p.fim) ? ` · ${parDia.filter(p => !p.fim).length} sem liberação` : ''}</span></div></div>`;
     if (!mesesCarregados().has(d.slice(0, 7))) return h + '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
@@ -280,6 +283,26 @@ export function criarEquip(X) {
   /* ---------- paradas ---------- */
   const RESP_TXT = { EQUIPAMENTO: 'falha do equipamento · reduz a disponibilidade física', OPERADOR: 'causada pelo operador · conta na nota dele', OPERACIONAL: 'da operação (sem carga, frente parada…) · não conta contra ninguém' };
   const kPar = p => semAcento([p.eq, p.op, p.causa, p.resp, p.desc, p.os, p.subst, p.subst ? 'substituicao troca reserva' : '', (calc().frotaMap.get(p.eq) || {}).tipo].filter(Boolean).join(' '));
+  // Exportar para o Excel: lançamentos do mês (com horas) e paradas do mês (no filtro escolhido).
+  function exportarLanc(ym) {
+    const C = calc();
+    const linhas = [['Data', 'Equipamento', 'Tipo', 'Operador', 'Substituiu', 'Área', 'Início', 'Fim', 'Status', 'Janela (h)', 'Paradas (h)', 'Operadas (h)', 'Observação']];
+    for (const l of lancMes(ym).slice().sort((a, b) => (a.data + a.eq).localeCompare(b.data + b.eq))) {
+      const jan = C.janela(l); const ps = E().par.filter(p => p.data === l.data && p.eq === l.eq && p.op === l.op && !p.subst);
+      const hp = Math.min(jan, ps.reduce((t, p) => t + C.duracao(p), 0));
+      linhas.push([dataBR(l.data), l.eq, l.tipo || '', l.op || '', l.sub || '', l.area || '', l.ini || 'turno', l.fim || 'turno', l.status || '', +jan.toFixed(2), +hp.toFixed(2), +Math.max(0, jan - hp).toFixed(2), l.obs || '']);
+    }
+    if (linhas.length === 1) return toast('Nenhum lançamento neste mês');
+    baixarExcel(`lancamentos-${ym}`, [{ nome: 'Lançamentos ' + ym, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+  }
+  function exportarPar() {
+    const C = calc(); const F = { aberta: p => !p.fim, todas: () => true };
+    const l = E().par.filter(p => p.data.slice(0, 7) === U.mes || (U.pf === 'aberta' && !p.fim)).filter(p => (F[U.pf] ? F[U.pf](p) : C.resp(p) === U.pf)).sort((a, b) => (a.data + (a.ini || '')).localeCompare(b.data + (b.ini || '')));
+    if (!l.length) return toast('Nenhuma parada com esse filtro');
+    const linhas = [['Data', 'Equipamento', 'Operador', 'Início', 'Fim', 'Duração (h)', 'Causa', 'Responsabilidade', 'Situação', 'Descrição', 'OS']];
+    for (const p of l) linhas.push([dataBR(p.data), p.eq, p.op || '', p.ini || '', p.fim || 'sem liberação', +(C.duracao(p) || 0).toFixed(2), p.causa || '', title(C.resp(p) || ''), C.situacao(p) || '', p.desc || '', p.os || '']);
+    baixarExcel(`paradas-${U.mes}`, [{ nome: 'Paradas ' + U.mes, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+  }
   function vPar() {
     const C = calc();
     const ps = E().par.filter(p => p.data.slice(0, 7) === U.mes || (U.pf === 'aberta' && !p.fim)).map(p => ({ ...p, dur: C.duracao(p), resp: C.resp(p), sit: C.situacao(p) }));
@@ -299,7 +322,7 @@ export function criarEquip(X) {
     const faixa = `<div class="dstrip" role="toolbar" aria-label="Filtrar por dia"><button class="dchip todos" data-epdia="" aria-pressed="${!U.pdia}"><small>Mês</small><b>Todos</b><i>${base.length}</i></button>${dias.map(d => { const x = porDia.get(d); return `<button class="dchip${d === TODAY ? ' hoje' : ''}${x ? '' : ' vazio'}${d > TODAY ? ' futuro' : ''}" data-epdia="${d}" aria-pressed="${U.pdia === d}" title="${dBR(d)}${x ? ` · ${x.n} parada(s) · ${h2(x.h)} h` : ' · sem paradas'}"><small>${semana(d)}</small><b>${d.slice(8)}</b><i>${x ? x.n : ''}</i></button>`; }).join('')}</div>`;
     setTimeout(() => { const st = document.querySelector('.dstrip'); if (!st) return; const alvo = st.querySelector('[aria-pressed="true"]:not(.todos)') || st.querySelector('.hoje'); if (alvo) st.scrollLeft = Math.max(0, alvo.offsetLeft - st.clientWidth / 2 + alvo.offsetWidth / 2); }, 0);
     const q = U.pq || '';
-    let h = `<div class="filters">${selMes('eMes', U.mes)}${podeEditar() ? `<button class="btn pri" data-e="novaPar" style="align-self:flex-end">${I.plus} Registrar parada</button>` : ''}</div>
+    let h = `<div class="filters">${selMes('eMes', U.mes)}${podeExportar() ? `<button class="btn" data-e="expPar" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}${podeEditar() ? `<button class="btn pri" data-e="novaPar" style="align-self:flex-end">${I.plus} Registrar parada</button>` : ''}</div>
       <div class="mini"><div><b class="num" style="color:${abertas.length ? 'var(--st-nreal)' : 'inherit'}">${abertas.length}</b><span>Parados agora</span></div><div><b class="num">${abertas.length ? tempoTxt(maisLonga) : '—'}</b><span>Mais tempo parado</span></div><div><b class="num">${doMes.length}</b><span>Paradas no mês</span></div><div><b class="num">${h1(doMes.reduce((t, p) => t + (p.dur || 0), 0))}</b><span>Horas paradas no mês</span></div><div><b class="num">${doMes.filter(p => p.subst).length}</b><span>Trocas por reserva</span></div></div>
       <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${k === 'aberta' ? abertas.length : n(k)}</span></button>`).join('')}</div>
       ${RESP_TXT[U.pf] ? `<p class="muted small m0 ajuda"><b>${title(U.pf)}:</b> ${RESP_TXT[U.pf]}.</p>` : U.pf === 'aberta' ? '<p class="muted small m0 ajuda"><b>Sem liberação</b> = o equipamento continua parado. Quando voltar a operar, toque em <b>Liberar</b> e informe a hora.</p>' : ''}
@@ -511,6 +534,8 @@ export function criarEquip(X) {
       case 'hoje': U.dia = TODAY; render(); break;
       case 'irDia': UI.view = 'elanc'; U.dia = d.dia; render(); scrollTo(0, 0); break;
       case 'novoLanc': lancForm(null); break;
+      case 'expLanc': exportarLanc(U.dia.slice(0, 7)); break;
+      case 'expPar': exportarPar(); break;
       case 'editLanc': lancForm(acharL(d.id)); break;
       case 'copiar': copiarDiaAnterior(); break;
       case 'lancOp': lancForm(null, { op: d.op }); break;

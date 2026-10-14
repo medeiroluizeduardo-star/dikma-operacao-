@@ -50,8 +50,10 @@ for (const k of SET_KEYS) {
   const plano = [], colabs = [], semanas = {}, sit = {};
   (await db.collection(C('plano')).get()).forEach(x => plano.push(...(x.data().itens || [])));
   (await db.collection(C('colaboradores')).get()).forEach(x => colabs.push(...(x.data().itens || [])));
-  for (const ini of new Set([weekOf(hoje), weekOf(amanha)])) for (const a of SETS[k].areas) { const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data(); }
-  for (const m of new Set([mes, amanha.slice(0, 7)])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) Object.assign(sit, s.data().v || {}); }
+  // segunda-feira: também a semana que passou (resumo semanal)
+  const segunda = new Date(hoje + 'T12:00:00').getDay() === 1;
+  for (const ini of new Set([weekOf(hoje), weekOf(amanha), ...(segunda ? [add(hoje, -7)] : [])])) for (const a of SETS[k].areas) { const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data(); }
+  for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) Object.assign(sit, s.data().v || {}); }
   sets[k] = { plano, colabs, semanas, sit, rotas: cfg.data().rotas || [] };
 }
 
