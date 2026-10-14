@@ -131,9 +131,11 @@ Fica em `config/escalas` e vale para Escala e Efetivo, Atividades, Operação, M
 
 Sem lançamento no dia, o **Efetivo diário marca a folga sozinho** pela escala (F tracejado). Marcar presente num dia de folga fica gravado; "voltar ao da escala" apaga o lançamento. Escalados, presentes, dimensionamento, balanço, déficit do Meu dia e avisos já descontam a folga da escala. Em rotas de turno, o necessário considera só a parte do quadro que trabalha por dia (4x4 = metade).
 
-## Módulo Escala e Efetivo
+## Módulo Efetivo (escala, presença e fichas)
 
-Reúne o que era a aba "Escala e efetivo" das Atividades, para Pátio e Bateria (botão **Pátio | Bateria** no topo). Não precisa marcar no usuário: quem tem Atividades Pátio ou Bateria já vê este módulo, nas mesmas áreas.
+Um módulo só com duas partes. **Escala e presença** (Efetivo diário, Dimensionamento, Balanço e ausências), para Pátio e Bateria (botão **Pátio | Bateria** no topo): aparece para quem tem Atividades Pátio ou Bateria, nas mesmas áreas. **Fichas de acompanhamento** (Painel, Colaboradores, Ocorrências, Controle, Impressão): aparece para quem tem o Efetivo marcado no usuário. Quem tem só uma das partes vê só ela.
+
+**Quem recolhe a assinatura:** ao registrar uma ocorrência, escolha quem vai recolher a assinatura (sugere o líder imediato da ficha; lista você, os líderes das fichas e os usuários de liderança, ou digite o nome). "Colher agora" só aparece quando é você. Na lista, cada pendência mostra o responsável (com **trocar**), o filtro **Comigo para recolher** mostra as suas, e o Meu dia avisa quantas estão com você.
 
 - **Efetivo diário:** todas as rotas da área de uma vez (agrupadas, com "presentes hoje" de cada rota) ou uma rota só; busca por nome, função ou rota; ✓ verde = presente; toque no dia para trocar a situação (com "Repetir até domingo" e **Desfazer**).
 - **Dimensionamento:** disponíveis × necessários por rota e dia.

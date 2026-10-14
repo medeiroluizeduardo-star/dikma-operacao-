@@ -159,7 +159,7 @@ service cloud.firestore {
     match /gocorr/{id} {
       allow read: if ge();
       allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid;
-      allow update: if admMod('gestao') || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha']));
+      allow update: if admMod('gestao') || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
       allow delete: if admMod('gestao');
     }
     match /gassin/{id} {

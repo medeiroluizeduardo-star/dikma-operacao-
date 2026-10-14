@@ -29,7 +29,7 @@ let PLANO = [], PL = new Map(), COLABS = [];
 let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (patio | bateria)
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; } catch (e) { /* ignora */ }
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; } catch (e) { /* ignora */ }
 const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet })); } catch (e) { /* ignora */ } };
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
@@ -150,9 +150,9 @@ const VIEWS = [
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
-  { id: 'esdia', nome: 'Efetivo diário', ic: 'escala', grp: 'Escala e efetivo', mod: 'es' },
-  { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Escala e efetivo', mod: 'es' },
-  { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e efetivo', mod: 'es' },
+  { id: 'esdia', nome: 'Efetivo diário', ic: 'escala', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
+  { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
+  { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   ...VIEWS_E,
   ...VIEWS_G,
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' },
@@ -162,7 +162,7 @@ const VIEWS = [
 ];
 // As telas de administração de cada módulo passam a morar no módulo Configurações (mesmas telas, mesmos dados).
 {
-  const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsDe(ME).includes(m));
+  const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsReais(ME).includes(m));
   const gestorAtiv = () => isAdmin() || (!!ME && ME.papel === 'gestor' && setsDe(ME).length > 0);
   const CFV = {
     cfgeral: { ord: 1 }, cfescala: { ord: 2 },
@@ -172,9 +172,11 @@ const VIEWS = [
     usuarios: { ord: 9, grp: 'Acesso', req: () => isAdmin() }, perfis: { ord: 10, grp: 'Acesso', req: () => isAdmin() }
   };
   for (const v of VIEWS) if (CFV[v.id]) Object.assign(v, { mod: 'cf', admin: true }, CFV[v.id]);
+  // fichas de acompanhamento: só quem tem o Efetivo marcado no usuário (os dados das fichas só chegam para essas pessoas)
+  for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, escala: { nome: 'Escala e Efetivo', curto: 'Escala', sub: 'Efetivo diário e dimensionamento', key: 'es', inicio: 'esdia' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Fichas de acompanhamento', key: 'ge', inicio: 'gpainel' } , config: { nome: 'Configurações', curto: 'Config.', sub: 'Ajustes de todos os módulos', key: 'cf', inicio: 'cfgeral' }};
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Configurações', curto: 'Config.', sub: 'Ajustes de todos os módulos', key: 'cf', inicio: 'cfgeral' }};
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -193,15 +195,19 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 // Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
-const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'escala' && m !== 'config');
-const modsDe = u => { if (!u) return []; const b = u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS[m] && m !== 'escala' && m !== 'config'); return TODOS_MODS.filter(m => b.includes(m) || (m === 'escala' && (b.includes('operacao') || b.includes('bateria'))) || (m === 'config' && (u.papel === 'admin' || u.papel === 'gestor'))); };
-const setsDe = u => ['patio', 'bateria'].filter(k => modsDe(u).includes(SETS[k].mod));
+const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'config');
+// Módulos marcados no usuário (os que trazem dados) · modsDe = o que aparece no menu:
+// Efetivo também aparece para quem tem Atividades (parte da escala); Configurações para administrador e gestor.
+const modsReais = u => (!u ? [] : u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS_MARCAVEIS.includes(m)));
+const temFichas = u => modsReais(u).includes('gestao');
+const modsDe = u => { if (!u) return []; const b = modsReais(u); return TODOS_MODS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))) || (m === 'config' && (u.papel === 'admin' || u.papel === 'gestor'))); };
+const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
-const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
+const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
-  if (UI.modulo === 'escala') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
+  if (UI.modulo === 'gestao') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
   if (UI.modulo === 'config') { const ss = setsDe(ME); k = ss.includes(UI.cfSet) ? UI.cfSet : (ss[0] || 'patio'); UI.cfSet = k; }
   if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', rfRota: 'TODAS', rfIni: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
@@ -211,10 +217,11 @@ function aplicarSet() {
 }
 function ensureModulo() {
   const ms = modsDe(ME); if (!ms.length) return;
+  if (UI.modulo === 'escala') UI.modulo = 'gestao'; // módulo antigo, agora dentro do Efetivo
   if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
   // Aba desligada para o perfil some do menu e não abre nem por link: cai na primeira aba liberada do módulo.
   const vs = viewsDoModulo();
-  if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs[0] || { id: MODS[UI.modulo].inicio }).id;
+  if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs.find(v => v.id !== 'meudia') || vs[0] || { id: MODS[UI.modulo].inicio }).id;
 }
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
@@ -278,12 +285,13 @@ function render() {
     const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
   }
 }
+const ES_VIEWS = ['esdia', 'esdim', 'esbal'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
+  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
@@ -303,8 +311,8 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  const atr = !ge && !eqm && UI.modulo !== 'escala' && UI.modulo !== 'config' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
-  const gb = ge ? GE.badge() : eqm ? EQ.badge() : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'config' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
   const cur = MODS[UI.modulo];
@@ -322,12 +330,21 @@ function renderNav() {
   pintar('who', DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
-  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['gcolab', 'Pessoas', 'users'], ['gocorr', 'Ocorrências', 'plano'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+  const tb = barraDe();
+  pintarBarra(tb, atr, gb);
+}
+// Barra de baixo (celular): até 4 atalhos do módulo + Mais.
+function barraDe() {
+  const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
+  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gocorr', 'Ocorrências', 'plano'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'escala' ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Efetivo', 'escala'], ['esdim', 'Rotas', 'painel'], ['esbal', 'Balanço', 'prog'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['meudia', 'Hoje', 'sol'], ['cfgeral', 'Geral', 'config'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
+  return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
+}
+function pintarBarra(tb, atr, gb) {
+  const pendUsers = 0;
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
   pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
@@ -357,11 +374,11 @@ function renderTop() {
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
   }
-  if (UI.modulo === 'gestao' || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1><div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   if (['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar'].includes(UI.view)) ctr = periodControls();
-  if (UI.modulo === 'escala' && setsDe(ME).length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
+  if (ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}<div class="syncwrap" id="sync">${syncPill()}</div>`);
 }
 
@@ -848,9 +865,9 @@ function turmaSheet(id) {
 }
 // Abre o módulo Escala e Efetivo no conjunto atual, já na rota (area|rota) quando vier de um link.
 function irEscala(rota) {
-  if (!modsDe(ME).includes('escala')) return;
+  if (!setsDe(ME).length) return;
   if (UI.modulo === 'operacao' || UI.modulo === 'bateria') UI.esSet = SK;
-  UI.modulo = 'escala'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
+  UI.modulo = 'gestao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
   salvarUI(); render(); scrollTo(0, 0);
 }
 function vEsDim() {
@@ -1097,12 +1114,12 @@ function vUsuarios() {
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
   <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsDe(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { operacao: 'op', bateria: 'op', escala: 'es', config: 'cf', equipamentos: 'eq', gestao: 'ge' };
-const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v)); };
+const KEY_MOD = { operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge' };
+const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v) && (!v.reqU || v.reqU(u))); };
 function celulaAbas(u) {
   if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
   if (u.papel === 'bloqueado') return '<span class="muted small">—</span>';
@@ -1148,7 +1165,7 @@ function vPerfis() {
   <div class="tw"><table class="perm"><thead><tr><th>Aba</th><th class="c">Admin<br><small>sempre tudo</small></th>${PERFIS_ABAS.map(([, n]) => `<th class="c">${n}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table></div>
   <div class="body row-gap"><button class="btn pri" data-act="permSalvar" ${mudou ? '' : 'disabled'}>${mudou ? 'Salvar permissões' : 'Tudo salvo'}</button><button class="btn" data-act="permPadrao">Voltar ao padrão</button>${mudou ? '<button class="btn ghost" data-act="permDesfazer">Desfazer</button>' : ''}<span class="muted small">Abas de administração só podem ser ligadas para o Gestor. O que cada perfil pode alterar continua valendo pelo perfil.</span></div></div>
   <div class="card"><header><h2>Exceção por pessoa</h2><p>Opcional. Abra <b>Usuários e acessos</b> e use <b>Personalizar</b> na coluna Abas para dar ou tirar abas de uma pessoa sem mudar o perfil inteiro.</p></header>
-  ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Módulos</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${papelNome(u.papel)}</td><td>${modsDe(u).map(m => MODS[m].curto).join(' · ')}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
+  ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Módulos</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${papelNome(u.papel)}</td><td>${modsReais(u).map(m => MODS[m].curto).join(' · ')}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
 }
 
 function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
@@ -1298,7 +1315,7 @@ function verEvidencia(ev, onDel, voltar) {
   }).catch(err => { const box = sc.querySelector('.vwbody'); if (box) box.innerHTML = `<p class="err">${esc(msgErro(err))}</p>`; });
 }
 
-function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'escala' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
+function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'gestao' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -1390,13 +1407,13 @@ document.addEventListener('click', async e => {
   const d = t.dataset;
   if (d.go) {
     if (d.go === '__more') {
-      const naBarra = UI.modulo === 'gestao' ? ['meudia', 'gpainel', 'gcolab', 'gocorr'] : UI.modulo === 'equipamentos' ? ['meudia', 'epainel', 'elanc', 'epar'] : UI.modulo === 'escala' ? ['meudia', 'esdia', 'esdim', 'esbal'] : UI.modulo === 'config' ? ['meudia', 'cfgeral', 'cfescala', 'usuarios'] : ['meudia', 'prog', 'apontar', 'pend'];
+      const naBarra = barraDe().map(x => x[0]);
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
-    { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || UI.modulo === 'escala') UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
+    { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
   }
   if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }
@@ -1604,7 +1621,7 @@ document.addEventListener('change', e => {
   if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
   if (t.dataset.umod) {
     const [uid, m] = t.dataset.umod.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
-    const atual = modsDe(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
+    const atual = modsReais(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
     if (!novo.length) { t.checked = true; toast('Deixe pelo menos um módulo'); return; }
     DB.setUsuario(uid, { modulos: novo }); toast('Módulos atualizados');
   }
@@ -1629,7 +1646,7 @@ window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHT
 window.addEventListener('pagehide', salvarUI);
 
 const PES = criarPessoas(DB);
-const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 if (new URLSearchParams(location.search).get('v') === 'meudia') { UI.view = 'meudia'; history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : '')); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.tipo === 'abrir' && AUTH.status === 'ready') { UI.view = 'meudia'; render(); scrollTo(0, 0); } });

@@ -447,6 +447,7 @@ export function gNovaOcorrencia(o) {
   track(setDoc(r, { ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
   return { id: r.id, ...o };
 }
+export const gAtualizarOcorrencia = (id, patch) => track(updateDoc(doc(db, 'gocorr', id), patch));
 export async function gExcluirOcorrencias(ids) {
   for (let i = 0; i < ids.length; i += 400) { const b = writeBatch(db); ids.slice(i, i + 400).forEach(id => b.delete(doc(db, 'gocorr', id))); await track(b.commit()); }
 }

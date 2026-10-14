@@ -114,6 +114,9 @@ export function criarMeuDia(X) {
       if (G && G.loaded && G.config) {
         const a = assinaturasPendentes(G.ocorr || [], hoje);
         const exp = (G.colabs || []).filter(c => (!c.dem || c.dem > hoje) && c.adm).map(c => ({ c, d: Math.round((new Date(hoje) - new Date(c.adm)) / 864e5) })).filter(x => (x.d >= 38 && x.d <= 45) || (x.d >= 83 && x.d <= 90));
+        const nk = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+        const comigo = (G.ocorr || []).filter(o => o.status === 'pendente' && o.recolhe && nk(o.recolhe) === nk(ME().nome));
+        if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: 'warn', go: ['gestao', 'gocorr', ''] });
         if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['gestao', 'gocorr', ''] });
         if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['gestao', 'gpainel', ''] });
         blocos.push(`<div class="card md-card"><header><h2>Efetivo</h2><p>Fichas de acompanhamento</p><span class="r">${ir('gestao', 'gocorr', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">

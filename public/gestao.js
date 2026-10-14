@@ -4,6 +4,7 @@
 import { pd, add, pad, today, MESES_L, AREA_S, SETS, setDaArea } from './cal.js';
 import { AREA_GERAL, AREA_OP, REGIMES, ehAreaAtiv } from './pessoas.js';
 import { criarImportador } from './importar.js';
+import { campoBusca, definirValor, semAcento } from './busca.js';
 
 export const VIEWS_G = [
   { id: 'gpainel', nome: 'Painel', ic: 'painel', grp: 'Fichas de acompanhamento', mod: 'ge' },
@@ -195,18 +196,18 @@ export function criarGestao(X) {
   }
   function ocLista(l, comNome) {
     if (!l.length) return '<div class="empty">Nenhuma ocorrência registrada.</div>';
-    return `<div class="plist">${l.map(o => `<div class="pitem"><div class="minw"><div class="t">${comNome ? esc(title(o.nome)) + ' · ' : ''}${esc(o.tipo)}</div><div class="l">${dBR(o.data)}${o.desc ? ' · ' + esc(o.desc) : ''}${o.lider ? ' · Dikma: ' + esc(title(o.lider)) : ''}</div><div style="margin-top:4px">${pillOc(o)}</div></div><div class="row-gap">${o.status === 'pendente' && podeEditar() ? `<button class="btn" data-g="assinar" data-mat="${o.mat}" data-oc="${o.id}">✍ Assinar</button>` : ''}${o.assinaturaId ? `<button class="btn" data-g="verAss" data-id="${o.assinaturaId}">Ver</button>` : ''}${isAdmin() ? `<button class="btn ghost danger" data-g="delOc" data-id="${o.id}" aria-label="Excluir ocorrência">✕</button>` : ''}</div></div>`).join('')}</div>`;
+    return `<div class="plist">${l.map(o => `<div class="pitem"><div class="minw"><div class="t">${comNome ? esc(title(o.nome)) + ' · ' : ''}${esc(o.tipo)}</div><div class="l">${dBR(o.data)}${o.desc ? ' · ' + esc(o.desc) : ''}${o.lider ? ' · Dikma: ' + esc(title(o.lider)) : ''}</div>${o.status === 'pendente' ? `<div class="l resp">${o.recolhe ? `Recolher assinatura: <b>${esc(title(o.recolhe))}</b>${souEu(o.recolhe) ? ' <span class="pill ext">você</span>' : ''}` : '<span class="semt">sem responsável pela assinatura</span>'}${podeEditar() ? ` · <button class="btn ghost link" data-g="trocaResp" data-id="${o.id}">${o.recolhe ? 'trocar' : 'definir'}</button>` : ''}</div>` : ''}<div style="margin-top:4px">${pillOc(o)}</div></div><div class="row-gap">${o.status === 'pendente' && podeEditar() ? `<button class="btn" data-g="assinar" data-mat="${o.mat}" data-oc="${o.id}">✍ Assinar</button>` : ''}${o.assinaturaId ? `<button class="btn" data-g="verAss" data-id="${o.assinaturaId}">Ver</button>` : ''}${isAdmin() ? `<button class="btn ghost danger" data-g="delOc" data-id="${o.id}" aria-label="Excluir ocorrência">✕</button>` : ''}</div></div>`).join('')}</div>`;
   }
 
   function vOcorr() {
     const q = U.ocQ.trim().toLowerCase();
     const mf = U.fa ? new Set(G().colabs.filter(filtroArea()).map(c => String(c.mat))) : null;
-    const l = G().ocorr.filter(o => (!mf || mf.has(String(o.mat))) && (!U.ocSt || o.status === U.ocSt) && (!U.ocTipo || o.tipo === U.ocTipo) && (!q || (o.mat + ' ' + o.nome + ' ' + o.desc).toLowerCase().includes(q))).sort((a, b) => (a.data > b.data ? -1 : 1));
+    const l = G().ocorr.filter(o => (!mf || mf.has(String(o.mat))) && (!U.ocMeu || (o.status === 'pendente' && souEu(o.recolhe))) && (!U.ocSt || o.status === U.ocSt) && (!U.ocTipo || o.tipo === U.ocTipo) && (!q || (o.mat + ' ' + o.nome + ' ' + o.desc).toLowerCase().includes(q))).sort((a, b) => (a.data > b.data ? -1 : 1));
     const n = st => G().ocorr.filter(o => o.status === st).length;
     let h = `<div class="filters"><label class="sel grow"><span>Buscar</span><input class="in" type="search" id="gOcQ" placeholder="Nome, matrícula ou descrição" value="${esc(U.ocQ)}"></label>
       ${selArea('gFaO')}<label class="sel"><span>Tipo</span><select class="in" id="gOcTipo"><option value="">Todos</option>${tipos().map(t => `<option ${t.tipo === U.ocTipo ? 'selected' : ''}>${esc(t.tipo)}</option>`).join('')}</select></label>
       ${podeEditar() ? `<button class="btn pri" data-g="novaOc" style="align-self:flex-end">${I.plus} Nova ocorrência</button>` : ''}</div>
-      <div class="rchips">${[['pendente', 'Aguardando assinatura'], ['assinada', 'Assinadas'], ['recusada', 'Recusadas'], ['', 'Todas']].map(([k, t]) => `<button class="rchip" data-gst="${k}" aria-pressed="${U.ocSt === k}">${t}<span class="c num">${k ? n(k) : G().ocorr.length}</span></button>`).join('')}</div>
+      <div class="rchips">${[['pendente', 'Aguardando assinatura'], ['assinada', 'Assinadas'], ['recusada', 'Recusadas'], ['', 'Todas']].map(([k, t]) => `<button class="rchip" data-gst="${k}" aria-pressed="${!U.ocMeu && U.ocSt === k}">${t}<span class="c num">${k ? n(k) : G().ocorr.length}</span></button>`).join('')}<button class="rchip" data-g="ocMeu" aria-pressed="${!!U.ocMeu}">Comigo para recolher<span class="c num">${G().ocorr.filter(o => o.status === 'pendente' && souEu(o.recolhe)).length}</span></button></div>
       <div class="card"><div class="body">${ocLista(l.slice(0, 300), true)}${l.length > 300 ? `<p class="muted small">Mostrando 300 de ${l.length}. Use a busca para filtrar.</p>` : ''}</div></div>`;
     return h;
   }
@@ -318,6 +319,17 @@ export function criarGestao(X) {
 
   /* ---------- formulários ---------- */
   const opcoesColab = () => [...indice().values()].filter(x => x.ativo).sort((a, b) => a.c.nome.localeCompare(b.c.nome)).map(x => `<option value="${x.c.mat} · ${esc(x.c.nome)}"></option>`).join('');
+  // Quem pode recolher a assinatura: você, os líderes imediatos das fichas e (para o administrador) os usuários de liderança.
+  const nomeN = s => semAcento(s).replace(/\s+/g, ' ').trim().toUpperCase();
+  const souEu = nome => !!nome && nomeN(nome) === nomeN(ME().nome || '');
+  function opcoesResp() {
+    const m = new Map(); const add = (nome, d, ord) => { const k = nomeN(nome); if (!k || k.length < 3) return; const x = m.get(k); if (!x || ord < x.ord) m.set(k, { v: String(nome).trim().toUpperCase(), t: title(nome), d, ord }); };
+    add(ME().nome || '', 'você', 0);
+    const lid = new Map(); for (const c of G().colabs) if (c.lider && (!c.dem || c.dem > TODAY)) lid.set(nomeN(c.lider), [(lid.get(nomeN(c.lider)) || [0, c.lider])[0] + 1, c.lider]);
+    for (const [, [n, nome]] of lid) add(nome, `líder imediato de ${n} pessoa${n > 1 ? 's' : ''}`, 1);
+    for (const u of (DB.cache.usuarios || [])) if (['lider', 'supervisor', 'coordenador', 'gestor', 'admin'].includes(u.papel)) add(u.nome, `usuário · ${{ lider: 'Líder', supervisor: 'Supervisor', coordenador: 'Coordenador', gestor: 'Gestor', admin: 'Administrador' }[u.papel]}`, 2);
+    return [...m.values()].sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
+  }
   function novaOcorrencia(mat) {
     const c = mat ? indice().get(mat).c : null;
     formSheet('Nova ocorrência', c ? `${esc(title(c.nome))} · ${c.mat}` : '', `
@@ -326,18 +338,27 @@ export function criarGestao(X) {
       <label class="sel"><span>Tipo</span><select class="in" id="noTipo">${tipos().map(t => `<option>${esc(t.tipo)}</option>`).join('')}</select></label></div>
       <label class="sel"><span>Descrição</span><textarea class="in ta" id="noDesc" rows="3">${esc((tipos()[0] || {}).texto || '')}</textarea></label>
       <label class="sel"><span>Responsável Dikma</span><input class="in" id="noLider" value="${esc((ME().nome || '').toUpperCase())}"></label>
-      <label class="switch"><input type="checkbox" id="noAssinar" checked><span>Colher a assinatura logo depois de salvar</span></label>`, 'Salvar ocorrência', async () => {
+      <div class="sel"><span>Quem vai recolher a assinatura</span>${campoBusca('noResp', (c && c.lider ? String(c.lider).toUpperCase() : '') || (ME().nome || '').toUpperCase(), opcoesResp, { livre: true, maiusculas: true, placeholder: 'Digite o nome do responsável' })}<small class="muted" id="noRespDica">${c && c.lider ? 'Sugestão: líder imediato na ficha' : ''}</small></div>
+      <label class="switch" id="noAssBox"><input type="checkbox" id="noAssinar" checked><span>Colher a assinatura agora, logo depois de salvar</span></label>`, 'Salvar ocorrência', async () => {
       let m = mat;
       if (!m) { const v = $('noColab').value.trim(); m = v.split(' ')[0]; if (!indice().has(m)) { const achou = [...indice().values()].find(x => x.c.nome.toLowerCase() === v.toLowerCase()); m = achou ? achou.c.mat : null; } }
       if (!m || !indice().has(m)) throw new Error('Escolha o colaborador da lista.');
       const data = $('noData').value; if (!data) throw new Error('Informe a data.');
       const tipo = $('noTipo').value; const desc = $('noDesc').value.trim(); const lider = $('noLider').value.trim();
-      const assinar = $('noAssinar').checked;
-      const o = DB.gNovaOcorrencia({ data, mat: m, nome: indice().get(m).c.nome, tipo, desc, lider, status: 'pendente' });
+      const recolhe = $('noResp').value.trim().toUpperCase(); if (!recolhe) throw new Error('Informe quem vai recolher a assinatura.');
+      const assinar = $('noAssinar').checked && !$('noAssBox').hidden;
+      const o = DB.gNovaOcorrencia({ data, mat: m, nome: indice().get(m).c.nome, tipo, desc, lider, recolhe, status: 'pendente' });
       DB.log(`Gestão: ocorrência "${tipo}" para ${indice().get(m) ? title(indice().get(m).c.nome) : m}`);
-      toast('Ocorrência registrada');
+      toast(souEu(recolhe) ? 'Ocorrência registrada' : `Ocorrência registrada · assinatura com ${title(recolhe)}`);
       if (assinar) setTimeout(() => assinarSheet(m, [o.id]), 50);
     });
+    // Responsável: sugere o líder imediato do colaborador escolhido; "colher agora" só aparece quando é você.
+    let mexeu = false;
+    const ajustar = () => { const eu = souEu($('noResp').value); $('noAssBox').hidden = !eu; };
+    $('noResp').addEventListener('change', () => { mexeu = true; ajustar(); });
+    const nc = $('noColab');
+    if (nc) nc.addEventListener('change', () => { const v = nc.value.trim(); const mm = v.split(' ')[0]; const x = indice().get(mm) || [...indice().values()].find(y => y.c.nome.toLowerCase() === v.toLowerCase()); if (x && x.c.lider && !mexeu) { definirValor('noResp', String(x.c.lider).toUpperCase()); $('noRespDica').textContent = 'Sugestão: líder imediato na ficha'; ajustar(); } });
+    ajustar();
     const tp = $('noTipo'), ds = $('noDesc');
     if (tp) tp.onchange = () => { const t = tipos().find(x => x.tipo === tp.value); if (t && (!ds.value || tipos().some(x => x.texto === ds.value))) ds.value = t.texto || ''; };
   }
@@ -514,10 +535,19 @@ export function criarGestao(X) {
     const t = e.target.closest('[data-g],[data-gf],[data-gst]'); if (!t || t.closest('#layer')) return;
     const d = t.dataset;
     if (d.gf) { U.filtro = d.gf; return render(); }
-    if (d.gst != null) { U.ocSt = d.gst; return render(); }
+    if (d.gst != null) { U.ocSt = d.gst; U.ocMeu = false; return render(); }
     switch (d.g) {
       case 'ficha': UI.view = 'gcolab'; U.mat = d.mat; render(); scrollTo(0, 0); break;
       case 'voltar': U.mat = null; render(); break;
+      case 'ocMeu': U.ocMeu = !U.ocMeu; if (U.ocMeu) U.ocSt = 'pendente'; render(); break;
+      case 'trocaResp': {
+        const o = G().ocorr.find(x => x.id === d.id); if (!o) break;
+        formSheet('Quem vai recolher a assinatura', `${esc(title(o.nome))} · ${esc(o.tipo)} · ${dBR(o.data)}`, `<div class="sel"><span>Responsável</span>${campoBusca('trResp', o.recolhe || '', opcoesResp, { livre: true, maiusculas: true, placeholder: 'Digite o nome' })}</div>`, 'Salvar', async () => {
+          const v = $('trResp').value.trim().toUpperCase(); if (!v) throw new Error('Informe o responsável.');
+          DB.gAtualizarOcorrencia(o.id, { recolhe: v }); DB.log(`Gestão: ${title(v)} vai recolher a assinatura de ${title(o.nome)}`); toast(`Assinatura com ${title(v)}`);
+        });
+        break;
+      }
       case 'impSel': U.impMat = d.mat; render(); if (matchMedia('(max-width:860px)').matches) { const b = $('gImpDocBox'); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); } break;
       case 'impF': U.impF = d.v; U.impMat = ''; render(); break;
       case 'impDoc': U.impDoc = d.v; render(); break;

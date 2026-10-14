@@ -233,6 +233,7 @@ async function seniorExemplo() {
 export async function gImportarOcorrencias(lista) { cache.g.ocorr = [...cache.g.ocorr, ...lista.map(o => ({ assinadoEm: null, testemunha: '', ...o, id: gid(), metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null }))]; gch(); }
 export async function gSalvarColabs(itens) { cache.g.colabs = itens; gch(); }
 export async function gSalvarConfig(patch) { cache.g.config = { ...cache.g.config, ...patch }; gch(); }
+export async function gAtualizarOcorrencia(id, patch) { cache.g.ocorr = cache.g.ocorr.map(o => (o.id === id ? { ...o, ...patch } : o)); gch(); }
 export function gNovaOcorrencia(o) { const x = { id: gid(), ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '' }; cache.g.ocorr = [...cache.g.ocorr, x]; gch(); return x; }
 export async function gExcluirOcorrencias(ids) { const s = new Set(ids); cache.g.ocorr = cache.g.ocorr.filter(o => !s.has(o.id)); gch(); }
 export function gExcluirOcorrencia(id) { cache.g.ocorr = cache.g.ocorr.filter(o => o.id !== id); gch(); }
