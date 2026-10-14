@@ -1023,6 +1023,59 @@ details.legdet[open]>summary{margin-bottom:6px}
   .mini b{font-size:17px}
   .mini span{font-size:10.5px;letter-spacing:.03em;white-space:nowrap}
 }
+
+/* acessos (tela de entrada) */
+.acessos{display:flex;flex-direction:column;gap:8px}
+.acard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;cursor:pointer}
+.acard:hover{border-color:var(--accent)}
+.acard:focus-visible{box-shadow:var(--ring);outline:0}
+.acard .ai{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.acard .ai svg{width:20px;height:20px}
+.acard b{display:block;font-size:15px}
+.acard small{display:block;color:var(--ink-3);font-size:12px;margin-top:2px}
+.acard .chev{width:16px;height:16px;color:var(--ink-3)}
+.gatecard .voltar{align-self:flex-start;padding-left:0}
+.trocaac{font-size:12px}
+.sit.AB{background:color-mix(in srgb,var(--st-real) 14%,transparent);color:var(--st-real);border-color:transparent}
+.sit.SP{background:color-mix(in srgb,var(--st-nreal) 26%,transparent);color:var(--st-nreal);border-color:transparent;font-weight:700}
+.sit.FE.auto,.sit.F.auto{opacity:.72;border-style:dashed}
+/* Administrativo */
+.compnav{display:inline-flex;align-items:center;gap:6px;align-self:flex-end}
+.compnav b{min-width:120px;text-align:center;font-size:13.5px}
+.freqtw{max-height:calc(100vh - 260px);overflow:auto}
+table.freq th.c,table.freq td.c{padding:2px 1px;min-width:0}
+table.freq .sit{width:26px;height:24px;font-size:10.5px}
+table.freq .sit.fut{opacity:.55}
+table.freq thead th{position:sticky;top:0;z-index:2;background:var(--surface);font-size:11px}
+table.freq thead th.fds{color:var(--st-nreal)}
+table.freq th.fnome{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;min-width:190px;max-width:220px;font-weight:500}
+table.freq thead th.fnome{z-index:3}
+table.freq th.fnome .btn.link{padding:0;font-weight:600;text-align:left;white-space:normal}
+table.freq th.fnome small{display:block;color:var(--ink-3);font-size:10.5px;font-weight:400}
+table.freq td.tot{font-size:12px;color:var(--ink-3)}
+table.freq td.tot.on{color:var(--ink);font-weight:700}
+table.freq tr.grp-row th{position:sticky;left:0}
+table.freq tr.grp-row .btn.sm{margin-left:10px;padding:2px 8px}
+.kpis5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.kpis5 div{display:flex;flex-direction:column;padding:8px 10px;border:1px solid var(--line-2);border-radius:8px}
+.kpis5 b{font-family:var(--f-display);font-size:22px;line-height:1.1}
+.kpis5 span{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+button.pitem{width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line-2);border-radius:0;font:inherit;color:inherit;cursor:pointer}
+button.pitem:hover{background:var(--surface-2)}
+.ferlist .pitem{text-align:left;background:none;border-left:0;border-right:0;border-top:0;font:inherit;color:inherit;cursor:pointer;padding-left:16px;padding-right:16px}
+.ferlist .pitem:hover{background:var(--surface-2)}
+.pitem .t{font-weight:600}.pitem .l{font-size:12.5px;color:var(--ink-2)}
+.fer-r{display:flex;flex-direction:column;align-items:flex-end;gap:4px;text-align:right}
+.fer-r small.bad{color:var(--st-nreal);font-weight:600}
+.g8{gap:8px}
+.g2eq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}.g2eq .in{min-width:0;width:100%}
+table.freq th.fnome{text-transform:none;letter-spacing:0;font-size:12.5px}
+table.freq th.fnome small{text-transform:none;letter-spacing:0}
+table.freq td.c{padding-top:1px;padding-bottom:1px}
+@media (max-width:860px){.kpis5{grid-template-columns:repeat(3,minmax(0,1fr))}table.freq th.fnome{min-width:130px;max-width:150px}.compnav b{min-width:96px}.freqtw{max-height:none}}
+.barra{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:6px}.barra i{display:block;height:100%;background:var(--accent)}
+@media (max-width:860px){.ferlist .pitem{grid-template-columns:minmax(0,1fr)}.fer-r{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;text-align:left}}
+table.freq th.fnome .btn.link{color:var(--ink)}
 </style>
 </head>
 <body>

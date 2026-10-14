@@ -1,6 +1,7 @@
 // Dikma Gestão — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
+import { competenciaDe } from './planilhas-adm.js';
 
 // Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
 // Assim a prévia nunca mexe nos dados reais.
@@ -14,6 +15,8 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas, chaveFicha } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
+import { ACESSOS, ACESSO, acessosDe, podeAcesso, indiceFerias } from './acessos.js';
+import { criarAdministrativo, VIEWS_A, SUB_A } from './administrativo.js';
 import { semAcento, casa, caixaBusca, filtrarLista, campoBusca } from './busca.js';
 import { criarEscala, normRegime, letra, fatorRota } from './escala.js';
 import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao } from './permissoes.js';
@@ -35,6 +38,10 @@ let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (pa
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
 try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; if (v.apArea) UI.apArea = v.apArea; if (v.aRotaPor) UI.aRotaPor = v.aRotaPor; if (v.progAbertas) UI.progAbertas = v.progAbertas; } catch (e) { /* ignora */ }
+// Acesso (porta de entrada) desta sessão: operacao | administrativo | sistema.
+try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
+if (!UI.acesso) UI.acesso = 'operacao';
+const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
 const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } };
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
@@ -161,9 +168,12 @@ const VIEWS = [
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   ...VIEWS_E,
   ...VIEWS_G,
+  ...VIEWS_A,
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Administração', admin: true, mod: 'all' },
   { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Administração', admin: true, mod: 'all' },
   { id: 'cfgeral', nome: 'Visão geral', ic: 'painel', grp: 'Geral', admin: true, mod: 'cf' },
+  { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'pend', grp: 'Geral', admin: true, mod: 'cf' },
+  { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'prog', grp: 'Geral', admin: true, mod: 'cf' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'escala', grp: 'Geral', admin: true, mod: 'cf' }
 ];
 // As telas de administração de cada módulo passam a morar no módulo Configurações (mesmas telas, mesmos dados).
@@ -171,7 +181,7 @@ const VIEWS = [
   const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsReais(ME).includes(m));
   const gestorAtiv = () => isAdmin() || (!!ME && ME.papel === 'gestor' && setsDe(ME).length > 0);
   const CFV = {
-    cfgeral: { ord: 1 }, cfescala: { ord: 2 },
+    cfgeral: { ord: 1 }, cfconf: { ord: 1.2, req: () => isAdmin() }, cfuso: { ord: 1.4, req: () => isAdmin() }, cfescala: { ord: 2 },
     config: { ord: 3, grp: 'Atividades', req: gestorAtiv }, plano: { ord: 4, grp: 'Atividades', req: gestorAtiv }, gerador: { ord: 5, grp: 'Atividades', req: gestorAtiv },
     econfig: { ord: 6, grp: 'Operação', nome: 'Operação (equipamentos)', req: gestorDe('equipamentos') },
     gtipos: { ord: 7, grp: 'Efetivo', req: gestorDe('gestao') }, gimport: { ord: 8, grp: 'Efetivo', req: () => isAdmin() },
@@ -182,7 +192,7 @@ const VIEWS = [
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Configurações', curto: 'Config.', sub: 'Ajustes de todos os módulos', key: 'cf', inicio: 'cfgeral' }};
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, adm: { nome: 'Administrativo', curto: 'Adm.', sub: 'Frequência e férias', key: 'ad', inicio: 'apainel' } };
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -193,6 +203,12 @@ const MOD_IC = {
   config: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>',
   gestao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.6 0 4.4 1.6 5 4.3"/></svg>'
 };
+const ACESSO_IC = {
+  operacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 20V9h14v11M9 20V9M13 20V9M17 20V9M7 9V5h10v4"/></svg>',
+  administrativo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
+  sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>'
+};
+MOD_IC.adm = ACESSO_IC.administrativo;
 function menuModulos(abrir) {
   UI.modOpen = abrir;
   const p = document.querySelector('.modpick'); if (!p) return;
@@ -201,15 +217,21 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 // Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
-const MODS_MARCAVEIS = TODOS_MODS.filter(m => m !== 'config');
+const MODS_MARCAVEIS = ['operacao', 'bateria', 'equipamentos', 'gestao'];
 // Módulos marcados no usuário (os que trazem dados) · modsDe = o que aparece no menu:
 // Efetivo também aparece para quem tem Atividades (parte da escala); Configurações para administrador e gestor.
 const modsReais = u => (!u ? [] : u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS_MARCAVEIS.includes(m)));
 const temFichas = u => modsReais(u).includes('gestao');
-const modsDe = u => { if (!u) return []; const b = modsReais(u); return TODOS_MODS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))) || (m === 'config' && (u.papel === 'admin' || u.papel === 'gestor'))); };
+// Módulos que aparecem no menu, conforme o acesso aberto: Operação (os módulos da pessoa), Administrativo, Administração do sistema.
+const modsDe = u => {
+  if (!u) return [];
+  if (UI.acesso === 'administrativo') return podeAcesso(u, 'administrativo') ? ['adm'] : [];
+  if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
+  const b = modsReais(u); return MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
+};
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
-const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || v.mod === 'all') && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
+const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || (v.mod === 'all' && (UI.acesso === 'operacao' || v.id !== 'meudia'))) && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
@@ -236,23 +258,30 @@ function pintar(id, html) { const el = document.getElementById(id); if (!el || e
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
 function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
-const GOOGLE = new URLSearchParams(location.search).has('google');
+
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
   const s = AUTH.status;
   const sair = `<button class="btn" data-act="logout">${I.out} Sair</button>`;
   if (s === 'loading') return gate('<p class="muted">Carregando…</p>');
   if (s === 'noConfig') return gate(`<h2>Sistema ainda não conectado</h2><p>Este endereço não encontrou a configuração do Firebase. Publique pelo Firebase Hosting (veja o README do projeto).</p><a class="btn" href="?demo">Abrir a demonstração</a>`);
-  if (s === 'signedOut') return gate(`<h2>Entrar</h2><form id="fLogin" class="stackform" novalidate>
+  if (s === 'signedOut') {
+    // 1) Escolha do acesso · 2) usuário e senha daquele acesso
+    if (!UI.escolha) return gate(`<h2>Entrar</h2><p class="muted m0">Escolha o acesso.</p>
+      <div class="acessos" role="list">${ACESSOS.map(a => `<button class="acard" role="listitem" data-escolha="${a.k}"><span class="ai">${ACESSO_IC[a.k]}</span><span class="minw"><b>${a.nome}</b><small>${a.sub}</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>
+      ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
+      ${AUTH.msg ? `<p class="err m0" role="alert">${esc(AUTH.msg)}</p>` : ''}
+      ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
+    const ac = ACESSO[UI.escolha];
+    return gate(`<button class="btn ghost sm voltar" data-escolha="">‹ Outros acessos</button><h2>${ac.nome}</h2><p class="muted m0">${ac.sub}</p><form id="fLogin" class="stackform" novalidate>
     <label class="sel"><span>Usuário</span><input class="in" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
     ${senhaField('lgPass', 'Senha', 'current-password')}
-    <div class="sel"><span>Entrar em</span><div class="modsel" role="radiogroup" aria-label="Módulo">${Object.entries(MODS).map(([k, m]) => `<label class="modcard"><input type="radio" name="lgMod" value="${k}" ${UI.modulo === k ? 'checked' : ''}><b>${m.nome}</b><small>${m.sub}</small></label>`).join('')}</div></div>
     <p class="err" id="lgErr" role="alert" hidden></p>
-    <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
-    ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
+    <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar em ' + ac.nome}</button></form>
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
-    ${GOOGLE ? `<button class="btn gbtn" data-act="loginGoogle">${I.google} Entrar com Google (administrador)</button>` : ''}
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
+  }
+  if (s === 'semAcesso') return gate(`<h2>Sem acesso</h2><p>O usuário <b>${esc(AUTH.user.login || AUTH.user.nome || '')}</b> não entra em <b>${esc((ACESSO[AUTH.acesso] || {}).nome || '')}</b>.${AUTH.acesso === 'sistema' ? ' Esse acesso é só do administrador.' : ' Fale com o administrador do sistema.'}</p><button class="btn pri" data-act="trocarAcesso">Entrar em outro acesso</button>`);
   if (s === 'firstAdmin') return gate(`<h2>Sistema sem administrador</h2><p>Por segurança, o administrador não é criado por esta tela.</p><p class="muted small">Quem cuida do sistema cria pelo GitHub: <b>Actions › Administrador do sistema › Run workflow</b>, informando nome e usuário. A senha provisória aparece no resultado da execução.</p>`);
   if (s === 'mustChange') return gate(`<h2>Crie sua senha</h2><p>Olá, <b>${esc(title(AUTH.user.nome))}</b>. No primeiro acesso, troque a senha provisória por uma só sua.</p><form id="fMust" class="stackform" novalidate>
     ${senhaField('mcPass', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password')}
@@ -292,6 +321,7 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
+  if (UI.modulo === 'adm') { renderNav(); renderTop(); pintar('view', AD.render(UI.view)); afterRender(); return; }
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
@@ -314,7 +344,7 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
   // Selo de Pendências: só os atrasos dos últimos 7 dias, na área da pessoa (um número que dá para resolver).
-  const atr = !ge && !eqm && UI.modulo !== 'config' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'adm' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
   const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
@@ -333,6 +363,7 @@ function renderNav() {
   pintar('who', DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
+  { const w = $('who'); if (w && !w.querySelector('[data-act="trocarAcesso"]') && acessosDe(ME).length > 1) w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="trocarAcesso">${ACESSO_IC[UI.acesso] || ''} ${esc(ACESSO[UI.acesso].nome)} · trocar de acesso</button>`); }
   const tb = barraDe();
   pintarBarra(tb, atr, gb);
 }
@@ -341,7 +372,8 @@ function barraDe() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gocorr', 'Ocorrências', 'plano'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'config' ? [['meudia', 'Hoje', 'sol'], ['cfgeral', 'Geral', 'config'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'adm' ? [['apainel', 'Painel', 'painel'], ['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
@@ -406,6 +438,12 @@ function indiceBusca() {
   const out = []; const ms = modsDe(ME);
   for (const v of viewsDoModulo()) out.push({ t: v.nome, d: `Tela · ${MODS[UI.modulo].nome}`, k: 'tela', ir: () => { UI.view = v.id; } });
   for (const m of ms) if (m !== UI.modulo) out.push({ t: MODS[m].nome, d: `Módulo · ${MODS[m].sub}`, k: 'tela', ir: () => { UI.modulo = m; UI.view = MODS[m].inicio; } });
+  if (UI.modulo === 'adm') { // Administrativo: pessoas das folhas e das férias
+    const vistos = new Set(); const A = DB.cache.adm || {};
+    for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'aferias'; if (UI.a) { UI.a.fQ = f.nome; UI.a.fAba = 'todas'; } } }); }
+    for (const [id, c] of Object.entries(A.comps || {})) if (c) for (const g of c.grupos || []) for (const p of g.pessoas) { const k = p.mat || p.nome; if (vistos.has('f' + k)) continue; vistos.add('f' + k); out.push({ t: title(p.nome), d: `Frequência · ${id.startsWith('bateria') ? 'Bateria' : 'Pátio'} · ${g.nome}`, k: 'pessoa', ir: () => { UI.view = 'afreq'; if (UI.a) { UI.a.conj = id.split('|')[0]; UI.a.q = p.nome; } } }); }
+    return out;
+  }
   for (const k of setsDe(ME)) {
     const st = DB.dados(k); if (!st || !st.config) continue;
     for (const r of st.config.rotas || []) if (r.carga > 0 && (!myAreas().length || myAreas().includes(r.area))) out.push({ t: r.rota, d: `Rota · ${SETS[k].curto} · ${AREA_S[r.area]}`, k: 'rota', ir: () => { UI.modulo = SETS[k].mod; UI.view = 'apontar'; UI.area = r.area; UI.aRota = r.rota; } });
@@ -444,7 +482,8 @@ function abrirBusca() {
 document.addEventListener('keydown', e => {
   if (AUTH.status !== 'ready' || $('layer').innerHTML) return;
   const digitando = e.target.closest && e.target.closest('input,textarea,select,[contenteditable]');
-  if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !digitando)) { e.preventDefault(); abrirBusca(); }
+  if (e.key === 'k' && (e.ctrlKey || e.metaKey) && !digitando) { e.preventDefault(); abrirBusca(); }
+  else if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); abrirBusca(); }
 });
 const BUSCA_BTN = '<button type="button" class="btn ghost buscabtn" data-act="busca" aria-label="Buscar pessoa, equipamento, rota ou tela (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Buscar</span><kbd>Ctrl K</kbd></button>';
 function renderTop() {
@@ -454,6 +493,7 @@ function renderTop() {
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
   }
+  if (UI.modulo === 'adm') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
@@ -651,15 +691,19 @@ const turmaDe = c => letra(c.turma) || turmaFicha(c.nome);
 const regimeDe = c => normRegime(c.regime, escala().regimes);
 const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.nome : title(c.regime || ''); };
 // { v: código, auto: veio da escala, motivo, semTurma }
+// Férias marcadas no Administrativo entram sozinhas como FE (o lançamento do dia ainda vale mais).
+let FERI = null, FERIv = null;
+const feriasDe = (c, dt) => { const l = DB.cache.feriasAtivas || (DB.cache.adm && DB.cache.adm.ferias) || []; if (FERIv !== l) { FERI = indiceFerias(l); FERIv = l; } return FERI({ mat: c.mat, nome: c.nome }, dt); };
 function sitDia(c, dt) {
   const m = DB.sit(c.id + '|' + dt); if (m) return { v: m, auto: false };
+  if (feriasDe(c, dt)) return { v: 'FE', auto: false, ferias: true }; // ausência (não é folga da escala: não vira hora extra)
   const p = escala().previsto(regimeDe(c), turmaDe(c), dt);
   if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
   return { v: 'P', auto: false, semTurma: !p };
 }
 const folgaEscala = (c, dt) => { const p = escala().previsto(regimeDe(c), turmaDe(c), dt); return !!(p && !p.trab); };
 // mesma regra para outros conjuntos (Meu dia): get(chave) devolve o lançado
-const sitDiaDe = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); return p && !p.trab ? 'F' : undefined; };
+const sitDiaDe = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; if (feriasDe(c, dt)) return 'FE'; const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); return p && !p.trab ? 'F' : undefined; };
 const indisponivel = (c, dt) => { const v = sitDia(c, dt).v; return v !== 'DS' && AUSENTE.has(v); };
 function escalaRota(r, ini) {
   const cs = COLABS.filter(c => c.area === r.area && c.rota === r.rota);
@@ -936,7 +980,67 @@ function vCfEscala() {
   return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Escala e Efetivo, Atividades, Operação, Meu dia e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
 }
 const dBRs = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
+// Conferência do cadastro: o que falta ou não bate entre os módulos, com o atalho para corrigir.
+function vCfConf() {
+  const E = escala(); const nk = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const itens = [];
+  const item = (grav, t, d, nomes, ir, irTxt) => itens.push({ grav, t, d, nomes, ir, irTxt });
+  // 1) turmas sem data de início (a folga automática não funciona para elas)
+  const semData = Object.entries(E.regimes).filter(([, r]) => r.tipo === 'ciclo').flatMap(([k, r]) => Object.entries(r.turmas || {}).filter(([, d]) => !d).map(([l]) => `${r.nome || k} · turma ${l}`));
+  if (semData.length) item('bad', 'Turmas sem data de início', 'Sem a data, a folga pela escala não é marcada sozinha para quem é dessas turmas.', semData, 'cfescala', 'Escalas e turnos');
+  // 2) pessoas de turno sem turma
+  const todos = setsDe(ME).flatMap(k => SETS[k].areas.flatMap(a => ((DB.dados(k).colabs || {})[a] || []).map(c => ({ ...c, set: k }))));
+  const semTurma = todos.filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); });
+  if (semTurma.length) item('bad', 'Pessoas de turno sem turma', 'Sem a letra da turma, o sistema não sabe as folgas delas.', semTurma.map(c => `${title(c.nome)} (${SETS[c.set].curto})`), 'cfescala', 'Escalas e turnos');
+  // 3) Atividades × fichas do Efetivo (pelo nome)
+  const fichas = (DB.cache.g && DB.cache.g.colabs) || [];
+  if (fichas.length) {
+    const fn = new Set(fichas.map(f => nk(f.nome)));
+    const semFicha = todos.filter(c => !fn.has(nk(c.nome)));
+    if (semFicha.length) item('warn', 'Nas Atividades sem ficha no Efetivo', 'O nome não bate com nenhuma ficha (apelido, abreviação ou ainda não cadastrado). Corrija no acesso Operação › Efetivo › Pessoas.', semFicha.map(c => title(c.nome)), null);
+    if (DB.areaDaFicha) { const ger = fichas.filter(f => DB.areaDaFicha(f.mat) === 'GERAL'); if (ger.length) item('warn', 'Fichas na área GERAL', 'Não foi possível saber a área de atuação. Só quem vê todas as áreas enxerga essas fichas. Corrija no acesso Operação › Efetivo › Pessoas.', ger.map(f => title(f.nome)), null); }
+  }
+  // 4) usuários
+  const us = DB.cache.usuarios || [];
+  const semArea = us.filter(u => ['lider', 'supervisor'].includes(u.papel) && !u.area && (u.modulos || ['operacao']).some(m => m === 'operacao' || m === 'bateria'));
+  if (semArea.length) item('bad', 'Líderes e supervisores sem área', 'Eles não veem nenhuma rota até a área ser escolhida.', semArea.map(u => title(u.nome)), 'usuarios', 'Usuários e acessos');
+  const nunca = us.filter(u => u.trocarSenha && u.papel !== 'bloqueado');
+  if (nunca.length) item('neu', 'Ainda não criaram a própria senha', 'Receberam a senha provisória e não entraram.', nunca.map(u => `${title(u.nome)} (${u.login || ''})`), 'usuarios', 'Usuários e acessos');
+  // 5) Administrativo: folha atual e férias
+  const A = DB.cache.adm || {}; const comp = competenciaDe(TODAY);
+  for (const k of SET_KEYS) { const c = (A.comps || {})[k + '|' + comp]; if (c === null) item('warn', `Folha de ${monthLabel(comp)} não aberta · ${SETS[k].curto}`, 'A frequência da competência atual ainda não foi aberta no Administrativo.', [], null); else if (c) { const sem = c.grupos.flatMap(g => g.pessoas.filter(p => !p.mat).map(p => title(p.nome))); if (sem.length) item('neu', `Na folha sem ficha no RH · ${SETS[k].curto}`, 'Entram na folha, mas sem matrícula as férias e o Efetivo não se ligam a elas.', sem, null); const sAt = c.grupos.flatMap(g => g.pessoas.filter(p => !p.ativ && !p.desligado && g.turno).map(p => title(p.nome))); if (sAt.length) item('neu', `Turno na folha, fora das Atividades · ${SETS[k].curto}`, 'A presença delas fica só na folha (não aparece no Efetivo diário).', sAt, null); } }
+  if (A.fLoaded) {
+    const marcadas = new Set((A.ferias || []).filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || nk(f.nome)));
+    const venc = (A.ferias || []).filter(f => f.limite && f.limite < TODAY && !marcadas.has(f.mat || nk(f.nome)));
+    if (venc.length) item('bad', 'Férias com data limite vencida', 'Data limite passou e não há férias marcadas daqui para frente.', venc.map(f => `${title(f.nome)} (limite ${dBRs(f.limite)})`), null);
+  }
+  const ord = { bad: 0, warn: 1, neu: 2 };
+  itens.sort((a, b) => ord[a.grav] - ord[b.grav]);
+  const ic = { bad: 'Corrigir', warn: 'Conferir', neu: 'Para saber' };
+  return `<div class="mini"><div><b class="num" style="color:var(--st-nreal)">${itens.filter(i => i.grav === 'bad').length}</b><span>Corrigir</span></div><div><b class="num" style="color:var(--st-atr)">${itens.filter(i => i.grav === 'warn').length}</b><span>Conferir</span></div><div><b class="num">${itens.filter(i => i.grav === 'neu').length}</b><span>Para saber</span></div></div>
+  ${itens.length ? itens.map(i => `<div class="card"><header><h2>${esc(i.t)}${i.nomes.length ? ` <span class="muted">(${i.nomes.length})</span>` : ''}</h2><p>${esc(i.d)}</p><span class="r"><span class="pill ${i.grav === 'neu' ? 'neu' : i.grav}">${ic[i.grav]}</span>${i.ir ? ` <button class="btn sm" data-cfgo="${i.ir}">${esc(i.irTxt)}</button>` : ''}</span></header>${i.nomes.length ? `<div class="body pt0"><details class="legdet"${i.nomes.length <= 8 ? ' open' : ''}><summary>Ver ${i.nomes.length > 8 ? 'os ' + i.nomes.length : 'quem'}</summary><p class="small m0">${i.nomes.map(esc).join(' · ')}</p></details></div>` : ''}</div>`).join('') : '<div class="card"><div class="empty">Tudo certo: nada para conferir no cadastro.</div></div>'}`;
+}
+// Uso do plano grátis do Firebase (Spark). O número vem da cópia de segurança diária.
+function vCfUso() {
+  const u = DB.cache.uso;
+  const LIM = [['Banco (Firestore)', '1 GiB guardado · 50 mil leituras, 20 mil gravações e 20 mil exclusões por dia'], ['Site (Hosting)', '10 GB guardados · 360 MB de transferência por dia'], ['Contas (Authentication)', 'Sem limite de contas com usuário e senha']];
+  const lim = `<div class="card"><header><h2>Limites do plano grátis</h2><p>Se passar do limite do dia, o banco para de responder até a meia-noite do horário do Pacífico (4h ou 5h em Brasília). Nada é cobrado.</p></header><div class="body"><dl class="cfkv">${LIM.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl></div></div>`;
+  if (!u) return `<div class="card"><div class="empty">Ainda sem medição. Ela é feita pela cópia de segurança diária (GitHub › Actions › Cópia de segurança), às 3h.</div></div>${lim}`;
+  const em = u.em && u.em.toDate ? u.em.toDate() : null;
+  const cols = Object.entries(u.colecoes || {}).sort((a, b) => b[1] - a[1]);
+  const totalDocs = cols.reduce((n, [, v]) => n + v, 0);
+  const tam = b => (b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round((b || 0) / 1024)) + ' KB');
+  const pctBanco = Math.min(100, ((u.pacoteBytes || 0) * 4) / (1024 ** 3) * 100);
+  return `<div class="mini"><div><b class="num">${totalDocs.toLocaleString('pt-BR')}</b><span>Documentos</span></div><div><b class="num">${tam((u.pacoteBytes || 0) * 4)}</b><span>Banco (estimado)</span></div><div><b class="num">${u.fotos ? u.fotos.n.toLocaleString('pt-BR') : '—'}</b><span>Fotos · ${u.fotos ? tam(u.fotos.bytes) : '—'}</span></div><div><b class="num">${u.contas ? u.contas.total : '—'}</b><span>Contas</span></div><div><b class="num">${(u.leiturasCopia || 0).toLocaleString('pt-BR')}</b><span>Leituras da cópia</span></div></div>
+  <div class="card"><header><h2>Banco de dados</h2><p>Medido ${em ? 'em ' + em.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'} · cópia ${esc(u.tipo || '')}</p></header><div class="body stackcol">
+    <div><div class="small">Espaço usado (estimado pelo tamanho da cópia): <b>${pctBanco < 1 ? 'menos de 1' : pctBanco.toFixed(0)}%</b> de 1 GiB</div><div class="barra"><i style="width:${Math.max(1, pctBanco)}%"></i></div></div>
+    ${u.contas && u.contas.semPerfil ? `<p class="small m0"><b>${u.contas.semPerfil} conta(s) sem usuário</b> (sobram quando a senha de alguém é redefinida). Não atrapalham nem gastam cota; podem ser apagadas no console do Firebase › Authentication.</p>` : ''}
+    <div class="tw"><table><thead><tr><th>Coleção</th><th class="r">Documentos</th></tr></thead><tbody>${cols.map(([c, n]) => `<tr><td class="mono">${esc(c)}</td><td class="r num">${n.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>
+  </div></div>${lim}`;
+}
 function vConfigModulo(view) {
+  if (view === 'cfconf') return vCfConf();
+  if (view === 'cfuso') return vCfUso();
   if (view === 'cfescala') return vCfEscala();
   if (view === 'usuarios') return vUsuarios();
   if (view === 'perfis') return vPerfis();
@@ -1230,12 +1334,12 @@ function vUsuarios() {
    <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
    <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
    <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
-   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
+   <div class="ur r3"><div class="sel"><span>Acessos</span><div class="mchips">${ACESSOS.filter(a => a.k !== 'sistema').map(a => `<label class="mchip"><input type="checkbox" id="nuA_${a.k}" ${a.k === 'operacao' ? 'checked' : ''}><span>${a.nome}</span></label>`).join('')}</div></div><div class="sel"><span>Módulos da Operação</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa entra só nos <b>acessos</b> marcados (Operação, Administrativo); a Administração do sistema é só do administrador.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Acessos</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos, mais a Administração do sistema</span>' : `<div class="mchips">${ACESSOS.filter(a => a.k !== 'sistema').map(a => `<label class="mchip"><input type="checkbox" data-uac="${u.uid}|${a.k}" ${acessosDe(u).includes(a.k) ? 'checked' : ''}><span>${a.nome}</span></label>`).join('')}</div>`}</td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : !acessosDe(u).includes('operacao') ? '<span class="muted small">Sem acesso à Operação</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
@@ -1541,13 +1645,14 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', async e => {
   const t = e.target.closest('button,[data-area]'); if (!t || t.closest('#layer')) return;
   const d = t.dataset;
+  if ('escolha' in d) { UI.escolha = d.escolha || null; AUTH.msg = ''; render(); const u = $('lgUser'); if (u) u.focus(); return; }
   if (d.go) {
     if (d.go === '__more') {
       const naBarra = barraDe().map(x => x[0]);
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
-      const extra = [{ t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      const extra = [...(acessosDe(ME).length > 1 ? [{ t: 'Trocar de acesso', id: '__acesso', d: 'Agora: ' + ACESSO[UI.acesso].nome, ic: `<span class="opt-ic">${ACESSO_IC[UI.acesso]}</span>` }] : []), { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__acesso') { UI.escolha = null; return DB.signOut(); } if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
@@ -1619,7 +1724,7 @@ document.addEventListener('click', async e => {
   }
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
-    case 'loginGoogle': try { await DB.signInGoogle(); } catch (err) { toast('Não foi possível entrar: ' + msgErro(err)); } break;
+    case 'trocarAcesso': UI.escolha = null; UI.modOpen = false; await DB.signOut(); break;
     case 'senha': alterarSenhaSheet(); break;
     case 'logout': DB.signOut(); break;
     case 'permSalvar': {
@@ -1709,7 +1814,12 @@ document.addEventListener('submit', async e => {
   e.preventDefault();
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
-    if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = 'meudia'; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
+    if (f.id === 'fLogin') {
+      UI.acesso = UI.escolha || UI.acesso; salvarAcesso(); DB.definirAcesso(UI.acesso);
+      UI.modulo = UI.acesso === 'administrativo' ? 'adm' : UI.acesso === 'sistema' ? 'config' : (MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao');
+      UI.view = ACESSO[UI.acesso].inicio; salvarUI();
+      await DB.signIn($('lgUser').value, $('lgPass').value); return;
+    }
     if (f.id === 'fMust') {
       const n = $('mcPass').value, n2 = $('mcPass2').value;
       { const p = problemaSenha(n, AUTH.user); if (p) throw new Error(p); } if (n !== n2) throw new Error('As duas senhas não são iguais.');
@@ -1723,12 +1833,14 @@ document.addEventListener('submit', async e => {
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 8) throw new Error('A senha provisória precisa ter pelo menos 8 caracteres.');
-      const modulos = MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked);
-      if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
+      const acessos = ['operacao', 'administrativo'].filter(k => $('nuA_' + k).checked);
+      if (!acessos.length && papel !== 'admin') throw new Error('Marque pelo menos um acesso (Operação ou Administrativo).');
+      const modulos = acessos.includes('operacao') ? MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked) : [];
+      if (!modulos.length && acessos.includes('operacao') && papel !== 'admin') throw new Error('Marque pelo menos um módulo da Operação.');
       if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
       if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos });
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos, acessos: papel === 'admin' ? ['operacao', 'administrativo'] : acessos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
       UI.busy = false; UI.senhaSug = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
@@ -1763,6 +1875,12 @@ document.addEventListener('change', e => {
     const atual = modsReais(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
     if (!novo.length) { t.checked = true; toast('Deixe pelo menos um módulo'); return; }
     DB.setUsuario(uid, { modulos: novo }); toast('Módulos atualizados');
+  }
+  if (t.dataset.uac) {
+    const [uid, k] = t.dataset.uac.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
+    const atual = acessosDe(u); const novo = t.checked ? [...new Set([...atual, k])] : atual.filter(x => x !== k);
+    if (!novo.length) { t.checked = true; toast('Deixe pelo menos um acesso'); return; }
+    DB.setUsuario(uid, { acessos: novo }); DB.log(`Acessos de ${u.login || u.nome}: ${novo.map(x => ACESSO[x].nome).join(', ')}`); toast('Acessos atualizados');
   }
   if (t.dataset.uarea) { DB.setUsuario(t.dataset.uarea, { area: t.value || null }); toast('Área atualizada'); }
   if (t.dataset.uarea2) {
@@ -1813,8 +1931,10 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   aplicarSet(); render(); scrollTo(0, 0);
 });
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
+const AD = criarAdministrativo({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
+if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { if (AUTH.status === 'ready') schedule(); },

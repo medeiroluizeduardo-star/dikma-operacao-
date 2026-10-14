@@ -27,7 +27,11 @@ const USUARIOS = {
   coordG: { papel: 'coordenador', modulos: ['gestao'] },
   leitorG: { papel: 'leitor', modulos: ['gestao'] },
   liderEq: { papel: 'lider', modulos: ['equipamentos'] },
-  bloq: { papel: 'bloqueado', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] }
+  bloq: { papel: 'bloqueado', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
+  admAn: { papel: 'supervisor', modulos: [], acessos: ['administrativo'] },
+  admLeitor: { papel: 'leitor', acessos: ['administrativo'] },
+  gestorSoAdm: { papel: 'gestor', modulos: ['operacao', 'gestao'], acessos: ['administrativo'] },
+  liderAmbos: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acessos: ['operacao', 'administrativo'] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
@@ -274,4 +278,79 @@ test('avisos: só o administrador acompanha o resultado da rotina', async () => 
   await assertSucceeds(getDoc(doc(db('admin'), 'avisos_enviados', 'estado')));
   await assertFails(getDoc(doc(db('gestorG'), 'avisos_enviados', 'estado')));
   await assertFails(setDoc(doc(db('admin'), 'avisos_enviados', 'estado'), { enviados: {} }));
+});
+
+// ---------------- acessos: Operação, Administrativo e Administração do sistema ----------------
+const prepAdm = () => env.withSecurityRulesDisabled(async ctx => {
+  const d = ctx.firestore();
+  await setDoc(doc(d, 'freqcomp', 'patio|2026-10'), { conj: 'patio', competencia: '2026-10', grupos: [], d: {} });
+  await setDoc(doc(d, 'ferias', 'f1'), { nome: 'PESSOA TESTE', inicio: '2026-10-01', termino: '2026-10-30' });
+  await setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] });
+  await setDoc(doc(d, 'sistema', 'uso'), { colecoes: {} });
+  await setDoc(doc(d, 'situacao', '2026-10'), { v: {} });
+  await setDoc(doc(d, 'b_situacao', '2026-10'), { v: {} });
+});
+test('acesso: quem não tem o campo acessos continua só na Operação (usuários antigos não mudam)', async () => {
+  await prepAdm();
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'semanas', SEM)));
+  await assertFails(getDoc(doc(db('liderRec'), 'freqcomp', 'patio|2026-10')));
+  await assertFails(getDocs(collection(db('liderRec'), 'ferias')));
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'adm', 'feriasAtivas')));
+});
+test('acesso: só Administrativo não lê nem grava nada da Operação, mesmo com módulos marcados', async () => {
+  for (const quem of ['admAn', 'gestorSoAdm']) {
+    await assertFails(getDoc(doc(db(quem), 'semanas', SEM)));
+    await assertFails(getDoc(doc(db(quem), 'config', 'sistema')));
+    await assertFails(getDocs(collection(db(quem), 'gocorr')));
+    await assertFails(getDoc(doc(db(quem), 'eq', 'cadastro')));
+    await assertFails(setDoc(doc(db(quem), 'plano', 'RECEBIMENTO'), { itens: [] }));
+  }
+});
+test('acesso Administrativo: lê e grava folha e férias; lê pessoas e presença; grava presença do dia', async () => {
+  const d = db('admAn');
+  await assertSucceeds(getDoc(doc(d, 'freqcomp', 'patio|2026-10')));
+  await assertSucceeds(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [{ nome: 'G', pessoas: [] }] }));
+  await assertSucceeds(getDocs(collection(d, 'ferias')));
+  await assertSucceeds(setDoc(doc(d, 'ferias', 'f2'), { nome: 'OUTRA', inicio: null }));
+  await assertSucceeds(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
+  await assertSucceeds(getDoc(doc(d, 'colaboradores', 'RECEBIMENTO')));
+  await assertSucceeds(getDoc(doc(d, 'gcolab', 'RECEBIMENTO')));
+  await assertSucceeds(getDoc(doc(d, 'situacao', '2026-10')));
+  await assertSucceeds(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-02': 'AT' } }, { merge: true }));
+  await assertSucceeds(setDoc(doc(d, 'b_situacao', '2026-10'), { v: { 'B001|2026-10-02': 'FT' } }, { merge: true }));
+  await assertFails(setDoc(doc(d, 'colaboradores', 'RECEBIMENTO'), { itens: [] }));
+  await assertFails(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [] }));
+});
+test('acesso Administrativo somente leitura: consulta e não altera', async () => {
+  const d = db('admLeitor');
+  await assertSucceeds(getDoc(doc(d, 'freqcomp', 'patio|2026-10')));
+  await assertSucceeds(getDocs(collection(d, 'ferias')));
+  await assertFails(setDoc(doc(d, 'ferias', 'f3'), { nome: 'X' }));
+  await assertFails(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [] }));
+  await assertFails(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-03': 'FT' } }, { merge: true }));
+  await assertFails(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
+});
+test('acesso: líder com Operação e Administrativo entra nos dois', async () => {
+  await assertSucceeds(getDoc(doc(db('liderAmbos'), 'semanas', SEM)));
+  await assertSucceeds(getDocs(collection(db('liderAmbos'), 'ferias')));
+});
+test('acesso: ninguém muda os próprios acessos; só o administrador', async () => {
+  await assertFails(updateDoc(doc(db('liderRec'), 'usuarios', 'liderRec'), { acessos: ['operacao', 'administrativo'] }));
+  await assertFails(updateDoc(doc(db('admAn'), 'usuarios', 'admAn'), { acessos: ['operacao', 'administrativo'], papel: 'admin' }));
+  await assertSucceeds(updateDoc(doc(db('admin'), 'usuarios', 'liderRec'), { acessos: ['operacao'] }));
+});
+test('Administração do sistema: uso do plano e planilhas de importação só para o administrador; ninguém grava o uso pelo site', async () => {
+  await assertSucceeds(getDoc(doc(db('admin'), 'sistema', 'uso')));
+  await assertFails(getDoc(doc(db('gestorP'), 'sistema', 'uso')));
+  await assertFails(getDoc(doc(db('admAn'), 'sistema', 'uso')));
+  await assertFails(setDoc(doc(db('admin'), 'sistema', 'uso'), { colecoes: {} }));
+  await env.withSecurityRulesDisabled(async ctx => { for (const n of ['seed-freq-patio', 'seed-ferias']) await setDoc(doc(ctx.firestore(), 'seeds', n), { json: '{}' }); });
+  await assertSucceeds(getDoc(doc(db('admin'), 'seeds', 'seed-ferias')));
+  await assertFails(getDoc(doc(db('admAn'), 'seeds', 'seed-ferias')));
+  await assertFails(getDoc(doc(db('gestorG'), 'seeds', 'seed-freq-patio')));
+});
+test('bloqueado não entra no Administrativo', async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'usuarios', 'bloqAdm'), { nome: 'b', nomeUp: 'B', papel: 'bloqueado', acessos: ['administrativo'] }); });
+  await assertFails(getDocs(collection(db('bloqAdm'), 'ferias')));
+  await assertFails(getDoc(doc(db('bloqAdm'), 'freqcomp', 'patio|2026-10')));
 });
