@@ -1,0 +1,8 @@
+node_modules/
+package-lock.json
+*-debug.log
+integracao/avisos/lib/
+copia/
+antes/
+backup/
+resultado.tap

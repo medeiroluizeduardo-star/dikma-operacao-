@@ -549,7 +549,7 @@ export function criarEquip(X) {
       case 'delFer': DB.eSalvarConfig({ feriados: E().config.feriados.filter(f => !(f.data === d.data && f.desc === d.desc)) }); break;
       case 'importar': {
         UI.busy = true; render();
-        try { const s = await (await fetch('seed-equip.json')).json(); await DB.eImportar(s); DB.log('Operação: importou a planilha de controle de equipamentos'); toast('Planilha importada'); }
+        try { const s = await DB.seed('seed-equip.json'); await DB.eImportar(s); DB.log('Operação: importou a planilha de controle de equipamentos'); toast('Planilha importada'); }
         catch (err) { toast('Erro ao importar: ' + (err.message || err)); }
         UI.busy = false; render(); break;
       }

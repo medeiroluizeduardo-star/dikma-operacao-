@@ -2,7 +2,8 @@
 // Login por USUÁRIO e SENHA. Só o administrador cadastra pessoas.
 // Por baixo, o Firebase Auth usa um e-mail interno gerado pelo sistema (ninguém precisa saber dele).
 // Estrutura no Firestore:
-//   config/bootstrap          { uid }                 quem criou o primeiro administrador
+//   config/bootstrap          { uid }                 quem criou o primeiro administrador (gravado só pela rotina do GitHub)
+//   seeds/{nome}              { json, atualizadoEm }  dados das planilhas para importar (gravado na publicação; só administração lê)
 //   config/sistema            { rotas[], tipos[], meses[] }
 //   logins/{login}            { email, uid }          liga o usuário digitado à conta interna
 //   usuarios/{uid}            { nome, login, papel, area, trocarSenha }
@@ -139,19 +140,8 @@ export async function signInGoogle() {
 }
 export const signOut = () => fbSignOut(auth);
 
-// Primeiro administrador de um sistema novo (só aparece enquanto não existe nenhum).
-export async function criarPrimeiroAdmin({ nome, login, senha }) {
-  login = normLogin(login);
-  if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
-  const email = emailInterno(login);
-  const cred = await createUserWithEmailAndPassword(auth, email, senha);
-  const uid = cred.user.uid;
-  const b = writeBatch(db);
-  b.set(doc(db, 'config', 'bootstrap'), { uid, login });
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel: 'admin', area: null, modulos: ['operacao', 'gestao'], trocarSenha: false, criadoEm: serverTimestamp() });
-  b.set(doc(db, 'logins', login), { email, uid });
-  await b.commit();
-}
+// O primeiro administrador (e a recuperação de um administrador) é criado pela rotina do GitHub
+// "Administrador do sistema" (.github/workflows/administrador.yml). Pelo site não dá: as regras bloqueiam.
 
 // Instância auxiliar: cria contas sem derrubar a sessão do administrador.
 function authAux() {
@@ -398,6 +388,15 @@ export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
   b.update(doc(db, C('config', k), 'sistema'), { meses: arrayUnion(ym) });
   await b.commit();
   return n;
+}
+
+// Dados das planilhas originais (pasta dados-importacao do repositório). Não ficam no site: a publicação
+// grava cada arquivo em seeds/{nome} e só a administração do módulo consegue ler (regras do Firestore).
+export async function seed(nome) {
+  const id = String(nome).replace(/\.json$/, '');
+  const d = await getDoc(doc(db, 'seeds', id));
+  if (!d.exists()) throw new Error(`Os dados de importação (${id}) ainda não foram enviados ao banco. Rode de novo a publicação no GitHub (Actions › Publicar no Firebase › Run workflow).`);
+  return JSON.parse(d.data().json);
 }
 
 export async function importar(seed, meses, aPartirDe) {

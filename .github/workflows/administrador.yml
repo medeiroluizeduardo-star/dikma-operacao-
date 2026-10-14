@@ -1,0 +1,37 @@
+name: Administrador do sistema
+
+# Cria o primeiro administrador ou recupera o acesso de um administrador (senha esquecida, conta apagada).
+# Também promove um usuário existente a administrador. A senha provisória aparece no resumo desta execução.
+# Pelo site isso não é possível: só quem tem acesso a este repositório consegue rodar.
+on:
+  workflow_dispatch:
+    inputs:
+      usuario:
+        description: 'Usuário de login (ex.: luiz.eduardo)'
+        required: true
+      nome:
+        description: 'Nome completo (obrigatório só para criar um usuário novo)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  administrador:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Criar ou recuperar
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ADM_USUARIO: ${{ inputs.usuario }}
+          ADM_NOME: ${{ inputs.nome }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/administrador.mjs

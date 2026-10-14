@@ -1,0 +1,200 @@
+// Testes das regras de segurança do Firestore (firestore.rules), no emulador do Firebase.
+// Rodam sozinhos no GitHub antes de cada publicação. Se algum falhar, nada é publicado.
+// Cada teste diz, em português, o que é garantido. Para rodar no computador: veja testes/LEIA-ME.md.
+import { test, before, after } from 'node:test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, serverTimestamp } from 'firebase/firestore';
+
+const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+let env;
+
+const USUARIOS = {
+  admin: { papel: 'admin' },
+  gestorP: { papel: 'gestor', modulos: ['operacao'] },
+  gestorG: { papel: 'gestor', modulos: ['gestao'] },
+  coord: { papel: 'coordenador', modulos: ['operacao', 'bateria'] },
+  sup: { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'BATERIA 1', modulos: ['operacao', 'bateria'] },
+  liderRec: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'] },
+  liderPrep: { papel: 'lider', area: 'PREPARAÇÃO', modulos: ['operacao'] },
+  liderG: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['gestao'] },
+  leitorG: { papel: 'leitor', modulos: ['gestao'] },
+  liderEq: { papel: 'lider', modulos: ['equipamentos'] },
+  bloq: { papel: 'bloqueado', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] }
+};
+const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
+
+// db('liderRec') = banco visto por essa pessoa; db(null) = sem login; db('semPerfil') = conta sem cadastro no sistema
+const db = uid => (uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore());
+
+before(async () => {
+  const host = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+  const [h, p] = host.split(':');
+  env = await initializeTestEnvironment({
+    projectId: process.env.GCLOUD_PROJECT || 'demo-dikma',
+    firestore: { rules: fs.readFileSync(path.join(raiz, 'firestore.rules'), 'utf8'), host: h, port: Number(p) }
+  });
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async ctx => {
+    const d = ctx.firestore();
+    for (const [uid, u] of Object.entries(USUARIOS)) await setDoc(doc(d, 'usuarios', uid), { nome: uid, login: uid.toLowerCase(), area: null, ...u });
+    await setDoc(doc(d, 'logins', 'admin'), { uid: 'admin', email: 'admin.x@usuarios.dikma.app' });
+    for (const s of ['seed', 'seed-bateria', 'seed-equip', 'seed-gestao', 'seed-efetivo']) await setDoc(doc(d, 'seeds', s), { json: '{}' });
+    await setDoc(doc(d, 'config', 'sistema'), { rotas: [] });
+    await setDoc(doc(d, 'config', 'escalas'), { regimes: [] });
+    await setDoc(doc(d, 'config', 'permissoes'), {});
+    await setDoc(doc(d, 'colaboradores', 'RECEBIMENTO'), { itens: [] });
+    await setDoc(doc(d, 'semanas', SEM), { area: 'RECEBIMENTO', s: {}, ev: {} });
+    await setDoc(doc(d, 'semanas', SEM_PREP), { area: 'PREPARAÇÃO', s: {}, ev: {} });
+    await setDoc(doc(d, 'semanas', SEM_CHEIA), { area: 'RECEBIMENTO', s: {}, ev: { 'REC-001|2': 6 } });
+    await setDoc(doc(d, 'b_semanas', SEM_B1), { area: 'BATERIA 1', s: {}, ev: {} });
+    await setDoc(doc(d, 'gestao', 'colaboradores'), { itens: [] });
+    for (const id of ['o1', 'o2']) await setDoc(doc(d, 'gocorr', id), { status: 'pendente', desc: 'Atestado', criadoPor: 'liderG' });
+    for (const id of ['a1', 'a2']) await setDoc(doc(d, 'gassin', id), { por: 'liderG', metodo: 'tela' });
+    await setDoc(doc(d, 'eq', 'cadastro'), { operadores: [] });
+    await setDoc(doc(d, 'eqlanc', 'l1'), { mes: '2026-10' });
+    await setDoc(doc(d, 'integracao', 'senior'), { registros: [] });
+    await setDoc(doc(d, 'avisos', 'liderRec'), { tokens: [] });
+    await setDoc(doc(d, 'historico', 'h1'), { t: 'x' });
+  });
+});
+after(async () => { if (env) await env.cleanup(); });
+
+// ---------------- administrador e cadastro ----------------
+test('sem administrador marcado, ninguém cria o config/bootstrap pelo site (nem sem cadastro, nem o próprio admin)', async () => {
+  await assertSucceeds(getDoc(doc(db(null), 'config', 'bootstrap')));
+  await assertFails(setDoc(doc(db('semPerfil'), 'config', 'bootstrap'), { uid: 'semPerfil' }));
+  await assertFails(setDoc(doc(db('admin'), 'config', 'bootstrap'), { uid: 'admin' }));
+});
+test('conta sem cadastro não consegue se cadastrar como administrador nem criar login', async () => {
+  await assertFails(setDoc(doc(db('semPerfil'), 'usuarios', 'semPerfil'), { papel: 'admin', nome: 'x', login: 'x' }));
+  await assertFails(setDoc(doc(db('semPerfil'), 'logins', 'invasor'), { uid: 'semPerfil', email: 'a@b.c' }));
+});
+test('ninguém muda o próprio perfil, área ou módulos; só o último acesso e a troca de senha', async () => {
+  const d = db('liderRec');
+  await assertFails(updateDoc(doc(d, 'usuarios', 'liderRec'), { papel: 'admin' }));
+  await assertFails(updateDoc(doc(d, 'usuarios', 'liderRec'), { area: 'PREPARAÇÃO' }));
+  await assertFails(updateDoc(doc(d, 'usuarios', 'liderRec'), { modulos: ['operacao', 'gestao'] }));
+  await assertFails(updateDoc(doc(d, 'usuarios', 'liderRec'), { abas: { gestao: ['x'] } }));
+  await assertSucceeds(updateDoc(doc(d, 'usuarios', 'liderRec'), { ultimoAcesso: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(d, 'usuarios', 'liderRec'), { trocarSenha: false }));
+});
+test('só o administrador cadastra usuários, vê o cadastro dos outros e muda as permissões', async () => {
+  await assertFails(getDoc(doc(db('liderRec'), 'usuarios', 'admin')));
+  await assertFails(getDoc(doc(db('gestorP'), 'usuarios', 'liderRec')));
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'usuarios', 'liderRec')));
+  await assertSucceeds(getDoc(doc(db('admin'), 'usuarios', 'liderRec')));
+  await assertFails(setDoc(doc(db('gestorP'), 'usuarios', 'novo1'), { papel: 'lider', nome: 'x', login: 'x' }));
+  await assertSucceeds(setDoc(doc(db('admin'), 'usuarios', 'novo1'), { papel: 'lider', nome: 'x', login: 'x' }));
+  await assertFails(setDoc(doc(db('gestorP'), 'config', 'permissoes'), { x: 1 }));
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'permissoes'), { x: 1 }));
+  await assertFails(getDocs(collection(db('liderRec'), 'logins')));
+});
+
+// ---------------- dados de importação (planilhas originais) ----------------
+test('dados de importação: ninguém de fora lê; cada administração lê só a do seu módulo; ninguém grava pelo site', async () => {
+  for (const s of ['seed', 'seed-bateria', 'seed-equip', 'seed-gestao', 'seed-efetivo']) {
+    for (const quem of [null, 'semPerfil', 'bloq', 'liderRec', 'liderG', 'leitorG', 'sup', 'coord', 'liderEq']) await assertFails(getDoc(doc(db(quem), 'seeds', s)));
+    await assertSucceeds(getDoc(doc(db('admin'), 'seeds', s)));
+  }
+  await assertSucceeds(getDoc(doc(db('gestorG'), 'seeds', 'seed-gestao')));
+  await assertSucceeds(getDoc(doc(db('gestorG'), 'seeds', 'seed-efetivo')));
+  await assertFails(getDoc(doc(db('gestorG'), 'seeds', 'seed-equip')));
+  await assertFails(getDoc(doc(db('gestorG'), 'seeds', 'seed')));
+  await assertSucceeds(getDoc(doc(db('gestorP'), 'seeds', 'seed')));
+  await assertFails(getDoc(doc(db('gestorP'), 'seeds', 'seed-efetivo')));
+  await assertFails(setDoc(doc(db('admin'), 'seeds', 'seed'), { json: '{"x":1}' }));
+  await assertFails(getDocs(collection(db('admin'), 'seeds')));
+});
+
+// ---------------- quem está de fora ----------------
+test('sem login, sem cadastro ou bloqueado: não lê nenhum dado do sistema', async () => {
+  const alvos = [['config', 'sistema'], ['config', 'escalas'], ['colaboradores', 'RECEBIMENTO'], ['semanas', SEM], ['b_semanas', SEM_B1],
+    ['gestao', 'colaboradores'], ['gocorr', 'o1'], ['gassin', 'a1'], ['eq', 'cadastro'], ['eqlanc', 'l1'], ['historico', 'h1'],
+    ['usuarios', 'liderRec'], ['integracao', 'senior'], ['avisos', 'liderRec']];
+  for (const quem of [null, 'semPerfil', 'bloq']) for (const [c, id] of alvos) await assertFails(getDoc(doc(db(quem), c, id)));
+});
+
+// ---------------- separação por módulo ----------------
+test('quem não tem o Efetivo não lê fichas, ocorrências nem assinaturas', async () => {
+  for (const quem of ['liderRec', 'gestorP', 'coord', 'sup', 'liderEq']) {
+    await assertFails(getDoc(doc(db(quem), 'gocorr', 'o1')));
+    await assertFails(getDoc(doc(db(quem), 'gassin', 'a1')));
+    await assertFails(getDoc(doc(db(quem), 'gestao', 'colaboradores')));
+  }
+});
+test('cada módulo só é lido por quem tem o módulo', async () => {
+  await assertFails(getDoc(doc(db('liderEq'), 'colaboradores', 'RECEBIMENTO')));
+  await assertFails(getDoc(doc(db('liderG'), 'eq', 'cadastro')));
+  await assertFails(getDoc(doc(db('liderRec'), 'b_semanas', SEM_B1)));
+  await assertFails(getDoc(doc(db('liderRec'), 'eqlanc', 'l1')));
+  await assertSucceeds(getDoc(doc(db('liderEq'), 'eqlanc', 'l1')));
+  await assertSucceeds(getDoc(doc(db('sup'), 'b_semanas', SEM_B1)));
+});
+
+// ---------------- Efetivo: ocorrências e assinaturas ----------------
+test('Efetivo: líder registra ocorrência em nome próprio e só muda a situação da assinatura', async () => {
+  const d = db('liderG');
+  await assertSucceeds(getDoc(doc(d, 'gocorr', 'o1')));
+  await assertSucceeds(setDoc(doc(d, 'gocorr', 'nova1'), { criadoPor: 'liderG', status: 'pendente', desc: 'x' }));
+  await assertFails(setDoc(doc(d, 'gocorr', 'nova2'), { criadoPor: 'outro', status: 'pendente', desc: 'x' }));
+  await assertSucceeds(updateDoc(doc(d, 'gocorr', 'o1'), { status: 'assinada' }));
+  await assertFails(updateDoc(doc(d, 'gocorr', 'o1'), { desc: 'texto trocado' }));
+  await assertFails(deleteDoc(doc(d, 'gocorr', 'o1')));
+  await assertSucceeds(deleteDoc(doc(db('gestorG'), 'gocorr', 'o2')));
+});
+test('Efetivo: somente leitura consulta e não registra nada', async () => {
+  const d = db('leitorG');
+  await assertSucceeds(getDoc(doc(d, 'gocorr', 'o1')));
+  await assertFails(setDoc(doc(d, 'gocorr', 'nova3'), { criadoPor: 'leitorG', status: 'pendente' }));
+  await assertFails(setDoc(doc(d, 'gassin', 'nova3'), { por: 'leitorG' }));
+});
+test('Efetivo: assinatura gravada não muda; só o administrador apaga', async () => {
+  await assertFails(updateDoc(doc(db('admin'), 'gassin', 'a1'), { metodo: 'papel' }));
+  await assertFails(updateDoc(doc(db('liderG'), 'gassin', 'a1'), { metodo: 'papel' }));
+  await assertFails(deleteDoc(doc(db('liderG'), 'gassin', 'a1')));
+  await assertFails(deleteDoc(doc(db('gestorG'), 'gassin', 'a1')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'gassin', 'a2')));
+});
+
+// ---------------- Atividades: áreas ----------------
+test('Atividades: líder aponta só na própria área e não muda a área da semana', async () => {
+  await assertSucceeds(updateDoc(doc(db('liderRec'), 'semanas', SEM), { s: { 'REC-001': 'R______' } }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', SEM), { area: 'PREPARAÇÃO' }));
+  await assertFails(setDoc(doc(db('liderRec'), 'semanas', 'RECEBIMENTO|2026-10-19'), { area: 'RECEBIMENTO', s: {} }));
+  await assertSucceeds(updateDoc(doc(db('coord'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }));
+  await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { s: { 'B1-001': 'R______' } }));
+});
+test('Atividades: foto só na própria área, em nome próprio, e no máximo 6 por atividade no dia', async () => {
+  const ev = (semana, extra = {}) => ({ semana, area: 'RECEBIMENTO', pid: 'REC-001', k: 2, por: 'liderRec', thumb: 'x', ...extra });
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'evidencias', 'e1'), ev(SEM)));
+  await assertFails(setDoc(doc(db('liderRec'), 'evidencias', 'e2'), ev(SEM_CHEIA)));
+  await assertFails(setDoc(doc(db('liderRec'), 'evidencias', 'e3'), ev(SEM, { por: 'outro' })));
+  await assertFails(setDoc(doc(db('liderPrep'), 'evidencias', 'e4'), ev(SEM, { por: 'liderPrep' })));
+});
+
+// ---------------- histórico, integração e avisos ----------------
+test('histórico: cada um registra só em nome próprio e ninguém altera', async () => {
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'historico', 'h2'), { at: serverTimestamp(), uid: 'liderRec', nome: 'x', t: 'y' }));
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), { at: serverTimestamp(), uid: 'admin', nome: 'x', t: 'y' }));
+  await assertFails(updateDoc(doc(db('admin'), 'historico', 'h1'), { t: 'z' }));
+  await assertFails(deleteDoc(doc(db('admin'), 'historico', 'h1')));
+});
+test('integração com o Senior: só o administrador lê', async () => {
+  await assertFails(getDoc(doc(db('gestorG'), 'integracao', 'senior')));
+  await assertSucceeds(getDoc(doc(db('admin'), 'integracao', 'senior')));
+});
+test('avisos no celular: cada um vê só os próprios aparelhos', async () => {
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'avisos', 'liderRec')));
+  await assertFails(getDoc(doc(db('liderPrep'), 'avisos', 'liderRec')));
+  await assertFails(setDoc(doc(db('liderPrep'), 'avisos', 'liderRec'), { tokens: ['x'] }));
+});
+test('escalas: todos os ativos leem; só administrador e gestor alteram', async () => {
+  await assertSucceeds(getDoc(doc(db('leitorG'), 'config', 'escalas')));
+  await assertFails(setDoc(doc(db('liderRec'), 'config', 'escalas'), { x: 1 }));
+  await assertFails(setDoc(doc(db('coord'), 'config', 'escalas'), { x: 1 }));
+  await assertSucceeds(setDoc(doc(db('gestorP'), 'config', 'escalas'), { x: 1 }));
+});
