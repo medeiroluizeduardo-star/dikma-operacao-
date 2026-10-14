@@ -1,0 +1,8 @@
+{
+  "name": "dikma-admin",
+  "private": true,
+  "type": "module",
+  "description": "Rotinas de administração do Dikma Operação (rodam no GitHub Actions): dados de importação, administrador, cópia de segurança e restauração",
+  "engines": { "node": ">=20" },
+  "dependencies": { "firebase-admin": "^12.7.0" }
+}

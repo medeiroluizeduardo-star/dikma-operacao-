@@ -60,12 +60,14 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 3. Abra a aba **Actions**. A publicação "Publicar no Firebase" roda sozinha e termina com ✓ verde em 1 a 2 minutos.
 4. Acesse `https://ID-DO-PROJETO.web.app`.
 
-> Se a pasta `.github` não subir: no repositório, clique em **Add file > Create new file**, digite o nome `.github/workflows/deploy.yml` e cole o conteúdo do arquivo do mesmo nome.
+> Se a pasta `.github` não subir: no repositório, clique em **Add file > Create new file**, digite o nome `.github/workflows/blank.yml` e cole o conteúdo do arquivo do mesmo nome.
 
 ### 8. Primeiro acesso
-1. Abra o endereço. Como ainda não existe administrador, aparece a tela **Primeiro acesso**: informe seu nome, um usuário (ex.: `luiz.eduardo`) e uma senha.
-2. Na tela seguinte, escolha a semana inicial e clique em **Importar e gerar a programação**. Isso carrega o plano padrão, as rotas, o efetivo e gera o mês atual e os dois seguintes.
-3. Em **Usuários e acessos**, cadastre cada líder: nome, usuário, perfil e área. O sistema sugere uma senha provisória e mostra os dados para você passar à pessoa. No primeiro acesso ela cria a própria senha.
+1. No GitHub: **Actions › Administrador do sistema › Run workflow**. Informe seu usuário (ex.: `luiz.eduardo`) e seu nome e clique em **Run workflow**.
+2. Abra a execução que terminou (✓ verde). O resumo mostra a **senha provisória**.
+3. Abra o endereço do sistema e entre com o usuário e a senha provisória. O sistema pede uma senha nova.
+4. Na tela seguinte, escolha a semana inicial e clique em **Importar e gerar a programação**. Isso carrega o plano padrão, as rotas, o efetivo e gera o mês atual e os dois seguintes.
+5. Em **Usuários e acessos**, cadastre cada líder: nome, usuário, perfil e área. O sistema sugere uma senha provisória e mostra os dados para você passar à pessoa. No primeiro acesso ela cria a própria senha.
 
 ## Usuários e senhas
 - Só o administrador cadastra pessoas, em **Usuários e acessos**.
@@ -73,6 +75,31 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - Esqueceu a senha: o administrador clica em **Redefinir senha** na linha da pessoa e passa a nova senha provisória.
 - Cada pessoa troca a própria senha em **Alterar senha** (menu lateral ou **Mais** no celular).
 - Para tirar o acesso de alguém, mude o perfil para **Bloqueado**.
+- **Administrador sem acesso** (esqueceu a senha, perfil trocado por engano, conta apagada): no GitHub, **Actions › Administrador do sistema › Run workflow** com o usuário dele (o nome só é preciso se o usuário não existir). O resumo da execução mostra uma senha provisória. A mesma rotina promove um usuário existente a administrador.
+- Por segurança, ninguém vira administrador pelo site: só por essa rotina, que exige acesso ao repositório do GitHub.
+
+## Segurança dos dados
+- **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) ficam na pasta `dados-importacao` do repositório. Na publicação, eles são gravados no banco (`seeds/`), e só a administração do módulo correspondente lê. Os botões de importação continuam iguais.
+- **A demonstração (`?demo`) usa nomes e matrículas fictícios** (pasta `public/demo`). Se os arquivos de `dados-importacao` mudarem, gere de novo com `node ferramentas/gerar-demo.mjs`.
+- **Conferência antes de publicar:** se algum arquivo de planilha ou nome real de colaborador aparecer na pasta `public`, a publicação para com erro.
+- **Testes automáticos das regras:** antes de cada publicação, o GitHub roda os testes de `testes/` no emulador do Firebase. Eles conferem, perfil por perfil, quem lê e quem altera cada parte do banco (ex.: líder sem o Efetivo não lê ocorrências; ninguém se promove a administrador; assinatura gravada não muda). Se algum falhar, nada é publicado. Mudou as regras de propósito? Ajuste o teste correspondente em `testes/regras.test.mjs`.
+- **Propostas de mudança (pull request):** os mesmos testes rodam na proposta, antes de ela entrar na `main`.
+
+## Cópia de segurança
+Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3h:
+- **Diária:** todas as coleções, menos o histórico e as fotos. Fica guardada 30 dias.
+- **Semanal (domingo):** inclui o histórico e a lista de fotos com miniatura. Fica guardada 90 dias.
+- **Completa (só manual, Run workflow):** inclui as fotos e arquivos em tamanho cheio. Fica 7 dias. É pesada: use quando quiser baixar tudo para um computador.
+- O resumo de cada execução mostra quantos documentos foram lidos (contam na cota grátis de 50 mil leituras por dia) e o tamanho do pacote. O GitHub grátis guarda até 500 MB de pacotes em repositório privado.
+- Para baixar: abra a execução e clique no pacote em **Artifacts**.
+
+**Restaurar** (rotina **Restaurar cópia de segurança**, Run workflow):
+1. Pegue o número da execução da cópia (está no resumo dela e no endereço: `.../actions/runs/NÚMERO`).
+2. Informe as coleções (`todas` ou, por exemplo, `gestao,gocorr`) e, se for um item só, os documentos.
+3. Rode primeiro **sem** marcar *Aplicar de verdade*: o resumo mostra quantos documentos voltariam e quantos já estão iguais.
+4. Rode de novo marcando *Aplicar de verdade*. O estado de antes fica no pacote **estado-antes-da-restauracao** daquela execução; para desfazer, restaure informando o número dela.
+- *Apagar o que foi criado depois da cópia* remove, nas coleções escolhidas, os documentos que não existiam na cópia.
+- Cada documento gravado conta na cota grátis de 20 mil gravações por dia.
 
 > Por dentro, o Firebase guarda cada usuário com um e-mail interno gerado pelo sistema (`...@usuarios.dikma.app`). Ninguém precisa saber dele nem recebe nada nesse endereço.
 
@@ -282,7 +309,6 @@ public/
   index.html          visual e estrutura da página
   app.js              telas e regras de negócio (módulo Atividades Pátio)
   equip.js, eqcalc.js módulo Operação (equipamentos) e as fórmulas dos indicadores
-  seed-equip.json     dados da planilha de equipamentos (usados só na importação)
   gestao.js           módulo Efetivo (fichas de acompanhamento)
   pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
   importar.js         Efetivo › Importar dados (lê Excel e CSV)
@@ -291,20 +317,26 @@ public/
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
-  seed-bateria.json   dados da planilha da Bateria (usados só na importação)
-  seed-efetivo.json   planilha EFETIVO PARA O SISTEMA do RH (usada em Efetivo › Importar dados)
   vendor/xlsx.js      leitor de planilhas SheetJS 0.18.5 (carregado só na importação)
-  seed-gestao.json    dados da planilha de fichas (usados só na importação)
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)
   cal.js              calendário operacional (semana pertence ao mês da quinta-feira)
-  seed.json           dados extraídos da planilha (usados só na importação)
+  demo/               dados da demonstração, com nomes e matrículas fictícios
   vendor/firebase.js  biblioteca do Firebase 10.14.1
   img/                logo da Dikma
   sw.js, manifest.webmanifest, icons/   instalação no celular e uso sem sinal
 firestore.rules       regras de segurança por perfil e área
 firebase.json         configuração do Hosting
-.github/workflows/deploy.yml   publicação automática
+.github/workflows/blank.yml        publicação automática (roda os testes antes)
+.github/workflows/testes.yml       testes automáticos (regras, rotinas e site sem dados pessoais)
+.github/workflows/backup.yml       cópia de segurança diária
+.github/workflows/restaurar.yml    restaurar uma cópia
+.github/workflows/administrador.yml   criar ou recuperar administrador
+dados-importacao/     planilhas originais (seed.json, seed-bateria.json, seed-equip.json, seed-gestao.json,
+                      seed-efetivo.json); vão para o banco na publicação, nunca para o site
+integracao/admin/     rotinas do GitHub: dados de importação, administrador, cópia e restauração
+testes/               testes automáticos no emulador do Firebase
+ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios) e conferir-site.mjs
 ```
 
 ## Estrutura do banco (Firestore)
@@ -328,6 +360,8 @@ firebase.json         configuração do Hosting
 | `gassin/{id}` | assinaturas (na tela, foto da via em papel ou recusa com testemunhas) |
 | `evidencias/{id}` | lista de anexos com miniatura (atividade, dia, quem enviou) |
 | `evidenciasArquivo/{id}` | foto ou arquivo completo, lido só ao abrir |
+| `seeds/{nome}` | dados das planilhas originais para a importação (gravados na publicação; só a administração lê) |
+| `config/bootstrap` | marca que o sistema tem administrador (gravado só pela rotina do GitHub) |
 
 Um documento por área e semana mantém cada tela em poucas leituras, dentro do plano grátis (50 mil leituras por dia).
 

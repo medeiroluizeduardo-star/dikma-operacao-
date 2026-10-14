@@ -1,0 +1,39 @@
+name: Testes automáticos
+
+# Confere que o site não tem dados pessoais e testa as regras de segurança e as rotinas no emulador do Firebase.
+# Roda em toda proposta de mudança (pull request) e antes de cada publicação (chamado pelo blank.yml).
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Site sem dados pessoais
+        run: node ferramentas/conferir-site.mjs
+
+      - name: Instalar
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          npm install --no-audit --no-fund --prefix testes
+
+      - name: Regras de segurança e rotinas (emulador do Firebase)
+        working-directory: testes
+        run: npx firebase emulators:exec --only firestore,auth --project demo-dikma --config ../firebase.json "npm test"

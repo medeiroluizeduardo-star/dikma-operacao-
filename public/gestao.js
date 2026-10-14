@@ -573,7 +573,7 @@ export function criarGestao(X) {
       default: if (isAdmin()) IMP.onClick(d); break;
       case 'importar': {
         UI.busy = true; render();
-        try { const s = await (await fetch('seed-gestao.json')).json(); await DB.gImportar(s); DB.log('Gestão: importou a planilha de fichas'); toast('Planilha de fichas importada'); }
+        try { const s = await DB.seed('seed-gestao.json'); await DB.gImportar(s); DB.log('Gestão: importou a planilha de fichas'); toast('Planilha de fichas importada'); }
         catch (err) { toast('Erro ao importar: ' + (err.message || err)); }
         UI.busy = false; render(); break;
       }

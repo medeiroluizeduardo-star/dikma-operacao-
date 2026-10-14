@@ -233,7 +233,7 @@ export function criarImportador(X) {
   async function planilhaRH() {
     ST.busy = true; ST.erro = ''; ST.P = null; ST.arq = 'EFETIVO PARA O SISTEMA'; render();
     try {
-      const s = await (await fetch('seed-efetivo.json')).json();
+      const s = await DB.seed('seed-efetivo.json');
       const cols = {}; s.colunas.forEach((c, i) => { const k = campoDe(c); if (k) cols[k] = i; });
       ST.P = analisar({ colab: { aba: 'Planilha1', cols, dados: s.linhas } }, ST.arq);
     } catch (err) { ST.erro = (err && err.message) || String(err); }
@@ -242,7 +242,7 @@ export function criarImportador(X) {
   async function planilhaOriginal() {
     ST.busy = true; ST.erro = ''; ST.P = null; ST.arq = 'Planilha original de fichas (FO-RED-COQ-004)'; render();
     try {
-      const s = await (await fetch('seed-gestao.json')).json();
+      const s = await DB.seed('seed-gestao.json');
       const cols = { mat: 0, nome: 1, funcao: 2, turma: 3, lider: 4, adm: 5, dem: 6 };
       const ocols = { data: 0, mat: 1, nome: 2, tipo: 3, desc: 4, lider: 5, assin: 6, assinadoEm: 7, testemunha: 8 };
       ST.P = analisar({

@@ -14,7 +14,10 @@ for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: (
 export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k === 'patio' ? ['operacao'] : [])).includes(SETS[k].mod));
 export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
-const LS = 'coqueria-demo-v1';
+const LS = 'coqueria-demo-v2';
+// Demonstração: dados de exemplo com nomes e matrículas fictícios (pasta demo/). Os dados reais não ficam no site.
+const seed_ = async nome => { const r = await fetch('demo/' + nome.replace(/^seed/, 'exemplo')); if (!r.ok) throw new Error('Dados de exemplo não encontrados: ' + nome); return r.json(); };
+export const seed = seed_;
 let cb = {}, me = null;
 
 const changed = () => { persist(); cb.onData && cb.onData(); };
@@ -27,7 +30,7 @@ function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^=
 function rnd(seed) { let t = seed + 0x6D2B79F5; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; }
 
 async function freshSet(k) {
-  const seed = await (await fetch(SETS[k].seed)).json();
+  const seed = await seed_(SETS[k].seed);
   const x = seedParaBanco(seed, SETS[k].areas);
   const st = S[k] = novoSet();
   Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sit, semanas: {} });
@@ -55,7 +58,7 @@ async function freshSet(k) {
 async function fresh() {
   cache.log = [];
   for (const k of SET_KEYS) await freshSet(k);
-  const sg = await (await fetch('seed-gestao.json')).json();
+  const sg = await seed_('seed-gestao.json');
   cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o, assinaturaId: null, metodo: null })) };
   cache.gAssin = {};
   await carregarE(null);
@@ -83,7 +86,7 @@ export async function start(callbacks) {
     for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, sitExtra: x.sitExtra || {}, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
     Object.assign(cache, { log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     await carregarE(saved.e);
-    if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await (await fetch('seed-gestao.json')).json(); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
+    if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await seed_('seed-gestao.json'); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
   } else { saved = null; await fresh(); }
   for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m));
   try { amostras(); } catch (e) { /* sem canvas */ }
@@ -222,7 +225,7 @@ export async function gSeniorAplicado() { if (cache.g.senior) { cache.g.senior.a
 // Demonstração da ponte com o Senior: simula uma leitura feita hoje às 06:00, com algumas mudanças.
 async function seniorExemplo() {
   try {
-    const s = await (await fetch('seed-efetivo.json')).json();
+    const s = await seed_('seed-efetivo.json');
     const registros = s.linhas.map(l => ({ mat: l[0], nome: l[1], funcao: l[2], area: l[3], rota: l[4], regime: l[5], turma: l[6], lider: l[7], adm: l[8] }));
     registros[0] = { ...registros[0], funcao: 'EXECUTOR II' };
     registros.push({ mat: '9001', nome: 'COLABORADOR NOVO DO SENIOR', funcao: 'AJUDANTE', area: 'Coqueria - Bateria', rota: 'Coqueria - Bateria 2', regime: 'Adm', turma: 'ADM', adm: new Date().toISOString().slice(0, 10) });
@@ -249,7 +252,7 @@ export function gCarregarAssin() { /* já está em memória */ }
 async function carregarE(salvo) {
   let e = salvo;
   if (!e || !e.config) {
-    const s = await (await fetch('seed-equip.json')).json(); let n = 0;
+    const s = await seed_('seed-equip.json'); let n = 0;
     const id = () => 'e' + (n++).toString(36);
     e = { config: s.config, cad: { operadores: s.operadores, frota: s.frota }, lanc: s.lanc.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), par: s.paradas.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), insp: [], aval: s.aval || {} };
   }

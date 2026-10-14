@@ -246,12 +246,7 @@ function renderGate() {
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
     ${GOOGLE ? `<button class="btn gbtn" data-act="loginGoogle">${I.google} Entrar com Google (administrador)</button>` : ''}
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
-  if (s === 'firstAdmin') return gate(`<h2>Primeiro acesso</h2><p class="muted">Ainda não existe nenhum administrador. Crie o seu acesso.</p><form id="fFirst" class="stackform" novalidate>
-    <label class="sel"><span>Seu nome</span><input class="in" id="faNome" required></label>
-    <label class="sel"><span>Usuário</span><input class="in" id="faUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="ex.: luiz.eduardo" required></label>
-    ${senhaField('faPass', 'Senha (mínimo 6 caracteres)', 'new-password')}
-    <p class="err" id="faErr" role="alert" hidden></p>
-    <button class="btn pri big" type="submit">Criar administrador</button></form>`);
+  if (s === 'firstAdmin') return gate(`<h2>Sistema sem administrador</h2><p>Por segurança, o administrador não é criado por esta tela.</p><p class="muted small">Quem cuida do sistema cria pelo GitHub: <b>Actions › Administrador do sistema › Run workflow</b>, informando nome e usuário. A senha provisória aparece no resultado da execução.</p>`);
   if (s === 'mustChange') return gate(`<h2>Crie sua senha</h2><p>Olá, <b>${esc(title(AUTH.user.nome))}</b>. No primeiro acesso, troque a senha provisória por uma só sua.</p><form id="fMust" class="stackform" novalidate>
     ${senhaField('mcPass', 'Nova senha (mínimo 6 caracteres)', 'new-password')}
     ${senhaField('mcPass2', 'Repita a nova senha', 'new-password')}
@@ -1103,8 +1098,8 @@ function vUsuarios() {
   const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${Object.values(SETS).map(st => `<optgroup label="${st.nome}">${st.areas.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select>`;
   return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div></div>
   <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="uform" novalidate>
-   <div class="ur r1"><label class="sel"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Edmar Lucas Gomes de Araujo"></label>
-   <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: edmar.araujo"></label>
+   <div class="ur r1"><label class="sel"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Maria Aparecida Souza"></label>
+   <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: maria.souza"></label>
    <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label></div>
    <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
    <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
@@ -1548,7 +1543,7 @@ document.addEventListener('click', async e => {
     case 'importar': {
       UI.busy = true; render();
       try {
-        const seed = await (await fetch(SETS[SK].seed)).json();
+        const seed = await DB.seed(SETS[SK].seed);
         await DB.importar(seed, [CUR_MONTH, addMonth(CUR_MONTH, 1), addMonth(CUR_MONTH, 2)], UI.impIni);
         DB.log('Importou os dados da planilha e gerou a programação'); toast('Dados importados');
       } catch (err) { toast('Erro ao importar: ' + err.message); }
@@ -1561,16 +1556,11 @@ document.addEventListener('click', async e => {
   }
 });
 document.addEventListener('submit', async e => {
-  const f = e.target; if (!['fLogin', 'fFirst', 'fMust', 'fNovoUser'].includes(f.id)) return;
+  const f = e.target; if (!['fLogin', 'fMust', 'fNovoUser'].includes(f.id)) return;
   e.preventDefault();
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
     if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = 'meudia'; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
-    if (f.id === 'fFirst') {
-      const nome = $('faNome').value.trim(), login = DB.normLogin($('faUser').value), senha = $('faPass').value;
-      if (!nome) throw new Error('Informe seu nome.'); if (senha.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
-      await DB.criarPrimeiroAdmin({ nome, login, senha }); return;
-    }
     if (f.id === 'fMust') {
       const n = $('mcPass').value, n2 = $('mcPass2').value;
       if (n.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); if (n !== n2) throw new Error('As duas senhas não são iguais.');
@@ -1597,7 +1587,7 @@ document.addEventListener('submit', async e => {
     }
   } catch (err) {
     UI.busy = false;
-    const id = { fLogin: 'lgErr', fFirst: 'faErr', fMust: 'mcErr', fNovoUser: 'nuErr' }[f.id];
+    const id = { fLogin: 'lgErr', fMust: 'mcErr', fNovoUser: 'nuErr' }[f.id];
     showErr(id, err);
   } finally { const b = f.querySelector('[type=submit]'); if (b && f.isConnected) b.disabled = false; }
 });

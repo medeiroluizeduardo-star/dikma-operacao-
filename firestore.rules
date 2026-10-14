@@ -27,13 +27,23 @@ service cloud.firestore {
     function ba() { return ativo() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
     function gestorDaB(area) { return gestor() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
-    function boot() { return /databases/$(database)/documents/config/bootstrap; }
 
-    // Criação do primeiro administrador: só acontece uma vez.
+    // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
+    // Ninguém grava pelo site: o administrador é criado ou recuperado pela rotina do GitHub
+    // "Administrador do sistema", que usa a chave de serviço (não passa por estas regras).
     match /config/bootstrap {
       allow get: if true;
-      allow create: if signed() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if false;
+      allow list, create, update, delete: if false;
+    }
+
+    // Dados das planilhas originais para a importação (pasta dados-importacao do repositório).
+    // A publicação grava com a chave de serviço; só a administração do módulo correspondente lê.
+    match /seeds/{nome} {
+      allow get: if (nome == 'seed' && admMod('operacao'))
+        || (nome == 'seed-bateria' && admMod('bateria'))
+        || (nome == 'seed-equip' && admMod('equipamentos'))
+        || (nome in ['seed-gestao', 'seed-efetivo'] && admMod('gestao'));
+      allow list, create, update, delete: if false;
     }
 
     match /config/sistema {
@@ -45,17 +55,13 @@ service cloud.firestore {
     match /logins/{login} {
       allow get: if true;
       allow list: if admin();
-      allow create: if admin()
-        || (signed() && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid);
-      allow update, delete: if admin();
+      allow create, update, delete: if admin();
     }
 
     // Só o administrador cadastra pessoas.
     match /usuarios/{uid} {
       allow read: if signed() && (request.auth.uid == uid || admin());
-      allow create: if admin()
-        || (signed() && request.auth.uid == uid && request.resource.data.papel == 'admin'
-            && !exists(boot()) && getAfter(boot()).data.uid == request.auth.uid);
+      allow create: if admin();
       allow update: if admin()
         || (request.auth.uid == uid && soAltera(['trocarSenha', 'ultimoAcesso'])
             && request.resource.data.get('trocarSenha', false) == false);
