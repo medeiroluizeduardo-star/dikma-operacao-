@@ -13,9 +13,10 @@
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" } }
 //   historico/{auto}          { at, uid, nome, t }
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
-//   gestao/colaboradores      { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }
-//   gocorr/{id}               { data, mat, nome, tipo, desc, lider, status, assinadoEm, assinaturaId, metodo, testemunha }
-//   gassin/{id}               { mat, ocorrIds[], metodo: tela|papel|recusa, colab, resp, respNome, foto, testemunhas[], em }
+//   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
+//                             (área das Atividades, OPERAÇÃO DE EQUIPAMENTOS ou GERAL). Cada um lê só as áreas dele.
+//   gocorr/{id}               { area, data, mat, nome, tipo, desc, lider, recolhe, status, assinadoEm, assinaturaId, metodo, testemunha }
+//   gassin/{id}               { area, mat, ocorrIds[], metodo: tela|papel|recusa, colab, resp, respNome, foto, testemunhas[], em }
 //   eq/config, eq/cadastro    módulo Operação: turnos, causas, metas, pesos, feriados · operadores e frota
 //   eqlanc/{id} eqpar/{id} eqinsp/{id}   lançamentos, paradas e inspeções (campo mes = AAAA-MM)
 //   integracao/senior        { estado, modo, recebidoEm, total, registros[], erro, aplicadoEm }  (ponte com o Senior)
@@ -36,6 +37,7 @@ import {
   getMessaging, getToken, deleteToken, mensagensSuportadas
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth } from './cal.js';
+import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -75,7 +77,7 @@ const erroAuth = e => {
   if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email', 'login/nao-existe'].includes(c)) return 'Usuário ou senha incorretos.';
   if (c === 'auth/too-many-requests') return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
   if (c === 'auth/network-request-failed') return 'Sem conexão com a internet.';
-  if (c === 'auth/weak-password') return 'A senha precisa ter pelo menos 6 caracteres.';
+  if (c === 'auth/weak-password' || c === 'auth/password-does-not-meet-requirements') return 'A senha precisa ter pelo menos 8 caracteres.';
   if (c === 'auth/operation-not-allowed') return 'O login por senha não está ativado no Firebase (Authentication > Método de login > E-mail/senha).';
   if (c === 'auth/requires-recent-login') return 'Por segurança, saia e entre de novo antes de trocar a senha.';
   return (e && e.message) || 'Erro inesperado.';
@@ -93,6 +95,12 @@ async function loadConfig() {
   return null;
 }
 
+// Sessão expira depois de 7 dias sem abrir o sistema (celular compartilhado ou perdido). O uso fica marcado neste aparelho.
+const USO_LS = 'dikma-ultimo-uso', SEM_USO_MAX = 7 * 864e5;
+let sessaoExpirou = false;
+export function marcarUso() { try { const agora = Date.now(); if (agora - (+localStorage.getItem(USO_LS) || 0) > 6e5) localStorage.setItem(USO_LS, String(agora)); } catch (e) { /* sem armazenamento: não expira */ } }
+function expirouSemUso() { try { const t = +localStorage.getItem(USO_LS) || 0; return !!t && Date.now() - t > SEM_USO_MAX; } catch (e) { return false; } }
+
 export async function start(callbacks) {
   cb = callbacks;
   cfg = await loadConfig();
@@ -104,6 +112,8 @@ export async function start(callbacks) {
   onAuthStateChanged(auth, u => {
     stopAll();
     if (!u) { me = null; signedOutState(); return; }
+    if (expirouSemUso()) { sessaoExpirou = true; try { localStorage.removeItem(USO_LS); } catch (e) { /* ignora */ } fbSignOut(auth); return; }
+    marcarUso();
     cb.onAuth({ status: 'loading' });
     // O perfil é criado pelo administrador; aqui só acompanhamos.
     userSub = onSnapshot(doc(db, 'usuarios', u.uid), s => {
@@ -122,7 +132,8 @@ export async function start(callbacks) {
 async function signedOutState() {
   let temAdmin = true;
   try { temAdmin = (await getDoc(doc(db, 'config', 'bootstrap'))).exists(); } catch (e) { /* sem sinal: mostra o login normal */ }
-  cb.onAuth({ status: temAdmin ? 'signedOut' : 'firstAdmin' });
+  cb.onAuth({ status: temAdmin ? 'signedOut' : 'firstAdmin', expirou: sessaoExpirou });
+  sessaoExpirou = false;
 }
 
 export async function signIn(loginDigitado, senha) {
@@ -163,7 +174,7 @@ export async function criarUsuario({ nome, login, senha, papel, area, area2, mod
   if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
   const { email, uid } = await novaConta(login, senha);
   const b = writeBatch(db);
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'usuarios', uid), { nome, nomeUp: String(nome || '').toUpperCase(), login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }
@@ -200,7 +211,7 @@ function startData() {
     if (!temSet(me, k)) { st.configLoaded = true; continue; }
     on(doc(db, C('config', k), 'sistema'), s => { st.config = s.exists() ? s.data() : null; st.configLoaded = true; changed(); });
     on(collection(db, C('plano', k)), qs => { st.plano = {}; qs.forEach(d => { st.plano[d.id] = d.data().itens || []; }); changed(); });
-    on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; }); changed(); });
+    on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; }); st.colabsLoaded = !qs.metadata.fromCache || qs.size > 0; changed(); if (gestaoOn) conferirAreas(); });
   }
   on(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(40)), qs => {
     cache.log = qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { ...x, at: x.at ? x.at.toDate() : new Date() }; });
@@ -214,6 +225,7 @@ function startData() {
   // Abas por perfil (tela Perfis e permissões).
   on(doc(db, 'config', 'permissoes'), s => { cache.permissoes = s.exists() ? (s.data().abas || {}) : {}; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
+  if (me.papel === 'admin') on(doc(db, 'avisos_enviados', 'estado'), s => { const x = s.exists() ? s.data() : null; cache.avisosEstado = x ? { ...x, enviados: undefined, ultimaExecucao: x.ultimaExecucao && x.ultimaExecucao.toDate ? x.ultimaExecucao.toDate() : null } : null; changed(); });
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear();
@@ -370,7 +382,7 @@ export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), {
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
-export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));
+export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 
 export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
@@ -411,40 +423,121 @@ export async function importar(seed, meses, aPartirDe) {
 }
 
 // ---------- módulo Gestão (fichas de acompanhamento) ----------
+// Fichas por área: quem vê todas as áreas acompanha a coleção gcolab inteira; os demais, só os documentos das áreas deles.
+// Ocorrências: todas as áreas = coleção inteira; os demais = uma consulta por área + as que registrou + as que vai recolher.
+let fichasPorArea = {};           // gcolab: { ÁREA: itens[] } como está no banco
+let ocorrFontes = {};             // consulta → { id: ocorrência }
+let chaveArea = () => null;       // área de atuação de uma ficha (definida pelo app; null = ainda não dá para saber)
+export const definirChaveArea = fn => { chaveArea = fn; };
+const montarFichas = () => { cache.g.colabs = Object.keys(fichasPorArea).sort().flatMap(a => fichasPorArea[a]).sort((x, y) => String(x.nome).localeCompare(String(y.nome))); };
+const montarOcorr = () => { const m = {}; for (const f of Object.values(ocorrFontes)) Object.assign(m, f); cache.g.ocorr = Object.values(m); };
+// Área em que a ficha está guardada hoje (pela matrícula).
+export function areaDaFicha(mat) {
+  for (const [a, l] of Object.entries(fichasPorArea)) if (!a.startsWith('_') && l.some(c => String(c.mat) === String(mat))) return a;
+  return FICHA_GERAL;
+}
 function startGestao() {
   gestaoOn = true;
-  const ok = { c: false, l: false, o: false };
-  const g = () => { cache.g.loaded = ok.c && ok.l && ok.o; cache.gVersao++; changed(); };
-  const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
-  on(doc(db, 'gestao', 'config'), s => { cache.g.config = s.exists() ? s.data() : null; ok.c = true; g(); });
-  on(doc(db, 'gestao', 'colaboradores'), s => { cache.g.colabs = (s.exists() && s.data().itens) || []; ok.l = true; g(); });
-  on(collection(db, 'gocorr'), qs => { cache.g.ocorr = qs.docs.map(d => ({ id: d.id, ...d.data() })); ok.o = true; g(); });
+  fichasPorArea = {}; ocorrFontes = {}; antigaFichas = null;
+  const todas = veTodasFichas(me);
+  const areas = todas ? [] : areasFichaDe(me);
+  const espera = new Set(['c', 'l', ...(todas ? ['o'] : ['oc', 'or', ...areas.map(a => 'o:' + a)]), ...areas.map(a => 'l:' + a)]);
+  if (!todas) espera.delete('l');
+  const pronto = k => { espera.delete(k); };
+  const g = () => { cache.g.loaded = espera.size === 0; cache.gVersao++; changed(); };
+  const on = (q, fn, k) => dataSubs.push(onSnapshot(q, fn, e => { if (k) pronto(k); g(); cb.onError && cb.onError(e); }));
+  on(doc(db, 'gestao', 'config'), s => { cache.g.config = s.exists() ? s.data() : null; pronto('c'); g(); }, 'c');
+  if (todas) {
+    on(collection(db, 'gcolab'), qs => { fichasPorArea = Object.fromEntries(qs.docs.map(d => [d.id, d.data().itens || []])); usarAntigaSeVazio(); montarFichas(); pronto('l'); g(); conferirAreas(); }, 'l');
+    // Antes da divisão por área a lista ficava num documento só. Enquanto gcolab estiver vazio, usa o antigo.
+    on(doc(db, 'gestao', 'colaboradores'), s => { antigaFichas = s.exists() ? (s.data().itens || []) : null; usarAntigaSeVazio(); montarFichas(); g(); conferirAreas(); });
+    on(collection(db, 'gocorr'), qs => { ocorrFontes = { todas: Object.fromEntries(qs.docs.map(d => [d.id, { id: d.id, ...d.data() }])) }; montarOcorr(); pronto('o'); g(); }, 'o');
+  } else {
+    for (const a of areas) on(doc(db, 'gcolab', a), s => { fichasPorArea[a] = s.exists() ? (s.data().itens || []) : []; montarFichas(); pronto('l:' + a); g(); }, 'l:' + a);
+    const fonte = (k, q) => on(q, qs => { ocorrFontes[k] = Object.fromEntries(qs.docs.map(d => [d.id, { id: d.id, ...d.data() }])); montarOcorr(); pronto(k); g(); }, k);
+    for (const a of areas) fonte('o:' + a, query(collection(db, 'gocorr'), where('area', '==', a)));
+    fonte('oc', query(collection(db, 'gocorr'), where('criadoPor', '==', me.uid)));
+    fonte('or', query(collection(db, 'gocorr'), where('recolhe', '==', me.nomeUp || String(me.nome || '').toUpperCase())));
+  }
+  g();
   // Ponte com o Senior: o que a rotina do GitHub trouxe (só o administrador vê).
   if (me.papel === 'admin') on(doc(db, 'integracao', 'senior'), s => { const x = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; cache.g.senior = x ? { ...x, recebidoEm: x.recebidoEm && x.recebidoEm.toDate ? x.recebidoEm.toDate() : null, tentativaEm: x.tentativaEm && x.tentativaEm.toDate ? x.tentativaEm.toDate() : null, aplicadoEm: x.aplicadoEm && x.aplicadoEm.toDate ? x.aplicadoEm.toDate() : null } : null; changed(); });
+}
+let antigaFichas = null;
+function usarAntigaSeVazio() {
+  if (antigaFichas && antigaFichas.length && !Object.keys(fichasPorArea).some(a => !a.startsWith('_'))) fichasPorArea = { _antiga: antigaFichas };
+}
+// Administrador: quando alguém muda de área nos módulos (ou a lista ainda está no documento antigo),
+// reorganiza as fichas por área e leva junto as ocorrências e assinaturas da pessoa. Só quando já dá para saber a área.
+let conferindo = null;
+function conferirAreas() {
+  if (!me || me.papel !== 'admin' || conferindo) return;
+  conferindo = setTimeout(async () => {
+    conferindo = null;
+    const itens = cache.g.colabs || []; if (!itens.length) return;
+    const antiga = !!fichasPorArea._antiga;
+    const errado = itens.some(c => { const k = chaveArea(c); return k && k !== areaDaFicha(c.mat); });
+    if (!antiga && !errado) return;
+    if (itens.some(c => chaveArea(c) == null)) return; // dados dos módulos ainda chegando
+    try { await gSalvarColabs(itens); if (antiga) { const b = writeBatch(db); b.delete(doc(db, 'gestao', 'colaboradores')); await b.commit(); } } catch (e) { cb.onError && cb.onError(e); }
+  }, 4000);
 }
 export const gSeniorAplicado = () => track(updateDoc(doc(db, 'integracao', 'senior'), { aplicadoEm: serverTimestamp(), aplicadoPor: me.nome || me.login || '' }));
 const gch = () => { cache.gVersao++; changed(); };
 export async function gImportar(seed) {
   const b = writeBatch(db);
   b.set(doc(db, 'gestao', 'config'), { codigo: seed.codigo, revisao: seed.revisao, declaracao: seed.declaracao, tipos: seed.tipos, importadoEm: serverTimestamp() });
-  b.set(doc(db, 'gestao', 'colaboradores'), { itens: seed.colabs });
-  for (const o of seed.ocorrencias) b.set(doc(collection(db, 'gocorr')), { ...o, metodo: o.status === 'assinada' ? 'importado' : null, assinaturaId: null, criadoPor: me.uid, criadoEm: serverTimestamp() });
   await b.commit();
+  await gSalvarColabs(seed.colabs);
+  await gImportarOcorrencias(seed.ocorrencias.map(o => ({ ...o, metodo: o.status === 'assinada' ? 'importado' : null })));
 }
 // Importação: grava várias ocorrências de uma vez (lotes de 400 por gravação).
 export async function gImportarOcorrencias(lista) {
   for (let i = 0; i < lista.length; i += 400) {
     const b = writeBatch(db);
-    for (const o of lista.slice(i, i + 400)) b.set(doc(collection(db, 'gocorr')), { assinadoEm: null, testemunha: '', ...o, metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null, criadoPor: me.uid, criadoEm: serverTimestamp() });
+    for (const o of lista.slice(i, i + 400)) b.set(doc(collection(db, 'gocorr')), { assinadoEm: null, testemunha: '', ...o, area: areaDaFicha(o.mat), metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null, criadoPor: me.uid, criadoEm: serverTimestamp() });
     await track(b.commit());
   }
 }
-export const gSalvarColabs = itens => track(setDoc(doc(db, 'gestao', 'colaboradores'), { itens }));
+// Grava a lista de fichas dividida por área (só administração do Efetivo). Quem mudou de área leva junto
+// as ocorrências e as assinaturas. Sem como saber a área agora (chaveArea = null), a ficha fica onde está.
+export function gSalvarColabs(itens) {
+  const grupos = {};
+  for (const c of itens) { const k = chaveArea(c) || (Object.keys(fichasPorArea).some(a => !a.startsWith('_')) ? areaDaFicha(c.mat) : chaveFicha(c.area)); (grupos[k] ||= []).push(c); }
+  const ops = [];
+  const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  for (const a of new Set([...Object.keys(grupos), ...Object.keys(fichasPorArea)])) {
+    if (a.startsWith('_')) continue;
+    const novo = grupos[a] || [];
+    if (!igual(novo, fichasPorArea[a] || [])) ops.push(['set', doc(db, 'gcolab', a), { itens: novo }]);
+  }
+  const areaNova = new Map(); for (const [a, l] of Object.entries(grupos)) for (const c of l) areaNova.set(String(c.mat), a);
+  const mudou = new Set();
+  for (const o of cache.g.ocorr || []) { const a = areaNova.get(String(o.mat)); if (a && o.area !== a) { ops.push(['upd', doc(db, 'gocorr', o.id), { area: a }]); mudou.add(String(o.mat)); } }
+  fichasPorArea = grupos; cache.g.colabs = itens;
+  // Não espera o servidor: sem sinal, as gravações ficam na fila e sobem quando a conexão voltar.
+  const t = [];
+  for (let i = 0; i < ops.length; i += 400) {
+    const b = writeBatch(db);
+    for (const [k, ref, v] of ops.slice(i, i + 400)) (k === 'set' ? b.set(ref, v) : b.update(ref, v));
+    t.push(track(b.commit()));
+  }
+  // assinaturas das pessoas que mudaram de área (precisa de sinal; se faltar, o administrador refaz na próxima conferência)
+  for (const m of mudou) {
+    t.push(getDocs(query(collection(db, 'gassin'), where('mat', '==', m))).then(qs => {
+      const a = areaNova.get(m); const b = writeBatch(db); let n = 0;
+      qs.forEach(d => { if (d.data().area !== a) { b.update(d.ref, { area: a }); n++; } });
+      return n ? track(b.commit()) : null;
+    }).catch(() => {}));
+  }
+  return Promise.all(t);
+}
 export const gSalvarConfig = patch => track(setDoc(doc(db, 'gestao', 'config'), patch, { merge: true }));
 export function gNovaOcorrencia(o) {
   const r = doc(collection(db, 'gocorr'));
-  track(setDoc(r, { ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
-  return { id: r.id, ...o };
+  const x = { ...o, area: areaDaFicha(o.mat) };
+  track(setDoc(r, { ...x, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
+  return { id: r.id, ...x };
 }
 export const gAtualizarOcorrencia = (id, patch) => track(updateDoc(doc(db, 'gocorr', id), patch));
 export async function gExcluirOcorrencias(ids) {
@@ -454,7 +547,8 @@ export function gExcluirOcorrencia(id) { const b = writeBatch(db); b.delete(doc(
 export function gAssinar(a) {
   const r = doc(collection(db, 'gassin'));
   const b = writeBatch(db);
-  const reg = { ...a, por: me.uid, porNome: me.nome || me.login || '' };
+  const oc = (cache.g.ocorr || []).find(o => a.ocorrIds.includes(o.id));
+  const reg = { ...a, area: (oc && oc.area) || areaDaFicha(a.mat), por: me.uid, porNome: me.nome || me.login || '' };
   b.set(r, { ...reg, criadoEm: serverTimestamp() });
   for (const id of a.ocorrIds) b.update(doc(db, 'gocorr', id), { status: a.metodo === 'recusa' ? 'recusada' : 'assinada', assinadoEm: a.metodo === 'recusa' ? null : a.em, assinaturaId: r.id, metodo: a.metodo, testemunha: (a.testemunhas || []).join(' e ') });
   cache.gAssin[r.id] = reg;

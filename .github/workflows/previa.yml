@@ -1,0 +1,52 @@
+name: Prévia da proposta
+
+# Publica cada proposta (pull request) num endereço temporário do Firebase, que vale 7 dias.
+# A prévia abre sempre no modo demonstração (dados de exemplo): não lê nem grava os dados reais.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: previa-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  previa:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Site sem dados pessoais
+        run: node ferramentas/conferir-site.mjs
+
+      - name: Publicar a prévia
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          P=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
+          npx --yes firebase-tools@13 hosting:channel:deploy "pr${{ github.event.pull_request.number }}" --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa.json"
+          URL=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/previa.json" | head -1)
+          [ -n "$URL" ] || { cat "$RUNNER_TEMP/previa.json"; exit 1; }
+          echo "URL=$URL" >> "$GITHUB_ENV"
+          echo "::notice title=Prévia::$URL"
+
+      - name: Avisar na proposta
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          corpo="**Prévia desta proposta:** $URL
+
+          Abre sempre no modo demonstração, com dados de exemplo. Vale 7 dias e é atualizada a cada mudança na proposta."
+          ja=$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" --jq '[.[] | select(.body | startswith("**Prévia desta proposta:**"))][0].id // empty')
+          if [ -n "$ja" ]; then gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$ja" -f body="$corpo" >/dev/null
+          else gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" -f body="$corpo" >/dev/null; fi

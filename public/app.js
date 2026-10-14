@@ -1,12 +1,17 @@
 // Dikma Operação — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
-import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
+import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 
-const DEMO = new URLSearchParams(location.search).has('demo');
+// Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
+// Assim a prévia nunca mexe nos dados reais.
+const PREVIA = location.hostname.includes('--');
+const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
+// Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
+{ const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
 import { criarGestao, VIEWS_G, SUB_G } from './gestao.js';
 import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
-import { criarPessoas } from './pessoas.js';
+import { criarPessoas, chaveFicha } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
 import { semAcento, casa, caixaBusca, filtrarLista, campoBusca } from './busca.js';
@@ -231,7 +236,7 @@ function pintar(id, html) { const el = document.getElementById(id); if (!el || e
 const $ = id => document.getElementById(id);
 function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>OPERAÇÃO</b></div></div>${html}</div>`; }
 const GOOGLE = new URLSearchParams(location.search).has('google');
-const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="6"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
+const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
   const s = AUTH.status;
   const sair = `<button class="btn" data-act="logout">${I.out} Sair</button>`;
@@ -243,12 +248,13 @@ function renderGate() {
     <div class="sel"><span>Entrar em</span><div class="modsel" role="radiogroup" aria-label="Módulo">${Object.entries(MODS).map(([k, m]) => `<label class="modcard"><input type="radio" name="lgMod" value="${k}" ${UI.modulo === k ? 'checked' : ''}><b>${m.nome}</b><small>${m.sub}</small></label>`).join('')}</div></div>
     <p class="err" id="lgErr" role="alert" hidden></p>
     <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
+    ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
     ${GOOGLE ? `<button class="btn gbtn" data-act="loginGoogle">${I.google} Entrar com Google (administrador)</button>` : ''}
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
   if (s === 'firstAdmin') return gate(`<h2>Sistema sem administrador</h2><p>Por segurança, o administrador não é criado por esta tela.</p><p class="muted small">Quem cuida do sistema cria pelo GitHub: <b>Actions › Administrador do sistema › Run workflow</b>, informando nome e usuário. A senha provisória aparece no resultado da execução.</p>`);
   if (s === 'mustChange') return gate(`<h2>Crie sua senha</h2><p>Olá, <b>${esc(title(AUTH.user.nome))}</b>. No primeiro acesso, troque a senha provisória por uma só sua.</p><form id="fMust" class="stackform" novalidate>
-    ${senhaField('mcPass', 'Nova senha (mínimo 6 caracteres)', 'new-password')}
+    ${senhaField('mcPass', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password')}
     ${senhaField('mcPass2', 'Repita a nova senha', 'new-password')}
     <p class="err" id="mcErr" role="alert" hidden></p>
     <button class="btn pri big" type="submit">Salvar e entrar</button></form>${DEMO ? mockSwitcher() : sair}`);
@@ -1100,7 +1106,7 @@ function vUsuarios() {
   <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="uform" novalidate>
    <div class="ur r1"><label class="sel"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Maria Aparecida Souza"></label>
    <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: maria.souza"></label>
-   <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="6" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label></div>
+   <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="8" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label></div>
    <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
    <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
    <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
@@ -1163,7 +1169,18 @@ function vPerfis() {
   ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Módulos</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${papelNome(u.papel)}</td><td>${modsReais(u).map(m => MODS[m].curto).join(' · ')}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
 }
 
-function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(8)); for (const n of r) s += c[n % c.length]; return s; }
+// Senha: no mínimo 8 caracteres, sem sequência óbvia e sem o próprio usuário ou nome. Devolve o problema ou ''.
+const SENHAS_OBVIAS = ['12345678', '123456789', '1234567890', '87654321', '11111111', '00000000', 'senha123', 'senha1234', 'password', 'qwertyui', 'qwerty123', 'abc12345', 'abcd1234', 'dikma123', 'dikma1234', 'coqueria', 'arcelor1', 'mudar123', 'trocar123'];
+function problemaSenha(n, u = ME) {
+  const s = String(n || '');
+  if (s.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.';
+  const b = semAcento(s).toLowerCase();
+  if (/^(.)\1+$/.test(b) || SENHAS_OBVIAS.includes(b) || '0123456789012345678901234567890'.includes(b) || 'abcdefghijklmnopqrstuvwxyz'.includes(b)) return 'Essa senha é fácil de adivinhar. Misture letras e números.';
+  const pessoais = [u && u.login, ...String((u && u.nome) || '').split(/\s+/)].map(x => semAcento(String(x || '')).toLowerCase()).filter(x => x.length >= 4);
+  if (pessoais.some(x => b.includes(x))) return 'A senha não pode conter o seu usuário ou o seu nome.';
+  return '';
+}
+function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(10)); for (const n of r) s += c[n % c.length]; return s; }
 
 /* ---------------- CONFIG ---------------- */
 function vConfig() {
@@ -1312,9 +1329,9 @@ function verEvidencia(ev, onDel, voltar) {
 
 function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'gestao' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
-  formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 6 caracteres)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
+  formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
-    if (n.length < 6) throw new Error('A nova senha precisa ter pelo menos 6 caracteres.');
+    { const p = problemaSenha(n); if (p) throw new Error(p); }
     if (n !== n2) throw new Error('As duas senhas novas não são iguais.');
     await DB.alterarSenha(a, n); toast('Senha alterada');
   });
@@ -1458,8 +1475,8 @@ document.addEventListener('click', async e => {
   if (d.ev) { const parts = d.ev.split('|'); return evidenciasSheet(DB.cache.semanas[parts[0] + '|' + parts[1]], +parts[2], +parts[3]); }
   if (d.reset) {
     const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
-    return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="6" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
-      const v = $('rsSenha').value.trim(); if (v.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+    return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="8" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
+      const v = $('rsSenha').value.trim(); if (v.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
       await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
     });
   }
@@ -1563,7 +1580,7 @@ document.addEventListener('submit', async e => {
     if (f.id === 'fLogin') { const mr = f.querySelector('input[name=lgMod]:checked'); if (mr) { UI.modulo = mr.value; UI.view = 'meudia'; salvarUI(); } await DB.signIn($('lgUser').value, $('lgPass').value); return; }
     if (f.id === 'fMust') {
       const n = $('mcPass').value, n2 = $('mcPass2').value;
-      if (n.length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); if (n !== n2) throw new Error('As duas senhas não são iguais.');
+      { const p = problemaSenha(n, AUTH.user); if (p) throw new Error(p); } if (n !== n2) throw new Error('As duas senhas não são iguais.');
       await DB.definirNovaSenha(n); toast('Senha criada'); return;
     }
     if (f.id === 'fNovoUser') {
@@ -1573,7 +1590,7 @@ document.addEventListener('submit', async e => {
       if (area2 && !area) throw new Error('Escolha a primeira área antes da segunda.');
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
-      if (senha.length < 6) throw new Error('A senha provisória precisa ter pelo menos 6 caracteres.');
+      if (senha.length < 8) throw new Error('A senha provisória precisa ter pelo menos 8 caracteres.');
       const modulos = MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked);
       if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
       if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
@@ -1636,10 +1653,33 @@ window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHT
 window.addEventListener('pagehide', salvarUI);
 
 const PES = criarPessoas(DB);
+// Marca o uso deste aparelho (a sessão expira depois de 7 dias sem uso).
+if (DB.marcarUso) ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (AUTH.status === 'ready') DB.marcarUso(); }, { passive: true }));
+// Área de atuação de cada ficha do Efetivo (organiza as fichas por área no banco). Só o administrador calcula,
+// e só depois que os dados de todos os módulos chegaram; antes disso devolve null e nada muda de lugar.
+if (DB.definirChaveArea) DB.definirChaveArea(c => {
+  if (!ME || ME.papel !== 'admin') return null;
+  const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
+  return ok ? chaveFicha(PES.lotacao(c).area) : null;
+});
 const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
-if (new URLSearchParams(location.search).get('v') === 'meudia') { UI.view = 'meudia'; history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : '')); }
-if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.tipo === 'abrir' && AUTH.status === 'ready') { UI.view = 'meudia'; render(); scrollTo(0, 0); } });
+// Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
+function abrirLink(busca) {
+  const p = new URLSearchParams(busca); const m = p.get('m'), v = p.get('v');
+  if (m && MODS[m]) UI.modulo = m;
+  if (v) UI.view = v;
+  if (m || v) { UI.confirm = null; salvarUI(); }
+  return !!(m || v);
+}
+if (abrirLink(location.search)) history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : ''));
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  if (!e.data || e.data.tipo !== 'abrir' || AUTH.status !== 'ready') return;
+  let busca = ''; try { busca = new URL(e.data.url).search; } catch (err) { /* link inválido: abre o Meu dia */ }
+  if (!abrirLink(busca)) UI.view = 'meudia';
+  if (typeof ensureModulo === 'function') ensureModulo();
+  aplicarSet(); render(); scrollTo(0, 0);
+});
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();

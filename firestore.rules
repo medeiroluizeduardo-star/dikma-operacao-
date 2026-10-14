@@ -26,6 +26,10 @@ service cloud.firestore {
     function gestorDa(area) { return gestor() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
     function ba() { return ativo() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
     function gestorDaB(area) { return gestor() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
+    // Efetivo por área: administrador, gestor, coordenador e somente leitura veem todas as áreas;
+    // supervisor, as 2 dele; líder, a dele; quem tem a Operação de equipamentos, também os operadores.
+    function todasFichas() { return ge() && (admin() || perfil().papel in ['gestor', 'coordenador', 'leitor']); }
+    function minhaFicha(area) { return ge() && (minhaArea(area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in mods())); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
 
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
@@ -158,20 +162,35 @@ service cloud.firestore {
     match /eqaval/{mes} { allow read: if eqm(); allow write: if eqEdita(); }
 
     // ---------- Módulo Efetivo: fichas de acompanhamento ----------
+    // gestao/config: tipos de ocorrência e texto da ficha (todos do Efetivo). gestao/colaboradores: lista antiga,
+    // de antes da divisão por área (só quem vê todas as áreas; é apagada na migração).
     match /gestao/{docId} {
-      allow read: if ge();
+      allow read: if ge() && (docId != 'colaboradores' || todasFichas());
       allow write: if admMod('gestao');
     }
+    // Fichas dos colaboradores, um documento por área.
+    match /gcolab/{area} {
+      allow read: if todasFichas() || minhaFicha(area);
+      allow write: if admMod('gestao');
+    }
+    // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,
+    // comparado com usuarios/{uid}.nomeUp, que o sistema grava no cadastro).
+    function veOcorr(o) {
+      return todasFichas() || (ge() && (minhaFicha(o.area) || o.criadoPor == request.auth.uid || o.recolhe == perfil().get('nomeUp', '#')));
+    }
     match /gocorr/{id} {
-      allow read: if ge();
-      allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid;
-      allow update: if admMod('gestao') || (geEdita() && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
+      allow read: if veOcorr(resource.data);
+      allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid
+        && request.resource.data.area is string && (todasFichas() || minhaFicha(request.resource.data.area));
+      allow update: if admMod('gestao') || (geEdita() && veOcorr(resource.data)
+        && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
       allow delete: if admMod('gestao');
     }
+    // Assinaturas: não mudam depois de gravadas (a administração só acerta a área quando a pessoa muda de área).
     match /gassin/{id} {
-      allow read: if ge();
-      allow create: if geEdita() && request.resource.data.por == request.auth.uid;
-      allow update: if false;
+      allow read: if todasFichas() || (ge() && (minhaFicha(resource.data.area) || resource.data.por == request.auth.uid));
+      allow create: if geEdita() && request.resource.data.por == request.auth.uid && request.resource.data.area is string;
+      allow update: if admMod('gestao') && soAltera(['area']);
       allow delete: if admin();
     }
 
@@ -192,6 +211,10 @@ service cloud.firestore {
     match /config/avisos {
       allow read: if ativo();
       allow write: if admin();
+    }
+    // Resultado da última execução da rotina de avisos (gravado pela rotina; o administrador acompanha no Meu dia).
+    match /avisos_enviados/{docId} {
+      allow get: if admin();
     }
     match /avisos/{uid} {
       allow read, write: if ativo() && request.auth.uid == uid;

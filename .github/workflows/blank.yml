@@ -49,5 +49,10 @@ jobs:
       - name: Publicar site e regras de segurança
         run: npx --yes firebase-tools@13 deploy --only hosting,firestore:rules --project "$PROJECT_ID" --non-interactive
 
+      - name: Organizar o Efetivo por área (só na primeira vez)
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node integracao/admin/migrar-areas.mjs
+
       - name: Endereço do sistema
         run: echo "::notice::Sistema publicado em https://$PROJECT_ID.web.app"

@@ -78,12 +78,22 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Administrador sem acesso** (esqueceu a senha, perfil trocado por engano, conta apagada): no GitHub, **Actions › Administrador do sistema › Run workflow** com o usuário dele (o nome só é preciso se o usuário não existir). O resumo da execução mostra uma senha provisória. A mesma rotina promove um usuário existente a administrador.
 - Por segurança, ninguém vira administrador pelo site: só por essa rotina, que exige acesso ao repositório do GitHub.
 
+## Efetivo por área
+- As fichas ficam divididas por área de atuação (`gcolab/{ÁREA}`): cada área das Atividades, **Operação de equipamentos** e **GERAL** (sem área no sistema: Coqueria sem rota, Alto Forno, Sinter, Sede…). Ocorrências e assinaturas guardam a mesma área.
+- **Quem vê:** administrador, gestor, coordenador e somente leitura (com o Efetivo) veem todas as áreas. Supervisor vê as 2 áreas dele; líder, a área dele. Quem tem a Operação de equipamentos também vê os operadores. Líder e supervisor veem ainda as ocorrências que registraram e as que vão recolher.
+- Quem muda de área leva junto a ficha, as ocorrências e as assinaturas. O sistema reorganiza sozinho quando o administrador abre o Efetivo.
+- Na primeira publicação depois desta mudança, a rotina `integracao/admin/migrar-areas.mjs` dividiu a lista antiga por área.
+
 ## Segurança dos dados
 - **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) ficam na pasta `dados-importacao` do repositório. Na publicação, eles são gravados no banco (`seeds/`), e só a administração do módulo correspondente lê. Os botões de importação continuam iguais.
 - **A demonstração (`?demo`) usa nomes e matrículas fictícios** (pasta `public/demo`). Se os arquivos de `dados-importacao` mudarem, gere de novo com `node ferramentas/gerar-demo.mjs`.
 - **Conferência antes de publicar:** se algum arquivo de planilha ou nome real de colaborador aparecer na pasta `public`, a publicação para com erro.
 - **Testes automáticos das regras:** antes de cada publicação, o GitHub roda os testes de `testes/` no emulador do Firebase. Eles conferem, perfil por perfil, quem lê e quem altera cada parte do banco (ex.: líder sem o Efetivo não lê ocorrências; ninguém se promove a administrador; assinatura gravada não muda). Se algum falhar, nada é publicado. Mudou as regras de propósito? Ajuste o teste correspondente em `testes/regras.test.mjs`.
 - **Propostas de mudança (pull request):** os mesmos testes rodam na proposta, antes de ela entrar na `main`.
+- **Senhas:** no mínimo 8 caracteres, sem sequências óbvias (12345678, senha123, dikma123…) e sem o próprio usuário ou nome. Vale para senhas novas.
+- **Sessão:** depois de 7 dias sem abrir o sistema naquele aparelho, ele pede a senha de novo.
+- **Cabeçalhos de proteção no site** (`firebase.json`): o sistema não abre dentro de outro site e só carrega código do próprio endereço e do Google (Firebase e fontes).
+- **Leitor de planilhas** SheetJS 0.20.3, sem as falhas conhecidas da 0.18.5.
 
 ## Cópia de segurança
 Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3h:
@@ -114,10 +124,13 @@ Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3
 - Líder vê a área dele; supervisor, as duas; coordenador, gestor, somente leitura e administrador veem todas as áreas dos módulos deles.
 
 ## Avisos no celular
-Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows/avisos.yml`) roda de hora em hora, das 6h às 22h, e manda avisos para quem ligou no aparelho:
+Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows/avisos.yml`) roda de hora em hora, das 6h às 22h, e manda avisos para quem ligou no aparelho. Cada pessoa recebe só o que é dela, e os avisos não mostram nomes de colaboradores na tela bloqueada:
 - **Parada sem liberação há mais de 2 horas** (uma vez por parada) — para quem tem o módulo Operação.
-- **Assinatura pendente há mais de 7 dias** (um resumo por dia, a partir das 8h) — para quem tem o Efetivo.
+- **Assinatura pendente há mais de 7 dias** (um resumo por dia, a partir das 8h) — para quem vai recolher a assinatura e, nas áreas da pessoa, as que estão sem responsável (supervisor: todas da área). Administrador, gestor e coordenador recebem o total. Somente leitura não recebe.
+- **Atividades do dia sem apontar** (às 15h, uma vez por dia, só se faltar alguma) — para líder e supervisor, das áreas deles.
 - **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
+- Tocar no aviso abre a tela certa (Paradas, Ocorrências, Apontar ou Efetivo diário).
+- O administrador vê no **Meu dia** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
 
 **Ligar (uma vez só, administrador)**
 1. Firebase › ⚙ Configurações do projeto › **Cloud Messaging** › Configuração da Web › **Certificados push da Web** › **Gerar par de chaves**. Copie a chave (começa com B…).
@@ -127,7 +140,7 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 **Cada pessoa, no próprio celular**
 - Abrir o sistema, ir em **Meu dia** › **Ligar avisos** e permitir as notificações. Dá para marcar quais avisos quer receber.
 - Android (Chrome): funciona direto. iPhone: primeiro **Compartilhar › Adicionar à Tela de Início** e abrir o sistema por esse ícone (iOS 16.4 ou mais novo).
-- Tocar no aviso abre o **Meu dia**.
+- **Testar neste aparelho** mostra um aviso na hora, para conferir que as notificações estão permitidas.
 
 **Testar:** GitHub › Actions › **Avisos no celular** › Run workflow com **Só testar** marcado: o registro mostra quem receberia o quê, sem enviar.
 
@@ -317,7 +330,7 @@ public/
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
-  vendor/xlsx.js      leitor de planilhas SheetJS 0.18.5 (carregado só na importação)
+  vendor/xlsx.js      leitor de planilhas SheetJS 0.20.3 (carregado só na importação)
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)
   cal.js              calendário operacional (semana pertence ao mês da quinta-feira)
@@ -355,12 +368,13 @@ ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios) e con
 | `eqlanc`, `eqpar`, `eqinsp` | Operação: lançamentos, paradas e inspeções (campo `mes`) |
 | `eqaval/{AAAA-MM}` | Operação: avaliação mensal dos operadores |
 | `gestao/config` | código e revisão da ficha, declaração, tipos de ocorrência |
-| `gestao/colaboradores` | colaboradores da Gestão (matrícula, nome, admissão, demissão…) |
-| `gocorr/{id}` | ocorrências (data, tipo, descrição, situação da assinatura) |
+| `gcolab/{ÁREA}` | fichas dos colaboradores da área (matrícula, nome, admissão, demissão…) |
+| `gocorr/{id}` | ocorrências (área, data, tipo, descrição, quem recolhe, situação da assinatura) |
 | `gassin/{id}` | assinaturas (na tela, foto da via em papel ou recusa com testemunhas) |
 | `evidencias/{id}` | lista de anexos com miniatura (atividade, dia, quem enviou) |
 | `evidenciasArquivo/{id}` | foto ou arquivo completo, lido só ao abrir |
 | `seeds/{nome}` | dados das planilhas originais para a importação (gravados na publicação; só a administração lê) |
+| `avisos_enviados/estado` | avisos já enviados e resultado da última execução da rotina |
 | `config/bootstrap` | marca que o sistema tem administrador (gravado só pela rotina do GitHub) |
 
 Um documento por área e semana mantém cada tela em poucas leituras, dentro do plano grátis (50 mil leituras por dia).
