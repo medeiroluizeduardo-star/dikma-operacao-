@@ -289,6 +289,7 @@ const prepAdm = () => env.withSecurityRulesDisabled(async ctx => {
   await setDoc(doc(d, 'sistema', 'uso'), { colecoes: {} });
   await setDoc(doc(d, 'situacao', '2026-10'), { v: {} });
   await setDoc(doc(d, 'b_situacao', '2026-10'), { v: {} });
+  for (const n of ['seed-freq-patio', 'seed-ferias']) await setDoc(doc(d, 'seeds', n), { json: '{}' });
 });
 test('acesso: quem não tem o campo acessos continua só na Operação (usuários antigos não mudam)', async () => {
   await prepAdm();
@@ -344,7 +345,6 @@ test('Administração do sistema: uso do plano e planilhas de importação só p
   await assertFails(getDoc(doc(db('gestorP'), 'sistema', 'uso')));
   await assertFails(getDoc(doc(db('admAn'), 'sistema', 'uso')));
   await assertFails(setDoc(doc(db('admin'), 'sistema', 'uso'), { colecoes: {} }));
-  await env.withSecurityRulesDisabled(async ctx => { for (const n of ['seed-freq-patio', 'seed-ferias']) await setDoc(doc(ctx.firestore(), 'seeds', n), { json: '{}' }); });
   await assertSucceeds(getDoc(doc(db('admin'), 'seeds', 'seed-ferias')));
   await assertFails(getDoc(doc(db('admAn'), 'seeds', 'seed-ferias')));
   await assertFails(getDoc(doc(db('gestorG'), 'seeds', 'seed-freq-patio')));
