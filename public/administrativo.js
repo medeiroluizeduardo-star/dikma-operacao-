@@ -5,6 +5,7 @@
 import { SETS, today, add, ddmm, MESES_L } from './cal.js';
 import { normRegime, letra } from './escala.js';
 import { editaAdm, indiceFerias } from './acessos.js';
+import { baixarExcel, dataBR } from './exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO } from './planilhas-adm.js';
 
 export const VIEWS_A = [
@@ -164,7 +165,7 @@ export function criarAdministrativo(X) {
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj);
     const linhas = [['Grupo', 'Nome', 'Matrícula', ...datas.map(d => ddmm(d)), ...CONTA.map(k => NOMES_CODIGO[k])]];
     for (const g of doc.grupos) for (const p of g.pessoas) { const t = totais(conj, comp, doc, g, p, datas, cmap); linhas.push([g.nome, p.nome, p.mat || '', ...datas.map(dt => codigo(conj, comp, doc, g, p, dt, cmap).v), ...CONTA.map(k => t[k] || '')]); }
-    baixarCSV(`frequencia-${conj}-${comp}.csv`, linhas);
+    baixarExcel(`frequencia-${conj}-${comp}`, [{ nome: `${SETS[conj].curto} ${nomeComp(comp)}`, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
   /* ---------- Férias ---------- */
@@ -316,10 +317,6 @@ export function criarAdministrativo(X) {
   }
 
   /* ---------- eventos ---------- */
-  function baixarCSV(nome, linhas) {
-    const csv = '﻿' + linhas.map(l => l.map(v => { const s = String(v == null ? '' : v); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(';')).join('\r\n');
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = nome; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  }
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || UI.modulo !== 'adm') return;
     const a = t.dataset.a, v = t.dataset.v;
@@ -347,7 +344,7 @@ export function criarAdministrativo(X) {
     else if (a === 'fAba') { U.fAba = v; render(); }
     else if (a === 'novaFerias') formFerias(null);
     else if (a === 'ferias') formFerias(v);
-    else if (a === 'exportarFerias') baixarCSV('ferias.csv', [['Matrícula', 'Nome', 'Setor', 'Função', 'Horário', 'Admissão', 'Data limite', 'Início', 'Dias', 'Término', 'Retorno', 'Substituto'], ...A().ferias.slice().sort((x, y) => String(x.inicio || '9').localeCompare(String(y.inicio || '9'))).map(f => [f.mat, f.nome, f.setor, f.funcao, f.horario, f.admissao, f.limite, f.inicio, f.dias, f.termino, f.retorno, f.substituto])]);
+    else if (a === 'exportarFerias') baixarExcel('ferias', [{ nome: 'Férias', linhas: [['Matrícula', 'Nome', 'Setor', 'Função', 'Horário', 'Admissão', 'Data limite', 'Início', 'Dias', 'Término', 'Retorno', 'Substituto / observação'], ...A().ferias.slice().sort((x, y) => String(x.inicio || '9').localeCompare(String(y.inicio || '9')) || x.nome.localeCompare(y.nome)).map(f => [f.mat, f.nome, f.setor, f.funcao, f.horario, dataBR(f.admissao), dataBR(f.limite), dataBR(f.inicio), f.inicio ? f.dias : '', dataBR(f.termino), dataBR(f.retorno), f.substituto])] }]).catch(e => toast('Não foi possível exportar: ' + e.message));
     else if (a === 'ir') { UI.view = v; render(); scrollTo(0, 0); }
     else if (a === 'impSeeds') impSeeds();
     else if (a === 'impConj') { U.impConj = v; render(); }

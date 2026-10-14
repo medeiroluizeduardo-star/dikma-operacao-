@@ -70,3 +70,19 @@ export function assinaturasPendentes(ocorr, hoje, dias = 7) {
 export function operadoresFora(operadores, hoje) {
   return operadores.filter(o => o.situacao && o.situacao !== 'TRABALHANDO' && !/DESLIG/i.test(o.situacao) && (!o.de || o.de <= hoje) && (!o.ate || o.ate >= hoje)).map(o => ({ nome: o.nome, cod: o.situacao }));
 }
+
+// Resumo de uma semana (segunda a domingo) nas áreas da pessoa: atividades e ausências lançadas.
+// d = { areas[], semanas {id: doc}, colabs[], sit } · ini = segunda-feira da semana
+export function resumoSemana(d, ini) {
+  let R = 0, N = 0, P = 0, E = 0; const aus = {};
+  for (const area of d.areas) {
+    const doc = d.semanas[area + '|' + ini]; if (!doc) continue;
+    doc.ids.forEach((_, i) => { for (const c of linha(doc, i)) { if (c === 'R') R++; else if (c === 'N') N++; else if (c === 'P') P++; else if (c === 'E') E++; } });
+  }
+  for (const c of d.colabs) {
+    if (!d.areas.includes(c.area)) continue;
+    for (let j = 0; j < 7; j++) { const v = d.sit[c.id + '|' + add(ini, j)]; if (v && ['FT', 'AT', 'AF', 'SP'].includes(v)) aus[v] = (aus[v] || 0) + 1; }
+  }
+  const prog = R + N + P;
+  return { ini, fim: add(ini, 6), R, N, P, E, prog, pct: prog ? Math.round((R / prog) * 100) : null, aus };
+}

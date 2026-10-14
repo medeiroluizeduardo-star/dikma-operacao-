@@ -1,11 +1,11 @@
 // Decide quem recebe qual aviso agora. Função pura: recebe os dados já lidos e devolve as mensagens.
 // Usa as mesmas contas da tela "Meu dia" (public/hoje.js), copiadas para esta pasta na hora de rodar.
 import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
-import { resumoAtividades, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
+import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true };
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
@@ -90,6 +90,29 @@ export function planejar(d) {
         r.deficit.forEach(df => linhas.push(`${df.rota} (${AREA_S[df.area]}): ${df.disp} de ${df.nec}`));
       }
       if (linhas.length) msgs.push({ uid: x.uid, titulo: `Amanhã (${add(hoje, 1).slice(8)}/${add(hoje, 1).slice(5, 7)}): ${linhas.length} rota${linhas.length > 1 ? 's' : ''} com déficit de efetivo`, corpo: linhas.slice(0, 4).join('\n') + (linhas.length > 4 ? `\n+ ${linhas.length - 4}` : ''), tag: 'deficit', url: '/?m=gestao&v=esdia' });
+      marcar.add(chave);
+    }
+  }
+  // 5) Resumo da semana que passou (segunda-feira, a partir das 7h), para administrador, gestor e coordenador.
+  if (hora >= 7 && new Date(hoje + 'T12:00:00').getDay() === 1) {
+    const ini = add(hoje, -7); const dm = s => `${s.slice(8)}/${s.slice(5, 7)}`;
+    const nomeAus = { FT: ['falta', 'faltas'], AT: ['atestado', 'atestados'], AF: ['afastamento', 'afastamentos'], SP: ['suspensão', 'suspensões'] };
+    const pend = assinaturasPendentes(d.ocorr || [], hoje).total;
+    const abertas = paradasAbertas(d.paradas || [], agora).length;
+    for (const x of alvo) {
+      const chave = `sem|${x.uid}|${hoje}`;
+      if (!x.prefs.semanal || d.enviados[chave] || !['admin', 'gestor', 'coordenador'].includes(x.u.papel)) continue;
+      const linhas = []; let mod = null;
+      for (const k of SET_KEYS) {
+        const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue;
+        const r = resumoSemana({ ...S, areas }, ini); if (!r.prog && !Object.keys(r.aus).length) continue;
+        mod = mod || SETS[k].mod;
+        const aus = Object.entries(r.aus).map(([c, n]) => `${n} ${nomeAus[c][n > 1 ? 1 : 0]}`);
+        linhas.push(`${SETS[k].curto}: ${r.pct != null ? `${r.pct}% realizado (${r.R} de ${r.prog})` : 'sem programação'}${r.N ? ` · ${r.N} não realizada${r.N > 1 ? 's' : ''}` : ''}${aus.length ? ' · ' + aus.join(', ') : ''}`);
+      }
+      if (mods(x.u).includes('gestao') && pend) linhas.push(`Efetivo: ${pend} assinatura${pend > 1 ? 's' : ''} pendente${pend > 1 ? 's' : ''}`);
+      if (mods(x.u).includes('equipamentos') && abertas) linhas.push(`Operação: ${abertas} parada${abertas > 1 ? 's' : ''} sem liberação`);
+      if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=painel` : '/?v=meudia' });
       marcar.add(chave);
     }
   }

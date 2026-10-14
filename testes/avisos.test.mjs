@@ -76,3 +76,28 @@ test('atividades sem apontar: às 15h, só líder e supervisor, só a área dele
   const desligado = planejar({ usuarios, avisos: { ...avisos, liderRec: { tokens: ['t'], prefs: { atividades: false } } }, paradas: [], ocorr: [], sets: { patio: setPatio() }, enviados: {}, agora: new Date(`${HOJE}T15:30:00`), hoje: HOJE });
   assert.equal(de(desligado, 'liderRec', 'atividades').length, 0, 'respeita a preferência');
 });
+
+test('resumo da semana: segunda às 7h, só administrador, gestor e coordenador, sem nomes, uma vez', () => {
+  const SEG = '2026-10-19'; const ini = '2026-10-12';
+  const S = { plano: [{ id: 'R1', rota: 'RECEBIMENTO' }], rotas: [], colabs: [{ id: 'C1', area: 'RECEBIMENTO', rota: 'RECEBIMENTO', nome: 'FULANO DA SILVA' }],
+    sit: { 'C1|2026-10-13': 'FT', 'C1|2026-10-14': 'AT', 'C1|2026-10-15': 'AT' },
+    semanas: { [`RECEBIMENTO|${ini}`]: { area: 'RECEBIMENTO', ini, ids: ['R1', 'R2'], s: { R1: 'RRRRN__', R2: 'RRRPE__' } } } };
+  const us = { ...usuarios, gest: { papel: 'gestor', modulos: ['operacao', 'gestao'], nome: 'Gestor' } };
+  const av = { ...avisos, gest: tok };
+  const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: {}, agora: new Date(`${SEG}T07:10:00`), hoje: SEG });
+  const g = de(r, 'gest', 'semanal');
+  assert.equal(g.length, 1);
+  assert.equal(g[0].titulo, 'Resumo da semana (12/10 a 18/10)');
+  assert.match(g[0].corpo, /Pátio: 78% realizado \(7 de 9\) · 1 não realizada · 1 falta, 2 atestados/);
+  assert.match(g[0].corpo, /Efetivo: 4 assinaturas pendentes/);
+  assert.equal(de(r, 'admin', 'semanal').length, 1);
+  assert.equal(de(r, 'liderRec', 'semanal').length, 0, 'líder não recebe');
+  assert.ok(!g[0].corpo.includes('FULANO'));
+  assert.ok(r.marcar.includes(`sem|gest|${SEG}`));
+  const terca = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: {}, agora: new Date('2026-10-20T07:10:00'), hoje: '2026-10-20' });
+  assert.equal(terca.msgs.filter(m => m.tag === 'semanal').length, 0, 'só na segunda');
+  const cedo = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: {}, agora: new Date(`${SEG}T06:30:00`), hoje: SEG });
+  assert.equal(cedo.msgs.filter(m => m.tag === 'semanal').length, 0, 'antes das 7h não');
+  const ja = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: { [`sem|gest|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG });
+  assert.equal(de(ja, 'gest', 'semanal').length, 0, 'uma vez');
+});

@@ -95,6 +95,14 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - **Cabeçalhos de proteção no site** (`firebase.json`): o sistema não abre dentro de outro site e só carrega código do próprio endereço e do Google (Firebase e fontes).
 - **Leitor de planilhas** SheetJS 0.20.3, sem as falhas conhecidas da 0.18.5.
 
+## Exportar para o Excel
+
+Botão **Exportar** (computador) em: Programação, Efetivo diário (a semana da área escolhida, com legenda), Ocorrências (com os filtros da tela), Lançamentos (o mês inteiro, com horas operadas e paradas), Paradas (mês e filtro escolhidos), Frequência e Férias. Baixa um arquivo .xlsx.
+
+## Contas sem usuário
+
+Quando a senha de alguém é redefinida pelo site, a conta de login antiga fica sem uso. A rotina **Limpar contas sem usuário** (GitHub › Actions) roda todo dia 1 e apaga as que não têm usuário, não estão ligadas a nenhum login e estão há mais de 30 dias sem uso. Pelo botão Run workflow dá para só listar.
+
 ## Cópia de segurança
 Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3h:
 - **Diária:** todas as coleções, menos o histórico e as fotos. Fica guardada 30 dias.
@@ -139,6 +147,7 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 - **Assinatura pendente há mais de 7 dias** (um resumo por dia, a partir das 8h) — para quem vai recolher a assinatura e, nas áreas da pessoa, as que estão sem responsável (supervisor: todas da área). Administrador, gestor e coordenador recebem o total. Somente leitura não recebe.
 - **Atividades do dia sem apontar** (às 15h, uma vez por dia, só se faltar alguma) — para líder e supervisor, das áreas deles.
 - **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
+- **Resumo da semana que passou** (segunda-feira, às 7h) — para administrador, gestor e coordenador: % de atividades realizadas, não realizadas, faltas e atestados de cada conjunto, assinaturas pendentes e paradas sem liberação. Sem nomes de colaboradores.
 - Tocar no aviso abre a tela certa (Paradas, Ocorrências, Apontar ou Efetivo diário).
 - O administrador vê no **Meu dia** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
 
@@ -364,6 +373,7 @@ public/
   acessos.js          os três acessos e as férias em comum
   administrativo.js   acesso Administrativo (painel, frequência, férias, importar)
   planilhas-adm.js    leitura das planilhas de frequência e férias
+  exportar.js         baixar listas como planilha do Excel
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
   vendor/xlsx.js      leitor de planilhas SheetJS 0.20.3 (carregado só na importação)
   data.js             conexão com o Firebase (login e banco)
@@ -380,6 +390,7 @@ firebase.json         configuração do Hosting
 .github/workflows/backup.yml       cópia de segurança diária
 .github/workflows/restaurar.yml    restaurar uma cópia
 .github/workflows/administrador.yml   criar ou recuperar administrador
+.github/workflows/limpar-contas.yml   apagar contas de login sem usuário (todo mês)
 dados-importacao/     planilhas originais (seed.json, seed-bateria.json, seed-equip.json, seed-gestao.json,
                       seed-efetivo.json, seed-freq-patio.json, seed-freq-bateria.json, seed-ferias.json);
                       vão para o banco na publicação, nunca para o site

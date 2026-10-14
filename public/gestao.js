@@ -2,9 +2,10 @@
 // Telas: Painel, Colaboradores (com ficha individual), Ocorrências, Controle de fichas, Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
 import { pd, add, pad, today, MESES_L, AREA_S, SETS, setDaArea } from './cal.js';
-import { AREA_GERAL, AREA_OP, REGIMES, ehAreaAtiv } from './pessoas.js';
+import { AREA_GERAL, AREA_OP, REGIMES, ehAreaAtiv, veTodasFichas, areasFichaDe } from './pessoas.js';
 import { criarImportador } from './importar.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
+import { baixarExcel, dataBR } from './exportar.js';
 
 export const VIEWS_G = [
   { id: 'gpainel', nome: 'Painel', ic: 'painel', grp: 'Fichas de acompanhamento', mod: 'ge' },
@@ -83,6 +84,8 @@ export function criarGestao(X) {
   }
   function selArea(id) {
     const cs = G().colabs; const porSetor = new Map();
+    // Quem só vê uma área (líder) não precisa escolher área: o filtro some.
+    if (X.ME && !veTodasFichas(X.ME) && areasFichaDe(X.ME).length <= 1) { U.fa = ''; return ''; }
     for (const c of cs) { const s0 = setorDe(c); if (!porSetor.has(s0)) porSetor.set(s0, new Map()); if (c.subsetor) { const m = porSetor.get(s0); m.set(c.subsetor, (m.get(c.subsetor) || 0) + 1); } }
     const conta = s0 => cs.filter(c => setorDe(c) === s0).length;
     const setores = [...porSetor.keys()].sort((a, b) => a.localeCompare(b));
@@ -204,9 +207,10 @@ export function criarGestao(X) {
     const mf = U.fa ? new Set(G().colabs.filter(filtroArea()).map(c => String(c.mat))) : null;
     const l = G().ocorr.filter(o => (!mf || mf.has(String(o.mat))) && (!U.ocMeu || (o.status === 'pendente' && souEu(o.recolhe))) && (!U.ocSt || o.status === U.ocSt) && (!U.ocTipo || o.tipo === U.ocTipo) && (!q || (o.mat + ' ' + o.nome + ' ' + o.desc).toLowerCase().includes(q))).sort((a, b) => (a.data > b.data ? -1 : 1));
     const n = st => G().ocorr.filter(o => o.status === st).length;
+    U.ocLista = l;
     let h = `<div class="filters"><label class="sel grow"><span>Buscar</span><input class="in" type="search" id="gOcQ" placeholder="Nome, matrícula ou descrição" value="${esc(U.ocQ)}"></label>
       ${selArea('gFaO')}<label class="sel"><span>Tipo</span><select class="in" id="gOcTipo"><option value="">Todos</option>${tipos().map(t => `<option ${t.tipo === U.ocTipo ? 'selected' : ''}>${esc(t.tipo)}</option>`).join('')}</select></label>
-      ${podeEditar() ? `<button class="btn pri" data-g="novaOc" style="align-self:flex-end">${I.plus} Nova ocorrência</button>` : ''}</div>
+      ${!framed && l.length ? `<button class="btn" data-g="expOc" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}${podeEditar() ? `<button class="btn pri" data-g="novaOc" style="align-self:flex-end">${I.plus} Nova ocorrência</button>` : ''}</div>
       <div class="rchips">${[['pendente', 'Aguardando assinatura'], ['assinada', 'Assinadas'], ['recusada', 'Recusadas'], ['', 'Todas']].map(([k, t]) => `<button class="rchip" data-gst="${k}" aria-pressed="${!U.ocMeu && U.ocSt === k}">${t}<span class="c num">${k ? n(k) : G().ocorr.length}</span></button>`).join('')}<button class="rchip" data-g="ocMeu" aria-pressed="${!!U.ocMeu}">Comigo para recolher<span class="c num">${G().ocorr.filter(o => o.status === 'pendente' && souEu(o.recolhe)).length}</span></button></div>
       <div class="card"><div class="body">${ocLista(l.slice(0, 300), true)}${l.length > 300 ? `<p class="muted small">Mostrando 300 de ${l.length}. Use a busca para filtrar.</p>` : ''}</div></div>`;
     return h;
@@ -552,6 +556,12 @@ export function criarGestao(X) {
       case 'impF': U.impF = d.v; U.impMat = ''; render(); break;
       case 'impDoc': U.impDoc = d.v; render(); break;
       case 'novaOc': novaOcorrencia(d.mat || null); break;
+      case 'expOc': {
+        const ST = { pendente: 'Aguardando assinatura', assinada: 'Assinada', recusada: 'Recusada' };
+        const linhas = [['Data', 'Matrícula', 'Nome', 'Área', 'Tipo', 'Descrição', 'Líder (Dikma)', 'Recolher assinatura', 'Situação', 'Assinada em', 'Testemunha'], ...(U.ocLista || []).map(o => [dataBR(o.data), o.mat, o.nome, o.area || '', o.tipo, o.desc || '', o.lider || '', o.recolhe || '', ST[o.status] || o.status, dataBR(typeof o.assinadoEm === 'string' ? o.assinadoEm : ''), o.testemunha || ''])];
+        baixarExcel('ocorrencias', [{ nome: 'Ocorrências', linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+        break;
+      }
       case 'assinar': assinarSheet(d.mat, d.oc ? [d.oc] : null); break;
       case 'verAss': verAssinatura(d.id); break;
       case 'imprimir': UI.view = 'gimpr'; U.impMat = d.mat; U.impDoc = indice().get(d.mat).pend.length ? 'via' : 'ficha'; render(); scrollTo(0, 0); break;

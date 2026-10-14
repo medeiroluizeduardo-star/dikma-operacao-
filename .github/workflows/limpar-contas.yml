@@ -1,0 +1,40 @@
+name: Limpar contas sem usuário
+
+# Uma vez por mês (dia 1, 4h de Brasília) apaga as contas de login que sobraram sem usuário no sistema
+# (sobram quando a senha de alguém é redefinida pelo site ou quando um usuário é apagado), com mais de 30 dias sem uso.
+# Manual (Run workflow): pode só listar, sem apagar.
+on:
+  schedule:
+    - cron: '0 7 1 * *'
+  workflow_dispatch:
+    inputs:
+      apagar:
+        description: 'Apagar as contas encontradas (desmarcado = só listar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  limpar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Limpar
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          LIMPAR_APAGAR: ${{ github.event_name == 'schedule' && 'sim' || (inputs.apagar && 'sim' || 'nao') }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/limpar-contas.mjs
