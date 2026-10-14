@@ -1,0 +1,40 @@
+name: Avisos no celular
+
+# De hora em hora, das 6h às 22h (Brasília): paradas sem liberação há mais de 2 h, assinaturas pendentes há mais
+# de 7 dias (a partir das 8h), atividades do dia sem apontar (a partir das 15h) e déficit de efetivo amanhã (17h).
+# Cada pessoa recebe só o que é dela. Enquanto ninguém ligar os avisos no sistema, só registra "nada a enviar".
+on:
+  schedule:
+    - cron: '5 9-23,0,1 * * *'
+  workflow_dispatch:
+    inputs:
+      so_testar:
+        description: 'Só testar (mostra o que enviaria, sem enviar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency: avisos-celular
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: integracao/avisos
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Enviar avisos
+        env:
+          TZ: America/Sao_Paulo
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          AVISOS_SO_TESTAR: ${{ inputs.so_testar && '1' || '' }}
+        run: node avisos.mjs

@@ -138,3 +138,28 @@ test('cópia de segurança e restauração: voltam os dados com os tipos certos,
   // coleção que não está na cópia: recusa
   assert.throws(() => rodar('restaurar.mjs', { RESTAURAR_PASTA: pasta, RESTAURAR_COLECOES: 'historico' }), /Não estão nesta cópia/);
 });
+
+test('divisão do Efetivo por área: cada ficha vai para a área onde a pessoa está, e ocorrências e assinaturas acompanham', async () => {
+  await limpar();
+  await db.doc('config/sistema').set({ rotas: [] });
+  await db.doc('colaboradores/RECEBIMENTO').set({ itens: [{ id: 'C001', mat: '111', nome: 'ANA PATIO', area: 'RECEBIMENTO', rota: 'RECEBIMENTO' }] });
+  await db.doc('eq/config').set({ turno: {} });
+  await db.doc('eq/cadastro').set({ operadores: [{ nome: 'BRUNO OPERADOR', funcao: 'OPERADOR' }], frota: [] });
+  await db.doc('gestao/colaboradores').set({ itens: [{ mat: '111', nome: 'ANA PATIO', area: 'COQUERIA' }, { mat: '222', nome: 'BRUNO OPERADOR', area: 'COQUERIA' }, { mat: '333', nome: 'CARLA SEDE', area: 'Sede' }] });
+  await db.doc('gocorr/oa').set({ mat: '111', status: 'pendente' });
+  await db.doc('gocorr/ob').set({ mat: '222', status: 'assinada' });
+  await db.doc('gocorr/oc').set({ mat: '333', status: 'pendente' });
+  await db.doc('gassin/sb').set({ mat: '222', ocorrIds: ['ob'], metodo: 'tela' });
+
+  const s = rodar('migrar-areas.mjs');
+  assert.match(s, /3 fichas organizadas/);
+  assert.deepEqual((await db.doc('gcolab/RECEBIMENTO').get()).get('itens').map(c => c.mat), ['111']);
+  assert.deepEqual((await db.doc('gcolab/OPERAÇÃO DE EQUIPAMENTOS').get()).get('itens').map(c => c.mat), ['222']);
+  assert.deepEqual((await db.doc('gcolab/GERAL').get()).get('itens').map(c => c.mat), ['333']);
+  assert.equal((await db.doc('gocorr/oa').get()).get('area'), 'RECEBIMENTO');
+  assert.equal((await db.doc('gocorr/ob').get()).get('area'), 'OPERAÇÃO DE EQUIPAMENTOS');
+  assert.equal((await db.doc('gocorr/oc').get()).get('area'), 'GERAL');
+  assert.equal((await db.doc('gassin/sb').get()).get('area'), 'OPERAÇÃO DE EQUIPAMENTOS');
+  assert.ok(!(await db.doc('gestao/colaboradores').get()).exists, 'lista antiga apagada');
+  assert.match(rodar('migrar-areas.mjs'), /Nada a fazer/);
+});

@@ -11,7 +11,7 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje', 'escala']) {
+for (const f of ['cal', 'hoje', 'escala', 'pessoas']) {
   const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
 }
@@ -32,7 +32,7 @@ const db = getFirestore();
 const porId = qs => Object.fromEntries(qs.docs.map(x => [x.id, x.data()]));
 const avisos = porId(await db.collection('avisos').get());
 const comToken = Object.keys(avisos).filter(uid => (avisos[uid].tokens || []).length);
-if (!comToken.length) { console.log('::notice::Ninguém ligou os avisos ainda. Nada a enviar.'); process.exit(0); }
+if (!comToken.length) { await db.doc('avisos_enviados/estado').set({ ultimaExecucao: FieldValue.serverTimestamp(), ultimoResultado: { avisos: 0, entregues: 0, falhas: 0 }, aparelhos: 0, pessoas: 0 }, { merge: true }); console.log('::notice::Ninguém ligou os avisos ainda. Nada a enviar.'); process.exit(0); }
 
 const usuarios = porId(await db.collection('usuarios').get());
 const hoje = today(), amanha = add(hoje, 1), mes = hoje.slice(0, 7);
@@ -81,5 +81,5 @@ for (const m of msgs) {
 const limite = add(hoje, -15); const novo = {};
 for (const [k, v] of Object.entries(enviados)) if (typeof v === 'string' && v >= limite) novo[k] = v;
 marcar.forEach(k => { novo[k] = hoje; });
-await estadoRef.set({ enviados: novo, ultimaExecucao: FieldValue.serverTimestamp(), ultimoResultado: { avisos: msgs.length, entregues: ok, falhas } });
+await estadoRef.set({ enviados: novo, ultimaExecucao: FieldValue.serverTimestamp(), ultimoResultado: { avisos: msgs.length, entregues: ok, falhas }, aparelhos: comToken.reduce((n, uid) => n + avisos[uid].tokens.length, 0), pessoas: comToken.length });
 console.log(`::notice::Avisos entregues: ${ok}${falhas ? ` · falhas: ${falhas}` : ''}.`);

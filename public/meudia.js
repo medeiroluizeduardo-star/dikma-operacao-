@@ -3,7 +3,7 @@ import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, addMonth, ddmm } fro
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './hoje.js';
 
 const DIAS_L = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true };
 
 export function criarMeuDia(X) {
   const { DB, esc, title, I, toast, render } = X;
@@ -52,7 +52,8 @@ export function criarMeuDia(X) {
     const prefs = { ...PREFS_PADRAO, ...((meus && meus.prefs) || {}) };
     const opcoes = [
       temMod('equipamentos') && ['paradas', 'Parada sem liberação há mais de 2 horas'],
-      temMod('gestao') && ['assinaturas', 'Assinatura pendente há mais de 7 dias (resumo às 8h)'],
+      temMod('gestao') && ME().papel !== 'leitor' && ['assinaturas', 'Assinatura com você ou da sua área há mais de 7 dias (às 8h)'],
+      (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(ME().papel) && ['atividades', 'Atividades do dia ainda sem apontar (às 15h)'],
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)']
     ].filter(Boolean);
     let corpo;
@@ -62,10 +63,21 @@ export function criarMeuDia(X) {
       : vazio('O administrador ainda não ligou os avisos no celular.');
     else if (!opcoes.length) corpo = vazio('Seus módulos não têm avisos.');
     else corpo = `<div class="avst ${ativo ? 'on' : ''}"><span class="dot"></span><div class="minw"><b>${ativo ? 'Avisos ligados neste aparelho' : 'Avisos desligados neste aparelho'}</b><small>${ativo ? 'Você recebe os avisos marcados abaixo, mesmo com o sistema fechado.' : ST.suportado ? 'Ligue para receber no celular, mesmo com o sistema fechado.' : 'Este navegador não recebe avisos. No iPhone, adicione o sistema à Tela de Início e abra por lá.'}</small></div>
-        ${ativo ? `<button class="btn sm" data-md-av="desligar" ${ST.ocupado ? 'disabled' : ''}>Desligar</button>` : `<button class="btn pri sm" data-md-av="ligar" ${ST.ocupado || !ST.suportado ? 'disabled' : ''}>${ST.ocupado ? 'Ligando…' : 'Ligar avisos'}</button>`}</div>
+        ${ativo ? `<button class="btn ghost sm" data-md-av="testar">Testar neste aparelho</button><button class="btn sm" data-md-av="desligar" ${ST.ocupado ? 'disabled' : ''}>Desligar</button>` : `<button class="btn pri sm" data-md-av="ligar" ${ST.ocupado || !ST.suportado ? 'disabled' : ''}>${ST.ocupado ? 'Ligando…' : 'Ligar avisos'}</button>`}</div>
       <div class="mchips">${opcoes.map(([k, t]) => `<label class="mchip"><input type="checkbox" data-md-pref="${k}" ${prefs[k] ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}`;
+    if (cfg.vapid && ME().papel === 'admin') corpo += estadoRotina();
     return `<div class="card"><header><h2>Avisos no celular</h2></header><div class="body stackcol" style="gap:12px">${corpo}</div></div>`;
+  }
+
+  // Administrador: como a rotina do GitHub está indo (gravado por ela a cada execução).
+  function estadoRotina() {
+    const e = DB.cache.avisosEstado;
+    if (!e || !e.ultimaExecucao) return '<p class="small muted m0">A rotina ainda não rodou. Ela roda de hora em hora, das 6h às 22h (GitHub › Actions › Avisos no celular).</p>';
+    const d = e.ultimaExecucao, r = e.ultimoResultado || {};
+    const quando = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} às ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const atrasada = Date.now() - d.getTime() > 3 * 36e5 && new Date().getHours() >= 7 && new Date().getHours() <= 22;
+    return `<p class="small m0 ${atrasada ? 'err' : 'muted'}">Rotina: última execução em ${quando}${atrasada ? ' (atrasada: confira em GitHub › Actions › Avisos no celular)' : ''} · ${e.pessoas || 0} pessoa(s) com aviso ligado em ${e.aparelhos || 0} aparelho(s) · ${r.entregues || 0} aviso(s) entregue(s)${r.falhas ? `, ${r.falhas} falha(s)` : ''}.</p>`;
   }
 
   function view() {
@@ -145,17 +157,19 @@ export function criarMeuDia(X) {
       try { await DB.ativarAvisos(prefs); toast('Avisos ligados neste aparelho'); testeLocal(); } catch (err) { ST.erro = (err && err.message) || String(err); }
       ST.ocupado = false; render(); return true;
     }
+    if (a === 'testar') { await testeLocal(true); return true; }
     if (a === 'desligar') { try { await DB.desativarAvisos(); toast('Avisos desligados neste aparelho'); } catch (err) { ST.erro = (err && err.message) || String(err); } render(); return true; }
     return false;
   }
   // Mostra um aviso de exemplo para a pessoa ver como chega.
-  async function testeLocal() {
+  async function testeLocal(avisar) {
     try {
-      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!('Notification' in window) || Notification.permission !== 'granted') { if (avisar) toast('Este aparelho não permite notificações. Libere nas configurações do navegador.'); return; }
       const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       const op = { body: 'Pronto. É assim que os avisos vão chegar.', icon: 'icons/icon-192.png', tag: 'teste' };
       if (reg) reg.showNotification('Dikma Operação', op); else new Notification('Dikma Operação', op);
-    } catch (e) { /* sem notificação local */ }
+      if (avisar) toast('Aviso de teste enviado para este aparelho');
+    } catch (e) { if (avisar) toast('Não foi possível mostrar o aviso neste aparelho'); }
   }
   function onChange(t) {
     const k = t.dataset.mdPref; if (!k) return false;

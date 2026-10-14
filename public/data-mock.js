@@ -120,16 +120,16 @@ export async function criarUsuario({ nome, login, senha, papel, area, area2, mod
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
-  if (String(senha).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  if (String(senha).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
   cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');
-  if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+  if (String(nova).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
   Object.assign(cache.usuarios.find(u => u.uid === uid), { senha: nova, trocarSenha: true }); changed();
 }
-export async function definirNovaSenha(nova) { if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); Object.assign(me, { senha: nova, trocarSenha: false }); persist(); emitAuth(); changed(); }
-export async function alterarSenha(atual, nova) { if (me.senha !== atual) throw new Error('A senha atual não confere.'); if (String(nova).length < 6) throw new Error('A senha precisa ter pelo menos 6 caracteres.'); me.senha = nova; changed(); }
+export async function definirNovaSenha(nova) { if (String(nova).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.'); Object.assign(me, { senha: nova, trocarSenha: false }); persist(); emitAuth(); changed(); }
+export async function alterarSenha(atual, nova) { if (me.senha !== atual) throw new Error('A senha atual não confere.'); if (String(nova).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.'); me.senha = nova; changed(); }
 
 export async function setStatusMany(docId, changes) {
   const w = cache.semanas[docId];
