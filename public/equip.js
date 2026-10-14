@@ -1,4 +1,4 @@
-// Dikma Operação — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
+// Dikma Gestão — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 // Telas: Painel, Lançamentos, Paradas, Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
 import { add, pad, today, MESES_L, addMonth, DAYS } from './cal.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';

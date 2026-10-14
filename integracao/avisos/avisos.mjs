@@ -1,4 +1,4 @@
-// Dikma Operação — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
+// Dikma Gestão — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
 // Lê o Firestore com a chave de serviço, decide os avisos (planejar.mjs) e envia pelo Firebase Cloud Messaging.
 // Cada aviso vai uma vez só: o que já foi enviado fica marcado em avisos_enviados/estado.
 // AVISOS_SO_TESTAR=1 mostra o que seria enviado, sem enviar nem marcar.

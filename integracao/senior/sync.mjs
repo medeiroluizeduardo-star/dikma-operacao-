@@ -1,4 +1,4 @@
-// Dikma Operação — ponte com o Senior.
+// Dikma Gestão — ponte com o Senior.
 // Roda no GitHub Actions (workflow "Integração Senior"). Busca os colaboradores no Senior,
 // padroniza os campos e grava em integracao/senior no Firestore. Nada é aplicado sozinho:
 // o administrador confere e aplica em Efetivo › Importar dados › Integração Senior.

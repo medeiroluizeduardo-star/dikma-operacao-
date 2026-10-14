@@ -1,4 +1,4 @@
-// Dikma Operação — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
+// Dikma Gestão — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 
@@ -235,7 +235,7 @@ const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extr
 function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>OPERAÇÃO</b></div></div>${html}</div>`; }
+function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
 const GOOGLE = new URLSearchParams(location.search).has('google');
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {

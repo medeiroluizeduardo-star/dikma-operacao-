@@ -1,4 +1,4 @@
-// Converte o que veio do Senior no formato que o Dikma Operação entende:
+// Converte o que veio do Senior no formato que o Dikma Gestão entende:
 // { mat, nome, funcao, area, rota, regime, turma, lider, adm, dem, situacao }
 // O mapa diz, para cada campo, os nomes possíveis no Senior (o primeiro que vier preenchido vale).
 // Nomes com ponto entram em objetos: "department.name". Maiúsculas e acentos não importam.

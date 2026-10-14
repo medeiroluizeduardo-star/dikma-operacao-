@@ -1,4 +1,4 @@
-// Dikma Operação — cálculos do "Meu dia". Funções puras, usadas pela tela (navegador)
+// Dikma Gestão — cálculos do "Meu dia". Funções puras, usadas pela tela (navegador)
 // e pela rotina de avisos no celular (GitHub Actions), para os dois mostrarem a mesma coisa.
 import { add, weekOf, AUSENTE } from './cal.js';
 

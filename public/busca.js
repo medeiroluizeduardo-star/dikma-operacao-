@@ -1,4 +1,4 @@
-// Dikma Operação — busca e seleção com digitação (operadores, equipamentos, colaboradores).
+// Dikma Gestão — busca e seleção com digitação (operadores, equipamentos, colaboradores).
 // A lista de sugestões abre ABAIXO do campo, dentro da própria janela: nunca cobre o que a pessoa digita.
 // Acha por qualquer parte do texto, sem acento: "joao sil", "silva", "25001".
 export const semAcento = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

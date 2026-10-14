@@ -1,7 +1,7 @@
 {
-  "name": "Dikma Operação",
-  "short_name": "Dikma Op",
-  "description": "Programação de atividades",
+  "name": "Dikma Gestão",
+  "short_name": "Dikma Gestão",
+  "description": "Atividades, operação de equipamentos e efetivo da Coqueria",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

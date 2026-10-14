@@ -1,4 +1,4 @@
-// Dikma Operação — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
+// Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
 import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, addMonth, ddmm } from './cal.js';
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './hoje.js';
 
@@ -178,7 +178,7 @@ export function criarMeuDia(X) {
       if (!('Notification' in window) || Notification.permission !== 'granted') { if (avisar) toast('Este aparelho não permite notificações. Libere nas configurações do navegador.'); return; }
       const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
       const op = { body: 'Pronto. É assim que os avisos vão chegar.', icon: 'icons/icon-192.png', tag: 'teste' };
-      if (reg) reg.showNotification('Dikma Operação', op); else new Notification('Dikma Operação', op);
+      if (reg) reg.showNotification('Dikma Gestão', op); else new Notification('Dikma Gestão', op);
       if (avisar) toast('Aviso de teste enviado para este aparelho');
     } catch (e) { if (avisar) toast('Não foi possível mostrar o aviso neste aparelho'); }
   }

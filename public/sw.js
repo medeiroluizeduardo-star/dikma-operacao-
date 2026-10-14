@@ -1,6 +1,6 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v29';
+const V = 'dikma-operacao-v30';
 const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
 
 self.addEventListener('install', e => {
@@ -34,7 +34,7 @@ self.addEventListener('fetch', e => {
 self.addEventListener('push', e => {
   let m = {};
   try { const j = e.data ? e.data.json() : {}; m = j.data || j.notification || j; } catch (err) { m = { corpo: e.data ? e.data.text() : '' }; }
-  const titulo = m.titulo || m.title || 'Dikma Operação';
+  const titulo = m.titulo || m.title || 'Dikma Gestão';
   e.waitUntil(self.registration.showNotification(titulo, {
     body: m.corpo || m.body || '', tag: m.tag || undefined, renotify: !!m.tag,
     icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', data: { url: m.url || './?v=meudia' }

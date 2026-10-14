@@ -1,4 +1,4 @@
-# Dikma Operação
+# Dikma Gestão
 
 Sistema web da Dikma para a Coqueria, com quatro módulos:
 - **Atividades Pátio:** programação e apontamento de atividades do Pátio de Carvão.

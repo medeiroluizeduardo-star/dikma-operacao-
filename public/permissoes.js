@@ -1,4 +1,4 @@
-// Dikma Operação — quais abas cada perfil vê (config/permissoes) e exceção por pessoa (campo abas em usuarios/{uid}).
+// Dikma Gestão — quais abas cada perfil vê (config/permissoes) e exceção por pessoa (campo abas em usuarios/{uid}).
 // Regra: administrador vê tudo. Abas de administração só podem ser ligadas para o Gestor.
 // Sem nada configurado, todo perfil vê todas as abas comuns dos módulos dele (o comportamento de antes).
 export const PERFIS_ABAS = [['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['leitor', 'Somente leitura']];
