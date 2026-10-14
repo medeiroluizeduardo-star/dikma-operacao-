@@ -849,6 +849,8 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 .dchip[aria-pressed="true"] i{background:var(--accent);color:var(--accent-ink)}
 .pgrp{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 0 6px;border-bottom:2px solid var(--line)}
 .pgrp:first-child{padding-top:0}
+.pgrp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.pgrp .pg-t{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}
 .pgrp b{font-family:var(--f-display);font-size:17px;letter-spacing:.03em;text-transform:uppercase}
 .pgrp span{font-size:12.5px;color:var(--ink-3)}.pgrp em{font-style:normal;color:var(--st-atr);font-weight:600}
 /* usuários */
@@ -933,6 +935,94 @@ td.uacts .btn+.btn{margin-left:4px}
 .rail:has(.modpick.aberto) .nav-ind{opacity:0!important}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
 @media print{.nav-ind,.layer-ghost,.toast{display:none!important}.card,.kpis{box-shadow:none}}
+
+/* ---------- Etapa 2: telas mais diretas ---------- */
+/* Busca rápida */
+.buscabtn{display:inline-flex;align-items:center;gap:6px;color:var(--ink-2)}
+.buscabtn svg{width:16px;height:16px}
+.buscabtn kbd{font-family:var(--f-mono);font-size:10.5px;border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--ink-3)}
+.scrim.busca{align-items:flex-start;padding-top:10vh}
+.buscasheet{width:min(560px,100%);gap:10px}
+.buscain{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:0 10px;background:var(--surface)}
+.buscain svg{width:18px;height:18px;color:var(--ink-3);flex:none}
+.buscain .in{border:0;box-shadow:none!important;outline:none;flex:1;min-width:0;background:transparent}
+.buscain:focus-within{box-shadow:var(--ring);border-color:var(--focus)}
+#bqRes{max-height:55vh;overflow:auto}
+#bqRes .opt[aria-selected="true"]{background:color-mix(in srgb,var(--accent) 10%,var(--surface));outline:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
+/* Filtro compacto (celular) */
+.fbar{display:flex;gap:8px;width:100%}
+.fcomp{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:9px 12px;font-weight:600;font-size:13.5px;color:var(--ink);text-align:left}
+.fcomp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fcomp svg{width:16px;height:16px;flex:none;color:var(--ink-3)}
+#fsCorpo .filters .sel{flex:1 1 100%}
+/* Linha de botões que desliza para o lado (áreas e rotas no Apontar) */
+.rchips.linha{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;scroll-snap-type:x proximity}
+.rchips.linha::-webkit-scrollbar{display:none}
+.rchips.linha .rchip{flex:none;scroll-snap-align:start;white-space:nowrap}
+.rchip .c{font-size:11px}
+/* Progresso do Apontar, preso no topo enquanto rola a lista */
+.apbar{position:sticky;top:var(--topo,0px);z-index:5;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:10px 12px;display:grid;gap:8px;box-shadow:var(--e1)}
+.apbar .row-gap{gap:6px}
+.fimrota{border-color:color-mix(in srgb,var(--st-real) 45%,var(--line-2))}
+.fimrota .body{gap:10px;flex-wrap:wrap}
+/* Programação: rotas recolhidas */
+.pgrp{width:100%;display:flex;align-items:center;gap:8px;flex-wrap:wrap;text-align:left;background:var(--surface);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;margin-top:6px;color:var(--ink)}
+button.pgrp:hover{border-color:var(--line)}
+.pgrp{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center}
+.pgrp .pg-t{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}
+.pgrp b{font-family:var(--f-display);font-size:16px;letter-spacing:.03em;text-transform:uppercase;color:var(--ink)}
+.pgrp small{color:var(--ink-3);font-size:12px}
+.pgrp .pres{margin-left:auto;font-size:12.5px;color:var(--ink-2)}
+.pgrp .atr{color:var(--st-atr);font-weight:600}
+.pgrp .chev{width:16px;height:16px;color:var(--ink-3);transition:transform var(--t2) var(--ease)}
+.pgrp.on .chev{transform:rotate(90deg)}
+tr.grp td .pgrp{margin:0;border:0;background:transparent;padding:2px 0}
+.pgtool{align-items:center}
+/* Efetivo diário: rotas recolhidas e legenda escondida */
+.efg{display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:0;color:var(--ink);font:inherit}
+.efg .chev{width:14px;height:14px;color:var(--ink-3);transition:transform var(--t2) var(--ease)}
+.efg.on .chev{transform:rotate(90deg)}
+details.legdet>summary{cursor:pointer;font-size:12.5px;color:var(--ink-2);padding:6px 0;list-style:none}
+details.legdet>summary::-webkit-details-marker{display:none}
+details.legdet>summary::before{content:"?";display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;border:1px solid var(--line);margin-right:6px;font-size:11px;font-weight:700}
+details.legdet[open]>summary{margin-bottom:6px}
+/* Meu dia: Agora e Hoje */
+.md-top{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start}
+.md-agora .body{display:grid;gap:0;padding-top:4px}
+.md-task{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line-2)}
+.md-task:first-child{border-top:0}
+.md-task .s{align-self:stretch;border-radius:2px;background:var(--st-prog)}
+.md-task.bad .s{background:var(--st-nreal)}.md-task.warn .s{background:var(--st-atr)}
+.md-task b{display:block;font-size:14px}
+.md-task b .num{font-family:var(--f-display);font-size:19px;margin-right:2px}
+.md-task.bad b .num{color:var(--st-nreal)}.md-task.warn b .num{color:var(--st-atr)}
+.md-task small{display:block;color:var(--ink-3);font-size:12px}
+.md-mais>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:8px 0;border-top:1px solid var(--line-2)}
+.md-ok{color:var(--ink-2)}
+.md-prog{display:grid;gap:6px;width:100%;text-align:left;background:none;border:0;padding:0;color:var(--ink)}
+.md-prog b{font-size:14px}
+.md-chips{display:flex;flex-wrap:wrap;gap:6px}
+.md-chip{border:1px solid var(--line-2);background:var(--surface-2);border-radius:999px;padding:4px 10px;font-size:12.5px;color:var(--ink-2)}
+.md-chip b{color:var(--ink)}
+.md-grid{margin-top:16px}
+@media (max-width:860px){
+  .md-top{grid-template-columns:minmax(0,1fr);gap:12px}
+  .md-hero h2{font-size:24px}
+  .top .buscabtn{position:absolute;right:12px;top:8px;padding:6px 8px}
+  .top .buscabtn span,.top .buscabtn kbd{display:none}
+  .syncwrap{right:56px}
+  .top h1{padding-right:170px}
+  body.rolou .top h1 small{display:none}
+  body.rolou .top h1{font-size:19px}
+  .mini{gap:6px}.mini div{padding:8px 10px}
+  .pgrp{grid-template-columns:auto minmax(0,1fr)}
+  .pgrp .pres{grid-column:2;margin-left:0}
+  .mini{display:flex!important;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:6px}
+  .mini::-webkit-scrollbar{display:none}
+  .mini div{flex:none;flex-direction:row;align-items:baseline;gap:5px;padding:5px 11px;border-radius:999px;box-shadow:none}
+  .mini b{font-size:17px}
+  .mini span{font-size:10.5px;letter-spacing:.03em;white-space:nowrap}
+}
 </style>
 </head>
 <body>
