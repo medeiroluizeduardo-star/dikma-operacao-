@@ -173,9 +173,10 @@ service cloud.firestore {
       allow read: if todasFichas() || minhaFicha(area);
       allow write: if admMod('gestao');
     }
-    // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher.
+    // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,
+    // comparado com usuarios/{uid}.nomeUp, que o sistema grava no cadastro).
     function veOcorr(o) {
-      return todasFichas() || (ge() && (minhaFicha(o.area) || o.criadoPor == request.auth.uid || o.recolhe == perfil().get('nome', '').upper()));
+      return todasFichas() || (ge() && (minhaFicha(o.area) || o.criadoPor == request.auth.uid || o.recolhe == perfil().get('nomeUp', '#')));
     }
     match /gocorr/{id} {
       allow read: if veOcorr(resource.data);

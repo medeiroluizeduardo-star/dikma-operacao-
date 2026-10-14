@@ -174,7 +174,7 @@ export async function criarUsuario({ nome, login, senha, papel, area, area2, mod
   if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
   const { email, uid } = await novaConta(login, senha);
   const b = writeBatch(db);
-  b.set(doc(db, 'usuarios', uid), { nome, login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'usuarios', uid), { nome, nomeUp: String(nome || '').toUpperCase(), login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }
@@ -382,7 +382,7 @@ export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), {
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
-export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch));
+export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 
 export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
@@ -457,7 +457,7 @@ function startGestao() {
     const fonte = (k, q) => on(q, qs => { ocorrFontes[k] = Object.fromEntries(qs.docs.map(d => [d.id, { id: d.id, ...d.data() }])); montarOcorr(); pronto(k); g(); }, k);
     for (const a of areas) fonte('o:' + a, query(collection(db, 'gocorr'), where('area', '==', a)));
     fonte('oc', query(collection(db, 'gocorr'), where('criadoPor', '==', me.uid)));
-    fonte('or', query(collection(db, 'gocorr'), where('recolhe', '==', String(me.nome || '').toUpperCase())));
+    fonte('or', query(collection(db, 'gocorr'), where('recolhe', '==', me.nomeUp || String(me.nome || '').toUpperCase())));
   }
   g();
   // Ponte com o Senior: o que a rotina do GitHub trouxe (só o administrador vê).

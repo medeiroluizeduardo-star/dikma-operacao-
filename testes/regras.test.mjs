@@ -44,7 +44,7 @@ before(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async ctx => {
     const d = ctx.firestore();
-    for (const [uid, u] of Object.entries(USUARIOS)) await setDoc(doc(d, 'usuarios', uid), { nome: uid, login: uid.toLowerCase(), area: null, ...u });
+    for (const [uid, u] of Object.entries(USUARIOS)) { const x = { nome: uid, login: uid.toLowerCase(), area: null, ...u }; await setDoc(doc(d, 'usuarios', uid), { ...x, nomeUp: x.nome.toUpperCase() }); }
     for (const a of ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'OPERAÇÃO DE EQUIPAMENTOS', 'GERAL']) await setDoc(doc(d, 'gcolab', a), { itens: [{ mat: a.slice(0, 3), nome: 'Pessoa ' + a }] });
     const oc = (id, area, extra = {}) => setDoc(doc(d, 'gocorr', id), { area, status: 'pendente', desc: 'Atestado', criadoPor: 'admin', recolhe: '', ...extra });
     await oc('rec1', 'RECEBIMENTO'); await oc('pre1', 'PREPARAÇÃO'); await oc('b1', 'BATERIA 1'); await oc('op1', 'OPERAÇÃO DE EQUIPAMENTOS'); await oc('ger1', 'GERAL');

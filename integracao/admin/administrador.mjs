@@ -34,7 +34,7 @@ if (!perfil && !nome) {
 }
 
 const dados = {
-  nome: nome || perfil.nome, login, papel: 'admin', area: null, area2: null,
+  nome: nome || perfil.nome, nomeUp: String(nome || perfil.nome || '').toUpperCase(), login, papel: 'admin', area: null, area2: null,
   modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], trocarSenha: true,
   senhaRedefinidaEm: F.FieldValue.serverTimestamp()
 };

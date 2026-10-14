@@ -17,6 +17,14 @@ const { SETS, SET_KEYS } = await import('./lib/cal.mjs');
 const { criarPessoas, chaveFicha, FICHA_GERAL } = await import('./lib/pessoas.mjs');
 
 const { db } = await conectar();
+
+// Nome em maiúsculas no cadastro de cada usuário (as regras usam para "ocorrências que eu vou recolher").
+let nomesAcertados = 0;
+{
+  const b = db.batch();
+  (await db.collection('usuarios').get()).forEach(d => { const up = String(d.get('nome') || '').toUpperCase(); if (d.get('nomeUp') !== up) { b.update(d.ref, { nomeUp: up }); nomesAcertados++; } });
+  if (nomesAcertados) { await b.commit(); console.log(`Nome em maiúsculas gravado em ${nomesAcertados} usuário(s).`); }
+}
 const antigo = await db.doc('gestao/colaboradores').get();
 const atuais = await db.collection('gcolab').get();
 const linhas = [];
