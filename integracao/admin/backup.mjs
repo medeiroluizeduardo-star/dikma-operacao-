@@ -19,7 +19,7 @@ const SO_COMPLETA = ['evidenciasArquivo', 'b_evidenciasArquivo'];
 const NUNCA = ['seeds']; // já estão no repositório (pasta dados-importacao)
 const entra = c => !NUNCA.includes(c) && (tipo === 'completa' || (!SO_COMPLETA.includes(c) && (tipo === 'semanal' || !SO_SEMANAL.includes(c))));
 
-const { db, F, projeto } = await conectar();
+const { db, F, auth, projeto } = await conectar();
 const todas = (await db.listCollections()).map(c => c.id).sort();
 const POR_PARTE = 300;
 const man = { projeto, tipo, inicio: new Date().toISOString(), colecoes: {}, fora: todas.filter(c => !entra(c)) };
@@ -49,6 +49,25 @@ for (const c of todas.filter(entra)) {
   if (sub) console.log(`::warning::A coleção ${c} tem subcoleções, que não entram nesta cópia.`);
 }
 man.fim = new Date().toISOString();
+
+// Uso do plano grátis (tela Administração do sistema › Uso do plano): tamanho aproximado, documentos, fotos e contas.
+const uso = { em: F.FieldValue.serverTimestamp(), tipo, leiturasCopia: leituras, pacoteBytes: bytes, colecoes: Object.fromEntries(Object.entries(man.colecoes).map(([c, x]) => [c, x.documentos])) };
+try {
+  let n = 0, b = 0;
+  for (const c of ['evidencias', 'b_evidencias']) {
+    if (!todas.includes(c)) continue;
+    const a = (await db.collection(c).aggregate({ n: F.AggregateField.count(), t: F.AggregateField.sum('tamanho') }).get()).data();
+    n += a.n || 0; b += a.t || 0;
+  }
+  uso.fotos = { n, bytes: b };
+} catch (e) { console.log('::warning::Não deu para somar as fotos: ' + e.message); }
+try {
+  const perfis = new Set((await db.collection('usuarios').select().get()).docs.map(d => d.id));
+  let contas = 0, orfas = 0, token;
+  do { const r = await auth.listUsers(1000, token); for (const u of r.users) { contas++; if (!perfis.has(u.uid)) orfas++; } token = r.pageToken; } while (token);
+  uso.contas = { total: contas, semPerfil: orfas };
+} catch (e) { console.log('::warning::Não deu para contar as contas: ' + e.message); }
+await db.doc('sistema/uso').set(uso);
 man.leituras = leituras;
 fs.writeFileSync(path.join(destino, 'manifesto.json'), JSON.stringify(man, null, 2));
 

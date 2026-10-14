@@ -17,19 +17,34 @@ service cloud.firestore {
     function todasAreas() { return hasProfile() && perfil().papel in ['gestor', 'coordenador']; }
     function minhaArea(area) { return perfil().get('area', '') == area || (perfil().papel == 'supervisor' && perfil().get('area2', '') == area); }
     function mods() { return perfil().get('modulos', ['operacao']); }
-    function admMod(m) { return admin() || (ativo() && perfil().papel == 'gestor' && m in mods()); }   // administração do módulo
-    function op() { return ativo() && (admin() || 'operacao' in mods()); }        // módulo Operação
-    function ge() { return ativo() && (admin() || 'gestao' in mods()); }          // módulo Gestão
-    function eqm() { return ativo() && (admin() || 'equipamentos' in mods()); }   // módulo Operação (equipamentos)
+    function admMod(m) { return admin() || (ativo() && acOp() && perfil().papel == 'gestor' && m in mods()); }   // administração do módulo
+    // Acessos (portas de entrada): operacao (padrão de quem não tem o campo), administrativo. O administrador entra em todos.
+    function acessos() { return perfil().get('acessos', ['operacao']); }
+    function acOp() { return admin() || 'operacao' in acessos(); }
+    function acAdm() { return ativo() && (admin() || 'administrativo' in acessos()); }   // acesso Administrativo
+    function admEdita() { return acAdm() && perfil().papel != 'leitor'; }
+    function op() { return ativo() && acOp() && (admin() || 'operacao' in mods()); }        // Atividades Pátio
+    function ge() { return hasProfile() && geU(perfil()); }          // Efetivo (fichas)
+    function eqm() { return ativo() && acOp() && (admin() || 'equipamentos' in mods()); }   // Operação (equipamentos)
     function eqEdita() { return eqm() && (admin() || perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']); }
-    function geEdita() { return ge() && (admin() || perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']); }
-    function gestorDa(area) { return gestor() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
-    function ba() { return ativo() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
-    function gestorDaB(area) { return gestor() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
+    function geEdita() { return hasProfile() && geEditaU(perfil()); }
+    function gestorDa(area) { return gestor() && acOp() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
+    function ba() { return ativo() && acOp() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
+    function gestorDaB(area) { return gestor() && acOp() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
     // Efetivo por área: administrador, gestor, coordenador e somente leitura veem todas as áreas;
     // supervisor, as 2 dele; líder, a dele; quem tem a Operação de equipamentos, também os operadores.
-    function todasFichas() { return ge() && (admin() || perfil().papel in ['gestor', 'coordenador', 'leitor']); }
-    function minhaFicha(area) { return ge() && (minhaArea(area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in mods())); }
+    function todasFichas() { return hasProfile() && todasFichasU(perfil()); }
+    function minhaFicha(area) { return hasProfile() && minhaFichaU(perfil(), area); }
+    // As mesmas contas, recebendo o perfil já lido (u): cada regra lê o perfil uma vez só e fica dentro do limite
+    // de expressões do Firestore.
+    function geU(u) { return u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor']
+      && (u.papel == 'admin' || ('operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao']))); }
+    function geEditaU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider']; }
+    function todasFichasU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'leitor']; }
+    function minhaAreaU(u, area) { return u.get('area', '') == area || (u.papel == 'supervisor' && u.get('area2', '') == area); }
+    function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in u.get('modulos', ['operacao']))); }
+    function admGestaoU(u) { return u.papel == 'admin' || (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])); }
+    function veOcorrU(u, o) { return todasFichasU(u) || (geU(u) && (minhaFichaU(u, o.area) || o.criadoPor == request.auth.uid || o.recolhe == u.get('nomeUp', '#'))); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
 
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
@@ -46,7 +61,8 @@ service cloud.firestore {
       allow get: if (nome == 'seed' && admMod('operacao'))
         || (nome == 'seed-bateria' && admMod('bateria'))
         || (nome == 'seed-equip' && admMod('equipamentos'))
-        || (nome in ['seed-gestao', 'seed-efetivo'] && admMod('gestao'));
+        || (nome in ['seed-gestao', 'seed-efetivo'] && admMod('gestao'))
+        || (nome in ['seed-freq-patio', 'seed-freq-bateria', 'seed-ferias'] && admin());
       allow list, create, update, delete: if false;
     }
 
@@ -78,13 +94,14 @@ service cloud.firestore {
     }
 
     match /colaboradores/{area} {
-      allow read: if op();
+      allow read: if op() || acAdm();
       allow write: if admMod('operacao') || admMod('gestao');
     }
 
+    // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
-      allow read: if op();
-      allow write: if admin() || (gestor() && 'operacao' in mods());
+      allow read: if op() || acAdm();
+      allow write: if admin() || (gestor() && 'operacao' in mods() && acOp()) || admEdita();
     }
 
     match /semanas/{id} {
@@ -122,12 +139,12 @@ service cloud.firestore {
       allow write: if admMod('bateria');
     }
     match /b_colaboradores/{area} {
-      allow read: if ba();
+      allow read: if ba() || acAdm();
       allow write: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
-      allow read: if ba();
-      allow write: if admin() || (gestor() && 'bateria' in mods());
+      allow read: if ba() || acAdm();
+      allow write: if admin() || (gestor() && 'bateria' in mods() && acOp()) || admEdita();
     }
     match /b_semanas/{id} {
       allow read: if ba();
@@ -170,20 +187,21 @@ service cloud.firestore {
     }
     // Fichas dos colaboradores, um documento por área.
     match /gcolab/{area} {
-      allow read: if todasFichas() || minhaFicha(area);
+      allow read: if todasFichas() || minhaFicha(area) || acAdm();
       allow write: if admMod('gestao');
     }
     // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,
     // comparado com usuarios/{uid}.nomeUp, que o sistema grava no cadastro).
-    function veOcorr(o) {
-      return todasFichas() || (ge() && (minhaFicha(o.area) || o.criadoPor == request.auth.uid || o.recolhe == perfil().get('nomeUp', '#')));
+    function veOcorr(o) { return hasProfile() && veOcorrU(perfil(), o); }
+    function mudaOcorr(o) {
+      let u = perfil();
+      return admGestaoU(u) || (geEditaU(u) && veOcorrU(u, o) && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
     }
     match /gocorr/{id} {
       allow read: if veOcorr(resource.data);
       allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid
         && request.resource.data.area is string && (todasFichas() || minhaFicha(request.resource.data.area));
-      allow update: if admMod('gestao') || (geEdita() && veOcorr(resource.data)
-        && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
+      allow update: if hasProfile() && mudaOcorr(resource.data);
       allow delete: if admMod('gestao');
     }
     // Assinaturas: não mudam depois de gravadas (a administração só acerta a área quando a pessoa muda de área).
@@ -225,6 +243,29 @@ service cloud.firestore {
     match /integracao/{docId} {
       allow read: if admin();
       allow update: if admin() && soAltera(['aplicadoEm', 'aplicadoPor']);
+    }
+
+    // ---------- Acesso Administrativo ----------
+    // Folha de frequência de cada competência (16 a 15): grupos, pessoas e os dias de quem não está nas Atividades.
+    // Quem está nas Atividades tem a presença em situacao/b_situacao (a mesma do Efetivo diário).
+    match /freqcomp/{id} {
+      allow read: if acAdm();
+      allow write: if admEdita();
+    }
+    // Férias: um documento por período.
+    match /ferias/{id} {
+      allow read: if acAdm();
+      allow write: if admEdita();
+    }
+    // adm/feriasAtivas: resumo das férias de agora e dos próximos meses, lido pela Operação (marca FE sozinho).
+    match /adm/{docId} {
+      allow read: if ativo();
+      allow write: if admEdita();
+    }
+    // Uso do plano grátis (gravado pela rotina do GitHub; o administrador acompanha).
+    match /sistema/{docId} {
+      allow read: if admin();
+      allow write: if false;
     }
 
     match /historico/{id} {

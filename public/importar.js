@@ -1,4 +1,4 @@
-// Dikma Operação — Efetivo › Importar dados.
+// Dikma Gestão — Efetivo › Importar dados.
 // Lê uma planilha (Excel .xlsx/.xlsm/.xls ou CSV), acha sozinho a tabela de colaboradores (e a de ocorrências,
 // se houver), mostra o que vai mudar e só grava depois da confirmação. A área de atuação e a função
 // importadas vão também para Atividades Pátio, Atividades Bateria e Operação (pessoas.js).

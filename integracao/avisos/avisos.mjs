@@ -1,4 +1,4 @@
-// Dikma Operação — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
+// Dikma Gestão — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
 // Lê o Firestore com a chave de serviço, decide os avisos (planejar.mjs) e envia pelo Firebase Cloud Messaging.
 // Cada aviso vai uma vez só: o que já foi enviado fica marcado em avisos_enviados/estado.
 // AVISOS_SO_TESTAR=1 mostra o que seria enviado, sem enviar nem marcar.
@@ -59,7 +59,11 @@ for (const k of SET_KEYS) {
 const cfgEsc = (await db.doc('config/escalas').get()).data() || {};
 const eqCfg = (await db.doc('eq/config').get()).data() || {};
 const ESC = criarEscala(cfgEsc, eqCfg.turmas, []);
-const sitEscala = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; const p = ESC.previsto(normRegime(c.regime, ESC.regimes), letra(c.turma), dt); return p && !p.trab ? 'F' : undefined; };
+// Férias marcadas no Administrativo (resumo adm/feriasAtivas): quem está de férias não conta como disponível.
+const semAc = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+const ferias = ((await db.doc('adm/feriasAtivas').get()).data() || {}).itens || [];
+const emFerias = (c, dt) => ferias.some(f => f.inicio <= dt && dt <= f.termino && ((f.mat && c.mat && String(f.mat) === String(c.mat)) || semAc(f.nome) === semAc(c.nome)));
+const sitEscala = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; if (emFerias(c, dt)) return 'FE'; const p = ESC.previsto(normRegime(c.regime, ESC.regimes), letra(c.turma), dt); return p && !p.trab ? 'F' : undefined; };
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};

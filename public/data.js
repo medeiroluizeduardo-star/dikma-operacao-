@@ -38,6 +38,8 @@ import {
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth } from './cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
+import { podeAcesso } from './acessos.js';
+import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -56,6 +58,9 @@ export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k 
 export const temOperacao = u => temSet(u, 'patio');
 export const temBateria = u => temSet(u, 'bateria');
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
+// Acesso aberto nesta sessão (operacao | administrativo | sistema). O app define antes de entrar.
+let acessoAtual = 'operacao';
+export const definirAcesso = a => { acessoAtual = a || 'operacao'; };
 
 let fbApp = null;
 let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
@@ -123,6 +128,7 @@ export async function start(callbacks) {
       if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
       if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
+      if (!podeAcesso(me, acessoAtual) || (acessoAtual === 'sistema' && me.papel !== 'admin')) { stopData(); cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual }); return; }
       if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); }
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
@@ -168,13 +174,13 @@ async function novaConta(login, senha) {
   return { email, uid };
 }
 
-export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos, acessos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if ((await getDoc(doc(db, 'logins', login))).exists()) throw new Error(`O usuário "${login}" já existe.`);
   const { email, uid } = await novaConta(login, senha);
   const b = writeBatch(db);
-  b.set(doc(db, 'usuarios', uid), { nome, nomeUp: String(nome || '').toUpperCase(), login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
+  b.set(doc(db, 'usuarios', uid), { nome, nomeUp: String(nome || '').toUpperCase(), login, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], trocarSenha: true, criadoEm: serverTimestamp(), criadoPor: me.uid });
   b.set(doc(db, 'logins', login), { email, uid });
   await b.commit();
 }
@@ -206,6 +212,17 @@ export async function alterarSenha(atual, nova) {
 
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  if (acessoAtual === 'administrativo') { startAdm(on); return; }
+  // Operação e Administração do sistema: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
+  on(doc(db, 'adm', 'feriasAtivas'), s => { cache.feriasAtivas = (s.exists() && s.data().itens) || []; changed(); });
+  if (me.papel === 'admin') on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
+  // Administração do sistema: a conferência do cadastro olha também férias e a folha da competência atual.
+  if (acessoAtual === 'sistema' && me.papel === 'admin') {
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+    on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
+    const comp = competenciaDe(today());
+    for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
+  }
   for (const k of SET_KEYS) {
     const st = S[k];
     if (!temSet(me, k)) { st.configLoaded = true; continue; }
@@ -420,6 +437,87 @@ export async function importar(seed, meses, aPartirDe) {
   for (const [m, v] of Object.entries(x.sit)) b.set(doc(db, C('situacao', k), m), { v });
   await b.commit();
   for (const m of meses) await gerarMes(m, x.plano, aPartirDe, k);
+}
+
+// ---------- Acesso Administrativo (Frequência e Férias) ----------
+// freqcomp/{conj|AAAA-MM}: { conj, competencia, ini, fim, grupos: [{ nome, turno, pessoas: [{ k, nome, mat, turma, obs, ativ }] }], d: { k: { data: código } } }
+//   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
+// ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
+// adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+const admSubs = new Map();
+function startAdm(on) {
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+  admSubs.clear();
+  on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
+  on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
+  on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
+  on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
+  for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
+  if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
+}
+// Liga uma competência (folha) e os meses de presença que ela cobre.
+export function admWatch(conj, comp) {
+  if (!db || !me || acessoAtual !== 'administrativo') return;
+  const id = conj + '|' + comp;
+  if (!admSubs.has(id)) admSubs.set(id, onSnapshot(doc(db, 'freqcomp', id), s => { cache.adm.comps[id] = s.exists() ? s.data() : null; changed(); }, e => cb.onError && cb.onError(e)));
+  const [a, m] = comp.split('-').map(Number); const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
+  for (const mes of [ant, comp]) {
+    const k = 's|' + conj + '|' + mes; if (admSubs.has(k)) continue;
+    admSubs.set(k, onSnapshot(doc(db, C('situacao', conj), mes), s => { cache.adm.sit[conj][mes] = (s.exists() && s.data().v) || {}; changed(); }, e => cb.onError && cb.onError(e)));
+  }
+}
+// Grava o código de uma pessoa num dia. Quem está nas Atividades grava na presença do dia (situacao) — a mesma do Efetivo diário.
+export function admSetCodigo(conj, comp, p, data, cod) {
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() } }, { merge: true }));
+  return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('d', p.k, data), cod || deleteField(), 'atualizadoEm', serverTimestamp()));
+}
+export const admSalvarComp = (conj, comp, dados) => track(setDoc(doc(db, 'freqcomp', conj + '|' + comp), { ...dados, conj, competencia: comp, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
+export const admSalvarGrupos = (conj, comp, grupos) => track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), { grupos, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
+// Férias: grava e refaz o resumo que a Operação lê.
+function resumoFerias(lista) {
+  const ini = addMonth(today().slice(0, 7), -2) + '-01', fim = addMonth(today().slice(0, 7), 6) + '-31';
+  return lista.filter(f => f.inicio && f.termino && f.termino >= ini && f.inicio <= fim).map(f => ({ mat: f.mat || '', nome: f.nome, inicio: f.inicio, termino: f.termino }));
+}
+function gravarResumoFerias() { return track(setDoc(doc(db, 'adm', 'feriasAtivas'), { itens: resumoFerias(cache.adm.ferias), atualizadoEm: serverTimestamp() })); }
+export async function feriasSalvar(id, dados) {
+  const ref = id ? doc(db, 'ferias', id) : doc(collection(db, 'ferias'));
+  const x = { ...dados, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid };
+  const i = cache.adm.ferias.findIndex(f => f.id === ref.id);
+  if (i >= 0) cache.adm.ferias[i] = { ...cache.adm.ferias[i], ...dados }; else cache.adm.ferias.push({ id: ref.id, ...dados });
+  track(setDoc(ref, x, { merge: true })); gravarResumoFerias();
+  return ref.id;
+}
+export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); const b = writeBatch(db); b.delete(doc(db, 'ferias', id)); track(b.commit()); gravarResumoFerias(); }
+// Importação das planilhas (administrador): folhas de frequência, presença de quem está nas Atividades e férias.
+// presenca: { patio: { 'C012|2026-10-03': 'AT' }, bateria: {...} } — só grava os dias que ainda estão vazios no banco.
+export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
+  for (const c of comps) { const b = writeBatch(db); b.set(doc(db, 'freqcomp', c.conj + '|' + c.competencia), { ...c, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }); await track(b.commit()); }
+  let n = 0;
+  for (const k of Object.keys(presenca || {})) {
+    const porMes = {};
+    for (const [key, cod] of Object.entries(presenca[k])) { const m = key.split('|')[1].slice(0, 7); (porMes[m] ||= {})[key] = cod; }
+    for (const [m, v] of Object.entries(porMes)) {
+      const atual = (await getDoc(doc(db, C('situacao', k), m))).data();
+      const ja = (atual && atual.v) || {};
+      const novo = Object.fromEntries(Object.entries(v).filter(([key]) => !ja[key]));
+      if (!Object.keys(novo).length) continue;
+      n += Object.keys(novo).length;
+      await track(setDoc(doc(db, C('situacao', k), m), { v: novo }, { merge: true }));
+    }
+  }
+  if (ferias) {
+    if (substituirFerias) for (let i = 0; i < cache.adm.ferias.length; i += 400) { const b = writeBatch(db); cache.adm.ferias.slice(i, i + 400).forEach(f => b.delete(doc(db, 'ferias', f.id))); await track(b.commit()); }
+    const novas = [];
+    for (let i = 0; i < ferias.length; i += 400) {
+      const b = writeBatch(db);
+      for (const f of ferias.slice(i, i + 400)) { const r = doc(collection(db, 'ferias')); b.set(r, { ...f, importadoEm: serverTimestamp() }); novas.push({ id: r.id, ...f }); }
+      await track(b.commit());
+    }
+    cache.adm.ferias = substituirFerias ? novas : [...cache.adm.ferias, ...novas];
+    await gravarResumoFerias();
+  }
+  return n;
 }
 
 // ---------- módulo Gestão (fichas de acompanhamento) ----------

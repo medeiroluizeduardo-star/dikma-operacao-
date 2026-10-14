@@ -1,4 +1,4 @@
-// Dikma Operação — módulo GESTÃO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
+// Dikma Gestão — módulo EFETIVO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 // Telas: Painel, Colaboradores (com ficha individual), Ocorrências, Controle de fichas, Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
 import { pd, add, pad, today, MESES_L, AREA_S, SETS, setDaArea } from './cal.js';
@@ -258,7 +258,7 @@ export function criarGestao(X) {
       <div class="fsign"><div><div class="ln"></div>Assinatura do colaborador<br><b>${esc(c.nome)}</b><br>Matrícula: ${c.mat}<br>Data: ____/____/________</div><div><div class="ln"></div>Assinatura do responsável Dikma<br><b>${esc(resp || '')}</b><br>Cargo: ____________________<br>Data: ____/____/________</div></div>
       <p class="small">Em caso de recusa do colaborador em assinar, preencher com duas testemunhas:</p>
       <div class="fsign"><div><div class="ln"></div>Testemunha 1 – nome e matrícula</div><div><div class="ln"></div>Testemunha 2 – nome e matrícula</div></div>
-      <p class="small muted">Via vinculada à ficha ${esc(cfg().codigo || 'FO-RED-COQ-004')}. Depois de assinada, fotografe e registre em Dikma Operação › Gestão › Assinar › Via em papel.</p></div>`;
+      <p class="small muted">Via vinculada à ficha ${esc(cfg().codigo || 'FO-RED-COQ-004')}. Depois de assinada, fotografe e registre em Dikma Gestão › Gestão › Assinar › Via em papel.</p></div>`;
   }
   // Impressão: lista de fichas com busca (nome, matrícula, função, área) ao lado do documento.
   // A busca filtra a lista na hora, sem redesenhar a tela (o cursor não sai do campo).
@@ -348,7 +348,7 @@ export function criarGestao(X) {
       const recolhe = $('noResp').value.trim().toUpperCase(); if (!recolhe) throw new Error('Informe quem vai recolher a assinatura.');
       const assinar = $('noAssinar').checked && !$('noAssBox').hidden;
       const o = DB.gNovaOcorrencia({ data, mat: m, nome: indice().get(m).c.nome, tipo, desc, lider, recolhe, status: 'pendente' });
-      DB.log(`Gestão: ocorrência "${tipo}" para ${indice().get(m) ? title(indice().get(m).c.nome) : m}`);
+      DB.log(`Efetivo: ocorrência "${tipo}" para ${indice().get(m) ? title(indice().get(m).c.nome) : m}`);
       toast(souEu(recolhe) ? 'Ocorrência registrada' : `Ocorrência registrada · assinatura com ${title(recolhe)}`);
       if (assinar) setTimeout(() => assinarSheet(m, [o.id]), 50);
     });
@@ -509,7 +509,7 @@ export function criarGestao(X) {
           if (!t1) throw new Error('Informe ao menos uma testemunha.');
           DB.gAssinar({ ...base, metodo: 'recusa', testemunhas: [t1, t2].filter(Boolean) });
         }
-        DB.log(`Gestão: ${modo === 'recusa' ? 'registrou recusa' : 'colheu assinatura'} de ${title(x.c.nome)} (${ids.length} ocorrência(s))`);
+        DB.log(`Efetivo: ${modo === 'recusa' ? 'registrou recusa' : 'colheu assinatura'} de ${title(x.c.nome)} (${ids.length} ocorrência(s))`);
         toast(modo === 'recusa' ? 'Recusa registrada' : 'Assinatura registrada');
         close();
       } catch (err) { showErr('sgErr', err); }
@@ -544,7 +544,7 @@ export function criarGestao(X) {
         const o = G().ocorr.find(x => x.id === d.id); if (!o) break;
         formSheet('Quem vai recolher a assinatura', `${esc(title(o.nome))} · ${esc(o.tipo)} · ${dBR(o.data)}`, `<div class="sel"><span>Responsável</span>${campoBusca('trResp', o.recolhe || '', opcoesResp, { livre: true, maiusculas: true, placeholder: 'Digite o nome' })}</div>`, 'Salvar', async () => {
           const v = $('trResp').value.trim().toUpperCase(); if (!v) throw new Error('Informe o responsável.');
-          DB.gAtualizarOcorrencia(o.id, { recolhe: v }); DB.log(`Gestão: ${title(v)} vai recolher a assinatura de ${title(o.nome)}`); toast(`Assinatura com ${title(v)}`);
+          DB.gAtualizarOcorrencia(o.id, { recolhe: v }); DB.log(`Efetivo: ${title(v)} vai recolher a assinatura de ${title(o.nome)}`); toast(`Assinatura com ${title(v)}`);
         });
         break;
       }
@@ -566,14 +566,14 @@ export function criarGestao(X) {
       case 'editColab': colabForm(d.mat); break;
       case 'delOc': {
         if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; setTimeout(() => { if (t.isConnected) { t.dataset.ok = ''; t.textContent = '✕'; } }, 3000); return; }
-        DB.gExcluirOcorrencia(d.id); DB.log('Gestão: excluiu uma ocorrência'); toast('Ocorrência excluída'); break;
+        DB.gExcluirOcorrencia(d.id); DB.log('Efetivo: excluiu uma ocorrência'); toast('Ocorrência excluída'); break;
       }
       case 'addTipo': { const l = tipos().concat([{ tipo: 'Novo tipo', f1: false, texto: '', pos: null }]); DB.gSalvarConfig({ tipos: l }); break; }
       case 'delTipo': { const l = tipos().filter((_, i) => i !== +d.i); DB.gSalvarConfig({ tipos: l }); toast('Tipo excluído'); break; }
       default: if (isAdmin()) IMP.onClick(d); break;
       case 'importar': {
         UI.busy = true; render();
-        try { const s = await DB.seed('seed-gestao.json'); await DB.gImportar(s); DB.log('Gestão: importou a planilha de fichas'); toast('Planilha de fichas importada'); }
+        try { const s = await DB.seed('seed-gestao.json'); await DB.gImportar(s); DB.log('Efetivo: importou a planilha de fichas'); toast('Planilha de fichas importada'); }
         catch (err) { toast('Erro ao importar: ' + (err.message || err)); }
         UI.busy = false; render(); break;
       }

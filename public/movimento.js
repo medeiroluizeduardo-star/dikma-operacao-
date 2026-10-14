@@ -1,4 +1,4 @@
-// Dikma Operação — movimento e fluidez da interface.
+// Dikma Gestão — movimento e fluidez da interface.
 // Tudo aqui responde a uma ação da pessoa (trocar de tela, abrir/fechar janela, marcar um apontamento)
 // e é desligado quando o aparelho pede "reduzir movimento".
 const reduzir = () => matchMedia('(prefers-reduced-motion: reduce)').matches;

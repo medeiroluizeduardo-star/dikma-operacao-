@@ -1,4 +1,4 @@
-// Dikma Operação — escala de turno (fonte única para todos os módulos).
+// Dikma Gestão — escala de turno (fonte única para todos os módulos).
 // Diz se uma pessoa está prevista para trabalhar num dia, pelo regime e pela letra da turma:
 //   Administrativo: dias da semana marcados (padrão seg a sex) e feriados sem operação = folga.
 //   Turnos em ciclo (4x4, 3x3…): a partir do 1º dia de trabalho de um ciclo de cada turma, conta N dias de trabalho e N de folga.

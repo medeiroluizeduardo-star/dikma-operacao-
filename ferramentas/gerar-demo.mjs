@@ -87,6 +87,31 @@ for (const [orig, dest] of [['seed.json', 'exemplo.json'], ['seed-bateria.json',
   grava('exemplo-efetivo.json', s);
 }
 
+// Administrativo: folhas de frequência e férias. Nomes e matrículas fictícios (os mesmos das Atividades, para a
+// presença em comum aparecer na demonstração); nomes de grupo só com as palavras genéricas; observações e substitutos saem.
+const GENERICAS = new Set(('GESTÃO GESTAO OPERADOR OPERADORES DE DA DO DAS DOS E ADM ARTÍFICE ARTIFICE 3X3 4X4 TURNO TURMA A B C D I J CDQ PATIO PÁTIO ' +
+  'CARVÃO CARVAO MD\'S CAMINHÃO MÉDIA PRESSÃO CANALETAS/PREVENTIVA CANALETAS PREVENTIVA CAPTAÇÃO GÁS GAS AFASTADO AFASTADOS OPERAÇÃO OPERACAO LIDER LÍDER ' +
+  'SUPERVISÃO SUPERVISAO PREPARACAO PREPARAÇÃO BATERIA TRILHO RECEBIMENTO FINAL TRATAMENTO COQUE APOIO LIMPEZA MAQUINAS MÁQUINAS CONTROLE TERMICO TÉRMICO TOPO ' +
+  'JARDINAGEM PINTURA ALMOXARIFADO ALMOXARIFE PROCESSO EQUIPAMENTOS AJUDANTE AJUDANTES MECANICA MECÂNICA ELETRICA ELÉTRICA -').split(' '));
+const nomeGrupo = g => g.split(/(\s+|-)/).map(w => (!w.trim() || w === '-' || GENERICAS.has(w.toUpperCase()) ? w : apelido(w))).join('');
+const NOTA_OK = /^(ADMISS|DESLIGA|desligado|Desligado|código|COBRIR)/;
+for (const conj of ['patio', 'bateria']) {
+  const f = 'seed-freq-' + conj + '.json';
+  if (!fs.existsSync(path.join(raiz, 'dados-importacao', f))) continue;
+  const s = ler(f);
+  s.avisos = [];
+  s.competencias = s.competencias.map(c => ({ ...c, grupos: c.grupos.map(g => ({ ...g, nome: nomeGrupo(g.nome), pessoas: g.pessoas.map(p => {
+    const nome = nomeFicticio(p.nome);
+    return { ...p, nome, chave: nome, ...(p.mat ? { mat: matricula(p.mat) } : {}), obs: '', notas: (p.notas || []).filter(n => NOTA_OK.test(n)) };
+  }) })) }));
+  grava('exemplo-freq-' + conj + '.json', s);
+}
+if (fs.existsSync(path.join(raiz, 'dados-importacao', 'seed-ferias.json'))) {
+  const s = ler('seed-ferias.json');
+  s.ferias = s.ferias.map(r => ({ ...r, nome: nomeFicticio(r.nome), mat: r.mat ? matricula(r.mat) : r.mat, substituto: r.substituto ? 'Substituto de exemplo' : '', obs: '' }));
+  grava('exemplo-ferias.json', s);
+}
+
 // Conferência: nenhum nome real pode sobrar nos arquivos da demonstração.
 const ficticios = new Set([...NOMES, ...MEIOS, ...SOBRE]);
 const reais = new Set();

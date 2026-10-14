@@ -1,4 +1,4 @@
-// Dikma Operação — cadastro único de pessoas.
+// Dikma Gestão — cadastro único de pessoas.
 // O Efetivo (fichas) é o cadastro mestre (tem a matrícula). A área de atuação e a função
 // definidas lá são gravadas também no Atividades Pátio (colaboradores/{ÁREA}), no Atividades Bateria
 // (b_colaboradores/{ÁREA}) e na Operação (eq/cadastro.operadores). A ligação é pela matrícula e,

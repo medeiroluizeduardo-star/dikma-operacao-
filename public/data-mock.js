@@ -1,6 +1,8 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
+import { podeAcesso } from './acessos.js';
+import { prepararImportacao } from './planilhas-adm.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, monthsLoaded: new Set() });
@@ -70,10 +72,11 @@ async function fresh() {
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
     ...lideres.map(c => ({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
-    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
+    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], acessos: ['operacao', 'administrativo'] },
     { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'] },
     { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
-    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null },
+    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, acessos: ['operacao', 'administrativo'] },
+    { uid: 'adm1', nome: 'Analista Administrativo', login: 'administrativo', senha: '123456', papel: 'supervisor', area: null, modulos: [], acessos: ['administrativo'] },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
 }
@@ -92,16 +95,21 @@ export async function start(callbacks) {
   try { amostras(); } catch (e) { /* sem canvas */ }
   await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
+  if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista Administrativo', login: 'administrativo', senha: '123456', papel: 'supervisor', area: null, modulos: [], acessos: ['administrativo'] });
+  await iniciarAdm();
   emitAuth(); changed();
 }
+let acessoAtual = 'operacao';
+export const definirAcesso = k => { acessoAtual = k || 'operacao'; };
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
+  if (!podeAcesso(me, acessoAtual)) return cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual });
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
   cb.onAuth({ status: 'ready', user: me });
 }
-export function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); emitAuth(); changed(); }
-export async function mockReset() { try { localStorage.removeItem(LS); } catch (e) { /* ignora */ } EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; emitAuth(); changed(); }
+export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); if (acessoAtual === 'administrativo') await iniciarAdm(); emitAuth(); changed(); }
+export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
@@ -111,17 +119,17 @@ export const erroAuth = e => (e && e.message) || 'Erro inesperado.';
 export async function signIn(login, senha) {
   const u = cache.usuarios.find(x => x.login === normLogin(login));
   if (!u || u.senha !== senha) throw new Error('Usuário ou senha incorretos.');
-  me = u; persist(); emitAuth(); changed();
+  me = u; persist(); if (podeAcesso(me, acessoAtual) && acessoAtual === 'administrativo') await iniciarAdm(); emitAuth(); changed();
 }
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
 export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
-export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos, acessos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
   if (String(senha).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
-  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], trocarSenha: true }); changed();
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');
@@ -270,3 +278,49 @@ export async function eSalvarCad(p) { cache.e.cad = { ...cache.e.cad, ...p }; ec
 export async function eSalvarAval(mes, op, v) { const a = cache.e.aval[mes] || (cache.e.aval[mes] = {}); a[op] = { ...(a[op] || {}), ...v }; ech(); }
 export async function eCarregarTudo() { return { lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp }; }
 export async function eImportar() { /* a demonstração já começa com a planilha */ }
+
+// ---------- Administrativo (demonstração): folhas e férias de exemplo, ligadas às Atividades da demonstração ----------
+const LSA = 'coqueria-demo-adm-v1';
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+cache.feriasAtivas = []; cache.uso = null;
+let admPronto = false;
+const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
+function admPersist() { try { localStorage.setItem(LSA, JSON.stringify({ ferias: cache.adm.ferias, comps: cache.adm.comps })); } catch (e) { /* sem espaço */ } }
+const admCh = () => { cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino })); admPersist(); changed(); };
+async function iniciarAdm() {
+  for (const k of SET_KEYS) cache.adm.colabs[k] = Object.values(S[k].colabs).flat();
+  cache.adm.sit = { patio: sitProxy('patio'), bateria: sitProxy('bateria') };
+  cache.adm.rh = cache.g.colabs || [];
+  if (admPronto) return;
+  admPronto = true;
+  let salvo = null; try { salvo = JSON.parse(localStorage.getItem(LSA) || 'null'); } catch (e) { /* ignora */ }
+  if (salvo && salvo.comps) Object.assign(cache.adm, { ferias: salvo.ferias || [], comps: salvo.comps });
+  else {
+    try {
+      const [fp, fb, fe] = await Promise.all(['seed-freq-patio.json', 'seed-freq-bateria.json', 'seed-ferias.json'].map(seed_));
+      const prep = prepararImportacao({ freq: { patio: fp, bateria: fb }, ferias: fe, colabs: cache.adm.colabs, rh: cache.adm.rh });
+      for (const c of prep.comps) cache.adm.comps[c.conj + '|' + c.competencia] = c;
+      // presença de quem está nas Atividades: só preenche os dias vazios da demonstração
+      for (const k of SET_KEYS) for (const [key, cod] of Object.entries(prep.presenca[k])) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (!o[key]) o[key] = cod; }
+      cache.adm.ferias = prep.ferias.map((f, i) => ({ id: 'fe' + i, ...f }));
+    } catch (e) { console.warn('Demonstração sem dados do Administrativo', e); }
+  }
+  cache.adm.loaded = cache.adm.fLoaded = true;
+  cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino }));
+}
+export function admWatch(conj, comp) { const k = conj + '|' + comp; if (!(k in cache.adm.comps)) cache.adm.comps[k] = null; }
+export async function admSetCodigo(conj, comp, p, data, cod) {
+  if (p.ativ) { const m = data.slice(0, 7); const o = (S[conj].sitByMonth[m] ||= {}); const key = p.ativ + '|' + data; if (cod) o[key] = cod; else delete o[key]; return changed(); }
+  const doc = cache.adm.comps[conj + '|' + comp]; const d = (doc.d[p.k] ||= {}); if (cod) d[data] = cod; else delete d[data]; admCh();
+}
+export async function admSalvarComp(conj, comp, dados) { cache.adm.comps[conj + '|' + comp] = { ...(cache.adm.comps[conj + '|' + comp] || {}), ...dados, conj, competencia: comp }; admCh(); }
+export async function admSalvarGrupos(conj, comp, grupos) { cache.adm.comps[conj + '|' + comp].grupos = grupos; admCh(); }
+export async function feriasSalvar(id, dados) { const nid = id || 'fe' + Date.now().toString(36); const i = cache.adm.ferias.findIndex(f => f.id === nid); if (i >= 0) cache.adm.ferias[i] = { ...cache.adm.ferias[i], ...dados }; else cache.adm.ferias.push({ id: nid, ...dados }); cache.adm.ferias = [...cache.adm.ferias]; admCh(); return nid; }
+export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); admCh(); }
+export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
+  for (const c of comps) cache.adm.comps[c.conj + '|' + c.competencia] = c;
+  let n = 0;
+  for (const k of Object.keys(presenca || {})) for (const [key, cod] of Object.entries(presenca[k])) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (!o[key]) { o[key] = cod; n++; } }
+  if (ferias) cache.adm.ferias = [...(substituirFerias ? [] : cache.adm.ferias), ...ferias.map((f, i) => ({ id: 'fi' + Date.now().toString(36) + i, ...f }))];
+  admCh(); return n;
+}

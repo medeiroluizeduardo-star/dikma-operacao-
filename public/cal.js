@@ -16,8 +16,8 @@ export const DAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 export const DL = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 export const MOTIVOS = ['Efetivo insuficiente', 'Equipamento indisponível', 'Área não liberada pela operação', 'Chuva / condição climática', 'Prioridade operacional', 'Falta de material / EPI', 'Outro'];
-export const SITS = [['P', 'Presente'], ['F', 'Folga'], ['FE', 'Férias'], ['AT', 'Atestado'], ['AF', 'Afastado'], ['TR', 'Treinamento'], ['FT', 'Falta'], ['DS', 'Desligado'], ['HE', 'Hora extra'], ['ATR', 'Atrasado']];
-export const AUSENTE = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'DS']);
+export const SITS = [['P', 'Presente'], ['F', 'Folga'], ['FE', 'Férias'], ['AT', 'Atestado'], ['AF', 'Afastado'], ['TR', 'Treinamento'], ['FT', 'Falta'], ['DS', 'Desligado'], ['HE', 'Hora extra'], ['ATR', 'Atrasado'], ['AB', 'Abono'], ['SP', 'Suspensão']];
+export const AUSENTE = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'DS', 'AB', 'SP']);
 export const PAPEIS = [['admin', 'Administrador'], ['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['leitor', 'Somente leitura'], ['bloqueado', 'Bloqueado']];
 export const ATIVOS = new Set(['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor']);
 

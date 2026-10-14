@@ -19,6 +19,8 @@ if (fs.existsSync(dir)) {
   const e = ler('seed-equip.json'); if (e) e.operadores.forEach(o => add(o.nome));
   const g = ler('seed-gestao.json'); if (g) g.colabs.forEach(c => add(c.nome));
   const r = ler('seed-efetivo.json'); if (r) r.linhas.forEach(l => add(l[1]));
+  for (const f of ['seed-freq-patio.json', 'seed-freq-bateria.json']) { const x = ler(f); if (x) x.competencias.forEach(c => c.grupos.forEach(g => g.pessoas.forEach(p => add(p.nome)))); }
+  const fe = ler('seed-ferias.json'); if (fe) fe.ferias.forEach(x => add(x.nome));
 }
 
 const problemas = [];
