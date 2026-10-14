@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Testes automáticos: regras de segurança do Firestore e rotinas do GitHub, no emulador do Firebase",
   "scripts": {
-    "test": "node --test --test-concurrency=1 regras.test.mjs rotinas.test.mjs",
+    "test": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap regras.test.mjs rotinas.test.mjs",
     "emulador": "firebase emulators:exec --only firestore,auth --project demo-dikma --config ../firebase.json \"npm test\""
   },
   "engines": { "node": ">=20" },
