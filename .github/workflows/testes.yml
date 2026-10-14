@@ -46,6 +46,8 @@ jobs:
           ok=$(grep -cE '^ *ok [0-9]+ ' resultado.tap || true)
           falhou=$(grep -cE '^ *not ok [0-9]+ ' resultado.tap || true)
           grep -E '^ *not ok [0-9]+ ' resultado.tap | sed -E 's/^ *not ok [0-9]+ - /::error title=Teste falhou::/' || true
+          # detalhe de cada falha (mensagem e linha do teste), numa linha só
+          awk '/^ *not ok [0-9]+ /{f=1; n=$0; d=""; next} f && /^ *\.\.\.$/{print "::error title=Detalhe::" n " | " d; f=0; next} f{gsub(/^ +/,""); if (length(d) < 900) d=d " " $0}' resultado.tap || true
           echo "::notice title=Testes::$ok passaram, $falhou falharam"
           { echo "### Testes automáticos"; echo "$ok passaram, $falhou falharam"; } >> "$GITHUB_STEP_SUMMARY"
           [ "$falhou" = "0" ] && [ "$ok" -gt 0 ]
