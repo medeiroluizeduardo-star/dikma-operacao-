@@ -2,7 +2,8 @@ rules_version = '2';
 // Regras de segurança — Programação do Pátio de Carvão
 // Perfis: admin (tudo), gestor (todas as áreas + administração dos módulos dele, menos usuários),
 // coordenador (aponta em todas as áreas dos módulos dele), supervisor (até 2 áreas: area e area2),
-// lider (1 área), leitor (só lê), bloqueado (sem acesso).
+// lider (1 área), administrativo (Frequência e férias + fichas do Efetivo; vê as Atividades sem apontar),
+// leitor (só lê), bloqueado (sem acesso).
 // Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, bateria = Atividades Bateria,
 // equipamentos = Operação, gestao = Efetivo. A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
@@ -11,7 +12,7 @@ service cloud.firestore {
     function uref() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
     function hasProfile() { return signed() && exists(uref()); }
     function perfil() { return get(uref()).data; }
-    function ativo() { return hasProfile() && perfil().papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor']; }
+    function ativo() { return hasProfile() && perfil().papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']; }
     function admin() { return hasProfile() && perfil().papel == 'admin'; }
     function gestor() { return hasProfile() && perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']; }   // quem aponta
     function todasAreas() { return hasProfile() && perfil().papel in ['gestor', 'coordenador']; }
@@ -22,7 +23,7 @@ service cloud.firestore {
     function acessos() { return perfil().get('acessos', ['operacao']); }
     // O antigo acesso Administrativo virou o módulo Frequência e férias da Operação ('frequencia' em modulos).
     function acOp() { return admin() || 'operacao' in acessos() || 'administrativo' in acessos(); }
-    function acAdm() { return ativo() && (admin() || 'frequencia' in mods() || 'administrativo' in acessos()); }   // módulo Frequência e férias
+    function acAdm() { return ativo() && (admin() || perfil().papel == 'administrativo' || 'frequencia' in mods() || 'administrativo' in acessos()); }   // módulo Frequência e férias
     function admEdita() { return acAdm() && perfil().papel != 'leitor'; }
     function op() { return ativo() && acOp() && (admin() || 'operacao' in mods()); }        // Atividades Pátio
     function ge() { return hasProfile() && geU(perfil()); }          // Efetivo (fichas)
@@ -38,10 +39,10 @@ service cloud.firestore {
     function minhaFicha(area) { return hasProfile() && minhaFichaU(perfil(), area); }
     // As mesmas contas, recebendo o perfil já lido (u): cada regra lê o perfil uma vez só e fica dentro do limite
     // de expressões do Firestore.
-    function geU(u) { return u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor']
+    function geU(u) { return u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']
       && (u.papel == 'admin' || ('operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao']))); }
-    function geEditaU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider']; }
-    function todasFichasU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'leitor']; }
+    function geEditaU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo']; }
+    function todasFichasU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor']; }
     function minhaAreaU(u, area) { return u.get('area', '') == area || (u.papel == 'supervisor' && u.get('area2', '') == area); }
     function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in u.get('modulos', ['operacao']))); }
     function admGestaoU(u) { return u.papel == 'admin' || (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])); }
@@ -111,6 +112,14 @@ service cloud.firestore {
       allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
 
+    // Aprovação dos apontamentos: o supervisor (e coordenador, gestor, administrador) aprova ou devolve o que o líder apontou.
+    function aprovaDa(area) { return admin() || (gestorDa(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    match /aprov/{id} {
+      allow read: if op();
+      allow create, update: if aprovaDa(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
+      allow delete: if admMod('operacao');
+    }
+
     // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
     match /evidencias/{id} {
       allow read: if op();
@@ -151,6 +160,12 @@ service cloud.firestore {
       allow read: if ba();
       allow create, delete: if admMod('bateria');
       allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+    }
+    function aprovaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    match /b_aprov/{id} {
+      allow read: if ba();
+      allow create, update: if aprovaDaB(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
+      allow delete: if admMod('bateria');
     }
     match /b_evidencias/{id} {
       allow read: if ba();

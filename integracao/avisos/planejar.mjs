@@ -4,12 +4,12 @@ import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 
-const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'leitor'];
+const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true };
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
-const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'leitor'].includes(u.papel) && mods(u).includes(m));
+const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(u.papel) && mods(u).includes(m));
 function areasDe(u, k) {
   if (!mods(u).includes(SETS[k].mod)) return [];
   if (todas(u, SETS[k].mod)) return SETS[k].areas;

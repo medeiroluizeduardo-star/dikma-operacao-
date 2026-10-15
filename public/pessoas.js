@@ -19,7 +19,7 @@ export const FICHA_GERAL = 'GERAL';
 export const chaveFicha = a => (AREAS_ATIV.includes(a) || a === AREA_OP ? a : FICHA_GERAL);
 const modsU = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
 // Administrador, gestor, coordenador e somente leitura (com o Efetivo) veem as fichas de todas as áreas.
-export const veTodasFichas = u => !!u && (u.papel === 'admin' || (['gestor', 'coordenador', 'leitor'].includes(u.papel) && modsU(u).includes('gestao')));
+export const veTodasFichas = u => !!u && (u.papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(u.papel) && modsU(u).includes('gestao')));
 // Supervisor: as 2 áreas dele · líder: a área dele · quem tem a Operação de equipamentos: também os operadores.
 export const areasFichaDe = u => {
   if (!u || !modsU(u).includes('gestao')) return [];
