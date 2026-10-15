@@ -1110,6 +1110,55 @@ table.freq tfoot td,table.freq tfoot th{background:var(--surface)}
 table.freq tr.grp-row .gcount{float:none;margin-left:14px}
 #layer .opt .sit{display:inline-grid;place-items:center;flex:none;padding:0}
 #layer .opt .sit svg{width:14px;height:14px}
+
+/* ---- celular: janela de lançamento em grade, toque mais rápido ---- */
+.opts.grade{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.opts.grade .opt{flex-direction:column;justify-content:center;gap:6px;padding:10px 4px;text-align:center;font-size:12.5px;line-height:1.2;min-height:68px}
+.opts.grade .opt .sit{width:36px;height:28px;font-size:12px}
+.opts.grade .opt.larga{grid-column:1/-1;flex-direction:row;justify-content:flex-start;text-align:left;font-size:14px;padding:11px 12px;min-height:0}
+.opts.grade .opt[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 22%,transparent)}
+@media (max-width:860px){.opts.grade{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* Frequência no celular: uma semana por vez, dias maiores */
+.semnav{display:flex;align-items:center;gap:10px;margin:4px 0 2px}
+.semnav b{font-size:14px}.semnav .muted{flex:1}
+.freqtw.semana{max-height:none;overflow-x:hidden}
+.freqtw.semana table.freq{width:100%;table-layout:fixed}
+.freqtw.semana table.freq .fnome{width:36%;min-width:0;max-width:none}
+.freqtw.semana table.freq td.c,.freqtw.semana table.freq th.c{padding:3px 1px}
+.freqtw.semana table.freq .sit{width:100%;max-width:38px;height:32px;font-size:11.5px}
+.freqtw.semana table.freq .fnome .btn.link b{font-size:12.5px}
+/* Efetivo diário no celular: sem a coluna Função (vai embaixo do nome), dias maiores */
+@media (max-width:860px){
+  table.efd.efmob{width:100%;table-layout:fixed}
+  table.efd.efmob td:first-child,table.efd.efmob th:first-child{width:36%}
+  table.efd.efmob td.c,table.efd.efmob th.c{padding:3px 1px}
+  table.efd.efmob .sit{width:100%;max-width:38px;height:32px}
+  .tw:has(> table.efd.efmob){overflow-x:hidden}
+}
+
+/* ---- celular: fluidez e acabamento ---- */
+.cmet{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3)}.cmet b{color:var(--ink);font-weight:600}
+.colabm .mcard{text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%}
+.mcard[role="button"]{cursor:pointer}
+button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.sheet{overscroll-behavior:contain}
+@media (hover:none){.opt:hover,button.pitem:hover,.ferlist .pitem:hover,.acard:hover,.rchip:hover{background:var(--surface);border-color:var(--line)}}
+@media (max-width:860px){
+  /* campos com 16px: o iPhone não dá zoom ao tocar para digitar */
+  input.in,select.in,textarea.in,.srch .in,.cbx-in .in{font-size:16px}
+  .top h1 small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  /* indicadores que rolam para o lado: sombra na borda mostra que há mais */
+  .mini{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:24px}
+  .mcard:active,.colabm .mcard:active{background:var(--surface-2)}
+  .card>header h2{font-size:17px}
+  .legdet summary{padding:6px 0}
+}
+.avm .avg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.avm .avg label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
+.avm .avg .in{width:100%;min-width:0}
+.avm .avnota{text-align:right}.avm .avnota b{font-family:var(--f-display);font-size:22px;display:block;line-height:1}.avm .avnota small{color:var(--ink-3)}
+.avm>.in{width:100%}
 </style>
 </head>
 <body>

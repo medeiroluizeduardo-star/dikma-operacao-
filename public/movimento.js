@@ -64,9 +64,36 @@ export function restaurarRolagem(view, pos) {
 
 // ---------- confirmação visual de um apontamento ----------
 export function pulsar(el) {
-  if (!el || reduzir()) return;
+  if (!el) return;
+  vibrar();
+  if (reduzir()) return;
   el.classList.remove('pulsa'); void el.offsetWidth; el.classList.add('pulsa');
   setTimeout(() => el.classList.remove('pulsa'), 600);
+}
+
+// Toque curto de confirmação no celular (Android; no iPhone o navegador não vibra).
+let ultVib = 0;
+export function vibrar(ms = 10) { if (Date.now() - ultVib < 700) return; ultVib = Date.now(); try { if (navigator.vibrate && matchMedia('(pointer:coarse)').matches) navigator.vibrate(ms); } catch (e) { /* sem vibração */ } }
+
+// ---------- janelas no celular: arrastar para baixo fecha ----------
+function arrastarParaFechar() {
+  let y0 = null, el = null, dy = 0;
+  document.addEventListener('touchstart', e => {
+    const sh = e.target.closest && e.target.closest('#layer .sheet'); if (!sh || sh.scrollTop > 0 || e.touches.length !== 1) return;
+    if (e.target.closest('input,textarea,select,.cbx-l')) return;
+    el = sh; y0 = e.touches[0].clientY; dy = 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (y0 == null || !el) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    if (dy > 4) { el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`; }
+  }, { passive: true });
+  document.addEventListener('touchend', () => {
+    if (y0 == null || !el) return;
+    const sh = el; y0 = null; el = null;
+    if (dy > 90) { const sc = document.getElementById('scrim'); if (sc) sc.dispatchEvent(new MouseEvent('click', { bubbles: true })); else sh.style.transform = ''; }
+    else { sh.style.transition = 'transform .18s ease'; sh.style.transform = ''; setTimeout(() => { sh.style.transition = ''; }, 200); }
+  });
 }
 
 // ---------- janelas: fecham com animação, sem mexer em cada tela ----------
@@ -74,6 +101,7 @@ export function pulsar(el) {
 // que toca a saída e some. Se outra janela abre no lugar, a troca é direta.
 export function iniciarJanelas() {
   const layer = document.getElementById('layer'); if (!layer) return;
+  arrastarParaFechar();
   const ghost = document.createElement('div'); ghost.className = 'layer-ghost'; ghost.setAttribute('aria-hidden', 'true');
   document.body.appendChild(ghost);
   new MutationObserver(ms => {
