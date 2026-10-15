@@ -25,6 +25,16 @@ let nomesAcertados = 0;
   (await db.collection('usuarios').get()).forEach(d => { const up = String(d.get('nome') || '').toUpperCase(); if (d.get('nomeUp') !== up) { b.update(d.ref, { nomeUp: up }); nomesAcertados++; } });
   if (nomesAcertados) { await b.commit(); console.log(`Nome em maiúsculas gravado em ${nomesAcertados} usuário(s).`); }
 }
+// O antigo acesso "Administrativo" virou o módulo Frequência e férias da Operação: modulos ganha 'frequencia'.
+{
+  const b = db.batch(); let n = 0;
+  (await db.collection('usuarios').get()).forEach(d => {
+    const ac = d.get('acessos'); if (!Array.isArray(ac) || !ac.includes('administrativo')) return;
+    const mods = Array.isArray(d.get('modulos')) ? d.get('modulos') : (ac.includes('operacao') ? ['operacao'] : []);
+    b.update(d.ref, { modulos: [...new Set([...mods, 'frequencia'])], acessos: ['operacao'] }); n++;
+  });
+  if (n) { await b.commit(); console.log(`Acesso Administrativo trocado pelo módulo Frequência e férias em ${n} usuário(s).`); }
+}
 const antigo = await db.doc('gestao/colaboradores').get();
 const atuais = await db.collection('gcolab').get();
 const linhas = [];

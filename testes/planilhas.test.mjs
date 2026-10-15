@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
 import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
-import { indiceFerias, acessosDe, podeAcesso, editaAdm } from '../public/acessos.js';
+import { indiceFerias, acessosDe, podeAcesso, editaAdm, modulosDe, temFreq } from '../public/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
 function livro(abas) {
@@ -90,15 +90,18 @@ test('férias em comum: o índice acha pela matrícula ou pelo nome, só dentro 
   assert.equal(idx({ mat: '1001', nome: 'ANA EXEMPLO' }, '2026-10-04'), null);
 });
 
-test('acessos: sem o campo, só Operação; Administração do sistema só o administrador; leitor não edita', () => {
+test('acessos: Operação para todos, Administração do sistema só o administrador; Frequência é módulo', () => {
   assert.deepEqual(acessosDe({ papel: 'lider' }), ['operacao']);
-  assert.deepEqual(acessosDe({ papel: 'gestor', acessos: ['administrativo', 'sistema'] }), ['administrativo']);
-  assert.deepEqual(acessosDe({ papel: 'admin' }), ['operacao', 'administrativo', 'sistema']);
-  assert.equal(podeAcesso({ papel: 'gestor', acessos: ['operacao', 'administrativo'] }, 'sistema'), false);
-  assert.equal(editaAdm({ papel: 'leitor', acessos: ['administrativo'] }), false);
+  assert.deepEqual(acessosDe({ papel: 'gestor', acessos: ['administrativo', 'sistema'] }), ['operacao']);
+  assert.deepEqual(acessosDe({ papel: 'admin' }), ['operacao', 'sistema']);
+  assert.equal(podeAcesso({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'sistema'), false);
+  assert.equal(temFreq({ papel: 'lider', modulos: ['operacao'] }), false);
+  assert.equal(temFreq({ papel: 'supervisor', modulos: ['frequencia'] }), true);
+  assert.deepEqual(modulosDe({ papel: 'supervisor', acessos: ['administrativo'], modulos: [] }), ['frequencia'], 'antigo Administrativo: só o módulo novo');
+  assert.deepEqual(modulosDe({ papel: 'lider' }), ['operacao']);
+  assert.equal(editaAdm({ papel: 'leitor', modulos: ['frequencia'] }), false);
   assert.equal(editaAdm({ papel: 'supervisor', acessos: ['administrativo'] }), true);
 });
-
 test('líder com o nome escrito de jeitos diferentes vira um grupo só (como Kauan / Kauan Souza / Kauan Suza)', () => {
   const g = (nome, ...ps) => ({ nome, pessoas: ps.map(n => ({ k: n, nome: n })) });
   const rh = ['TALISON MOURA DA CRUZ', 'TALIS ROCHA LEMOS', 'OTAVIO NUNES PRADO', 'OTAVIO LIMA REIS', 'SERGIO ALVES']; // nomes inventados

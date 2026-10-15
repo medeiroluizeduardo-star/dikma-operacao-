@@ -184,3 +184,13 @@ test('limpar contas: apaga só a conta sem usuário e sem login ligado; sem "apa
   const recente = rodar('limpar-contas.mjs', { LIMPAR_DIAS: '30', LIMPAR_APAGAR: 'sim' });
   assert.match(recente, /0 sobra\(s\)/, 'conta recente nunca é apagada');
 });
+
+test('publicação: quem tinha o acesso Administrativo passa a ter o módulo Frequência e férias', async () => {
+  await db.doc('usuarios/antigoAdm').set({ nome: 'Antigo Adm', papel: 'supervisor', modulos: [], acessos: ['administrativo'] });
+  await db.doc('usuarios/antigoAmbos').set({ nome: 'Antigo Ambos', papel: 'lider', acessos: ['operacao', 'administrativo'] });
+  const s = rodar('migrar-areas.mjs');
+  assert.match(s, /módulo Frequência e férias em 2 usuário/);
+  assert.deepEqual((await db.doc('usuarios/antigoAdm').get()).get('modulos'), ['frequencia']);
+  assert.deepEqual((await db.doc('usuarios/antigoAmbos').get()).get('modulos'), ['operacao', 'frequencia']);
+  assert.deepEqual((await db.doc('usuarios/antigoAmbos').get()).get('acessos'), ['operacao']);
+});

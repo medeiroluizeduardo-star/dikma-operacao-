@@ -1,23 +1,31 @@
-// Dikma Gestão — acessos (portas de entrada do sistema) e férias em comum entre eles.
-// Operação: Atividades Pátio e Bateria, Operação de equipamentos e Efetivo (o que já existia).
-// Administrativo: Frequência (folha de 16 a 15) e Férias.
+// Dikma Gestão — acessos (portas de entrada do sistema) e férias em comum.
+// Operação: Atividades Pátio e Bateria, Operação de equipamentos, Efetivo e Frequência e férias (módulos marcados no usuário).
 // Administração do sistema: ajustes de todo o sistema, só o administrador.
-// Cada acesso pede usuário e senha. Quem pode entrar em cada um fica em usuarios/{uid}.acessos.
+// O antigo acesso "Administrativo" virou o módulo Frequência e férias dentro da Operação: quem tinha o acesso
+// marcado (campo acessos com 'administrativo') continua entrando e passa a ter o módulo.
 import { normNome } from './planilhas-adm.js';
 
 export const ACESSOS = [
-  { k: 'operacao', nome: 'Operação', sub: 'Atividades, equipamentos e efetivo', inicio: 'meudia' },
-  { k: 'administrativo', nome: 'Administrativo', sub: 'Frequência e férias', inicio: 'apainel' },
+  { k: 'operacao', nome: 'Operação', sub: 'Atividades, equipamentos, efetivo, frequência e férias', inicio: 'meudia' },
   { k: 'sistema', nome: 'Administração do sistema', sub: 'Ajustes de todo o sistema · só o administrador', inicio: 'cfgeral' }
 ];
 export const ACESSO = Object.fromEntries(ACESSOS.map(a => [a.k, a]));
-// Sem o campo acessos (usuários antigos), a pessoa entra só na Operação. O administrador entra em todos.
-export const acessosDe = u => (!u ? [] : u.papel === 'admin' ? ACESSOS.map(a => a.k) : (Array.isArray(u.acessos) ? u.acessos : ['operacao']).filter(k => k === 'operacao' || k === 'administrativo'));
-export const podeAcesso = (u, k) => acessosDe(u).includes(k);
-// Quem edita no Administrativo (somente leitura só consulta).
-export const editaAdm = u => podeAcesso(u, 'administrativo') && u.papel !== 'leitor';
+const antigoAdm = u => Array.isArray(u.acessos) && u.acessos.includes('administrativo');
+export const acessosDe = u => (!u ? [] : u.papel === 'admin' ? ACESSOS.map(a => a.k) : ['operacao']);
+export const podeAcesso = (u, k) => acessosDe(u).includes(k === 'administrativo' ? 'operacao' : k);
+// Módulo Frequência e férias: marcado no usuário (modulos) ou o antigo acesso Administrativo.
+export const temFreq = u => !!u && (u.papel === 'admin' || (Array.isArray(u.modulos) && u.modulos.includes('frequencia')) || antigoAdm(u));
+// Módulos do usuário (os marcados); usuário antigo só do Administrativo não ganha a Operação sem querer.
+export const modulosDe = u => {
+  if (!u) return [];
+  const m = Array.isArray(u.modulos) && u.modulos.length ? [...u.modulos] : antigoAdm(u) && !u.acessos.includes('operacao') ? [] : ['operacao'];
+  if (temFreq(u) && !m.includes('frequencia')) m.push('frequencia');
+  return m;
+};
+// Quem edita a Frequência e as Férias (somente leitura só consulta).
+export const editaAdm = u => temFreq(u) && u.papel !== 'leitor';
 
-// ---- Férias: uma conta só para Operação, Administrativo, Meu dia e avisos ----
+// ---- Férias: uma conta só para Operação, Frequência, Meu dia e avisos ----
 // itens: [{ mat, nome, inicio, termino }] · devolve (pessoa {mat?, nome}, data AAAA-MM-DD) → férias que cobrem o dia, ou null
 export function indiceFerias(itens) {
   const porMat = new Map(), porNome = new Map();

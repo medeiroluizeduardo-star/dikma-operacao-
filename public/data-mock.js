@@ -73,11 +73,11 @@ async function fresh() {
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
     ...lideres.map(c => ({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
-    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], acessos: ['operacao', 'administrativo'] },
+    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'] },
     { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'] },
     { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
-    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, acessos: ['operacao', 'administrativo'] },
-    { uid: 'adm1', nome: 'Analista Administrativo', login: 'administrativo', senha: '123456', papel: 'supervisor', area: null, modulos: [], acessos: ['administrativo'] },
+    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'] },
+    { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
 }
@@ -96,12 +96,12 @@ export async function start(callbacks) {
   try { amostras(); } catch (e) { /* sem canvas */ }
   await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
-  if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista Administrativo', login: 'administrativo', senha: '123456', papel: 'supervisor', area: null, modulos: [], acessos: ['administrativo'] });
+  if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] });
   await iniciarAdm();
   emitAuth(); changed();
 }
 let acessoAtual = 'operacao';
-export const definirAcesso = k => { acessoAtual = k || 'operacao'; };
+export const definirAcesso = k => { acessoAtual = k === 'sistema' ? 'sistema' : 'operacao'; };
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
@@ -109,7 +109,7 @@ function emitAuth() {
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
   cb.onAuth({ status: 'ready', user: me });
 }
-export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); if (acessoAtual === 'administrativo') await iniciarAdm(); emitAuth(); changed(); }
+export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
 export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
@@ -120,7 +120,7 @@ export const erroAuth = e => (e && e.message) || 'Erro inesperado.';
 export async function signIn(login, senha) {
   const u = cache.usuarios.find(x => x.login === normLogin(login));
   if (!u || u.senha !== senha) throw new Error('Usuário ou senha incorretos.');
-  me = u; persist(); if (podeAcesso(me, acessoAtual) && acessoAtual === 'administrativo') await iniciarAdm(); emitAuth(); changed();
+  me = u; persist(); await iniciarAdm(); emitAuth(); changed();
 }
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
