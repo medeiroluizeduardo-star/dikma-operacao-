@@ -423,5 +423,5 @@ test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e c
   await assertSucceeds(setDoc(doc(d, 'gassin', 'adm-as1'), { area: 'BATERIA 1', por: 'admv', metodo: 'tela' }));
   await assertFails(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [] }));
   await assertFails(deleteDoc(doc(d, 'gocorr', 'rec1')));
-  await assertFails(getDocs(collection(db('admvSo'), 'gcolab')), 'sem o Efetivo marcado não lê as fichas');
+  await assertFails(setDoc(doc(db('admvSo'), 'gocorr', 'adm-oc3'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'admvSo' }), 'sem o Efetivo marcado não registra ocorrência');
 });
