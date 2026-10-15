@@ -22,7 +22,8 @@ const seed_ = async nome => { const r = await fetch('demo/' + nome.replace(/^see
 export const seed = seed_;
 let cb = {}, me = null;
 
-const changed = () => { persist(); cb.onData && cb.onData(); };
+let versao = 0;
+const changed = () => { versao++; persist(); cb.onData && cb.onData(); };
 function persist() {
   const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
   try { localStorage.setItem(LS, JSON.stringify({ v: 2, sets, log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
@@ -324,3 +325,7 @@ export async function admImportar({ comps, presenca, ferias, substituirFerias })
   if (ferias) cache.adm.ferias = [...(substituirFerias ? [] : cache.adm.ferias), ...ferias.map((f, i) => ({ id: 'fi' + Date.now().toString(36) + i, ...f }))];
   admCh(); return n;
 }
+
+// Equipe e frota (Operação) lê a mesma folha e a mesma presença do dia
+Object.defineProperty(cache, 'eqFreq', { get: () => ({ comps: cache.adm.comps, sit: { patio: S.patio.sitByMonth, bateria: S.bateria.sitByMonth }, v: versao }), enumerable: false });
+export function eqFreqWatch() { /* tudo já está em memória */ }

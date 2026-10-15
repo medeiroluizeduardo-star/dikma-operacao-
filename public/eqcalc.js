@@ -15,7 +15,9 @@ export const STATUS_HE = ['HORA EXTRA', 'HE NOTURNA'];
 export const ITENS_5S = [['cab', 'Cabine limpa'], ['eqlimpo', 'Equipamento limpo'], ['soltos', 'Sem objetos soltos'], ['vaz', 'Sem vazamentos']];
 export const ITENS_SEG = [['epi', 'Uso de EPI'], ['cinto', 'Cinto de segurança'], ['check', 'Checklist pré-uso'], ['sinal', 'Sinalização e velocidade'], ['ext', 'Extintor e emergência']];
 
-export function criarCalc(cfg, cad) {
+// ext(o, data): situação vinda da Frequência / Efetivo diário / Férias (nome da situação, null = trabalhando,
+// undefined = sem informação, usa a do cadastro).
+export function criarCalc(cfg, cad, ext) {
   const T = cfg.turno;
   const opMap = new Map((cad.operadores || []).map(o => [o.nome, o]));
   const frotaMap = new Map((cad.frota || []).map(f => [f.id, f]));
@@ -59,7 +61,9 @@ export function criarCalc(cfg, cad) {
   }
   const sitDesconta = s => { const x = (cfg.situacoes || []).find(z => z.sit === s); return x ? x.desconta : true; };
   function ausenteEm(o, data) {
-    if (!o || !o.situacao || o.situacao === 'TRABALHANDO') return null;
+    if (!o) return null;
+    if (ext) { const x = ext(o, data); if (x !== undefined) return x; }
+    if (!o.situacao || o.situacao === 'TRABALHANDO') return null;
     const de = o.de || '0000-01-01', ate = o.ate || '9999-12-31';
     return data >= de && data <= ate ? o.situacao : null;
   }
@@ -122,7 +126,8 @@ export function criarCalc(cfg, cad) {
         hparOp: sum(po.filter(p => p.resp === 'OPERADOR'), p => p.dur), npar: cnt(po, p => p.ini), ninsp: io.length };
       x.diasOp = diasPrevistosOp(o, jIni, jFim);
       let ferd = 0;
-      if (o.situacao && o.situacao !== 'TRABALHANDO' && sitDesconta(o.situacao)) {
+      if (ext) ferd = contar(jIni, jFim, d => { const s = ausenteEm(o, d); return !!s && sitDesconta(s) && escalado(o, d); });
+      else if (o.situacao && o.situacao !== 'TRABALHANDO' && sitDesconta(o.situacao)) {
         const a = [o.de || jIni, jIni].sort()[1], b = [o.ate || '9999-12-31', jFim].sort()[0];
         ferd = a > b ? 0 : diasPrevistosOp(o, a, b);
       }
@@ -136,7 +141,10 @@ export function criarCalc(cfg, cad) {
       x.xProat = tem('proat') ? av.proat * 20 : P_.notaPadrao * 20;
       x.xS5 = i5.length ? media(i5) * 100 : tem('s5') ? av.s5 * 20 : P_.notaPadrao * 20;
       x.xSeg = iS.length ? media(iS) * 100 : tem('seg') ? av.seg * 20 : P_.notaPadrao * 20;
-      x.faltas = +av.faltas || 0; x.atrasos = +av.atrasos || 0; x.atest = +av.atest || 0;
+      // faltas e atestados: o que foi digitado na Avaliação; sem isso, o que está lançado na Frequência / Efetivo diário
+      const vazio = c => av[c] === undefined || av[c] === '' || av[c] === null;
+      const conta = nome => (ext ? contar(jIni, jFim, d => ext(o, d) === nome) : 0);
+      x.faltas = vazio('faltas') ? conta('FALTA') : +av.faltas || 0; x.atrasos = +av.atrasos || 0; x.atest = vazio('atest') ? conta('ATESTADO MÉDICO') : +av.atest || 0;
       x.xF = Math.max(0, 100 - x.faltas * P_.ptsFalta); x.xA = Math.max(0, 100 - x.atrasos * P_.ptsAtraso); x.xT = Math.max(0, 100 - x.atest * P_.ptsAtest);
       x.pend = (tem('proat') ? 0 : 1) + (i5.length || tem('s5') ? 0 : 1) + (iS.length || tem('seg') ? 0 : 1);
       const algumaAval = ['proat', 's5', 'seg', 'faltas', 'atrasos', 'atest'].some(tem) || i5.length || iS.length;

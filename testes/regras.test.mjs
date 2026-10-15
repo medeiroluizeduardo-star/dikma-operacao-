@@ -354,3 +354,14 @@ test('bloqueado não entra no Administrativo', async () => {
   await assertFails(getDocs(collection(db('bloqAdm'), 'ferias')));
   await assertFails(getDoc(doc(db('bloqAdm'), 'freqcomp', 'patio|2026-10')));
 });
+
+test('Operação de equipamentos lê a folha e a presença do dia (Equipe e frota sincronizada), mas não grava', async () => {
+  await prepAdm();
+  await assertSucceeds(getDoc(doc(db('liderEq'), 'freqcomp', 'patio|2026-10')));
+  await assertSucceeds(getDoc(doc(db('liderEq'), 'situacao', '2026-10')));
+  await assertSucceeds(getDoc(doc(db('liderEq'), 'b_situacao', '2026-10')));
+  await assertFails(updateDoc(doc(db('liderEq'), 'freqcomp', 'patio|2026-10'), { grupos: [] }));
+  await assertFails(setDoc(doc(db('liderEq'), 'situacao', '2026-10'), { v: { 'C001|2026-10-02': 'FT' } }, { merge: true }));
+  await assertFails(getDocs(collection(db('liderEq'), 'ferias')));
+  await assertFails(getDoc(doc(db('liderG'), 'freqcomp', 'patio|2026-10')), 'quem só tem o Efetivo não lê a folha');
+});

@@ -97,7 +97,7 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 
 ## Exportar para o Excel
 
-Botão **Exportar** (computador) em: Programação, Efetivo diário (a semana da área escolhida, com legenda), Ocorrências (com os filtros da tela), Lançamentos (o mês inteiro, com horas operadas e paradas), Paradas (mês e filtro escolhidos), Frequência e Férias. Baixa um arquivo .xlsx.
+Botão **Exportar** (computador) em: Folha do líder (a programação da semana), Efetivo diário (a semana da área escolhida, com legenda), Colaboradores (as ocorrências de quem está na lista), Lançamentos e paradas (lançamentos do mês inteiro, com horas operadas e paradas; paradas do mês), Frequência e Férias. Baixa um arquivo .xlsx.
 
 ## Contas sem usuário
 
@@ -129,7 +129,7 @@ Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3
 - **Busca rápida:** lupa no topo (no computador, Ctrl+K ou /). Acha pessoa, ficha, equipamento, rota ou tela e leva direto para lá.
 - **Filtro no celular:** mês, semana e área ficam numa linha só no topo; tocar abre o painel para escolher.
 - **Apontar:** abre direto na área e na rota (a última usada, ou a que tem mais coisa para apontar). Áreas e rotas ficam numa linha que desliza para o lado, com a quantidade pendente. O progresso fica preso no topo ao rolar. Ao terminar uma rota, o sistema oferece a próxima.
-- **Programação:** cada rota abre fechada, com "feitas de programadas" e as atrasadas; toque para ver as atividades (ou **Abrir todas**). Com busca ou uma rota escolhida, tudo aparece aberto.
+- **Programação:** a aba foi tirada (Pátio e Bateria). O dia a dia fica no **Apontar**, o atrasado em **Pendências** e a semana impressa e exportada na **Folha do líder**.
 - **Efetivo diário:** com muitas rotas na tela, elas começam fechadas com "presentes hoje"; toque para ver as pessoas. A legenda das siglas fica em **Legenda das siglas**.
 - **Pendências:** o número no menu conta só os atrasos dos últimos 7 dias da sua área.
 
@@ -148,7 +148,7 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 - **Atividades do dia sem apontar** (às 15h, uma vez por dia, só se faltar alguma) — para líder e supervisor, das áreas deles.
 - **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
 - **Resumo da semana que passou** (segunda-feira, às 7h) — para administrador, gestor e coordenador: % de atividades realizadas, não realizadas, faltas e atestados de cada conjunto, assinaturas pendentes e paradas sem liberação. Sem nomes de colaboradores.
-- Tocar no aviso abre a tela certa (Paradas, Ocorrências, Apontar ou Efetivo diário).
+- Tocar no aviso abre a tela certa (Lançamentos e paradas, Colaboradores, Apontar ou Efetivo diário). Se o sistema estava aberto no Administrativo, passa para a Operação.
 - O administrador vê no **Meu dia** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
 
 **Ligar (uma vez só, administrador)**
@@ -179,10 +179,15 @@ Ao abrir o sistema aparecem os três acessos. A pessoa escolhe um e entra com us
 - Quem tem mais de um acesso troca pelo botão **trocar de acesso** no menu (no celular: **Mais › Trocar de acesso**). Ele pede usuário e senha de novo.
 - As regras do banco garantem a separação: quem só tem o Administrativo não lê nada da Operação, mesmo com módulos marcados.
 
+### Frequência e Efetivo diário: o mesmo jeito de lançar
+As duas telas têm o mesmo visual (grupos que recolhem, busca, filtro de grupo ou rota, legenda das siglas, ✓ = presente, rodapé com os presentes de cada dia) e o mesmo lançamento: toque no dia → escolha a situação → escolha até quando vale (só este dia, 3, 5, 7, 15 ou 30 dias, até domingo ou até o fim da competência). No Efetivo diário, depois de uma ausência num dia de trabalho, o sistema pergunta quem cobre; depois de uma hora extra, a pedido de quem.
+- **Líder com o nome escrito de jeitos diferentes** (KAUN, KAUAN, KAUAN SUZA = KAUAN SOUZA): os grupos da Frequência viram um só e o Efetivo diário pode **agrupar por líder** com o mesmo nome. Os apelidos conhecidos ficam em `public/planilhas-adm.js` (`APELIDOS_LIDER`); além deles, um nome que é o começo de um único outro nome (KAUAN → KAUAN SOUZA) vira esse outro.
+
 ### Dados em comum entre os acessos (nada é digitado duas vezes)
 - **Presença do dia.** Quem está nas Atividades tem uma presença só: o que o líder marca no Efetivo diário aparece na Frequência, e o que o Administrativo corrige na Frequência aparece no Efetivo diário. Quem não está nas Atividades (gestão, apoio) fica só na folha.
 - **Férias.** Marcadas no Administrativo, aparecem sozinhas como **FE** no Efetivo diário, no Dimensionamento, no Meu dia e nos avisos do celular (quem está de férias não conta como disponível).
 - **Escala.** A folga pela letra da turma (Escalas e turnos) também aparece na Frequência.
+- **Operação › Equipe e frota.** A situação de cada operador (férias, atestado, falta, folga lançada, desligado) vem da Frequência, do Efetivo diário e das Férias; a escala do mês e o painel usam essa situação. Faltas e atestados da Avaliação mensal vêm de lá quando não foram digitados. Operador que não está na folha continua com a situação do cadastro.
 - **Pessoas.** A folha liga cada nome à ficha do RH (matrícula) e às Atividades, aceitando acento, espaço a mais ou uma letra trocada.
 
 ### Administrativo
@@ -193,7 +198,7 @@ Ao abrir o sistema aparecem os três acessos. A pessoa escolhe um e entra com us
 - Para gerar de novo os dados de importação a partir das planilhas originais (que não vão para o repositório): `node ferramentas/gerar-adm.mjs <frequencia-patio.xlsx> <frequencia-bateria.xlsx> <ferias.xlsx>`.
 
 ## Módulo Atividades Bateria
-- Tem as mesmas telas do Atividades Pátio: Painel, Programação, Apontar, Escala e efetivo, Pendências, Folha do líder, Relatório fotográfico, Plano padrão, Gerador de meses e Rotas e configurações.
+- Tem as mesmas telas do Atividades Pátio: Painel, Apontar, Escala e efetivo, Pendências, Folha do líder, Relatório fotográfico, Plano padrão, Gerador de meses e Rotas e configurações.
 - **Primeiro acesso:** entre como administrador, escolha **Atividades Bateria** e clique em **Importar e gerar a programação**. Isso carrega as 120 atividades do plano padrão, as 18 rotas das áreas Bateria 1, Bateria 2, Trilho e CDQ e os 55 colaboradores, e gera a programação do mês atual e dos dois seguintes.
 - Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
@@ -238,7 +243,7 @@ Em **Lançamentos** (botão de troca na linha) ou em **Paradas** (botão **Subst
   - dias operados, horas operadas, disponibilidade física, efetividade, paradas, horas paradas, MTTR e MTBF;
   - operadores ativos, horas extras, paradas sem liberação, destaque do mês, quem está fora da coqueria hoje, nota média, avaliações pendentes e paradas do operador.
   - Abaixo vêm a produtividade por operador, as horas por dia, o Pareto das causas, os equipamentos com mais horas paradas e reincidentes e a classificação dos operadores com a variação em relação ao mês anterior.
-- **Lançamentos:** as alocações do dia (equipamento, operador, área, status e horário). O horário vazio usa o turno. O sistema calcula a janela, as horas paradas e as horas operadas. **Copiar do dia anterior** repete as alocações do último dia, deixando de fora quem está ausente ou de folga na escala 4x4.
+- **Lançamentos e paradas** é uma aba só (troca no topo). **Lançamentos:** as alocações do dia (equipamento, operador, área, status e horário). O horário vazio usa o turno. O sistema calcula a janela, as horas paradas e as horas operadas. **Copiar do dia anterior** repete as alocações do último dia, deixando de fora quem está ausente ou de folga na escala 4x4.
 - **Paradas:** registro com causa e responsabilidade. Sem horário de fim, a parada fica como **sem liberação** até alguém tocar em **Liberar**. Também avisa de inconsistências, como parada sem lançamento correspondente.
 - **Equipe e frota:**
   - operadores com função, escala (ADM ou 4x4 por turma), fixo ou não e situação (férias, folga, atestado…) com período;
@@ -262,12 +267,12 @@ Em **Lançamentos** (botão de troca na linha) ou em **Paradas** (botão **Subst
 - **Primeiro acesso:** entre como administrador, escolha **Efetivo** e clique em **Importar dados da planilha**. Isso carrega os 179 colaboradores, as ocorrências já lançadas e os 12 tipos com texto padrão.
 - **Painel:** fichas em dia, ativos, em experiência, integração completa, assinaturas pendentes e recusas. Mostra também as ocorrências por mês e por tipo e alertas de experiência (45 e 90 dias), integração incompleta e assinatura parada há mais de 7 dias.
 - **Colaboradores:** busca, filtros e a ficha de cada pessoa, com a Folha 1 (integração) e a Folha 2 (ocorrências). O administrador cadastra, edita e informa a demissão.
-- **Ocorrências:** registro com o texto padrão do tipo e acompanhamento da situação (aguardando, assinada ou recusada).
+- **Ocorrências:** ficam na ficha de cada colaborador (Nova ocorrência, assinar, ver). A aba Ocorrências foi tirada; em **Colaboradores** os filtros **Pendente assinatura** e **Comigo para recolher** mostram quem tem assinatura para recolher.
 - **Assinatura, de três formas:**
   1. **Na tela:** o colaborador e o responsável Dikma assinam com o dedo.
   2. **Via em papel:** imprima a via, colha as assinaturas e fotografe a folha assinada.
   3. **Recusou:** informe as testemunhas.
-- **Controle de fichas:** grade com as datas da integração, Folha 2 (de 33), pendências e status de cada um.
+- **Colaboradores** (juntou o antigo Controle de fichas): uma tabela com cadastro, integração (x de 5, com as datas ao passar o mouse), Folha 2 (de 33), assinaturas aguardando, recusas e situação da ficha.
 - **Impressão:** ficha (Folhas 1 e 2, com as assinaturas feitas na tela) e via de assinatura com código de controle.
 - **Tipos de ocorrência** (administrador): até 5 vão para a Folha 1, na ordem da posição.
 - **Área de atuação e função (cadastro único):** em **Colaboradores › abrir a ficha › Editar**, o administrador escolhe a **área de atuação** (Coqueria sem rota, uma das áreas do Pátio ou da Bateria com rota e regime, ou Operação de equipamentos) e a **função**. Ao salvar, a mudança vai junto para os outros módulos:
@@ -275,7 +280,7 @@ Em **Lançamentos** (botão de troca na linha) ou em **Paradas** (botão **Subst
   - **Operação:** marque **Opera equipamentos** para colocar a pessoa na equipe de operadores (com escala ADM ou 4x4 e turma). Desmarcando, ela sai da equipe; os lançamentos antigos continuam no histórico.
   - A ligação entre os módulos é pela matrícula e, na falta dela, pelo nome completo.
   - Quando o administrador muda a função de um operador em **Operação › Equipe e frota**, a função também é atualizada no Efetivo, no Pátio e na Bateria.
-- **Filtro por área** no Painel, Colaboradores, Ocorrências e Controle de fichas: por área do RH (Coqueria - Pátio, Alto Forno, Sinter…), por setor (Coqueria - Recebimento, Alto Forno - Carregamento AF1…) ou pela área de atuação no sistema. O filtro escolhido vale para todas essas telas.
+- **Filtro por área** no Painel e Colaboradores: por área do RH (Coqueria - Pátio, Alto Forno, Sinter…), por setor (Coqueria - Recebimento, Alto Forno - Carregamento AF1…) ou pela área de atuação no sistema. O filtro escolhido vale para todas essas telas.
 - **Excluir colaboradores** (administrador): na ficha, botão **Excluir**; na lista, marque as caixas e use **Excluir selecionados**. Dá para tirar a pessoa também de Atividades Pátio, Atividades Bateria e Operação e, se quiser, apagar as ocorrências dela. Pede confirmação e não dá para desfazer.
 - Quem tem acesso ao Efetivo com perfil **Supervisor** ou **Líder** registra ocorrências e colhe assinaturas. Com **Somente leitura**, só consulta. Excluir ocorrências e editar o cadastro é só do administrador.
 
@@ -321,7 +326,7 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 
 ## Fotos e arquivos (evidências)
 - Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
-- Na **Programação**, toque no dia da atividade e escolha **Fotos e arquivos**. Os dias com anexo têm um ponto laranja no canto.
+- No **Apontar**, toque no ícone da câmera da atividade para anexar **fotos e arquivos**.
 - A foto é reduzida automaticamente (máx. 1600 px) e recebe um carimbo com **data, hora, atividade e usuário** de quem enviou.
 - Até **6 fotos ou arquivos** por atividade em cada dia.
 - Arquivos que não são foto podem ter até **700 KB**.

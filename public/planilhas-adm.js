@@ -224,6 +224,75 @@ export function criarBusca(lista, nomeDe = x => x.nome) {
   };
 }
 
+// ---- Líderes com o nome escrito de jeitos diferentes (apelido, só o primeiro nome, erro de digitação) ----
+// Ex.: "KAUN", "KAUAN" e "KAUAN SUZA" são a mesma pessoa que "KAUAN SOUZA". Sem lista fixa de nomes no código:
+// 1) procura no cadastro do RH (pessoas) uma única pessoa cujo nome começa com as palavras do líder, aceitando
+//    uma letra trocada em cada palavra (KAUN ≈ KAUAN, SUZA ≈ SOUZA) → o líder vira "PRIMEIRO SEGUNDO" nome dela;
+// 2) sem isso, dentro da própria lista: um nome que é o começo de um único outro (KAUAN → KAUAN SOUZA).
+const palavraParecida = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && distancia(a, b) <= 1);
+export function canonLideres(nomes, pessoas = []) {
+  const P = [...new Set((pessoas || []).map(x => normNome(typeof x === 'string' ? x : x.nome)).filter(Boolean))].map(n => n.split(' '));
+  const lista = [...new Set((nomes || []).map(n => normNome(n)).filter(Boolean))];
+  // primeiro com as palavras iguais; só se ninguém bater, aceita uma letra trocada. Mais de uma pessoa = ambíguo (não troca).
+  const doRH = n => {
+    const w = n.split(' '); if (!w.length || w[0].length < 3) return null;
+    for (const igual of [(a, b) => a === b, palavraParecida]) {
+      const ach = [...new Set(P.filter(p => p.length >= w.length && w.every((x, i) => igual(x, p[i]))).map(p => p.slice(0, Math.max(2, w.length)).join(' ')))];
+      if (ach.length === 1) return ach[0];
+      if (ach.length > 1) return ach; // ambíguo: decide depois, se só um dos candidatos é líder nesta lista
+    }
+    return null;
+  };
+  const mapa = new Map(); const ambiguo = new Map();
+  for (const n of lista) { const r = doRH(n); if (Array.isArray(r)) ambiguo.set(n, r); mapa.set(n, typeof r === 'string' ? r : n); }
+  const lideres = new Set([...mapa.entries()].filter(([n]) => !ambiguo.has(n)).map(([, v]) => v));
+  for (const [n, cands] of ambiguo) { const l = cands.filter(c => lideres.has(c)); if (l.length === 1) { mapa.set(n, l[0]); ambiguo.delete(n); } }
+  const canon = [...new Set(mapa.values())];
+  for (const n of lista) {
+    let c = mapa.get(n); if (c !== n) continue;
+    const maiores = canon.filter(m => m !== c && m.startsWith(c + ' '));
+    if (maiores.length === 1) c = maiores[0]; // vale também quando o RH tem mais de um com esse nome: entre os líderes da lista só há um
+    else if (!maiores.length && !ambiguo.has(n)) { const w = c.split(' '); const perto = canon.filter(m => m !== c && m.length > c.length && m.split(' ').length >= w.length && w.every((x, i) => palavraParecida(x, m.split(' ')[i]))); if (perto.length === 1) c = perto[0]; }
+    mapa.set(n, c);
+  }
+  const f = n => { const k = normNome(n); if (mapa.has(k)) return mapa.get(k); const r = doRH(k); return typeof r === 'string' ? r : k; };
+  // grafia: o nome como foi escrito, só com as letras corrigidas pelo RH (KAUAN SUZA → KAUAN SOUZA), sem acrescentar palavras
+  f.grafia = n => { const k = normNome(n); const c = f(k); const w = k.split(' '), cw = c.split(' '); return cw.length >= w.length && w.every((x, i) => palavraParecida(x, cw[i])) ? cw.slice(0, w.length).join(' ') : k; };
+  return f;
+}
+// Nome do grupo da folha: "[PREFIXO -] LIDER <nome> - SUPERVISÃO <nome>"
+export function partesGrupo(nome) {
+  const s = String(nome || '').replace(/\s+/g, ' ').trim();
+  const m = s.match(/^(.*?)\bL[IÍ]DER\s+(.+?)\s*-\s*(SUPERVIS[ÃA]O.*)$/i) || s.match(/^(.*?)\bL[IÍ]DER\s+(.+)$/i);
+  if (!m) return null;
+  return { prefixo: m[1].replace(/[-\s]+$/, '').trim(), lider: m[2].replace(/[-\s]+$/, '').trim(), resto: (m[3] || '').trim() };
+}
+// Junta os grupos do mesmo líder (mesmo prefixo e mesma supervisão) e escreve o nome do líder sempre igual.
+export function unirGrupos(grupos, pessoas = []) {
+  const canon = canonLideres((grupos || []).map(g => (partesGrupo(g.nome) || {}).lider).filter(Boolean), pessoas);
+  const out = []; const porChave = new Map();
+  for (const g of grupos || []) {
+    const pt = partesGrupo(g.nome);
+    let nome = g.nome, chave = normNome(g.nome);
+    let grafia = null;
+    if (pt) {
+      const lid = canon(pt.lider); grafia = canon.grafia(pt.lider);
+      nome = `${pt.prefixo ? pt.prefixo + ' - ' : ''}LIDER ${grafia}${pt.resto ? ' - ' + pt.resto.toUpperCase() : ''}`;
+      chave = normNome(pt.prefixo) + '|' + lid + '|' + normNome(pt.resto);
+    }
+    const ja = porChave.get(chave);
+    if (ja) {
+      const ks = new Set(ja.pessoas.map(p => p.k || p.chave || normNome(p.nome))); for (const p of g.pessoas || []) if (!ks.has(p.k || p.chave || normNome(p.nome))) ja.pessoas.push(p); ja.turno = ja.turno || !!g.turno;
+      if (grafia && grafia.length > (ja._grafia || '').length) { ja._grafia = grafia; ja.nome = nome; } // fica o nome mais completo
+      continue;
+    }
+    const novo = { ...g, nome, pessoas: [...(g.pessoas || [])] }; if (grafia) novo._grafia = grafia; porChave.set(chave, novo); out.push(novo);
+  }
+  for (const g of out) delete g._grafia;
+  for (const g of out) g.pessoas.sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  return out;
+}
+
 // Datas de uma competência (16 do mês anterior a 15).
 export function diasDaCompetencia(comp) {
   const [a, m] = comp.split('-').map(Number);
@@ -253,7 +322,7 @@ export function prepararImportacao({ freq = {}, ferias = null, colabs = {}, rh =
     for (const c of f.competencias) {
       const datas = diasDaCompetencia(c.competencia);
       const d = {};
-      const grupos = c.grupos.map(g => ({
+      const grupos = unirGrupos(c.grupos.map(g => ({
         nome: g.nome, turno: !!g.turno,
         pessoas: g.pessoas.map(p => {
           const dias = p.dias || Object.fromEntries((p.d || '').split(',').map((v, i) => [datas[i], v]).filter(([, v]) => v));
@@ -268,7 +337,7 @@ export function prepararImportacao({ freq = {}, ferias = null, colabs = {}, rh =
           if (ativ) r.ligadas++;
           return { k, nome: p.nome, mat, turma: p.turma || '', obs: p.obs || '', notas: p.notas || [], ativ, desligado: p.desligado || null };
         })
-      }));
+      })), rh);
       r.pessoas = Math.max(r.pessoas, grupos.reduce((n, g) => n + g.pessoas.length, 0));
       r.competencias.push(c.competencia);
       comps.push({ conj, competencia: c.competencia, ini: datas[0], fim: datas[datas.length - 1], grupos, d });

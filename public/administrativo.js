@@ -6,7 +6,9 @@ import { SETS, today, add, ddmm, MESES_L } from './cal.js';
 import { normRegime, letra } from './escala.js';
 import { editaAdm, indiceFerias } from './acessos.js';
 import { baixarExcel, dataBR } from './exportar.js';
-import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO } from './planilhas-adm.js';
+import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from './planilhas-adm.js';
+import { abrirLancamento } from './presenca.js';
+import { caixaBusca } from './busca.js';
 
 export const VIEWS_A = [
   { id: 'apainel', nome: 'Painel', ic: 'painel', grp: 'Administrativo', mod: 'ad' },
@@ -58,7 +60,17 @@ export function criarAdministrativo(X) {
     if (pr && !pr.trab) return { v: 'F', auto: true, por: 'escala', motivo: pr.motivo };
     return dt <= TODAY ? { v: 'P', auto: true, por: 'padrao' } : { v: '', auto: true, por: 'padrao' };
   }
-  const compDoc = (conj, comp) => { DB.admWatch(conj, comp); return A().comps[conj + '|' + comp]; };
+  // Grupos do mesmo líder escritos de jeitos diferentes (KAUAN, KAUAN SOUZA, KAUAN SUZA) viram um grupo só;
+  // quem edita grava a folha já arrumada.
+  const compDoc = (conj, comp) => {
+    DB.admWatch(conj, comp); const doc = A().comps[conj + '|' + comp];
+    if (doc && !doc._unidos) {
+      const u = unirGrupos(doc.grupos || [], A().rh || []); const sig = l => JSON.stringify(l.map(g => [g.nome, g.pessoas.length]));
+      const mudou = sig(u) !== sig(doc.grupos || []); doc.grupos = u; doc._unidos = true;
+      if (mudou && pode()) DB.admSalvarGrupos(conj, comp, u);
+    }
+    return doc;
+  };
 
   /* ---------- topo: Pátio | Bateria e competência ---------- */
   function topo(view) {
@@ -73,6 +85,10 @@ export function criarAdministrativo(X) {
     for (const dt of datas) { const c = codigo(conj, comp, doc, g, p, dt, cmap).v; if (c in t) t[c]++; }
     return t;
   }
+  // Frequência com o mesmo visual e funcionamento do Efetivo diário: grupos que recolhem, busca, filtro de grupo,
+  // legenda das siglas, ✓ = presente, rodapé com presentes do dia. A folha vai de 16 a 15.
+  const funcaoRH = () => { const m = new Map(); for (const c of A().rh || []) if (c.mat) m.set(String(c.mat), c.funcao || ''); return m; };
+  const presente = v => v && v !== 'DS' && !['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'AB', 'SP'].includes(v);
   function vFreq() {
     const conj = U.conj, comp = U.comp, doc = compDoc(conj, comp);
     if (doc === undefined) return '<div class="card skel"><i></i><i></i><i></i></div>';
@@ -80,53 +96,68 @@ export function criarAdministrativo(X) {
       const ant = compDoc(conj, compMais(comp, -1));
       return `<div class="card"><div class="empty"><b>A folha de ${nomeComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri" data-a="abrirComp">Abrir a folha com os grupos de ${nomeComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
     }
-    const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj);
-    const q = normNome(U.q || '');
-    const ed = pode();
-    const nG = doc.grupos.length; const recolhe = nG > 4 && !q;
+    const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj); const fRH = funcaoRH();
+    const q = normNome(U.q || ''); const ed = pode();
+    if (U.grp == null || (U.grp !== '*' && !doc.grupos[+U.grp])) U.grp = '*';
+    const todos = U.grp === '*' || !!q;
+    const vis = doc.grupos.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q))) })).filter(x => x.ps.length && (todos || String(x.gi) === String(U.grp)));
+    const recolhe = todos && !q && vis.length > 4;
     const ab = new Set(U.abertos);
+    const hojeNa = datas.includes(TODAY);
     const resumo = { FT: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0, pessoas: 0 };
+    const pres = datas.map(() => 0), quadro = datas.map(() => 0);
     let corpo = '';
-    doc.grupos.forEach((g, gi) => {
-      const ps = g.pessoas.filter(p => !q || normNome(p.nome).includes(q));
-      if (!ps.length) return;
-      const tot = ps.map(p => totais(conj, comp, doc, g, p, datas, cmap));
-      tot.forEach(t => { for (const k of Object.keys(t)) resumo[k] += t[k] > 0 ? (k === 'HE' ? t[k] : t[k]) : 0; }); resumo.pessoas += ps.length;
+    for (const { g, gi, ps } of vis) {
+      const cods = ps.map(p => datas.map(dt => codigo(conj, comp, doc, g, p, dt, cmap)));
+      const tot = cods.map(l => { const t = { FT: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0 }; l.forEach(c => { if (c.v in t) t[c.v]++; }); return t; });
+      tot.forEach(t => { for (const k of Object.keys(resumo)) if (k in t) resumo[k] += t[k]; }); resumo.pessoas += ps.length;
+      cods.forEach(l => l.forEach((c, i) => { if (c.v !== 'DS' && !(c.auto && c.por === 'escala')) quadro[i]++; if (presente(c.v)) pres[i]++; }));
+      const iH = datas.indexOf(TODAY);
+      const ph = hojeNa ? cods.filter(l => presente(l[iH].v)).length : null, eh = hojeNa ? cods.filter(l => l[iH].v !== 'DS' && !(l[iH].auto && l[iH].por === 'escala')).length : null;
       const aberto = !recolhe || ab.has(String(gi));
-      const soma = k => tot.reduce((n, t) => n + t[k], 0);
-      corpo += `<tr class="grp-row"><th colspan="${datas.length + 6}"><button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button><span class="gcount">${ps.length} pessoa${ps.length > 1 ? 's' : ''}${soma('FT') ? ` · ${soma('FT')} falta(s)` : ''}${soma('AT') ? ` · ${soma('AT')} atestado(s)` : ''}</span>${ed ? `<button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}</th></tr>`;
-      if (!aberto) return;
+      if (todos) corpo += `<tr class="grp-row"><th colspan="${datas.length + 2 + CONTA.length}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
-        corpo += `<tr><th class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}">${esc(title(p.nome))}</button><small>${p.ativ ? 'Atividades' : 'só na folha'}${p.turma ? ' · turma ' + esc(p.turma) : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}</small></th>${datas.map(dt => {
-          const c = codigo(conj, comp, doc, g, p, dt, cmap);
-          return `<td class="c${dt === TODAY ? ' today' : ''}"><button class="sit ${c.v}${c.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-a="cel" data-g="${gi}" data-p="${esc(p.k)}" data-dt="${dt}"` : 'disabled'} title="${dBR(dt)} · ${esc(NOMES_CODIGO[c.v] || 'sem lançamento')}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : ''}">${c.v === 'P' ? '' : c.v}</button></td>`;
+        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.ativ ? 'Atividades' : 'só na folha'}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}</div></td><td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>${cods[i].map((c, j) => {
+          const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
+          const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : ''}`;
+          return `<td class="c${dt === TODAY ? ' today' : ''}"><button class="sit ${c.v}${c.auto && c.v !== 'P' ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-a="cel" data-g="${gi}" data-p="${esc(p.k)}" data-dt="${dt}"` : 'disabled'} aria-label="${esc(title(p.nome))}, ${esc(tt)}" title="${esc(tt)}">${c.v === 'P' ? I.ok : c.v}</button></td>`;
         }).join('')}${CONTA.map(k => `<td class="c num tot${t[k] ? ' on' : ''}">${t[k] || ''}</td>`).join('')}</tr>`;
       });
-    });
-    const head = `<tr><th class="fnome">Nome</th>${datas.map(dt => { const d = new Date(dt + 'T12:00:00'); return `<th class="c${dt === TODAY ? ' today' : ''}${[0, 6].includes(d.getDay()) ? ' fds' : ''}">${dt.slice(8)}<br><span class="thd">${DIA_L[d.getDay()]}</span></th>`; }).join('')}${CONTA.map(k => `<th class="c" title="${NOMES_CODIGO[k]}">${k}</th>`).join('')}</tr>`;
+    }
+    const head = `<tr><th class="fnome">Colaborador</th><th>Função</th>${datas.map(dt => { const d = new Date(dt + 'T12:00:00'); return `<th class="c${dt === TODAY ? ' today' : ''}${[0, 6].includes(d.getDay()) ? ' fds' : ''}">${DIA_L[d.getDay()]}<br><span class="thd">${dt.slice(8)}</span></th>`; }).join('')}${CONTA.map(k => `<th class="c" title="${NOMES_CODIGO[k]}">${k}</th>`).join('')}</tr>`;
+    const foot = vis.length ? `<tfoot><tr><th colspan="2" class="fnome">Presentes</th>${datas.map((dt, i) => `<td class="c num${dt === TODAY ? ' today' : ''}">${dt > TODAY ? '' : `<b class="${pres[i] < quadro[i] ? 'menos' : ''}">${pres[i]}</b><span class="muted">/${quadro[i]}</span>`}</td>`).join('')}${CONTA.map(k => `<td class="c num tot">${resumo[k] || ''}</td>`).join('')}</tr></tfoot>` : '';
+    const nPes = doc.grupos.reduce((n, g) => n + g.pessoas.length, 0);
     return `<div class="mini"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>
-      <div class="card"><div class="body lbar"><label class="sel grow"><span>Buscar</span><input class="in" id="aQ" type="search" placeholder="Nome" value="${esc(U.q || '')}"></label>
-        ${recolhe ? `<button class="btn sm" data-a="todos">${ab.size ? 'Recolher todos' : 'Abrir todos os grupos'}</button>` : ''}
-        ${!X.framed ? `<button class="btn sm" data-a="exportar">${I.dl} Exportar Excel</button>` : ''}
-        ${ed ? `<button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button>` : ''}</div>
-        <details class="legdet body pt0 pb0"${X.isMobile() ? '' : ' open'}><summary>Legenda</summary><div class="legend sitleg">${CODS.map(c => `<span><span class="sit ${c}">${c === 'P' ? I.ok : c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit F auto">F</span> Automático (escala, férias)</span><span class="muted">${ed ? 'Toque no dia para lançar. Quem está nas Atividades é a mesma presença do Efetivo diário.' : 'Somente leitura'}</span></div></details>
-        <div class="tw freqtw"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${datas.length + 6}" class="empty">Ninguém encontrado.</td></tr>`}</tbody></table></div></div>`;
+      <div class="card"><header><h2>Frequência</h2><p>${ed ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'} · ${SETS[conj].curto} · ${dBR(datas[0])} a ${dBR(datas[datas.length - 1])}</p>${ed ? `<span class="r"><button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button></span>` : ''}</header>
+        <div class="body lbar efbar">${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar">${I.dl} Exportar Excel</button>` : ''}${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${doc.grupos.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}</div>
+        ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
+        <details class="legdet body pb0 pt0"${X.isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span class="muted">Quem está nas Atividades tem a mesma presença do Efetivo diário.</span></div></details>
+        <div class="tw freqtw"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${datas.length + 2 + CONTA.length}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
   }
   const achar = (doc, gi, k) => { const g = doc.grupos[+gi]; return { g, p: g && g.pessoas.find(x => x.k === k) }; };
+  // Lançar: o mesmo jeito do Efetivo diário (situação → até quando)
   function lancar(gi, k, dt) {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
     const { g, p } = achar(doc, gi, k); if (!p) return;
     const cmap = colabPorId(conj); const atual = codigo(conj, comp, doc, g, p, dt, cmap);
     const datas = diasDaCompetencia(comp);
-    sheet(title(p.nome), `${dBR(dt)} · agora: ${NOMES_CODIGO[atual.v] || 'sem lançamento'}${atual.auto ? ' (automático)' : ''}`,
-      [...CODS.map(c => ({ t: NOMES_CODIGO[c], d: c, v: c, cur: !atual.auto && atual.v === c })), ...(!atual.auto ? [{ t: 'Voltar ao automático', d: 'Escala, férias ou presente', v: '' }] : [])],
-      o => {
-        const restantes = datas.filter(x => x > dt);
-        const aplicar = ate => { const lista = [dt, ...restantes.filter(x => x <= ate)]; lista.forEach(x => DB.admSetCodigo(conj, comp, p, x, o.v)); DB.log(`Administrativo: ${title(p.nome)} → ${o.v ? NOMES_CODIGO[o.v] : 'automático'} ${lista.length > 1 ? `de ${ddmm(dt)} a ${ddmm(lista[lista.length - 1])}` : 'em ' + ddmm(dt)}`); toast(lista.length > 1 ? `${lista.length} dias lançados` : 'Lançado'); };
-        if (!o.v || !restantes.length || ['P', 'HE'].includes(o.v)) return aplicar(dt);
-        sheet('Até quando?', `${NOMES_CODIGO[o.v]} a partir de ${dBR(dt)}`, [{ t: 'Só este dia', v: dt }, ...[2, 4, 6, 14].filter(n => restantes[n - 1]).map(n => ({ t: `${n + 1} dias`, d: `até ${dBR(restantes[n - 1])}`, v: restantes[n - 1] })), { t: 'Até o fim da competência', d: dBR(datas[datas.length - 1]), v: datas[datas.length - 1] }], x => aplicar(x.v));
-      });
+    abrirLancamento({
+      sheet, nome: title(p.nome), dt, ok: I.ok, codigos: CODS,
+      atual: atual.auto ? { v: atual.v, auto: true, motivo: atual.por === 'ferias' ? 'férias' : atual.por === 'escala' ? 'pela escala' : '' } : { v: atual.v },
+      linhaInfo: p.ativ ? 'Mesma presença do Efetivo diário' : 'Só na folha (fora das Atividades)',
+      depois: datas.filter(x => x > dt), fim: { t: 'Até o fim da competência', v: datas[datas.length - 1] },
+      aoEscolher: (cod, lista) => {
+        const antes = lista.map(x => [x, codigo(conj, comp, doc, g, p, x, cmap)]);
+        lista.forEach(x => DB.admSetCodigo(conj, comp, p, x, cod));
+        DB.log(`Administrativo: ${title(p.nome)} → ${cod ? NOMES_CODIGO[cod] : 'automático'} ${lista.length > 1 ? `de ${ddmm(dt)} a ${ddmm(lista[lista.length - 1])}` : 'em ' + ddmm(dt)}`);
+        render();
+        const b = document.querySelector(`[data-a="cel"][data-p="${CSS.escape(p.k)}"][data-dt="${dt}"]`); if (b && X.pulsar) X.pulsar(b);
+        toast(lista.length > 1 ? `${title(p.nome).split(' ')[0]}: ${(cod ? NOMES_CODIGO[cod] : 'automático').toLowerCase()} em ${lista.length} dias` : `${title(p.nome).split(' ')[0]}: ${(cod ? NOMES_CODIGO[cod] : 'automático').toLowerCase()}`,
+          { desfazer: () => { antes.forEach(([x, c]) => DB.admSetCodigo(conj, comp, p, x, c.auto ? '' : c.v)); render(); } });
+      }
+    });
   }
   function opcoesPessoa() {
     const out = []; const vistos = new Set();
@@ -322,6 +353,8 @@ export function criarAdministrativo(X) {
     const a = t.dataset.a, v = t.dataset.v;
     if (a === 'conj') { U.conj = v; render(); }
     else if (a === 'comp') { U.comp = compMais(U.comp, +v); render(); }
+    else if (a === 'soGrupo') { U.grp = v; render(); }
+    else if (a === 'limparQ') { U.q = ''; render(); }
     else if (a === 'grupo') { const s = new Set(U.abertos); if (s.has(v)) s.delete(v); else s.add(v); U.abertos = [...s]; render(); }
     else if (a === 'todos') { const doc = A().comps[U.conj + '|' + U.comp]; U.abertos = U.abertos.length || !doc ? [] : doc.grupos.map((_, i) => String(i)); render(); }
     else if (a === 'cel') lancar(t.dataset.g, t.dataset.p, t.dataset.dt);
@@ -359,6 +392,7 @@ export function criarAdministrativo(X) {
   document.addEventListener('change', e => {
     if (UI.modulo !== 'adm') return;
     if (e.target.id === 'aFSetor') { U.fSetor = e.target.value; render(); }
+    if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
     if (e.target.id === 'aFMes') { U.fMes = e.target.value; render(); }
     if (e.target.id === 'aImpArq' && e.target.files[0]) impArquivo(e.target.files[0]);
   });

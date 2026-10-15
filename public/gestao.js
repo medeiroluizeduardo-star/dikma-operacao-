@@ -1,5 +1,5 @@
 // Dikma Gestão — módulo EFETIVO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
-// Telas: Painel, Colaboradores (com ficha individual), Ocorrências, Controle de fichas, Impressão e Tipos.
+// Telas: Painel, Colaboradores (cadastro + controle da ficha, com a ficha individual e as ocorrências), Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
 import { pd, add, pad, today, MESES_L, AREA_S, SETS, setDaArea } from './cal.js';
 import { AREA_GERAL, AREA_OP, REGIMES, ehAreaAtiv, veTodasFichas, areasFichaDe } from './pessoas.js';
@@ -10,17 +10,13 @@ import { baixarExcel, dataBR } from './exportar.js';
 export const VIEWS_G = [
   { id: 'gpainel', nome: 'Painel', ic: 'painel', grp: 'Fichas de acompanhamento', mod: 'ge' },
   { id: 'gcolab', nome: 'Colaboradores', ic: 'users', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gocorr', nome: 'Ocorrências', ic: 'plano', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gcontrole', nome: 'Controle de fichas', ic: 'prog', grp: 'Fichas de acompanhamento', mod: 'ge' },
   { id: 'gimpr', nome: 'Impressão', ic: 'print', grp: 'Fichas de acompanhamento', mod: 'ge' },
   { id: 'gimport', nome: 'Importar dados', ic: 'dl', grp: 'Administração', mod: 'ge', admin: true },
   { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'config', grp: 'Administração', mod: 'ge', admin: true }
 ];
 export const SUB_G = {
   gpainel: 'Indicadores das fichas de acompanhamento',
-  gcolab: 'Cadastro e ficha de cada colaborador',
-  gocorr: 'Orientações e ocorrências registradas',
-  gcontrole: 'Integração, Folha 2 e pendências de cada ficha',
+  gcolab: 'Cadastro, controle da ficha e assinaturas de cada colaborador',
   gimpr: 'Ficha (Folhas 1 e 2) e via de assinatura',
   gimport: 'Colaboradores e ocorrências a partir de uma planilha',
   gtipos: 'Tipos, texto padrão e o que vai para a Folha 1'
@@ -163,25 +159,32 @@ export function criarGestao(X) {
     return h;
   }
 
+  // Colaboradores: cadastro e controle da ficha numa tabela só. As ocorrências ficam na ficha de cada um
+  // (Nova ocorrência, assinar, ver) e nos filtros "Pendente assinatura" e "Comigo para recolher".
   function vColab() {
     if (U.mat) return vFicha(U.mat);
-    const idx = indice();
+    const idx = indice(); const f1 = tiposF1();
     const q = U.q.trim().toLowerCase();
-    const F = { ativos: x => x.ativo, exp: x => x.exp, integ: x => x.ativo && !x.intOk, pend: x => x.pend.length, desl: x => !x.ativo, todos: () => true };
+    const F = { ativos: x => x.ativo, exp: x => x.exp, integ: x => x.ativo && !x.intOk, pend: x => x.pend.length, comigo: x => x.pend.some(o => souEu(o.recolhe)), rec: x => x.rec.length, desl: x => !x.ativo, todos: () => true };
+    if (!F[U.filtro]) U.filtro = 'ativos';
     const L = lot(); const fa = filtroArea();
     const base = [...idx.values()].filter(x => fa(x.c));
-    const lista = base.filter(F[U.filtro] || F.todos).filter(x => !q || (x.c.mat + ' ' + x.c.nome + ' ' + (x.c.funcao || '')).toLowerCase().includes(q)).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+    const lista = base.filter(F[U.filtro]).filter(x => !q || (x.c.mat + ' ' + x.c.nome + ' ' + (x.c.funcao || '')).toLowerCase().includes(q)).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
     const n = k => base.filter(F[k]).length;
     for (const m of [...SEL]) if (!idx.has(m)) SEL.delete(m);
     const adm = isAdmin(); const todosMarc = lista.length && lista.slice(0, 500).every(x => SEL.has(x.c.mat));
+    U.ocLista = lista.flatMap(x => x.oc);
     let h = `<div class="filters"><label class="sel grow"><span>Buscar</span><input class="in" type="search" id="gQ" placeholder="Nome, matrícula ou função" value="${esc(U.q)}"></label>
       ${selArea('gFaC')}
-      ${isAdmin() ? `<button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Novo colaborador</button>` : ''}</div>
-      <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['desl', 'Desligados'], ['todos', 'Todos']].map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
+      ${!framed && !matchMedia('(max-width:860px)').matches ? `<button class="btn" data-g="expOc" style="align-self:flex-end" title="Ocorrências de quem está na lista">${I.dl} Exportar ocorrências</button>` : ''}
+      ${podeEditar() ? `<button class="btn" data-g="novaOc" style="align-self:flex-end">${I.plus} Ocorrência</button>` : ''}
+      ${isAdmin() ? `<button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Colaborador</button>` : ''}</div>
+      <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k !== 'comigo' || n('comigo')).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
     if (adm && SEL.size) h += `<div class="selbar" role="region" aria-label="Selecionados"><b>${SEL.size} selecionado(s)</b><button class="btn danger" data-g="excluirSel">Excluir selecionados</button><button class="btn" data-g="limparSel">Limpar seleção</button></div>`;
     if (!lista.length) return h + '<div class="card"><div class="empty">Ninguém com esse filtro.</div></div>';
-    h += `<div class="card"><div class="tw"><table class="hoverable"><thead><tr>${adm ? `<th class="c selc"><input type="checkbox" data-g="selTodos" aria-label="Marcar todos da lista" ${todosMarc ? 'checked' : ''}></th>` : ''}<th>Matrícula</th><th>Nome</th><th>Área de atuação</th><th>Admissão</th><th>Tempo de casa</th><th class="c">Integração</th><th class="c">Ocorrências</th><th>Ficha</th></tr></thead><tbody>
-      ${lista.slice(0, 500).map(x => `<tr data-g="ficha" data-mat="${x.c.mat}" tabindex="0">${adm ? `<td class="c selc" data-g="sel" data-mat="${x.c.mat}"><input type="checkbox" ${SEL.has(x.c.mat) ? 'checked' : ''} aria-label="Marcar ${esc(title(x.c.nome))}"></td>` : ''}<td class="mono">${x.c.mat}</td><td><b>${esc(title(x.c.nome))}</b>${x.exp ? ' <span class="pill ext">experiência</span>' : ''}${x.c.funcao ? `<div class="muted small">${esc(title(x.c.funcao))}</div>` : ''}</td><td class="small">${x.c.subsetor ? `<div>${esc(x.c.subsetor)}</div>` : ''}<div class="${x.c.subsetor ? 'muted' : ''}">${esc((L.get(String(x.c.mat)) || {}).txt || '')}</div></td><td class="num">${dBR(x.c.adm)}</td><td class="num">${x.tempo}</td><td class="c num">${x.c.intAnt ? '<span class="muted">Anterior</span>' : `${x.nInt}/${tiposF1().length}`}</td><td class="c num">${x.oc.length}</td><td>${pillSt(x.status)}</td></tr>`).join('')}
+    const intTxt = x => x.c.intAnt ? '<span class="muted">Anterior</span>' : `<span class="${x.intOk ? '' : 'warn-t'}" title="${esc(f1.map((t, i) => `${t.tipo}: ${x.integ[i] === 'Anterior' ? 'anterior' : x.integ[i] ? dBR(x.integ[i]) : 'pendente'}`).join('\n'))}">${x.nInt}/${f1.length}</span>`;
+    h += `<div class="card"><div class="tw"><table class="hoverable colabt"><thead><tr>${adm ? `<th class="c selc"><input type="checkbox" data-g="selTodos" aria-label="Marcar todos da lista" ${todosMarc ? 'checked' : ''}></th>` : ''}<th>Matrícula</th><th>Nome</th><th>Área de atuação</th><th>Admissão</th><th class="c">Integração</th><th class="c">Folha 2</th><th class="c">Aguard. assinatura</th><th class="c">Recusas</th><th>Ficha</th></tr></thead><tbody>
+      ${lista.slice(0, 500).map(x => `<tr data-g="ficha" data-mat="${x.c.mat}" tabindex="0">${adm ? `<td class="c selc" data-g="sel" data-mat="${x.c.mat}"><input type="checkbox" ${SEL.has(x.c.mat) ? 'checked' : ''} aria-label="Marcar ${esc(title(x.c.nome))}"></td>` : ''}<td class="mono">${x.c.mat}</td><td><b>${esc(title(x.c.nome))}</b>${x.exp ? ' <span class="pill ext">experiência</span>' : ''}${x.c.funcao ? `<div class="muted small">${esc(title(x.c.funcao))}</div>` : ''}</td><td class="small">${x.c.subsetor ? `<div>${esc(x.c.subsetor)}</div>` : ''}<div class="${x.c.subsetor ? 'muted' : ''}">${esc((L.get(String(x.c.mat)) || {}).txt || '')}</div></td><td class="num">${dBR(x.c.adm)}<div class="muted small">${x.tempo}</div></td><td class="c num">${intTxt(x)}</td><td class="c num">${x.f2.length ? `${x.f2.length}/33` : '<span class="muted">0</span>'}</td><td class="c num">${x.pend.length ? `<b class="warn-t">${x.pend.length}</b>${x.pend.some(o => souEu(o.recolhe)) ? ' <span class="pill ext">você</span>' : ''}` : ''}</td><td class="c num">${x.rec.length ? `<b class="bad-t">${x.rec.length}</b>` : ''}</td><td>${pillSt(x.status)}</td></tr>`).join('')}
       </tbody></table></div>${lista.length > 500 ? `<div class="body"><p class="muted small m0">Mostrando 500 de ${lista.length}. Use a busca ou o filtro de área.</p></div>` : ''}</div>`;
     return h;
   }
@@ -200,31 +203,6 @@ export function criarGestao(X) {
   function ocLista(l, comNome) {
     if (!l.length) return '<div class="empty">Nenhuma ocorrência registrada.</div>';
     return `<div class="plist">${l.map(o => `<div class="pitem"><div class="minw"><div class="t">${comNome ? esc(title(o.nome)) + ' · ' : ''}${esc(o.tipo)}</div><div class="l">${dBR(o.data)}${o.desc ? ' · ' + esc(o.desc) : ''}${o.lider ? ' · Dikma: ' + esc(title(o.lider)) : ''}</div>${o.status === 'pendente' ? `<div class="l resp">${o.recolhe ? `Recolher assinatura: <b>${esc(title(o.recolhe))}</b>${souEu(o.recolhe) ? ' <span class="pill ext">você</span>' : ''}` : '<span class="semt">sem responsável pela assinatura</span>'}${podeEditar() ? ` · <button class="btn ghost link" data-g="trocaResp" data-id="${o.id}">${o.recolhe ? 'trocar' : 'definir'}</button>` : ''}</div>` : ''}<div style="margin-top:4px">${pillOc(o)}</div></div><div class="row-gap">${o.status === 'pendente' && podeEditar() ? `<button class="btn" data-g="assinar" data-mat="${o.mat}" data-oc="${o.id}">✍ Assinar</button>` : ''}${o.assinaturaId ? `<button class="btn" data-g="verAss" data-id="${o.assinaturaId}">Ver</button>` : ''}${isAdmin() ? `<button class="btn ghost danger" data-g="delOc" data-id="${o.id}" aria-label="Excluir ocorrência">✕</button>` : ''}</div></div>`).join('')}</div>`;
-  }
-
-  function vOcorr() {
-    const q = U.ocQ.trim().toLowerCase();
-    const mf = U.fa ? new Set(G().colabs.filter(filtroArea()).map(c => String(c.mat))) : null;
-    const l = G().ocorr.filter(o => (!mf || mf.has(String(o.mat))) && (!U.ocMeu || (o.status === 'pendente' && souEu(o.recolhe))) && (!U.ocSt || o.status === U.ocSt) && (!U.ocTipo || o.tipo === U.ocTipo) && (!q || (o.mat + ' ' + o.nome + ' ' + o.desc).toLowerCase().includes(q))).sort((a, b) => (a.data > b.data ? -1 : 1));
-    const n = st => G().ocorr.filter(o => o.status === st).length;
-    U.ocLista = l;
-    let h = `<div class="filters"><label class="sel grow"><span>Buscar</span><input class="in" type="search" id="gOcQ" placeholder="Nome, matrícula ou descrição" value="${esc(U.ocQ)}"></label>
-      ${selArea('gFaO')}<label class="sel"><span>Tipo</span><select class="in" id="gOcTipo"><option value="">Todos</option>${tipos().map(t => `<option ${t.tipo === U.ocTipo ? 'selected' : ''}>${esc(t.tipo)}</option>`).join('')}</select></label>
-      ${!framed && l.length ? `<button class="btn" data-g="expOc" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}${podeEditar() ? `<button class="btn pri" data-g="novaOc" style="align-self:flex-end">${I.plus} Nova ocorrência</button>` : ''}</div>
-      <div class="rchips">${[['pendente', 'Aguardando assinatura'], ['assinada', 'Assinadas'], ['recusada', 'Recusadas'], ['', 'Todas']].map(([k, t]) => `<button class="rchip" data-gst="${k}" aria-pressed="${!U.ocMeu && U.ocSt === k}">${t}<span class="c num">${k ? n(k) : G().ocorr.length}</span></button>`).join('')}<button class="rchip" data-g="ocMeu" aria-pressed="${!!U.ocMeu}">Comigo para recolher<span class="c num">${G().ocorr.filter(o => o.status === 'pendente' && souEu(o.recolhe)).length}</span></button></div>
-      <div class="card"><div class="body">${ocLista(l.slice(0, 300), true)}${l.length > 300 ? `<p class="muted small">Mostrando 300 de ${l.length}. Use a busca para filtrar.</p>` : ''}</div></div>`;
-    return h;
-  }
-
-  function vControle() {
-    const f1 = tiposF1(); const q = U.cq.trim().toLowerCase();
-    const fa = filtroArea();
-    const l = [...indice().values()].filter(x => fa(x.c) && (U.cf === 'todos' || (U.cf === 'pend' ? x.pend.length : U.cf === 'integ' ? !x.intOk : x.ativo)) && (!q || (x.c.mat + ' ' + x.c.nome).toLowerCase().includes(q))).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
-    return `<div class="filters"><label class="sel grow"><span>Buscar</span><input class="in" type="search" id="gCQ" placeholder="Nome ou matrícula" value="${esc(U.cq)}"></label>
-      ${selArea('gFaK')}<label class="sel"><span>Mostrar</span><select class="in" id="gCF">${[['ativos', 'Ativos'], ['pend', 'Pendente assinatura'], ['integ', 'Integração incompleta'], ['todos', 'Todos']].map(([k, t]) => `<option value="${k}" ${U.cf === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
-      <div class="card"><div class="tw"><table class="hoverable"><thead><tr><th>Matrícula</th><th>Nome</th>${f1.map(t => `<th class="c">${esc(t.tipo)}</th>`).join('')}<th class="c">Integração</th><th class="c">Folha 2</th><th class="c">Aguard.</th><th class="c">Recusas</th><th>Status</th></tr></thead><tbody>
-      ${l.map(x => `<tr data-g="ficha" data-mat="${x.c.mat}" tabindex="0"><td class="mono">${x.c.mat}</td><td><b>${esc(title(x.c.nome))}</b></td>${x.integ.map(v => `<td class="c small ${v ? '' : 'muted'}">${v === 'Anterior' ? 'Anterior' : v ? dBR(v).slice(0, 5) : '—'}</td>`).join('')}<td class="c num">${x.nInt}/${f1.length}</td><td class="c num">${x.f2.length}/33</td><td class="c num">${x.pend.length || ''}</td><td class="c num">${x.rec.length || ''}</td><td>${pillSt(x.status)}</td></tr>`).join('')}
-      </tbody></table></div></div>`;
   }
 
   /* ---------- impressão ---------- */
@@ -616,7 +594,7 @@ export function criarGestao(X) {
   return {
     render(view) {
       const v = vazio(); if (v) return v;
-      return ({ gpainel: vPainel, gcolab: vColab, gocorr: vOcorr, gcontrole: vControle, gimpr: vImpr, gtipos: vTipos, gimport: () => (isAdmin() ? IMP.view() : vPainel()) }[view] || vPainel)();
+      return ({ gpainel: vPainel, gcolab: vColab, gimpr: vImpr, gtipos: vTipos, gimport: () => (isAdmin() ? IMP.view() : vPainel()) }[view] || vPainel)();
     },
     badge: () => (G().loaded && G().config ? pendentesVelhas() : 0)
   };

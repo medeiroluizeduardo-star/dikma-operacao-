@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" id="fontes">
 <!-- Baixa todos os módulos em paralelo (sem esperar um pedir o outro). -->
-<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="busca.js"><link rel="modulepreload" href="escala.js"><link rel="modulepreload" href="acessos.js"><link rel="modulepreload" href="administrativo.js"><link rel="modulepreload" href="planilhas-adm.js"><link rel="modulepreload" href="exportar.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
+<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="busca.js"><link rel="modulepreload" href="escala.js"><link rel="modulepreload" href="acessos.js"><link rel="modulepreload" href="administrativo.js"><link rel="modulepreload" href="planilhas-adm.js"><link rel="modulepreload" href="exportar.js"><link rel="modulepreload" href="presenca.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
 <style>
 :root{padding-top:env(safe-area-inset-top,0px)}
 body{margin:0}
@@ -1047,10 +1047,10 @@ table.freq .sit{width:26px;height:24px;font-size:10.5px}
 table.freq .sit.fut{opacity:.55}
 table.freq thead th{position:sticky;top:0;z-index:2;background:var(--surface);font-size:11px}
 table.freq thead th.fds{color:var(--st-nreal)}
-table.freq th.fnome{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;min-width:190px;max-width:220px;font-weight:500}
+table.freq .fnome{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;min-width:190px;max-width:220px;font-weight:500}
 table.freq thead th.fnome{z-index:3}
-table.freq th.fnome .btn.link{padding:0;font-weight:600;text-align:left;white-space:normal}
-table.freq th.fnome small{display:block;color:var(--ink-3);font-size:10.5px;font-weight:400}
+table.freq .fnome .btn.link{padding:0;font-weight:600;text-align:left;white-space:normal}
+table.freq .fnome small{display:block;color:var(--ink-3);font-size:10.5px;font-weight:400}
 table.freq td.tot{font-size:12px;color:var(--ink-3)}
 table.freq td.tot.on{color:var(--ink);font-weight:700}
 table.freq tr.grp-row th{position:sticky;left:0}
@@ -1068,13 +1068,13 @@ button.pitem:hover{background:var(--surface-2)}
 .fer-r small.bad{color:var(--st-nreal);font-weight:600}
 .g8{gap:8px}
 .g2eq{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}.g2eq .in{min-width:0;width:100%}
-table.freq th.fnome{text-transform:none;letter-spacing:0;font-size:12.5px}
-table.freq th.fnome small{text-transform:none;letter-spacing:0}
+table.freq tbody .fnome{text-transform:none;letter-spacing:0;font-size:12.5px}
+table.freq .fnome small{text-transform:none;letter-spacing:0}
 table.freq td.c{padding-top:1px;padding-bottom:1px}
-@media (max-width:860px){.kpis5{grid-template-columns:repeat(3,minmax(0,1fr))}table.freq th.fnome{min-width:130px;max-width:150px}.compnav b{min-width:96px}.freqtw{max-height:none}}
+@media (max-width:860px){.kpis5{grid-template-columns:repeat(3,minmax(0,1fr))}table.freq .fnome{min-width:130px;max-width:150px}.compnav b{min-width:96px}.freqtw{max-height:none}}
 .barra{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:6px}.barra i{display:block;height:100%;background:var(--accent)}
 @media (max-width:860px){.ferlist .pitem{grid-template-columns:minmax(0,1fr)}.fer-r{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;text-align:left}}
-table.freq th.fnome .btn.link{color:var(--ink)}
+table.freq .fnome .btn.link{color:var(--ink)}
 
 /* ---- correções de layout ---- */
 .row-gap.diastog{flex-wrap:nowrap}
@@ -1098,6 +1098,18 @@ table.tipos .numin{width:64px}
   /* os 7 dias cabem na tela */
   .dayscroll .dbtn{flex:1 1 0;min-width:0;padding:6px 2px}
 }
+.warn-t{color:var(--st-atr)}.bad-t{color:var(--st-nreal)}
+table.freq .fnome .muted.small{font-size:10.5px;font-weight:400}
+table.freq tfoot .fnome{z-index:1}
+table.freq tfoot td,table.freq tfoot th{background:var(--surface)}
+.seg.lpseg{grid-template-columns:repeat(2,auto);width:max-content;margin-bottom:14px}
+.seg.lpseg button{display:inline-flex;align-items:center;gap:6px;padding:8px 14px}
+.seg.lpseg svg{width:15px;height:15px}
+.seg.lpseg .badge{background:var(--st-atr);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:0 7px;line-height:18px}
+@media (max-width:860px){.seg.lpseg{width:100%;grid-template-columns:1fr 1fr}.seg.lpseg button{justify-content:center;padding:8px 6px;font-size:12.5px}}
+table.freq tr.grp-row .gcount{float:none;margin-left:14px}
+#layer .opt .sit{display:inline-grid;place-items:center;flex:none;padding:0}
+#layer .opt .sit svg{width:14px;height:14px}
 </style>
 </head>
 <body>
