@@ -95,6 +95,12 @@ export function criarAdministrativo(X) {
       return `<div class="card"><div class="empty"><b>A folha de ${nomeComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri" data-a="abrirComp">Abrir a folha com os grupos de ${nomeComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
     }
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj); const fRH = funcaoRH();
+    // No celular a folha mostra uma semana por vez (os 30 dias não cabem): ‹ › troca a semana dentro da competência.
+    const mob = X.isMobile();
+    const semanas = []; datas.forEach((dt, i) => { const dw = new Date(dt + 'T12:00:00').getDay(); if (!semanas.length || dw === 1) semanas.push([]); semanas[semanas.length - 1].push(i); });
+    if (U.fSem == null || !semanas[U.fSem]) { const iH = datas.indexOf(TODAY); U.fSem = iH >= 0 ? semanas.findIndex(w => w.includes(iH)) : 0; }
+    const vi = mob ? semanas[U.fSem] : datas.map((_, i) => i);
+    const ncol = vi.length + (mob ? 1 : 2 + CONTA.length);
     const q = normNome(U.q || ''); const ed = pode();
     if (U.grp == null || (U.grp !== '*' && !doc.grupos[+U.grp])) U.grp = '*';
     const todos = U.grp === '*' || !!q;
@@ -113,26 +119,27 @@ export function criarAdministrativo(X) {
       const iH = datas.indexOf(TODAY);
       const ph = hojeNa ? cods.filter(l => presente(l[iH].v)).length : null, eh = hojeNa ? cods.filter(l => l[iH].v !== 'DS' && !(l[iH].auto && l[iH].por === 'escala')).length : null;
       const aberto = !recolhe || ab.has(String(gi));
-      if (todos) corpo += `<tr class="grp-row"><th colspan="${datas.length + 2 + CONTA.length}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      if (todos) corpo += `<tr class="grp-row"><th colspan="${ncol}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
       if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
-        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.ativ ? 'Atividades' : 'só na folha'}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}</div></td><td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>${cods[i].map((c, j) => {
-          const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
+        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.ativ ? 'Atividades' : 'só na folha'}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
+          const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : ''}`;
           return `<td class="c${dt === TODAY ? ' today' : ''}"><button class="sit ${c.v}${c.auto && c.v !== 'P' ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}" ${ed ? `data-a="cel" data-g="${gi}" data-p="${esc(p.k)}" data-dt="${dt}"` : 'disabled'} aria-label="${esc(title(p.nome))}, ${esc(tt)}" title="${esc(tt)}">${c.v === 'P' ? I.ok : c.v}</button></td>`;
-        }).join('')}${CONTA.map(k => `<td class="c num tot${t[k] ? ' on' : ''}">${t[k] || ''}</td>`).join('')}</tr>`;
+        }).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot${t[k] ? ' on' : ''}">${t[k] || ''}</td>`).join('')}</tr>`;
       });
     }
-    const head = `<tr><th class="fnome">Colaborador</th><th>Função</th>${datas.map(dt => { const d = new Date(dt + 'T12:00:00'); return `<th class="c${dt === TODAY ? ' today' : ''}${[0, 6].includes(d.getDay()) ? ' fds' : ''}">${DIA_L[d.getDay()]}<br><span class="thd">${dt.slice(8)}</span></th>`; }).join('')}${CONTA.map(k => `<th class="c" title="${NOMES_CODIGO[k]}">${k}</th>`).join('')}</tr>`;
-    const foot = vis.length ? `<tfoot><tr><th colspan="2" class="fnome">Presentes</th>${datas.map((dt, i) => `<td class="c num${dt === TODAY ? ' today' : ''}">${dt > TODAY ? '' : `<b class="${pres[i] < quadro[i] ? 'menos' : ''}">${pres[i]}</b><span class="muted">/${quadro[i]}</span>`}</td>`).join('')}${CONTA.map(k => `<td class="c num tot">${resumo[k] || ''}</td>`).join('')}</tr></tfoot>` : '';
+    const head = `<tr><th class="fnome">Colaborador</th>${mob ? '' : '<th>Função</th>'}${vi.map(j => datas[j]).map(dt => { const d = new Date(dt + 'T12:00:00'); return `<th class="c${dt === TODAY ? ' today' : ''}${[0, 6].includes(d.getDay()) ? ' fds' : ''}">${DIA_L[d.getDay()]}<br><span class="thd">${dt.slice(8)}</span></th>`; }).join('')}${mob ? '' : CONTA.map(k => `<th class="c" title="${NOMES_CODIGO[k]}">${k}</th>`).join('')}</tr>`;
+    const foot = vis.length ? `<tfoot><tr><th colspan="${mob ? 1 : 2}" class="fnome">Presentes</th>${vi.map(i => [datas[i], i]).map(([dt, i]) => `<td class="c num${dt === TODAY ? ' today' : ''}">${dt > TODAY ? '' : `<b class="${pres[i] < quadro[i] ? 'menos' : ''}">${pres[i]}</b><span class="muted">/${quadro[i]}</span>`}</td>`).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot">${resumo[k] || ''}</td>`).join('')}</tr></tfoot>` : '';
     const nPes = doc.grupos.reduce((n, g) => n + g.pessoas.length, 0);
     return `<div class="mini"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>
       <div class="card"><header><h2>Frequência</h2><p>${ed ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'} · ${SETS[conj].curto} · ${dBR(datas[0])} a ${dBR(datas[datas.length - 1])}</p>${ed ? `<span class="r"><button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button></span>` : ''}</header>
         <div class="body lbar efbar">${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar">${I.dl} Exportar Excel</button>` : ''}${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${doc.grupos.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}</div>
         ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
         <details class="legdet body pb0 pt0"${X.isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span class="muted">Quem está nas Atividades tem a mesma presença do Efetivo diário.</span></div></details>
-        <div class="tw freqtw"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${datas.length + 2 + CONTA.length}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
+        ${mob ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
+        <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
   }
   const achar = (doc, gi, k) => { const g = doc.grupos[+gi]; return { g, p: g && g.pessoas.find(x => x.k === k) }; };
   // Lançar: o mesmo jeito do Efetivo diário (situação → até quando)
@@ -321,7 +328,8 @@ export function criarAdministrativo(X) {
     const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || UI.modulo !== 'frequencia') return;
     const a = t.dataset.a, v = t.dataset.v;
     if (a === 'conj') { U.conj = v; render(); }
-    else if (a === 'comp') { U.comp = compMais(U.comp, +v); render(); }
+    else if (a === 'comp') { U.comp = compMais(U.comp, +v); U.fSem = null; render(); }
+    else if (a === 'fsem') { U.fSem = Math.max(0, (U.fSem || 0) + (+v)); render(); }
     else if (a === 'soGrupo') { U.grp = v; render(); }
     else if (a === 'limparQ') { U.q = ''; render(); }
     else if (a === 'grupo') { const s = new Set(U.abertos); if (s.has(v)) s.delete(v); else s.add(v); U.abertos = [...s]; render(); }
@@ -353,6 +361,11 @@ export function criarAdministrativo(X) {
     else if (a === 'impOk') impOk();
     else if (a === 'impCancel') { U.imp = null; render(); }
   });
+  // Celular: arrastar a folha para o lado troca a semana
+  { let x0 = null, y0 = null;
+    document.addEventListener('touchstart', e => { const t = e.target.closest && e.target.closest('.freqtw.semana'); if (!t || UI.modulo !== 'frequencia') { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null; if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return; const b = document.querySelector(`[data-a="fsem"][data-v="${dx < 0 ? 1 : -1}"]:not([disabled])`); if (b) b.click(); }, { passive: true });
+  }
   document.addEventListener('input', e => {
     if (UI.modulo !== 'frequencia') return;
     if (e.target.id === 'aQ') { U.q = e.target.value; (X.agendar || render)(); }

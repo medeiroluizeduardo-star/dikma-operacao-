@@ -19,10 +19,11 @@ export function abrirLancamento(o) {
   const sub = `${diaSem(o.dt)}, ${dBR(o.dt)} · agora: <b>${agora}</b>${o.linhaInfo ? `<br>${o.linhaInfo}` : ''}`;
   const opts = [
     ...o.codigos.map(c => ({ t: NOMES_CODIGO[c] || c, v: c, ic: chipSit(c, o.ok), cur: !at.auto && at.v === c })),
-    ...(!at.auto && at.v ? [{ t: 'Voltar ao automático', d: 'Pela escala, férias e presença padrão', v: '', ic: '<span class="sit auto">↺</span>' }] : []),
-    ...(o.extras || [])
+    ...(!at.auto && at.v ? [{ t: 'Voltar ao automático', d: 'Pela escala, férias e presença padrão', v: '', larga: true, ic: '<span class="sit auto">↺</span>' }] : []),
+    ...(o.extras || []).map(x => ({ ...x, larga: true }))
   ];
   sheet(o.nome, sub, opts, x => {
+    if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) { /* sem vibração */ }
     if (x.extra) return o.aoExtra && o.aoExtra(x.v);
     const cod = x.v; const dep = (o.depois || []);
     // presente, hora extra e "automático" valem só no dia tocado (o comum); o resto pergunta até quando
@@ -33,5 +34,5 @@ export function abrirLancamento(o) {
     sheet('Até quando?', `${NOMES_CODIGO[cod] || cod} a partir de ${diaSem(o.dt)}, ${dBR(o.dt)}`, ate.map(a => ({ ...a, ic: chipSit(cod, o.ok) })), y => {
       o.aoEscolher(cod, [o.dt, ...dep.filter(d => d <= y.v)]);
     });
-  });
+  }, { grade: true });
 }

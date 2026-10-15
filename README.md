@@ -354,6 +354,11 @@ Menu **Administração › Perfis e permissões**: liga e desliga, perfil por pe
 A permissão controla as abas. O que cada perfil pode alterar no banco continua definido pelo perfil (regras do Firestore).
 
 ## No celular
+- **Lançar presença** (Efetivo diário e Frequência): a janela mostra as situações em grade, um toque escolhe; arrastar a janela para baixo fecha.
+- **Frequência** mostra uma semana por vez (‹ › ou arraste a folha para o lado); **Efetivo diário** sem a coluna Função (vai embaixo do nome), com os dias maiores.
+- **Colaboradores**, **Equipe e frota** e **Avaliação mensal** viram cartões em vez de tabelas largas.
+- Campos com letra de 16 px (o iPhone não dá zoom ao tocar para digitar); o último usuário fica lembrado na entrada (a senha não).
+- Vibração curta ao confirmar um lançamento (Android).
 Abra o endereço no Chrome (Android) ou Safari (iPhone) e use **Adicionar à tela inicial**. O sistema abre como um aplicativo. Sem sinal, os apontamentos ficam guardados no aparelho e são enviados quando a conexão voltar. O topo da tela mostra **Sem sinal · N aguardando envio**.
 
 ## Para alterar o sistema depois
