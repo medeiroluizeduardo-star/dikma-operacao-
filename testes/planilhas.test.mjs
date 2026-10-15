@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
-import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca } from '../public/planilhas-adm.js';
+import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
 import { indiceFerias, acessosDe, podeAcesso, editaAdm } from '../public/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
@@ -97,4 +97,18 @@ test('acessos: sem o campo, só Operação; Administração do sistema só o adm
   assert.equal(podeAcesso({ papel: 'gestor', acessos: ['operacao', 'administrativo'] }, 'sistema'), false);
   assert.equal(editaAdm({ papel: 'leitor', acessos: ['administrativo'] }), false);
   assert.equal(editaAdm({ papel: 'supervisor', acessos: ['administrativo'] }), true);
+});
+
+test('líder com o nome escrito de jeitos diferentes vira um grupo só (como Kauan / Kauan Souza / Kauan Suza)', () => {
+  const g = (nome, ...ps) => ({ nome, pessoas: ps.map(n => ({ k: n, nome: n })) });
+  const rh = ['TALISON MOURA DA CRUZ', 'TALIS ROCHA LEMOS', 'OTAVIO NUNES PRADO', 'OTAVIO LIMA REIS', 'SERGIO ALVES']; // nomes inventados
+  const u = unirGrupos([g('GESTÃO', 'A'), g('LIDER TALISON - SUPERVISÃO KAROL', 'B'), g('LIDER TALISON MOURA- SUPERVISÃO KAROL', 'C', 'B'), g('LIDER TALSON - SUPERVISÃO KAROL', 'D'),
+    g('GÁS - LIDER SERGIO - SUPERVISÃO KAROL', 'E'), g('PREPARACAO - LIDER SERGIO - SUPERVISÃO KAROL', 'F')], rh);
+  assert.deepEqual(u.map(x => x.nome), ['GESTÃO', 'LIDER TALISON MOURA - SUPERVISÃO KAROL', 'GÁS - LIDER SERGIO - SUPERVISÃO KAROL', 'PREPARACAO - LIDER SERGIO - SUPERVISÃO KAROL'], 'o nome fica como foi escrito; só junta e corrige letras');
+  assert.deepEqual(u[1].pessoas.map(p => p.nome), ['B', 'C', 'D'], 'junta sem repetir a mesma pessoa');
+  assert.equal(unirGrupos([g('LIDER TALISON MURA- SUPERVISÃO KAROL')], rh)[0].nome, 'LIDER TALISON MOURA - SUPERVISÃO KAROL', 'uma letra trocada no sobrenome');
+  const c = canonLideres(['Talison', 'Otavio', 'Sergio'], rh);
+  assert.equal(c('Talison'), 'TALISON MOURA');
+  assert.equal(c('Otavio'), 'OTAVIO', 'dois Otávios no RH: não troca');
+  assert.equal(unirGrupos([g('LIDER TALISON - SUPERVISÃO X'), g('LIDER TALISON MOURA - SUPERVISÃO X')], [])[0].nome, 'LIDER TALISON MOURA - SUPERVISÃO X', 'sem o RH, o nome curto vira o único nome maior');
 });

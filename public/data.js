@@ -254,6 +254,8 @@ function stopData() {
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
+  eqFreqSubs.clear(); cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 };
+  for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
@@ -448,7 +450,7 @@ cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio
 const admSubs = new Map();
 function startAdm(on) {
   cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-  admSubs.clear();
+  for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
@@ -688,6 +690,24 @@ export function eWatch(meses) {
     }, err);
     eMonthSubs.set(m, [sub('eqlanc', 'lanc', 'l'), sub('eqpar', 'par', 'p'), sub('eqinsp', 'insp', 'i'),
       onSnapshot(doc(db, 'eqaval', m), s => { cache.e.aval[m] = (s.exists() && s.data().itens) || {}; st.a = true; done(); }, err)]);
+  }
+}
+// Equipe e frota em sincronia com a Frequência e o Efetivo diário: a folha (freqcomp) das competências que cobrem o mês
+// e a presença do dia (situacao/b_situacao) do mês. Só leitura; quem lança é o Efetivo diário ou o Administrativo.
+cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 };
+const eqFreqSubs = new Set();
+export function eqFreqWatch(ym) {
+  if (!db || !me || !eqOn || !ym) return;
+  const [a, m] = ym.split('-').map(Number); const prox = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`;
+  const err = () => {}; // sem permissão ou sem folha: a Equipe usa a situação do cadastro
+  const ch = () => { cache.eqFreq.v++; cache.eVersao++; changed(); };
+  for (const k of SET_KEYS) {
+    for (const comp of [ym, prox]) {
+      const id = k + '|' + comp; if (eqFreqSubs.has('c' + id)) continue; eqFreqSubs.add('c' + id);
+      dataSubs.push(onSnapshot(doc(db, 'freqcomp', id), s => { cache.eqFreq.comps[id] = s.exists() ? s.data() : null; ch(); }, err));
+    }
+    const sid = 's' + k + '|' + ym; if (eqFreqSubs.has(sid)) continue; eqFreqSubs.add(sid);
+    dataSubs.push(onSnapshot(doc(db, C('situacao', k), ym), s => { cache.eqFreq.sit[k][ym] = (s.exists() && s.data().v) || {}; ch(); }, err));
   }
 }
 export function eAdd(tipo, o) { const r = doc(collection(db, EQCOL[tipo])); track(setDoc(r, { ...o, mes: o.data.slice(0, 7), por: me.uid, em: serverTimestamp() })); return r.id; }

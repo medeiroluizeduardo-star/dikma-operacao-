@@ -100,7 +100,7 @@ service cloud.firestore {
 
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
-      allow read: if op() || acAdm();
+      allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
       allow write: if admin() || (gestor() && 'operacao' in mods() && acOp()) || admEdita();
     }
 
@@ -143,7 +143,7 @@ service cloud.firestore {
       allow write: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
-      allow read: if ba() || acAdm();
+      allow read: if ba() || acAdm() || eqm();
       allow write: if admin() || (gestor() && 'bateria' in mods() && acOp()) || admEdita();
     }
     match /b_semanas/{id} {
@@ -249,7 +249,7 @@ service cloud.firestore {
     // Folha de frequência de cada competência (16 a 15): grupos, pessoas e os dias de quem não está nas Atividades.
     // Quem está nas Atividades tem a presença em situacao/b_situacao (a mesma do Efetivo diário).
     match /freqcomp/{id} {
-      allow read: if acAdm();
+      allow read: if acAdm() || eqm();   // Equipe e frota (Operação) lê a folha para a situação dos operadores
       allow write: if admEdita();
     }
     // Férias: um documento por período.

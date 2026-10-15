@@ -1,7 +1,8 @@
 // Dikma Gestão — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
-import { competenciaDe } from './planilhas-adm.js';
+import { competenciaDe, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
+import { abrirLancamento } from './presenca.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
 // Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
@@ -156,7 +157,6 @@ const I = {
 const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
   { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
-  { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar', mod: 'op' },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
@@ -189,6 +189,8 @@ const VIEWS = [
     usuarios: { ord: 9, grp: 'Acesso', req: () => isAdmin() }, perfis: { ord: 10, grp: 'Acesso', req: () => isAdmin() }
   };
   for (const v of VIEWS) if (CFV[v.id]) Object.assign(v, { mod: 'cf', admin: true }, CFV[v.id]);
+  // Importar planilhas do Administrativo: só o administrador (para os outros a tela nem aparece no menu)
+  { const ai = VIEWS.find(v => v.id === 'aimport'); if (ai) ai.req = () => isAdmin(); }
   // fichas de acompanhamento: só quem tem o Efetivo marcado no usuário (os dados das fichas só chegam para essas pessoas)
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
@@ -244,7 +246,16 @@ function aplicarSet() {
   if (UI.area !== 'TODAS' && !AREAS.includes(UI.area)) UI.area = 'TODAS';
   if (myArea()) UI.area = myArea();
 }
+// Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
+const VIEW_NOVA = { prog: 'apontar', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc' };
+function normalizarView() {
+  const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
+  UI.view = VIEW_NOVA[v0];
+  if (v0 === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
+  if (v0 === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
+}
 function ensureModulo() {
+  normalizarView();
   const ms = modsDe(ME); if (!ms.length) return;
   if (UI.modulo === 'escala') UI.modulo = 'gestao'; // módulo antigo, agora dentro do Efetivo
   if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
@@ -255,10 +266,11 @@ function ensureModulo() {
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
 // Só troca o HTML de um bloco quando ele mudou: atualização de dados que não muda a tela não mexe em nada (sem piscar).
-function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; return true; }
+let VIEW_MUDOU = false;
+function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; if (id === 'view') VIEW_MUDOU = true; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
+function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
@@ -305,10 +317,11 @@ function render() {
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
   const nav = k !== ULT || !!view.querySelector('.skel');
   const pos = nav ? null : M.guardarRolagem(view);
+  VIEW_MUDOU = false;
   renderTela();
   if (AUTH.status !== 'ready') { ULT = ''; return; }
   ULT = k;
-  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav) M.restaurarRolagem(view, pos);
+  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); }
   M.moverIndicador();
   if (UI.flash && Date.now() - UI.flash.t > 500) UI.flash = null;
   if (UI.flash) {
@@ -334,7 +347,7 @@ function renderTela() {
   renderNav(); renderTop();
   const needWeeks = ['painel', 'prog', 'apontar', 'esdia', 'esdim', 'esbal', 'imprimir', 'relfoto'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, apontar: vApontar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -357,7 +370,7 @@ function renderNav() {
   </div>`, g = '';
   for (const v of viewsDoModulo()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
-    const badge = v.id === 'pend' && atr ? atr : (v.id === 'gocorr' || v.id === 'epar') && gb ? gb : 0;
+    const badge = v.id === 'pend' && atr ? atr : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
     h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
   }
   pintar('nav', h);
@@ -371,11 +384,11 @@ function renderNav() {
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais.
 function barraDe() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gocorr', 'Ocorrências', 'plano'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
-    : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['epar', 'Paradas', 'pend'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+    : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'adm' ? [['apainel', 'Painel', 'painel'], ['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['__more', 'Mais', 'more']]
-    : [['meudia', 'Hoje', 'sol'], ['prog', 'Programação', 'prog'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
+    : [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
 }
@@ -383,7 +396,7 @@ function pintarBarra(tb, atr, gb) {
   const pendUsers = 0;
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = atr + pendUsers;
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'gocorr' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${id === 'epar' && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
 }
 function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -554,78 +567,12 @@ function vPainel() {
 }
 function logHtml(n) {
   const L = DB.cache.log;
-  if (!L.length) return '<div class="empty">Nenhum registro ainda. Os apontamentos feitos em Programação ou Apontar aparecem aqui.</div>';
+  if (!L.length) return '<div class="empty">Nenhum registro ainda. Os apontamentos feitos no Apontar aparecem aqui.</div>';
   return `<div class="log">${L.slice(0, n).map(l => `<div><time>${fmtAt(l.at)}</time><span><b>${esc(title(l.nome))}</b> · ${esc(l.t)}</span></div>`).join('')}</div>`;
 }
 
 /* ---------------- PROGRAMAÇÃO ---------------- */
 const isMobile = () => matchMedia('(max-width:860px)').matches;
-function vProg() {
-  const area = areaScope();
-  const docs = docsFor({ ini: UI.ini, area }).sort((a, b) => AREAS.indexOf(a.area) - AREAS.indexOf(b.area));
-  const rts = [...new Set(docs.flatMap(d => d.ids.map(id => PL.get(id) && PL.get(id).rota)))].filter(Boolean);
-  if (UI.rota !== 'TODAS' && !rts.includes(UI.rota)) UI.rota = 'TODAS';
-  const s = stats(docs, { rota: UI.rota, tipo: UI.tipo });
-  const cel = isMobile();
-  const selRota = `<label class="sel"><span>Rota</span><select class="in" id="fRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
-   <label class="sel"><span>Tipo</span><select class="in" id="fTipo"><option value="TODOS">Todos</option>${tipos().map(t => `<option ${t === UI.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
-  let h = `<div class="filters">
-   ${cel ? '' : selRota}
-   <label class="sel grow"><span>Buscar</span><input class="in" id="fQ" type="search" placeholder="Local, atividade ou ID" value="${esc(UI.q)}"></label>
-   <label class="btn" style="align-self:flex-end"><input type="checkbox" id="fPend" ${UI.soPend ? 'checked' : ''}> Só com pendência</label>
-   ${!framed && !cel ? `<button class="btn" data-act="csv" style="align-self:flex-end">${I.dl} Exportar Excel</button>` : ''}
-  </div>${cel ? `<details class="legdet"${UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' open' : ''}><summary>Filtrar por rota ou tipo</summary><div class="filters">${selRota}</div></details>` : ''}
-  <div class="mini"><div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
-  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A', 'E'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura'}</span></div></details>`;
-  const q = UI.q.trim().toLowerCase();
-  const rows = [];
-  for (const doc of docs) doc.ids.forEach((id, i) => {
-    const p = PL.get(id); if (!p) return;
-    if (UI.rota !== 'TODAS' && p.rota !== UI.rota) return; if (UI.tipo !== 'TODOS' && p.tipo !== UI.tipo) return;
-    if (q && !(p.id + ' ' + p.local + ' ' + p.ativ).toLowerCase().includes(q)) return;
-    if (UI.soPend && ![...doc.d[i]].some((c, k) => c === 'P' && add(doc.ini, k) <= TODAY)) return;
-    rows.push({ doc, i, p });
-  });
-  if (!rows.length) return h + `<div class="card"><div class="empty">Nenhuma atividade com esses filtros nesta semana.${UI.q || UI.soPend || UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' <button class="btn sm" data-act="limparProg">Limpar filtros</button>' : ''}</div></div>`;
-  const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  // Rotas recolhidas: cada rota mostra o resumo; o detalhe abre ao tocar. Com busca ou uma rota escolhida, abre tudo.
-  const grupos = new Map();
-  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
-  const tudoAberto = !!q || UI.rota !== 'TODAS' || grupos.size === 1;
-  const abertas = new Set(UI.progAbertas || []);
-  const aberto = key => tudoAberto || abertas.has(key);
-  const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.rows.length} atividades</small></span><span class="pres num">${x.R} de ${x.tot} feitas${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
-  if (!tudoAberto) h += `<div class="row-gap pgtool"><button class="btn sm" data-act="progTodas">${abertas.size ? 'Recolher todas' : 'Abrir todas'}</button><span class="muted small">${grupos.size} rotas · toque numa rota para ver as atividades</span></div>`;
-  rows.length = 0; for (const [key, x] of grupos) { if (aberto(key)) rows.push(...x.rows); else rows.push({ fechado: key }); }
-  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const n = evCount(doc, doc.ids[i], k); return `<button class="chip ${c}${n ? ' hasev' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}${n ? ', ' + n + ' anexo(s)' : ''}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${n ? ' · ' + n + ' anexo(s)' : ''}">${CHIP[c]}</button>`; };
-  const LIM = UI.more || (isMobile() ? 80 : 250); // o resto aparece em "Mostrar mais" (abre mais rápido)
-  const shown = rows.slice(0, LIM);
-  let g = '';
-  if (isMobile()) {
-    h += '<div class="mlist">';
-    for (const r of shown) {
-      if (r.fechado) { h += cabGrupo(r.fechado, grupos.get(r.fechado)); g = r.fechado; continue; }
-      const { doc, i, p } = r;
-      const key = doc.area + '|' + p.rota;
-      if (key !== g) { g = key; h += cabGrupo(key, grupos.get(key)); }
-      h += `<div class="mcard"><div><div class="t">${esc(p.ativ)}</div><div class="loc wrapit">${esc(p.local)}</div></div><div class="row-gap"><span class="tag">${esc(p.tipo)}</span><span class="mono muted">${p.id}</span></div><div class="days">${DAYS.map((d, k) => `<div>${DL[k]}${chip(doc, i, k)}</div>`).join('')}</div></div>`;
-    }
-    h += '</div>';
-  } else {
-    h += `<div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}</tr></thead><tbody>`;
-    for (const r of shown) {
-      if (r.fechado) { h += `<tr class="grp"><td colspan="11">${cabGrupo(r.fechado, grupos.get(r.fechado))}</td></tr>`; g = r.fechado; continue; }
-      const { doc, i, p } = r;
-      const key = doc.area + '|' + p.rota;
-      if (key !== g) { g = key; h += `<tr class="grp"><td colspan="11">${cabGrupo(key, grupos.get(key))}</td></tr>`; }
-      h += `<tr><td class="mono muted">${p.id}</td><td><div class="loc" title="${esc(p.local)}">${esc(p.local)}</div></td><td>${esc(p.ativ)}</td><td><span class="tag">${esc(p.tipo)}</span></td>${DAYS.map((_, k) => `<td class="c ${tk[k] ? 'today' : ''}">${chip(doc, i, k)}</td>`).join('')}</tr>`;
-    }
-    h += '</tbody></table></div></div>';
-  }
-  if (rows.length > shown.length) h += `<button class="btn center" data-act="more" data-n="${LIM + 400}">Mostrar mais ${Math.min(400, rows.length - shown.length)} de ${rows.length - shown.length}</button>`;
-  return h;
-}
-
 /* ---------------- APONTAR ---------------- */
 // Área aberta no Apontar (quem vê todas as áreas usa a última escolhida).
 const apArea = () => { const a = areaScope(); return a === 'TODAS' ? (UI.apArea || AREAS[0]) : a; };
@@ -808,7 +755,7 @@ function opcoesSubst(c, dt) {
   }).filter(Boolean).sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
 }
 function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
-function sitPopEsc(e) { if (e.key === 'Escape' && !(e.target.closest && e.target.closest('.cbx'))) { e.stopPropagation(); fecharSitPop(); } }
+function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSitPop(); } }
 function posicionar(pop, btn) {
   const r = btn.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
   const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
@@ -816,6 +763,76 @@ function posicionar(pop, btn) {
   pop.style.left = x + 'px'; pop.style.top = y + 'px';
 }
 const botoesHE = (atual, extra = '') => `<div class="sp-heo" role="group" aria-label="Hora extra a pedido de">${Object.entries(HE_ORIG).map(([k, n]) => `<button type="button" class="btn ${atual === k ? 'pri' : ''}" data-heo="${k}"${extra}>${n}</button>`).join('')}</div>`;
+// Efetivo diário: o mesmo lançamento da Frequência (janela com as situações → até quando),
+// e depois, quando é ausência num dia de trabalho, quem cobre; quando é hora extra, a pedido de quem.
+const CODS_EF = ['P', 'F', 'FT', 'AT', 'AB', 'HE', 'FE', 'AF', 'TR', 'SP', 'ATR', 'DS'];
+function lancarEfetivo(key) {
+  fecharSitPop();
+  const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
+  const sx = sitDia(c, dt); const info = DB.sitInfo(key); const cobre = cobrindo(id, dt);
+  const prev = escala().previsto(regimeDe(c), turmaDe(c), dt);
+  const linha = prev ? (prev.trab ? `Pela escala: trabalha${turmaDe(c) ? ` (turma ${esc(turmaDe(c))})` : ''}` : `Pela escala: folga (${esc(prev.motivo)})`) : 'Sem turma: a escala não marca folga sozinha';
+  const extras = [];
+  if (!sx.auto && AUS_COBRIVEL.has(sx.v)) {
+    if (info.cob) extras.push({ t: 'Trocar substituto', d: `Hoje cobre: ${nomeDe(info.cob)}`, v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` }, { t: 'Tirar o substituto', v: 'semcob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
+    else extras.push({ t: 'Definir substituto', d: 'Ninguém cobrindo', v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
+  }
+  if (cobre) extras.push({ t: `Deixar de cobrir ${nomeDe(cobre)}`, v: 'sairCob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
+  if (sx.v === 'HE') extras.push({ t: 'Hora extra a pedido de…', d: info.he ? `Agora: ${HE_ORIG[info.he]}` : 'Não informado', v: 'heo', extra: true, ic: '<span class="sit HE">HE</span>' });
+  const k = (pd(dt).getDay() + 6) % 7; const domingo = add(dt, 6 - k);
+  const depois = []; for (let i = 1; i <= 30; i++) depois.push(add(dt, i));
+  const fimToque = () => { render(); const nb = document.querySelector(`[data-sit="${CSS.escape(key)}"]`); if (nb) { nb.focus({ preventScroll: true }); M.pulsar(nb); } };
+  abrirLancamento({
+    sheet, nome: title(c.nome), dt, atual: sx.auto ? { v: sx.v, auto: true, motivo: 'pela escala' } : sx.ferias ? { v: 'FE', auto: true, motivo: 'férias do Administrativo' } : DB.sit(key) ? { v: sx.v } : { v: sx.v, auto: true, motivo: '' },
+    codigos: CODS_EF, linhaInfo: linha, extras, depois, ok: I.ok,
+    fim: k < 6 ? { t: 'Até domingo', v: domingo } : null,
+    aoExtra: v => {
+      if (v === 'cob') return passoCobertura(c, dt, [dt], null, fimToque);
+      if (v === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`); fimToque(); toast('Substituto removido'); return; }
+      if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
+      if (v === 'heo') return passoHE(c, [dt], null, fimToque);
+    },
+    aoEscolher: (v, dias) => {
+      const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
+      // grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não
+      const gravar = d => { if (!v) return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
+      dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') DB.setSitExtra('he', id + '|' + d, null); });
+      const nome = !v ? 'automático' : SIT_NOME[v];
+      DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
+      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); DB.setSitExtra('he', id + '|' + d, inf.he || null); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
+      fimToque();
+      if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque);
+      if (v === 'HE') return passoHE(c, dias, desfazer, fimToque);
+      toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer });
+    }
+  });
+}
+// Depois de uma ausência: quem cobre (opcional). Se quem cobre está de folga pela escala, vira hora extra.
+function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
+  const id = c.id;
+  formSheet('Quem vai cobrir?', `${esc(title(c.nome))} · ${SIT_NOME[DB.sit(id + '|' + dt)] || 'ausência'} ${dias.length > 1 ? `de ${ddmm(dt)} a ${ddmm(dias[dias.length - 1])}` : `em ${ddmm(dt)}`} · opcional`,
+    `<div class="sel"><span>Substituto</span>${campoBusca('spSub', cobertoPor(id, dt), opcoesSubst(c, dt), { placeholder: 'Digite o nome de quem substitui', vazio: '—' })}</div>
+     <div id="spSubHe" hidden><p class="small m0">Está de folga pela escala: vira <b>hora extra</b>. A pedido de:</p><div class="mchips">${Object.entries(HE_ORIG).map(([k, n], i) => `<label class="mchip"><input type="radio" name="spHeo" value="${k}" ${i === 0 ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></div>`,
+    'Confirmar substituto', async () => {
+      const sid = $('spSub').value; if (!sid) { if (desfazerBase) toast('Lançado sem substituto', { desfazer: desfazerBase }); return; }
+      const s = COLABS.find(x => x.id === sid); const heOrig = (document.querySelector('input[name="spHeo"]:checked') || {}).value || 'DIKMA'; const feitos = [];
+      for (const d of dias) { removerCobertura(id, d); DB.setSitExtra('cob', id + '|' + d, sid); if (sitDia(s, d).auto) { DB.setSit(sid + '|' + d, 'HE'); DB.setSitExtra('he', sid + '|' + d, heOrig); feitos.push(d); } }
+      DB.log(`${title(s.nome)} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
+      fimToque();
+      toast(`${curto(title(s.nome))} cobre ${curto(title(c.nome))}${feitos.length ? ' · hora extra ' + HE_ORIG[heOrig] : ''}`, { desfazer: () => { dias.forEach(d => removerCobertura(id, d)); if (desfazerBase) desfazerBase(); render(); } });
+    });
+  const cancelar = document.querySelector('#fSheet [data-close]'); if (cancelar) cancelar.textContent = 'Sem substituto';
+  const mostrarHe = () => { const s = COLABS.find(x => x.id === $('spSub').value); $('spSubHe').hidden = !(s && dias.some(d => sitDia(s, d).auto)); };
+  $('spSub').addEventListener('change', mostrarHe);
+  setTimeout(() => { const q = $('spSub_q'); if (q) q.focus(); }, 60);
+}
+// Depois de uma hora extra: a pedido de quem
+function passoHE(c, dias, desfazer, fimToque) {
+  sheet('Hora extra a pedido de quem?', `${esc(title(c.nome))} · ${dias.length > 1 ? `${dias.length} dias` : ddmm(dias[0])}`, [...Object.entries(HE_ORIG).map(([k, n]) => ({ t: n, v: k })), { t: 'Não informar agora', v: '' }], o => {
+    if (!o.v) { if (desfazer) toast('Hora extra lançada', { desfazer }); return; }
+    dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined);
+  });
+}
 function sitPop(btn) {
   fecharSitPop();
   const key = btn.dataset.sit; const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
@@ -1109,6 +1126,17 @@ function vEsBal() {
     ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="sit ${y.v} ro${y.auto ? ' auto' : ''}" title="${y.auto ? esc(y.motivo) : SIT_NOME[y.v] || y.v}">${y.v === 'P' ? I.ok : y.v}</span></td>`).join('')}</tr>`).join('')}
   </tbody></table></div>` : '<div class="body"><div class="empty">Ninguém ausente nesta semana.</div></div>'}</div>`;
 }
+// Líder de cada pessoa das Atividades, pela ficha do Efetivo (só para quem tem as fichas). Nomes do mesmo líder viram um só.
+let LIDc = null, LIDk = null;
+function liderDosColabs() {
+  const fichas = (temFichas(ME) && DB.cache.g && DB.cache.g.colabs) || []; if (!fichas.some(f => f.lider)) return null;
+  if (LIDc && LIDk === fichas) return LIDc;
+  const canon = canonLideres(fichas.map(f => f.lider).filter(Boolean), fichas); const busca = buscaNomes(fichas); const m = new Map();
+  // grupo = o líder (chave do RH); o nome mostrado é o mais completo como foi escrito nas fichas
+  const graf = new Map(); for (const f of fichas) if (f.lider) { const k = canon(f.lider), g = canon.grafia(f.lider); if (!graf.has(k) || g.length > graf.get(k).length) graf.set(k, g); }
+  LIDk = fichas; LIDc = c => { if (!m.has(c.id)) { const r = busca(c.nome, c.mat); const k = r && r.item.lider ? canon(r.item.lider) : ''; m.set(c.id, k ? graf.get(k) || k : ''); } return m.get(c.id); };
+  return LIDc;
+}
 function vEsDia() {
   const area = areaScope();
   const rs = rotasDa(area);
@@ -1118,10 +1146,13 @@ function vEsDia() {
   // Busca: com texto, mostra quem casar em todas as rotas da área escolhida no topo.
   const q = UI.eQ || '';
   const kC = c => semAcento([c.nome, c.funcao, c.rota, c.regime, AREA_S[c.area]].filter(Boolean).join(' '));
-  const todas = UI.eRota === '*' || !!q.trim();
+  const todas = UI.eRota === '*' || UI.eAgr === 'lider' || !!q.trim();
   const ordem = new Map(rs.map((r, i) => [r.area + '|' + r.rota, i]));
-  let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
-  cs = cs.slice().sort((x, y) => (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
+  // Agrupar por rota (padrão) ou por líder (o líder vem da ficha do Efetivo; nomes do mesmo líder viram um só)
+  const lid = liderDosColabs(); const porLider = UI.eAgr === 'lider' && !!lid;
+  let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' || porLider ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
+  const gk = c => (porLider ? 'L|' + (lid(c) || '~') : c.area + '|' + c.rota);
+  cs = cs.slice().sort((x, y) => porLider ? gk(x).localeCompare(gk(y)) || x.nome.localeCompare(y.nome) : (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
   const pres = DAYS.map((_, k) => cs.filter(c => { const v = sitDia(c, add(UI.ini, k)).v; return v !== 'DS' && !AUSENTE.has(v); }).length);
   const quadro = DAYS.map((_, k) => cs.filter(c => { const dt = add(UI.ini, k); return DB.sit(c.id + '|' + dt) !== 'DS' && !folgaEscala(c, dt); }).length);
   const celula = (c, k) => {
@@ -1132,24 +1163,25 @@ function vEsDia() {
   };
   // agrupa por rota quando mostra várias rotas; com muitas rotas, os grupos começam fechados (toque para abrir)
   let ant = '';
-  const nGrupos = todas && !q.trim() ? new Set(cs.map(c => c.area + '|' + c.rota)).size : 0;
+  const nGrupos = todas && !q.trim() ? new Set(cs.map(gk)).size : 0;
   const recolhe = nGrupos > 4;
   const efAb = new Set(UI.efAbertas || []);
   const linhas = cs.map(c => {
-    const g = c.area + '|' + c.rota; let cab = '';
+    const g = gk(c); let cab = '';
     const fechado = recolhe && !efAb.has(g);
     if (todas && !q.trim() && g !== ant) {
-      ant = g; const doG = cs.filter(x => x.area + '|' + x.rota === g); const kh = DAYS.findIndex((_, k) => tk[k]);
+      ant = g; const doG = cs.filter(x => gk(x) === g);
+      const rot = porLider ? (g === 'L|~' ? 'Sem líder na ficha' : 'LÍDER ' + g.slice(2)) : c.rota; const kh = DAYS.findIndex((_, k) => tk[k]);
       const ph = kh >= 0 ? doG.filter(x => { const v = sitDia(x, TODAY).v; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
       const eh = kh >= 0 ? doG.filter(x => DB.sit(x.id + '|' + TODAY) !== 'DS' && !folgaEscala(x, TODAY)).length : null;
-      cab = `<tr class="grp-row"><th colspan="9">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(c.rota)}</b>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      cab = `<tr class="grp-row"><th colspan="9">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porLider ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porLider ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
     }
     if (fechado) return cab;
-    return cab + `<tr><td><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
+    return cab + `<tr><td class="fnome"><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() || porLider ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}</div></td><td class="muted small">${esc(title(c.funcao))}</td>${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
   }).join('');
   return miniEscala(area) + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
-  <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}</div>
-  ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? 'Recolher todas as rotas' : 'Abrir todas as rotas'}</button><span class="muted small">${nGrupos} rotas · toque numa rota para ver as pessoas</span></div>` : ''}
+  <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `${lid ? `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porLider ? 'selected' : ''}>Rota</option><option value="lider" ${porLider ? 'selected' : ''}>Líder</option></select></label>` : ''}${porLider ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}</div>
+  ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? (porLider ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porLider ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porLider ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
   <details class="legdet body pb0 pt0"${isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></details>
   <div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Função</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="9" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
@@ -1172,15 +1204,15 @@ function vPend() {
   for (const [key, xs] of lista.slice(0, 12)) {
     const [a, r] = key.split('|'); const ed = canEdit(a);
     h += `<div class="card"><header><h2>${esc(r)}</h2><p>${AREA_S[a]} · ${xs.length} atrasada${xs.length > 1 ? 's' : ''}</p>${ed ? `<span class="r">${UI.confirm === 'rota:' + key ? `<span class="confirm">Marcar todas como feitas? <button class="btn pri" data-act="rotaok" data-k="${esc(key)}">Confirmar</button><button class="btn" data-act="cancel">Cancelar</button></span>` : `<button class="btn" data-act="askRota" data-k="${esc(key)}">✓ Todas feitas</button>`}</span>` : ''}</header><div class="body"><div class="plist">
-    ${xs.slice(0, 6).map(x => { const p = PL.get(x.doc.ids[x.i]); return `<div class="pitem"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${DAYS[x.k]} ${ddmm(x.dt)} · ${esc(p.local)}</div></div>${ed ? `<div class="bt"><button class="ok-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|R" aria-label="Realizada">✓</button><button class="no-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|N" aria-label="Não realizada">✕</button></div>` : ''}</div>`; }).join('')}
-    ${xs.length > 6 ? `<div class="pitem"><span class="muted">+ ${xs.length - 6} nesta rota</span><button class="btn" data-goprog="${esc(key)}|${xs[0].doc.ini}">Abrir na programação</button></div>` : ''}
+    ${xs.slice(0, (UI.pendTodas || []).includes(key) ? xs.length : 6).map(x => { const p = PL.get(x.doc.ids[x.i]); return `<div class="pitem"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${DAYS[x.k]} ${ddmm(x.dt)} · ${esc(p.local)}</div></div>${ed ? `<div class="bt"><button class="ok-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|R" aria-label="Realizada">✓</button><button class="no-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|N" aria-label="Não realizada">✕</button></div>` : ''}</div>`; }).join('')}
+    ${xs.length > 6 ? `<div class="pitem"><span class="muted">${(UI.pendTodas || []).includes(key) ? `${xs.length} nesta rota` : `+ ${xs.length - 6} nesta rota`}</span><button class="btn" data-act="pendTodas" data-k="${esc(key)}">${(UI.pendTodas || []).includes(key) ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
     </div></div></div>`;
   }
   h += '</div>';
   const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) mot[v] = (mot[v] || 0) + 1;
   const mt = Object.entries(mot).sort((a, b) => b[1] - a[1]); const mx = Math.max(1, ...mt.map(x => x[1]));
   h += `<div class="stackcol"><div class="card"><header><h2>Por que não foi feito</h2><p>Motivos das não realizadas</p></header><div class="body">${mt.length ? `<div class="bars">${mt.map(([m, n]) => `<div class="barrow mot"><span class="n">${esc(m)}</span><div class="stack clear"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Sem registros.</div>'}</div></div>
-  <div class="card"><header><h2>Histórico</h2></header><div class="body">${logHtml(15)}</div></div></div></div>`;
+</div></div>`;
   return h;
 }
 
@@ -1197,6 +1229,7 @@ function vImprimir() {
    <label class="sel"><span>Rota</span><select class="in" id="fIRota"><option value="TODAS">Todas</option>${rts.map(r => `<option ${r === UI.iRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
    <label class="sel"><span>Líder</span><input class="in" id="fLider" value="${esc(lider)}"></label>
    ${!framed ? `<button class="btn pri" data-act="print" style="align-self:flex-end">${I.print} Imprimir / salvar PDF</button>` : ''}
+   ${!framed && !isMobile() ? `<button class="btn" data-act="csv" style="align-self:flex-end" title="A programação da semana, com o que foi feito">${I.dl} Exportar Excel</button>` : ''}
   </div>`;
   if (!doc) return h + '<div class="card"><div class="empty">Semana não gerada.</div></div>';
   const items = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && (UI.iRota === 'TODAS' || x.p.rota === UI.iRota) && doc.d[x.i] !== '_______');
@@ -1300,7 +1333,7 @@ function vPlano() {
    <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required placeholder="Ex.: CORREIA C5613A"></label>
    <label class="sel wide"><span>Atividade</span><input class="in" id="nAtiv" required placeholder="Ex.: Mesa impacto - Lavagem"></label>
    <label class="sel"><span>Tipo</span><select class="in" id="nTipo">${tipos().map(t => `<option>${esc(t)}</option>`).join('')}</select></label>
-   <div class="sel"><span>Dias</span><div class="row-gap tight">${DL.map((d, k) => `<button type="button" class="tog lbl-on" data-ntog="${k}" aria-pressed="${k < 5}" aria-label="${DAYS[k]}">${d}</button>`).join('')}</div></div>
+   <div class="sel"><span>Dias</span><div class="row-gap tight diastog">${DL.map((d, k) => `<button type="button" class="tog lbl-on" data-ntog="${k}" aria-pressed="${k < 5}" aria-label="${DAYS[k]}">${d}</button>`).join('')}</div></div>
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
@@ -1624,6 +1657,7 @@ function afterRender() {
   on('escQ', 'input', e => { UI.escQ = e.target.value; filtrarLista($('escLista'), e.target.value); });
   on('fEQ', 'input', e => { UI.eQ = e.target.value; clearTimeout(window._eqt); window._eqt = setTimeout(schedule, 180); });
   on('fERota', 'change', e => { UI.eRota = e.target.value; render(); });
+  on('fEAgr', 'change', e => { UI.eAgr = e.target.value; UI.efAbertas = []; render(); });
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; const t = $('liderTxt'); if (t) t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); });
   on('fPArea', 'change', e => { UI.pArea = e.target.value; render(); });
@@ -1680,11 +1714,13 @@ document.addEventListener('click', async e => {
   if (d.md) {
     const [mod, view, area] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
     if (view === 'escala') { UI.esSet = mod === 'bateria' ? 'bateria' : 'patio'; UI.area = area || UI.area; irEscala(''); return; }
-    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = view; UI.confirm = null;
+    const novaOc = view === 'gnovaoc';
+    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = { gcomigo: 'gcolab', gnovaoc: 'gcolab' }[view] || view; UI.confirm = null;
     if (area && (mod === 'operacao' || mod === 'bateria')) { UI.area = area; UI.aRota = null; UI.eRota = null; }
-    if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.ocSt = 'pendente'; }
-    if (view === 'epar' && UI.e) UI.e.pf = 'aberta';
-    salvarUI(); render(); scrollTo(0, 0); return;
+    if (view === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
+    salvarUI(); render(); scrollTo(0, 0);
+    if (novaOc) { const b = document.querySelector('[data-g="novaOc"]'); if (b) b.click(); }
+    return;
   }
   if (d.modmenu) { menuModulos(!UI.modOpen); if (!UI.modOpen) t.focus(); return; }
   if (d.mod) { UI.modOpen = false; trocarModulo(d.mod); return;
@@ -1703,11 +1739,10 @@ document.addEventListener('click', async e => {
     return apply(doc, +i, +k, doc.d[+i][+k] === v ? 'P' : v);
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
-  if (d.goprog) { const [a, r, ini] = d.goprog.split('|'); UI.view = 'prog'; if (!myArea()) UI.area = a; UI.rota = r; UI.ini = ini; UI.mes = monthOfWeek(ini); UI.soPend = true; render(); scrollTo(0, 0); return; }
   if (d.goescala !== undefined) { irEscala(d.goescala); return; }
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
-  if (d.sit) { sitPop(t); return; }
+  if (d.sit) { lancarEfetivo(d.sit); return; }
   if (d.turma) { turmaSheet(d.turma); return; }
 
   if (d.ptog) {
@@ -1820,6 +1855,7 @@ document.addEventListener('click', async e => {
     case 'csv': exportCSV(); break;
     case 'expEsdia': exportEsdia(); break;
     case 'rotasTodas': UI.rotasTodas = !UI.rotasTodas; render(); break;
+    case 'pendTodas': { const k = t.dataset.k; const l = UI.pendTodas || []; UI.pendTodas = l.includes(k) ? l.filter(x => x !== k) : [...l, k]; render(); break; }
   }
 });
 document.addEventListener('submit', async e => {
@@ -1910,7 +1946,7 @@ document.addEventListener('keydown', e => {
   const b = document.querySelector('#layer input[type=search], #view input[type=search], #view #fQ, #top #fQ'); if (!b) return;
   e.preventDefault(); b.focus(); b.select();
 });
-matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'prog' || UI.view === 'elanc') render(); });
+matchMedia('(max-width:860px)').addEventListener('change', () => { if (UI.view === 'elanc') render(); });
 window.addEventListener('online', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
 window.addEventListener('offline', () => { const s = $('sync'); if (s) s.innerHTML = syncPill(); });
 window.addEventListener('pagehide', salvarUI);
@@ -1928,8 +1964,12 @@ if (DB.definirChaveArea) DB.definirChaveArea(c => {
 const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
+// Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).
+let trocouAcessoPorLink = false;
 function abrirLink(busca) {
   const p = new URLSearchParams(busca); const m = p.get('m'), v = p.get('v');
+  const daOperacao = (m && MODS_MARCAVEIS.includes(m)) || (!m && v === 'meudia');
+  if (daOperacao && UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; }
   if (m && MODS[m]) UI.modulo = m;
   if (v) UI.view = v;
   if (m || v) { UI.confirm = null; salvarUI(); }
@@ -1939,12 +1979,15 @@ if (abrirLink(location.search)) history.replaceState(null, '', location.pathname
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
   if (!e.data || e.data.tipo !== 'abrir' || AUTH.status !== 'ready') return;
   let busca = ''; try { busca = new URL(e.data.url).search; } catch (err) { /* link inválido: abre o Meu dia */ }
-  if (!abrirLink(busca)) UI.view = 'meudia';
+  trocouAcessoPorLink = false;
+  if (!abrirLink(busca)) { UI.view = 'meudia'; if (UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; } }
+  // outro acesso aberto: recarrega já na Operação (os dados de cada acesso são carregados na entrada)
+  if (trocouAcessoPorLink) { salvarUI(); location.reload(); return; }
   if (typeof ensureModulo === 'function') ensureModulo();
   aplicarSet(); render(); scrollTo(0, 0);
 });
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
-const AD = criarAdministrativo({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), UI, isMobile, escala: () => escala(), framed });
+const AD = criarAdministrativo({ pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);

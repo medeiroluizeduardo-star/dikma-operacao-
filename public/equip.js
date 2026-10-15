@@ -1,14 +1,15 @@
 // Dikma Gestão — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
-// Telas: Painel, Lançamentos, Paradas, Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
+// Telas: Painel, Lançamentos e paradas (uma aba só), Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
 import { add, pad, today, MESES_L, addMonth, DAYS } from './cal.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
+import { criarBusca, competenciaDe } from './planilhas-adm.js';
+import { indiceFerias } from './acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 
 export const VIEWS_E = [
   { id: 'epainel', nome: 'Painel', ic: 'painel', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'elanc', nome: 'Lançamentos', ic: 'apontar', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'epar', nome: 'Paradas', ic: 'pend', grp: 'Equipamentos', mod: 'eq' },
+  { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'apontar', grp: 'Equipamentos', mod: 'eq' },
   { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'eq' },
   { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'plano', grp: 'Avaliação', mod: 'eq' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'users', grp: 'Avaliação', mod: 'eq' },
@@ -16,7 +17,7 @@ export const VIEWS_E = [
   { id: 'econfig', nome: 'Configurações', ic: 'config', grp: 'Administração', mod: 'eq', admin: true }
 ];
 export const SUB_E = {
-  epainel: 'Produtividade da operação de equipamentos', elanc: 'Alocações do dia: operador, equipamento e horário', epar: 'Paradas, causas e liberação',
+  epainel: 'Produtividade da operação de equipamentos', elanc: 'Alocações do dia e paradas dos equipamentos',
   eequipe: 'Operadores, situação, frota e escala do mês', einsp: 'Checklist de 5S no equipamento e segurança', eaval: 'Notas do mês por operador',
   eanal: 'Evolução mensal e qualidade dos lançamentos', econfig: 'Turnos, metas, pesos, causas e feriados'
 };
@@ -45,7 +46,40 @@ export function criarEquip(X) {
   let CALCesc;
   const cfgOp = () => { const c = E().config; const esc = DB.cache.escalas; const t4 = esc && esc.regimes && esc.regimes['4x4'] && esc.regimes['4x4'].turmas; const tem = t4 && Object.values(t4).some(Boolean);
     return { ...c, turmas: tem ? { ...Object.fromEntries(Object.entries(c.turmas || {}).filter(([k]) => /^[A-Z]{1,2}$/.test(k))), ...Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) } : c.turmas, feriados: [...(c.feriados || []), ...((esc && esc.feriados) || [])] }; };
-  const calc = () => { if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas) { CALC = criarCalc(cfgOp(), E().cad); CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; } return CALC; };
+  // Situação dos operadores em sincronia com a Frequência (Administrativo), o Efetivo diário e as Férias:
+  // o que está lançado lá vale aqui. Sem lançamento, vale a situação do cadastro da Equipe.
+  const SIT_EXT = { FE: 'FÉRIAS', AT: 'ATESTADO MÉDICO', AF: 'AFASTAMENTO (INSS)', FT: 'FALTA', DS: 'DESLIGADO', TR: 'TREINAMENTO', F: 'FOLGA', SP: 'SUSPENSÃO', AB: 'ABONO' };
+  let EXT = null, EXTv = -1, EXTf = null;
+  function extFreq() {
+    const F = DB.cache.eqFreq; const fer = DB.cache.feriasAtivas || [];
+    if (EXT && EXTv === (F ? F.v : -2) && EXTf === fer) return EXT;
+    EXTv = F ? F.v : -2; EXTf = fer;
+    const pessoas = [];
+    if (F) for (const [id, d] of Object.entries(F.comps || {})) if (d) for (const g of d.grupos || []) for (const p of g.pessoas || []) pessoas.push({ conj: id.split('|')[0], p, nome: p.nome, mat: p.mat });
+    const busca = pessoas.length ? criarBusca(pessoas) : () => null;
+    const ferias = indiceFerias(fer); const porOp = new Map();
+    EXT = (o, data) => {
+      let m = porOp.get(o.nome); if (m === undefined) { const r = busca(o.nome); m = r ? r.item : null; porOp.set(o.nome, m); }
+      if (ferias({ nome: o.nome, mat: m && m.mat }, data)) return 'FÉRIAS';
+      if (!m) return undefined;
+      const { p, conj } = m;
+      if (p.desligado && data >= p.desligado) return 'DESLIGADO';
+      let cod;
+      if (p.ativ) cod = ((F.sit[conj] || {})[data.slice(0, 7)] || {})[p.ativ + '|' + data];
+      else { const d = F.comps[conj + '|' + competenciaDe(data)]; cod = d && d.d && d.d[p.k] && d.d[p.k][data]; }
+      if (!cod) return undefined;
+      if (cod === 'P' || cod === 'HE' || cod === 'ATR') return null;
+      return SIT_EXT[cod] || 'OUTRO';
+    };
+    EXT.achou = o => { let m = porOp.get(o.nome); if (m === undefined) { const r = busca(o.nome); m = r ? r.item : null; porOp.set(o.nome, m); } return m; };
+    return EXT;
+  }
+  const calc = () => {
+    if (DB.eqFreqWatch) { DB.eqFreqWatch(U.mes); DB.eqFreqWatch(TODAY.slice(0, 7)); }
+    const ext = extFreq();
+    if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas || CALC._ext !== ext) { CALC = criarCalc(cfgOp(), E().cad, ext); CALC._ext = ext; CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; }
+    return CALC;
+  };
   const mesesCarregados = () => E().meses || new Set();
   const lancMes = ym => E().lanc.filter(l => l.data.slice(0, 7) === ym);
 
@@ -114,6 +148,13 @@ export function criarEquip(X) {
   const trocaTxt = l => `${l.trocaPara ? `<div><span class="pill neu" title="Equipamento substituído">${I.swap} trocado por ${esc(l.trocaPara)} às ${esc(l.fim || '')}</span></div>` : ''}${l.eqOrig ? `<div><span class="pill ext" title="Equipamento reserva">${I.swap} reserva de ${esc(l.eqOrig)}</span></div>` : ''}${l.voltaDe ? `<div><span class="pill ok">${I.swap} voltou do ${esc(l.voltaDe)}</span></div>` : ''}`;
   const desdeH = p => { if (!p.ini) return 0; const t = new Date(`${p.data}T${p.ini}:00`).getTime(); return Math.max(0, (Date.now() - t) / 36e5); };
   const tempoTxt = h => (h >= 24 ? `${Math.floor(h / 24)} d ${Math.floor(h % 24)} h` : `${Math.floor(h)} h ${pad(Math.round((h % 1) * 60) % 60)} min`);
+  // Lançamentos e paradas numa aba só: a troca fica no topo; o número de equipamentos parados aparece sempre.
+  function vLancPar() {
+    const abertas = E().par.filter(p => !p.fim).length;
+    const aba = U.aba === 'par' ? 'par' : 'lanc';
+    const seg = `<div class="seg lpseg" role="tablist" aria-label="Mostrar"><button type="button" role="tab" data-e="aba" data-v="lanc" aria-selected="${aba === 'lanc'}">${I.apontar} Lançamentos do dia</button><button type="button" role="tab" data-e="aba" data-v="par" aria-selected="${aba === 'par'}">${I.pend} Paradas${abertas ? ` <span class="badge num">${abertas}</span>` : ''}</button></div>`;
+    return seg + (aba === 'par' ? vPar() : vLanc());
+  }
   function vLanc() {
     const C = calc(); const d = U.dia;
     const all = E().lanc; const al = C.alertas(all.filter(l => l.data === d), E().par.filter(p => p.data === d), TODAY);
@@ -376,7 +417,11 @@ export function criarEquip(X) {
     const stMap = new Map(st.map(x => [x.o.nome, x]));
     const fora = ops.filter(o => C.ausenteEm(o, TODAY));
     const ult = n => E().lanc.filter(l => l.op === n).map(l => l.data).sort().pop();
-    const sitTxt = o => { if (!o.situacao || o.situacao === 'TRABALHANDO') return '<span class="pill ok">Trabalhando</span>'; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
+    const ext = extFreq();
+    const sitTxt = o => {
+      const daFreq = ext(o, TODAY);
+      if (daFreq !== undefined) return daFreq ? `<span class="pill warn">${esc(title(daFreq))}</span><div class="muted small">pela Frequência / Efetivo diário</div>` : `<span class="pill ok">Trabalhando</span><div class="muted small">pela Frequência / Efetivo diário</div>`;
+      if (!o.situacao || o.situacao === 'TRABALHANDO') return `<span class="pill ok">Trabalhando</span>${ext.achou(o) ? '' : '<div class="muted small">fora da Frequência</div>'}`; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
     // Busca e filtro de operadores: valem para a lista e para a escala do mês.
     const kOp = o => semAcento([o.nome, o.funcao, o.escala, o.turma ? 'turma ' + o.turma : '', o.situacao].filter(Boolean).join(' '));
     const FO = { todos: () => true, trab: o => !C.ausenteEm(o, TODAY), fora: o => !!C.ausenteEm(o, TODAY), x4: o => o.escala === '4x4', adm: o => o.escala !== '4x4' };
@@ -532,7 +577,8 @@ export function criarEquip(X) {
       case 'diaAnt': U.dia = add(U.dia, -1); render(); break;
       case 'diaProx': U.dia = add(U.dia, 1); render(); break;
       case 'hoje': U.dia = TODAY; render(); break;
-      case 'irDia': UI.view = 'elanc'; U.dia = d.dia; render(); scrollTo(0, 0); break;
+      case 'irDia': UI.view = 'elanc'; U.aba = 'lanc'; U.dia = d.dia; render(); scrollTo(0, 0); break;
+      case 'aba': U.aba = d.v; render(); break;
       case 'novoLanc': lancForm(null); break;
       case 'expLanc': exportarLanc(U.dia.slice(0, 7)); break;
       case 'expPar': exportarPar(); break;
@@ -618,7 +664,7 @@ export function criarEquip(X) {
       if (!E().loaded) return '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';
       if (!E().config) return vImportar();
       DB.eWatch([U.mes, addMonth(U.mes, -1), U.dia.slice(0, 7), addMonth(U.dia.slice(0, 7), -1), U.avMes, U.inMes, TODAY.slice(0, 7)]);
-      return ({ epainel: vPainel, elanc: vLanc, epar: vPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
+      return ({ epainel: vPainel, elanc: vLancPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
     },
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
