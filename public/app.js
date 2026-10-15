@@ -189,6 +189,8 @@ const VIEWS = [
     usuarios: { ord: 9, grp: 'Acesso', req: () => isAdmin() }, perfis: { ord: 10, grp: 'Acesso', req: () => isAdmin() }
   };
   for (const v of VIEWS) if (CFV[v.id]) Object.assign(v, { mod: 'cf', admin: true }, CFV[v.id]);
+  // Importar planilhas do Administrativo: só o administrador (para os outros a tela nem aparece no menu)
+  { const ai = VIEWS.find(v => v.id === 'aimport'); if (ai) ai.req = () => isAdmin(); }
   // fichas de acompanhamento: só quem tem o Efetivo marcado no usuário (os dados das fichas só chegam para essas pessoas)
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
@@ -255,10 +257,11 @@ function ensureModulo() {
 const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada' };
 
 // Só troca o HTML de um bloco quando ele mudou: atualização de dados que não muda a tela não mexe em nada (sem piscar).
-function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; return true; }
+let VIEW_MUDOU = false;
+function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; if (id === 'view') VIEW_MUDOU = true; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
+function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 function renderGate() {
@@ -305,10 +308,11 @@ function render() {
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
   const nav = k !== ULT || !!view.querySelector('.skel');
   const pos = nav ? null : M.guardarRolagem(view);
+  VIEW_MUDOU = false;
   renderTela();
   if (AUTH.status !== 'ready') { ULT = ''; return; }
   ULT = k;
-  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav) M.restaurarRolagem(view, pos);
+  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); }
   M.moverIndicador();
   if (UI.flash && Date.now() - UI.flash.t > 500) UI.flash = null;
   if (UI.flash) {
@@ -808,7 +812,7 @@ function opcoesSubst(c, dt) {
   }).filter(Boolean).sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
 }
 function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
-function sitPopEsc(e) { if (e.key === 'Escape' && !(e.target.closest && e.target.closest('.cbx'))) { e.stopPropagation(); fecharSitPop(); } }
+function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSitPop(); } }
 function posicionar(pop, btn) {
   const r = btn.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
   const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
@@ -1300,7 +1304,7 @@ function vPlano() {
    <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required placeholder="Ex.: CORREIA C5613A"></label>
    <label class="sel wide"><span>Atividade</span><input class="in" id="nAtiv" required placeholder="Ex.: Mesa impacto - Lavagem"></label>
    <label class="sel"><span>Tipo</span><select class="in" id="nTipo">${tipos().map(t => `<option>${esc(t)}</option>`).join('')}</select></label>
-   <div class="sel"><span>Dias</span><div class="row-gap tight">${DL.map((d, k) => `<button type="button" class="tog lbl-on" data-ntog="${k}" aria-pressed="${k < 5}" aria-label="${DAYS[k]}">${d}</button>`).join('')}</div></div>
+   <div class="sel"><span>Dias</span><div class="row-gap tight diastog">${DL.map((d, k) => `<button type="button" class="tog lbl-on" data-ntog="${k}" aria-pressed="${k < 5}" aria-label="${DAYS[k]}">${d}</button>`).join('')}</div></div>
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
@@ -1928,8 +1932,12 @@ if (DB.definirChaveArea) DB.definirChaveArea(c => {
 const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
+// Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).
+let trocouAcessoPorLink = false;
 function abrirLink(busca) {
   const p = new URLSearchParams(busca); const m = p.get('m'), v = p.get('v');
+  const daOperacao = (m && MODS_MARCAVEIS.includes(m)) || (!m && v === 'meudia');
+  if (daOperacao && UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; }
   if (m && MODS[m]) UI.modulo = m;
   if (v) UI.view = v;
   if (m || v) { UI.confirm = null; salvarUI(); }
@@ -1939,12 +1947,15 @@ if (abrirLink(location.search)) history.replaceState(null, '', location.pathname
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
   if (!e.data || e.data.tipo !== 'abrir' || AUTH.status !== 'ready') return;
   let busca = ''; try { busca = new URL(e.data.url).search; } catch (err) { /* link inválido: abre o Meu dia */ }
-  if (!abrirLink(busca)) UI.view = 'meudia';
+  trocouAcessoPorLink = false;
+  if (!abrirLink(busca)) { UI.view = 'meudia'; if (UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; } }
+  // outro acesso aberto: recarrega já na Operação (os dados de cada acesso são carregados na entrada)
+  if (trocouAcessoPorLink) { salvarUI(); location.reload(); return; }
   if (typeof ensureModulo === 'function') ensureModulo();
   aplicarSet(); render(); scrollTo(0, 0);
 });
 const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
-const AD = criarAdministrativo({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), UI, isMobile, escala: () => escala(), framed });
+const AD = criarAdministrativo({ get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);

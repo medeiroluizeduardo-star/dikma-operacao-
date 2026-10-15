@@ -14,7 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" media="print" id="fontes">
 <!-- Baixa todos os módulos em paralelo (sem esperar um pedir o outro). -->
-<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="busca.js"><link rel="modulepreload" href="escala.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
+<link rel="modulepreload" href="app.js"><link rel="modulepreload" href="cal.js"><link rel="modulepreload" href="gestao.js"><link rel="modulepreload" href="equip.js"><link rel="modulepreload" href="eqcalc.js"><link rel="modulepreload" href="pessoas.js"><link rel="modulepreload" href="importar.js"><link rel="modulepreload" href="movimento.js"><link rel="modulepreload" href="meudia.js"><link rel="modulepreload" href="hoje.js"><link rel="modulepreload" href="permissoes.js"><link rel="modulepreload" href="busca.js"><link rel="modulepreload" href="escala.js"><link rel="modulepreload" href="acessos.js"><link rel="modulepreload" href="administrativo.js"><link rel="modulepreload" href="planilhas-adm.js"><link rel="modulepreload" href="exportar.js"><link rel="modulepreload" href="data.js"><link rel="modulepreload" href="vendor/firebase.js">
 <style>
 :root{padding-top:env(safe-area-inset-top,0px)}
 body{margin:0}
@@ -494,7 +494,6 @@ table.perm tr.grp-row th{background:var(--surface-2);text-align:left;font-size:1
   .card>header .r{margin-left:0;flex:1 1 100%}
   .card>header .r select{width:100%}
 }
-@media (prefers-reduced-motion:no-preference){.toast{animation:up .18s ease-out}.sheet{animation:up .18s ease-out}@keyframes up{from{transform:translate(var(--tx,0),10px);opacity:.4}}.toast{--tx:-50%}}
 @media print{
   body{background:#fff}
   .rail,.top,.tabbar,.demo,.noprint{display:none!important}
@@ -760,8 +759,8 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 /* entrada de tela (só ao navegar) */
 @media (prefers-reduced-motion:no-preference){
   #view.entra{animation:entra .18s var(--ease) both}
-  #view.entra .stack i,#view.entra .meter i,#view.entra .ef i,#view.entra .md-bar i{animation:cresceX .4s var(--ease) both;transform-origin:left center}
-  #view.entra .col i{animation:cresceY .4s var(--ease) both;transform-origin:center bottom}
+  #view.barras .stack i,#view.barras .meter i,#view.barras .ef i,#view.barras .md-bar i{animation:cresceX .4s var(--ease) both;transform-origin:left center}
+  #view.barras .col i{animation:cresceY .4s var(--ease) both;transform-origin:center bottom}
 }
 @keyframes entra{from{opacity:.0;transform:translateY(3px)}}
 @keyframes cresceX{from{transform:scaleX(0)}}
@@ -1076,6 +1075,29 @@ table.freq td.c{padding-top:1px;padding-bottom:1px}
 .barra{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-top:6px}.barra i{display:block;height:100%;background:var(--accent)}
 @media (max-width:860px){.ferlist .pitem{grid-template-columns:minmax(0,1fr)}.fer-r{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;text-align:left}}
 table.freq th.fnome .btn.link{color:var(--ink)}
+
+/* ---- correções de layout ---- */
+.row-gap.diastog{flex-wrap:nowrap}
+.seg.setsw{flex:none;width:max-content;grid-template-columns:repeat(2,auto)}
+table.tipos input.in[data-gt$="|tipo"]{min-width:170px}
+table.tipos textarea.in{min-width:240px}
+table.tipos .numin{width:64px}
+@media (min-width:861px){
+  /* topo com filtros: a busca fica só no ícone (Ctrl+K continua), para não quebrar a linha */
+  .top:has(select) .buscabtn span,.top:has(select) .buscabtn kbd{display:none}
+  .top:has(select) .buscabtn{padding:6px 8px}
+  .top:has(select) h1{max-width:290px}
+  /* "Sincronizado" vira um ponto verde (o texto aparece ao passar o mouse); "Sem sinal" e "Sincronizando" continuam escritos */
+  .top:has(select) .syncwrap .pill.ok,.top:has(select) .syncwrap .pill.neu:not(.sync){font-size:0;line-height:0;width:10px;height:10px;min-width:0;padding:0;border-radius:50%;background:var(--st-real);border:0}
+  .top:has(select) .syncwrap .pill.neu:not(.sync){background:var(--ink-3)}
+}
+@media (max-width:860px){
+  /* listas com botões: os botões vão para baixo do texto em vez de apertar a descrição */
+  .plist .pitem:has(> .row-gap){grid-template-columns:minmax(0,1fr)}
+  .plist .pitem > .row-gap{justify-content:flex-start}
+  /* os 7 dias cabem na tela */
+  .dayscroll .dbtn{flex:1 1 0;min-width:0;padding:6px 2px}
+}
 </style>
 </head>
 <body>

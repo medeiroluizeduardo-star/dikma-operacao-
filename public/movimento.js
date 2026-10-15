@@ -25,8 +25,8 @@ export function moverIndicador() {
 // ---------- entrada da tela (só quando a pessoa troca de tela, não quando os dados atualizam) ----------
 export function entrarTela(view) {
   if (reduzir()) return;
-  view.classList.remove('entra'); void view.offsetWidth; view.classList.add('entra');
-  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra'), 450);
+  view.classList.remove('entra', 'barras'); void view.offsetWidth; view.classList.add('entra', 'barras');
+  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 450);
   contarNumeros(view);
 }
 
@@ -55,6 +55,8 @@ function contarNumeros(root) {
 export function guardarRolagem(view) {
   return [...view.querySelectorAll('.tw')].map(el => [el.scrollLeft, el.scrollTop]);
 }
+// Dados que chegam logo depois da troca de tela redesenham a tela: as barras não crescem de novo (piscavam).
+export function semRepetir(view) { view.classList.remove('barras'); }
 export function restaurarRolagem(view, pos) {
   if (!pos || !pos.length) return;
   view.querySelectorAll('.tw').forEach((el, i) => { if (pos[i]) { el.scrollLeft = pos[i][0]; el.scrollTop = pos[i][1]; } });

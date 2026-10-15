@@ -316,7 +316,7 @@ export function criarGestao(X) {
 
   function vTipos() {
     const t = tipos();
-    return `<div class="card"><header><h2>Tipos de ocorrência</h2><p>Até 5 tipos vão pré-escritos na Folha 1 (integração), na ordem da posição. Os demais vão para a Folha 2.</p></header><div class="tw"><table><thead><tr><th>Tipo</th><th class="c">Folha 1</th><th class="c">Posição</th><th>Texto padrão</th><th></th></tr></thead><tbody>
+    return `<div class="card"><header><h2>Tipos de ocorrência</h2><p>Até 5 tipos vão pré-escritos na Folha 1 (integração), na ordem da posição. Os demais vão para a Folha 2.</p></header><div class="tw"><table class="tipos"><thead><tr><th>Tipo</th><th class="c">Folha 1</th><th class="c">Posição</th><th>Texto padrão</th><th></th></tr></thead><tbody>
       ${t.map((x, i) => `<tr><td><input class="in" data-gt="${i}|tipo" value="${esc(x.tipo)}" aria-label="Nome do tipo"></td><td class="c"><input type="checkbox" data-gt="${i}|f1" ${x.f1 ? 'checked' : ''} aria-label="Vai na Folha 1"></td><td class="c"><input class="in numin" type="number" min="1" max="5" data-gt="${i}|pos" value="${x.pos || ''}" aria-label="Posição"></td><td><textarea class="in ta" data-gt="${i}|texto" rows="2" aria-label="Texto padrão">${esc(x.texto || '')}</textarea></td><td><button class="btn ghost danger" data-g="delTipo" data-i="${i}" aria-label="Excluir tipo">✕</button></td></tr>`).join('')}
       </tbody></table></div><div class="body"><button class="btn" data-g="addTipo">${I.plus} Novo tipo</button></div></div>`;
   }

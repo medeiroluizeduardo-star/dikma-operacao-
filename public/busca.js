@@ -67,7 +67,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown') { e.preventDefault(); if (l.hidden) abrir(id); else marcar(Math.min(ops.length - 1, at + 1)); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); marcar(Math.max(0, at - 1)); }
   else if (e.key === 'Enter') { e.preventDefault(); if (!l.hidden && ops[at]) escolher(id, ops[at].dataset.cbxV); else confirmarTexto(id); fechar(id); }
-  else if (e.key === 'Escape' && !l.hidden) { e.stopPropagation(); fechar(id); }
+  else if (e.key === 'Escape' && !l.hidden) { e.stopImmediatePropagation(); fechar(id); } // fecha só a lista; o próximo Esc fecha a janela
 }, true);
 
 // Filtro de lista na própria tela (sem redesenhar): esconde quem não casa com a busca.

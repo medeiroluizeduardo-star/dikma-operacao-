@@ -353,8 +353,8 @@ export function criarAdministrativo(X) {
   });
   document.addEventListener('input', e => {
     if (UI.modulo !== 'adm') return;
-    if (e.target.id === 'aQ') { U.q = e.target.value; clearTimeout(window._aqt); window._aqt = setTimeout(render, 220); }
-    if (e.target.id === 'aFQ') { U.fQ = e.target.value; clearTimeout(window._aqt); window._aqt = setTimeout(render, 220); }
+    if (e.target.id === 'aQ') { U.q = e.target.value; (X.agendar || render)(); }
+    if (e.target.id === 'aFQ') { U.fQ = e.target.value; (X.agendar || render)(); }
   });
   document.addEventListener('change', e => {
     if (UI.modulo !== 'adm') return;

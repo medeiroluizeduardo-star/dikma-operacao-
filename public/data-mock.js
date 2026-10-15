@@ -303,7 +303,7 @@ async function iniciarAdm() {
       // presença de quem está nas Atividades: só preenche os dias vazios da demonstração
       for (const k of SET_KEYS) for (const [key, cod] of Object.entries(prep.presenca[k])) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (!o[key]) o[key] = cod; }
       cache.adm.ferias = prep.ferias.map((f, i) => ({ id: 'fe' + i, ...f }));
-    } catch (e) { console.warn('Demonstração sem dados do Administrativo', e); }
+    } catch (e) { admPronto = false; console.warn('Demonstração sem dados do Administrativo', e); } // tenta de novo na próxima entrada
   }
   cache.adm.loaded = cache.adm.fLoaded = true;
   cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino }));
