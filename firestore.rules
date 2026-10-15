@@ -20,8 +20,9 @@ service cloud.firestore {
     function admMod(m) { return admin() || (ativo() && acOp() && perfil().papel == 'gestor' && m in mods()); }   // administração do módulo
     // Acessos (portas de entrada): operacao (padrão de quem não tem o campo), administrativo. O administrador entra em todos.
     function acessos() { return perfil().get('acessos', ['operacao']); }
-    function acOp() { return admin() || 'operacao' in acessos(); }
-    function acAdm() { return ativo() && (admin() || 'administrativo' in acessos()); }   // acesso Administrativo
+    // O antigo acesso Administrativo virou o módulo Frequência e férias da Operação ('frequencia' em modulos).
+    function acOp() { return admin() || 'operacao' in acessos() || 'administrativo' in acessos(); }
+    function acAdm() { return ativo() && (admin() || 'frequencia' in mods() || 'administrativo' in acessos()); }   // módulo Frequência e férias
     function admEdita() { return acAdm() && perfil().papel != 'leitor'; }
     function op() { return ativo() && acOp() && (admin() || 'operacao' in mods()); }        // Atividades Pátio
     function ge() { return hasProfile() && geU(perfil()); }          // Efetivo (fichas)

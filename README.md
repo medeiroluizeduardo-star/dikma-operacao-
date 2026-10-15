@@ -148,7 +148,7 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 - **Atividades do dia sem apontar** (às 15h, uma vez por dia, só se faltar alguma) — para líder e supervisor, das áreas deles.
 - **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
 - **Resumo da semana que passou** (segunda-feira, às 7h) — para administrador, gestor e coordenador: % de atividades realizadas, não realizadas, faltas e atestados de cada conjunto, assinaturas pendentes e paradas sem liberação. Sem nomes de colaboradores.
-- Tocar no aviso abre a tela certa (Lançamentos e paradas, Colaboradores, Apontar ou Efetivo diário). Se o sistema estava aberto no Administrativo, passa para a Operação.
+- Tocar no aviso abre a tela certa (Lançamentos e paradas, Colaboradores, Apontar ou Efetivo diário).
 - O administrador vê no **Meu dia** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
 
 **Ligar (uma vez só, administrador)**
@@ -165,35 +165,33 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 
 Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em repositório privado, o GitHub dá 2.000 minutos grátis por mês; esta rotina usa cerca de 500. Em repositório público, não há limite, mas o GitHub pausa rotinas agendadas depois de 60 dias sem nenhuma alteração no repositório (basta reativar em Actions).
 
-## Acessos: Operação, Administrativo e Administração do sistema
+## Acessos: Operação e Administração do sistema
 
-Ao abrir o sistema aparecem os três acessos. A pessoa escolhe um e entra com usuário e senha; só entra nos acessos marcados para ela.
+Ao abrir o sistema aparecem dois acessos; cada um pede usuário e senha.
 
 | Acesso | O que tem | Quem entra |
 |---|---|---|
-| **Operação** | Atividades Pátio e Bateria, Operação de equipamentos, Efetivo, Meu dia | quem tem o acesso Operação marcado (todo usuário antigo já tem) |
-| **Administrativo** | Painel, Frequência (folha de 16 a 15), Férias, Importar planilhas | quem tem o acesso Administrativo marcado |
-| **Administração do sistema** | Visão geral, Conferência do cadastro, Uso do plano grátis, Escalas, configurações de cada módulo, Usuários e acessos, Perfis | só o administrador |
+| **Operação** | os módulos marcados no usuário: Atividades Pátio, Atividades Bateria, Operação (equipamentos), Efetivo e **Frequência e férias**, mais o Meu dia | todos os usuários |
+| **Administração do sistema** | Visão geral, Conferência do cadastro, Uso do plano grátis, Escalas, configurações de cada módulo, Usuários e acessos, Perfis e permissões | só o administrador |
 
-- Em **Usuários e acessos** (Administração do sistema), marque os acessos e, para a Operação, os módulos de cada pessoa.
-- Quem tem mais de um acesso troca pelo botão **trocar de acesso** no menu (no celular: **Mais › Trocar de acesso**). Ele pede usuário e senha de novo.
-- As regras do banco garantem a separação: quem só tem o Administrativo não lê nada da Operação, mesmo com módulos marcados.
+- Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
+- O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
 
 ### Frequência e Efetivo diário: o mesmo jeito de lançar
 As duas telas têm o mesmo visual (grupos que recolhem, busca, filtro de grupo ou rota, legenda das siglas, ✓ = presente, rodapé com os presentes de cada dia) e o mesmo lançamento: toque no dia → escolha a situação → escolha até quando vale (só este dia, 3, 5, 7, 15 ou 30 dias, até domingo ou até o fim da competência). No Efetivo diário, depois de uma ausência num dia de trabalho, o sistema pergunta quem cobre; depois de uma hora extra, a pedido de quem.
-- **Líder com o nome escrito de jeitos diferentes** (KAUN, KAUAN, KAUAN SUZA = KAUAN SOUZA): os grupos da Frequência viram um só e o Efetivo diário pode **agrupar por líder** com o mesmo nome. Os apelidos conhecidos ficam em `public/planilhas-adm.js` (`APELIDOS_LIDER`); além deles, um nome que é o começo de um único outro nome (KAUAN → KAUAN SOUZA) vira esse outro.
+- **Líder com o nome escrito de jeitos diferentes** (KAUAN, KAUAN SOUZA, KAUAN SUZA): os grupos da Frequência viram um só e o Efetivo diário pode **agrupar por líder** com o mesmo nome. O reconhecimento usa o cadastro do RH: nome que é o começo de uma única pessoa, ou com uma letra trocada; quando o RH tem duas pessoas possíveis e a lista não desempata, não troca.
 
-### Dados em comum entre os acessos (nada é digitado duas vezes)
-- **Presença do dia.** Quem está nas Atividades tem uma presença só: o que o líder marca no Efetivo diário aparece na Frequência, e o que o Administrativo corrige na Frequência aparece no Efetivo diário. Quem não está nas Atividades (gestão, apoio) fica só na folha.
-- **Férias.** Marcadas no Administrativo, aparecem sozinhas como **FE** no Efetivo diário, no Dimensionamento, no Meu dia e nos avisos do celular (quem está de férias não conta como disponível).
+### Dados em comum entre os módulos (nada é digitado duas vezes)
+- **Presença do dia.** Quem está nas Atividades tem uma presença só: o que o líder marca no Efetivo diário aparece na Frequência, e o que é corrigido na Frequência aparece no Efetivo diário. Quem não está nas Atividades (gestão, apoio) fica só na folha.
+- **Férias.** Marcadas em Frequência e férias, aparecem sozinhas como **FE** no Efetivo diário, no Dimensionamento, no Meu dia e nos avisos do celular (quem está de férias não conta como disponível).
 - **Escala.** A folga pela letra da turma (Escalas e turnos) também aparece na Frequência.
 - **Operação › Equipe e frota.** A situação de cada operador (férias, atestado, falta, folga lançada, desligado) vem da Frequência, do Efetivo diário e das Férias; a escala do mês e o painel usam essa situação. Faltas e atestados da Avaliação mensal vêm de lá quando não foram digitados. Operador que não está na folha continua com a situação do cadastro.
 - **Pessoas.** A folha liga cada nome à ficha do RH (matrícula) e às Atividades, aceitando acento, espaço a mais ou uma letra trocada.
 
-### Administrativo
+### Módulo Frequência e férias
 - **Frequência:** escolha Pátio ou Bateria e a competência (16 a 15). Toque no dia para lançar (presente, folga, falta, atestado, abono, hora extra, férias, afastado, treinamento, suspensão, desligado) e escolha até quando vale. Grupos recolhem; **Exportar Excel** baixa a folha. **Abrir a folha** da competência nova copia os grupos da anterior.
 - **Férias:** agora e próximos 60 dias, por mês (inclui as planejadas sem data), data limite (vencida ou nos próximos 90 dias sem férias marcadas) e todas. O término e o retorno são calculados pelo início e dias.
-- **Importar planilhas** (administrador): lê as planilhas de frequência do Pátio e da Bateria e a de férias que já estão no sistema, ou uma planilha nova em Excel. Mostra a conferência antes de gravar e, na presença do dia, só preenche o que ainda está vazio.
+- **Importar planilhas** (administrador; o gestor do módulo também, se ligado em Perfis): o administrador lê as planilhas de frequência do Pátio e da Bateria e a de férias que já estão no sistema, ou uma planilha nova em Excel. Mostra a conferência antes de gravar e, na presença do dia, só preenche o que ainda está vazio.
 - Códigos das planilhas: na folha de turno D e N são dias trabalhados e FO/Fg folga; nos grupos administrativos S e D são folga; **F na planilha é falta (FT)**; FE na planilha é feriado (folga); T é treinamento; X é ignorado.
 - Para gerar de novo os dados de importação a partir das planilhas originais (que não vão para o repositório): `node ferramentas/gerar-adm.mjs <frequencia-patio.xlsx> <frequencia-bateria.xlsx> <ferias.xlsx>`.
 
@@ -376,7 +374,7 @@ public/
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
   acessos.js          os três acessos e as férias em comum
-  administrativo.js   acesso Administrativo (painel, frequência, férias, importar)
+  administrativo.js   módulo Frequência e férias (frequência, férias, importar)
   planilhas-adm.js    leitura das planilhas de frequência e férias
   exportar.js         baixar listas como planilha do Excel
   movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
@@ -401,7 +399,7 @@ dados-importacao/     planilhas originais (seed.json, seed-bateria.json, seed-eq
                       vão para o banco na publicação, nunca para o site
 integracao/admin/     rotinas do GitHub: dados de importação, administrador, cópia e restauração
 testes/               testes automáticos no emulador do Firebase
-ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gerar-adm.mjs (planilhas do Administrativo) e conferir-site.mjs
+ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gerar-adm.mjs (planilhas de frequência e férias) e conferir-site.mjs
 ```
 
 ## Estrutura do banco (Firestore)
@@ -409,7 +407,7 @@ ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gera
 | Coleção / documento | Conteúdo |
 |---|---|
 | `config/sistema` | rotas (efetivo e carga padrão), tipos de atividade, meses gerados |
-| `usuarios/{uid}` | nome, usuário, perfil, área, módulos, acessos (operacao, administrativo) |
+| `usuarios/{uid}` | nome, usuário, perfil, área, módulos (operacao, bateria, equipamentos, gestao, frequencia) |
 | `logins/{usuario}` | liga o usuário digitado à conta interna do Firebase |
 | `plano/{ÁREA}` | atividades do plano padrão da área |
 | `colaboradores/{ÁREA}` | efetivo da área por rota |
@@ -427,8 +425,8 @@ ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gera
 | `evidenciasArquivo/{id}` | foto ou arquivo completo, lido só ao abrir |
 | `seeds/{nome}` | dados das planilhas originais para a importação (gravados na publicação; só a administração lê) |
 | `avisos_enviados/estado` | avisos já enviados e resultado da última execução da rotina |
-| `freqcomp/{conjunto\|AAAA-MM}` | Administrativo: folha da competência (grupos, pessoas e os dias de quem não está nas Atividades) |
-| `ferias/{id}` | Administrativo: um período de férias (matrícula, nome, setor, início, dias, término, retorno, data limite) |
+| `freqcomp/{conjunto\|AAAA-MM}` | Frequência: folha da competência (grupos, pessoas e os dias de quem não está nas Atividades) |
+| `ferias/{id}` | Férias: um período de férias (matrícula, nome, setor, início, dias, término, retorno, data limite) |
 | `adm/feriasAtivas` | resumo das férias de agora e dos próximos meses, lido pela Operação |
 | `sistema/uso` | uso do plano grátis, gravado pela cópia de segurança diária (só o administrador lê) |
 | `config/bootstrap` | marca que o sistema tem administrador (gravado só pela rotina do GitHub) |

@@ -31,7 +31,9 @@ const USUARIOS = {
   admAn: { papel: 'supervisor', modulos: [], acessos: ['administrativo'] },
   admLeitor: { papel: 'leitor', acessos: ['administrativo'] },
   gestorSoAdm: { papel: 'gestor', modulos: ['operacao', 'gestao'], acessos: ['administrativo'] },
-  liderAmbos: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acessos: ['operacao', 'administrativo'] }
+  liderAmbos: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acessos: ['operacao', 'administrativo'] },
+  freqSo: { papel: 'supervisor', modulos: ['frequencia'] },
+  freqLeitor: { papel: 'leitor', modulos: ['operacao', 'frequencia'] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
@@ -298,8 +300,8 @@ test('acesso: quem não tem o campo acessos continua só na Operação (usuário
   await assertFails(getDocs(collection(db('liderRec'), 'ferias')));
   await assertSucceeds(getDoc(doc(db('liderRec'), 'adm', 'feriasAtivas')));
 });
-test('acesso: só Administrativo não lê nem grava nada da Operação, mesmo com módulos marcados', async () => {
-  for (const quem of ['admAn', 'gestorSoAdm']) {
+test('módulo Frequência e férias sozinho (ou o antigo acesso Administrativo sem módulos) não lê nem grava as Atividades', async () => {
+  for (const quem of ['admAn', 'freqSo']) {
     await assertFails(getDoc(doc(db(quem), 'semanas', SEM)));
     await assertFails(getDoc(doc(db(quem), 'config', 'sistema')));
     await assertFails(getDocs(collection(db(quem), 'gocorr')));
@@ -364,4 +366,14 @@ test('Operação de equipamentos lê a folha e a presença do dia (Equipe e frot
   await assertFails(setDoc(doc(db('liderEq'), 'situacao', '2026-10'), { v: { 'C001|2026-10-02': 'FT' } }, { merge: true }));
   await assertFails(getDocs(collection(db('liderEq'), 'ferias')));
   await assertFails(getDoc(doc(db('liderG'), 'freqcomp', 'patio|2026-10')), 'quem só tem o Efetivo não lê a folha');
+});
+
+test('módulo Frequência e férias (dentro da Operação): lê e grava folha e férias; somente leitura só consulta', async () => {
+  await prepAdm();
+  await assertSucceeds(getDoc(doc(db('freqSo'), 'freqcomp', 'patio|2026-10')));
+  await assertSucceeds(setDoc(doc(db('freqSo'), 'ferias', 'f9'), { nome: 'X Y', inicio: null }));
+  await assertSucceeds(setDoc(doc(db('freqSo'), 'situacao', '2026-10'), { v: { 'C001|2026-10-05': 'AT' } }, { merge: true }));
+  await assertSucceeds(getDocs(collection(db('freqLeitor'), 'ferias')));
+  await assertFails(setDoc(doc(db('freqLeitor'), 'ferias', 'f10'), { nome: 'X Y' }));
+  await assertSucceeds(getDoc(doc(db('gestorSoAdm'), 'semanas', SEM)), 'quem tinha o acesso Administrativo e módulos da Operação entra na Operação');
 });

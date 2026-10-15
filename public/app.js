@@ -17,7 +17,7 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas, chaveFicha } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
-import { ACESSOS, ACESSO, acessosDe, podeAcesso, indiceFerias } from './acessos.js';
+import { ACESSOS, ACESSO, acessosDe, podeAcesso, indiceFerias, modulosDe } from './acessos.js';
 import { criarAdministrativo, VIEWS_A, SUB_A } from './administrativo.js';
 import { semAcento, casa, caixaBusca, filtrarLista, campoBusca } from './busca.js';
 import { criarEscala, normRegime, letra, fatorRota } from './escala.js';
@@ -39,8 +39,8 @@ let PLANO = [], PL = new Map(), COLABS = [];
 let SK = 'patio', AREAS = SETS.patio.areas; // conjunto de atividades aberto (patio | bateria)
 const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; if (v.apArea) UI.apArea = v.apArea; if (v.aRotaPor) UI.aRotaPor = v.aRotaPor; if (v.progAbertas) UI.progAbertas = v.progAbertas; } catch (e) { /* ignora */ }
-// Acesso (porta de entrada) desta sessão: operacao | administrativo | sistema.
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo === 'adm' ? 'frequencia' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; if (v.apArea) UI.apArea = v.apArea; if (v.aRotaPor) UI.aRotaPor = v.aRotaPor; if (v.progAbertas) UI.progAbertas = v.progAbertas; } catch (e) { /* ignora */ }
+// Acesso (porta de entrada) desta sessão: operacao | sistema (o antigo Administrativo agora é um módulo da Operação).
 try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
 if (!UI.acesso) UI.acesso = 'operacao';
 const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
@@ -189,13 +189,11 @@ const VIEWS = [
     usuarios: { ord: 9, grp: 'Acesso', req: () => isAdmin() }, perfis: { ord: 10, grp: 'Acesso', req: () => isAdmin() }
   };
   for (const v of VIEWS) if (CFV[v.id]) Object.assign(v, { mod: 'cf', admin: true }, CFV[v.id]);
-  // Importar planilhas do Administrativo: só o administrador (para os outros a tela nem aparece no menu)
-  { const ai = VIEWS.find(v => v.id === 'aimport'); if (ai) ai.req = () => isAdmin(); }
   // fichas de acompanhamento: só quem tem o Efetivo marcado no usuário (os dados das fichas só chegam para essas pessoas)
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, adm: { nome: 'Administrativo', curto: 'Adm.', sub: 'Frequência e férias', key: 'ad', inicio: 'apainel' } };
+const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -211,7 +209,7 @@ const ACESSO_IC = {
   administrativo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
   sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>'
 };
-MOD_IC.adm = ACESSO_IC.administrativo;
+MOD_IC.frequencia = ACESSO_IC.administrativo;
 function menuModulos(abrir) {
   UI.modOpen = abrir;
   const p = document.querySelector('.modpick'); if (!p) return;
@@ -220,21 +218,20 @@ function menuModulos(abrir) {
   if (abrir) { const it = p.querySelector('.modmenu [aria-checked="true"]') || p.querySelector('.modmenu button'); if (it) it.focus(); }
 }
 // Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
-const MODS_MARCAVEIS = ['operacao', 'bateria', 'equipamentos', 'gestao'];
+const MODS_MARCAVEIS = ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'];
 // Módulos marcados no usuário (os que trazem dados) · modsDe = o que aparece no menu:
 // Efetivo também aparece para quem tem Atividades (parte da escala); Configurações para administrador e gestor.
-const modsReais = u => (!u ? [] : u.papel === 'admin' ? MODS_MARCAVEIS : (u.modulos && u.modulos.length ? u.modulos : ['operacao']).filter(m => MODS_MARCAVEIS.includes(m)));
+const modsReais = u => (!u ? [] : u.papel === 'admin' ? MODS_MARCAVEIS : modulosDe(u).filter(m => MODS_MARCAVEIS.includes(m)));
 const temFichas = u => modsReais(u).includes('gestao');
-// Módulos que aparecem no menu, conforme o acesso aberto: Operação (os módulos da pessoa), Administrativo, Administração do sistema.
+// Módulos que aparecem no menu, conforme o acesso aberto: Operação (os módulos da pessoa) ou Administração do sistema.
 const modsDe = u => {
   if (!u) return [];
-  if (UI.acesso === 'administrativo') return podeAcesso(u, 'administrativo') ? ['adm'] : [];
   if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
   const b = modsReais(u); return MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
 };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
-const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || (v.mod === 'all' && (UI.acesso === 'operacao' || v.id !== 'meudia'))) && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
+const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || (v.mod === 'all' && ((UI.acesso === 'operacao' && UI.modulo !== 'frequencia') || v.id !== 'meudia'))) && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
@@ -247,7 +244,7 @@ function aplicarSet() {
   if (myArea()) UI.area = myArea();
 }
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { prog: 'apontar', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc' };
+const VIEW_NOVA = { prog: 'apontar', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
@@ -335,7 +332,7 @@ function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
-  if (UI.modulo === 'adm') { renderNav(); renderTop(); pintar('view', AD.render(UI.view)); afterRender(); return; }
+  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', AD.render(UI.view)); afterRender(); return; }
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
@@ -358,7 +355,7 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
   // Selo de Pendências: só os atrasos dos últimos 7 dias, na área da pessoa (um número que dá para resolver).
-  const atr = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'adm' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
   const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
   const pendUsers = 0;
   const ms = modsDe(ME);
@@ -387,7 +384,7 @@ function barraDe() {
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'adm' ? [['apainel', 'Painel', 'painel'], ['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
@@ -452,7 +449,7 @@ function indiceBusca() {
   const out = []; const ms = modsDe(ME);
   for (const v of viewsDoModulo()) out.push({ t: v.nome, d: `Tela · ${MODS[UI.modulo].nome}`, k: 'tela', ir: () => { UI.view = v.id; } });
   for (const m of ms) if (m !== UI.modulo) out.push({ t: MODS[m].nome, d: `Módulo · ${MODS[m].sub}`, k: 'tela', ir: () => { UI.modulo = m; UI.view = MODS[m].inicio; } });
-  if (UI.modulo === 'adm') { // Administrativo: pessoas das folhas e das férias
+  if (UI.modulo === 'frequencia') { // Frequência e férias: pessoas das folhas e das férias
     const vistos = new Set(); const A = DB.cache.adm || {};
     for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'aferias'; if (UI.a) { UI.a.fQ = f.nome; UI.a.fAba = 'todas'; } } }); }
     for (const [id, c] of Object.entries(A.comps || {})) if (c) for (const g of c.grupos || []) for (const p of g.pessoas) { const k = p.mat || p.nome; if (vistos.has('f' + k)) continue; vistos.add('f' + k); out.push({ t: title(p.nome), d: `Frequência · ${id.startsWith('bateria') ? 'Bateria' : 'Pátio'} · ${g.nome}`, k: 'pessoa', ir: () => { UI.view = 'afreq'; if (UI.a) { UI.a.conj = id.split('|')[0]; UI.a.q = p.nome; } } }); }
@@ -507,7 +504,7 @@ function renderTop() {
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
   }
-  if (UI.modulo === 'adm') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
@@ -640,7 +637,7 @@ const turmaDe = c => letra(c.turma) || turmaFicha(c.nome);
 const regimeDe = c => normRegime(c.regime, escala().regimes);
 const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.nome : title(c.regime || ''); };
 // { v: código, auto: veio da escala, motivo, semTurma }
-// Férias marcadas no Administrativo entram sozinhas como FE (o lançamento do dia ainda vale mais).
+// Férias marcadas em Frequência e férias entram sozinhas como FE (o lançamento do dia ainda vale mais).
 let FERI = null, FERIv = null;
 const feriasDe = (c, dt) => { const l = DB.cache.feriasAtivas || (DB.cache.adm && DB.cache.adm.ferias) || []; if (FERIv !== l) { FERI = indiceFerias(l); FERIv = l; } return FERI({ mat: c.mat, nome: c.nome }, dt); };
 function sitDia(c, dt) {
@@ -783,7 +780,7 @@ function lancarEfetivo(key) {
   const depois = []; for (let i = 1; i <= 30; i++) depois.push(add(dt, i));
   const fimToque = () => { render(); const nb = document.querySelector(`[data-sit="${CSS.escape(key)}"]`); if (nb) { nb.focus({ preventScroll: true }); M.pulsar(nb); } };
   abrirLancamento({
-    sheet, nome: title(c.nome), dt, atual: sx.auto ? { v: sx.v, auto: true, motivo: 'pela escala' } : sx.ferias ? { v: 'FE', auto: true, motivo: 'férias do Administrativo' } : DB.sit(key) ? { v: sx.v } : { v: sx.v, auto: true, motivo: '' },
+    sheet, nome: title(c.nome), dt, atual: sx.auto ? { v: sx.v, auto: true, motivo: 'pela escala' } : sx.ferias ? { v: 'FE', auto: true, motivo: 'férias' } : DB.sit(key) ? { v: sx.v } : { v: sx.v, auto: true, motivo: '' },
     codigos: CODS_EF, linhaInfo: linha, extras, depois, ok: I.ok,
     fim: k < 6 ? { t: 'Até domingo', v: domingo } : null,
     aoExtra: v => {
@@ -1025,9 +1022,9 @@ function vCfConf() {
   if (semArea.length) item('bad', 'Líderes e supervisores sem área', 'Eles não veem nenhuma rota até a área ser escolhida.', semArea.map(u => title(u.nome)), 'usuarios', 'Usuários e acessos');
   const nunca = us.filter(u => u.trocarSenha && u.papel !== 'bloqueado');
   if (nunca.length) item('neu', 'Ainda não criaram a própria senha', 'Receberam a senha provisória e não entraram.', nunca.map(u => `${title(u.nome)} (${u.login || ''})`), 'usuarios', 'Usuários e acessos');
-  // 5) Administrativo: folha atual e férias
+  // 5) Frequência e férias: folha atual e férias
   const A = DB.cache.adm || {}; const comp = competenciaDe(TODAY);
-  for (const k of SET_KEYS) { const c = (A.comps || {})[k + '|' + comp]; if (c === null) item('warn', `Folha de ${monthLabel(comp)} não aberta · ${SETS[k].curto}`, 'A frequência da competência atual ainda não foi aberta no Administrativo.', [], null); else if (c) { const sem = c.grupos.flatMap(g => g.pessoas.filter(p => !p.mat).map(p => title(p.nome))); if (sem.length) item('neu', `Na folha sem ficha no RH · ${SETS[k].curto}`, 'Entram na folha, mas sem matrícula as férias e o Efetivo não se ligam a elas.', sem, null); const sAt = c.grupos.flatMap(g => g.pessoas.filter(p => !p.ativ && !p.desligado && g.turno).map(p => title(p.nome))); if (sAt.length) item('neu', `Turno na folha, fora das Atividades · ${SETS[k].curto}`, 'A presença delas fica só na folha (não aparece no Efetivo diário).', sAt, null); } }
+  for (const k of SET_KEYS) { const c = (A.comps || {})[k + '|' + comp]; if (c === null) item('warn', `Folha de ${monthLabel(comp)} não aberta · ${SETS[k].curto}`, 'A frequência da competência atual ainda não foi aberta em Frequência e férias.', [], null); else if (c) { const sem = c.grupos.flatMap(g => g.pessoas.filter(p => !p.mat).map(p => title(p.nome))); if (sem.length) item('neu', `Na folha sem ficha no RH · ${SETS[k].curto}`, 'Entram na folha, mas sem matrícula as férias e o Efetivo não se ligam a elas.', sem, null); const sAt = c.grupos.flatMap(g => g.pessoas.filter(p => !p.ativ && !p.desligado && g.turno).map(p => title(p.nome))); if (sAt.length) item('neu', `Turno na folha, fora das Atividades · ${SETS[k].curto}`, 'A presença delas fica só na folha (não aparece no Efetivo diário).', sAt, null); } }
   if (A.fLoaded) {
     const marcadas = new Set((A.ferias || []).filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || nk(f.nome)));
     const venc = (A.ferias || []).filter(f => f.limite && f.limite < TODAY && !marcadas.has(f.mat || nk(f.nome)));
@@ -1369,16 +1366,16 @@ function vUsuarios() {
    <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
    <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
    <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
-   <div class="ur r3"><div class="sel"><span>Acessos</span><div class="mchips">${ACESSOS.filter(a => a.k !== 'sistema').map(a => `<label class="mchip"><input type="checkbox" id="nuA_${a.k}" ${a.k === 'operacao' ? 'checked' : ''}><span>${a.nome}</span></label>`).join('')}</div></div><div class="sel"><span>Módulos da Operação</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
+   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MODS[m].nome}</span></label>`).join('')}</div></div>
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa entra só nos <b>acessos</b> marcados (Operação, Administrativo); a Administração do sistema é só do administrador.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Acessos</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos, mais a Administração do sistema</span>' : `<div class="mchips">${ACESSOS.filter(a => a.k !== 'sistema').map(a => `<label class="mchip"><input type="checkbox" data-uac="${u.uid}|${a.k}" ${acessosDe(u).includes(a.k) ? 'checked' : ''}><span>${a.nome}</span></label>`).join('')}</div>`}</td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : !acessosDe(u).includes('operacao') ? '<span class="muted small">Sem acesso à Operação</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa vê só os <b>módulos</b> marcados (Frequência e férias inclusive); a Administração do sistema é só do administrador. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge' };
+const KEY_MOD = { operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge', frequencia: 'ad' };
 const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v) && (!v.reqU || v.reqU(u))); };
 function celulaAbas(u) {
   if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
@@ -1865,7 +1862,7 @@ document.addEventListener('submit', async e => {
   try {
     if (f.id === 'fLogin') {
       UI.acesso = UI.escolha || UI.acesso; salvarAcesso(); DB.definirAcesso(UI.acesso);
-      UI.modulo = UI.acesso === 'administrativo' ? 'adm' : UI.acesso === 'sistema' ? 'config' : (MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao');
+      UI.modulo = UI.acesso === 'sistema' ? 'config' : (MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao');
       UI.view = ACESSO[UI.acesso].inicio; salvarUI();
       await DB.signIn($('lgUser').value, $('lgPass').value); return;
     }
@@ -1882,14 +1879,13 @@ document.addEventListener('submit', async e => {
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 8) throw new Error('A senha provisória precisa ter pelo menos 8 caracteres.');
-      const acessos = ['operacao', 'administrativo'].filter(k => $('nuA_' + k).checked);
-      if (!acessos.length && papel !== 'admin') throw new Error('Marque pelo menos um acesso (Operação ou Administrativo).');
-      const modulos = acessos.includes('operacao') ? MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked) : [];
-      if (!modulos.length && acessos.includes('operacao') && papel !== 'admin') throw new Error('Marque pelo menos um módulo da Operação.');
+      const acessos = ['operacao'];
+      const modulos = MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked);
+      if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
       if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
       if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos, acessos: papel === 'admin' ? ['operacao', 'administrativo'] : acessos });
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos, acessos });
       DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
       UI.busy = false; UI.senhaSug = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
@@ -1923,7 +1919,7 @@ document.addEventListener('change', e => {
     const [uid, m] = t.dataset.umod.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
     const atual = modsReais(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
     if (!novo.length) { t.checked = true; toast('Deixe pelo menos um módulo'); return; }
-    DB.setUsuario(uid, { modulos: novo }); toast('Módulos atualizados');
+    DB.setUsuario(uid, { modulos: novo, acessos: ['operacao'] }); toast('Módulos atualizados'); // acessos antigo (Administrativo) vira o módulo
   }
   if (t.dataset.uac) {
     const [uid, k] = t.dataset.uac.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);

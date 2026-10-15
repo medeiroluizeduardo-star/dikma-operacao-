@@ -38,7 +38,7 @@ import {
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth } from './cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
-import { podeAcesso } from './acessos.js';
+import { podeAcesso, temFreq } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
@@ -58,9 +58,9 @@ export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k 
 export const temOperacao = u => temSet(u, 'patio');
 export const temBateria = u => temSet(u, 'bateria');
 export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
-// Acesso aberto nesta sessão (operacao | administrativo | sistema). O app define antes de entrar.
+// Acesso aberto nesta sessão (operacao | sistema). O app define antes de entrar. O antigo Administrativo entra na Operação.
 let acessoAtual = 'operacao';
-export const definirAcesso = a => { acessoAtual = a || 'operacao'; };
+export const definirAcesso = a => { acessoAtual = a === 'sistema' ? 'sistema' : 'operacao'; };
 
 let fbApp = null;
 let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
@@ -212,10 +212,11 @@ export async function alterarSenha(atual, nova) {
 
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
-  if (acessoAtual === 'administrativo') { startAdm(on); return; }
   // Operação e Administração do sistema: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
   on(doc(db, 'adm', 'feriasAtivas'), s => { cache.feriasAtivas = (s.exists() && s.data().itens) || []; changed(); });
   if (me.papel === 'admin') on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
+  // Módulo Frequência e férias (dentro da Operação): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
+  if (acessoAtual === 'operacao' && temFreq(me)) startAdm(on);
   // Administração do sistema: a conferência do cadastro olha também férias e a folha da competência atual.
   if (acessoAtual === 'sistema' && me.papel === 'admin') {
     cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
@@ -254,7 +255,7 @@ function stopData() {
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
-  eqFreqSubs.clear(); cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 };
+  eqFreqSubs.clear(); cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
@@ -452,15 +453,14 @@ function startAdm(on) {
   cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
-  on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
-  on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
   on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
-  if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
+  admOn = true;
 }
+let admOn = false;
 // Liga uma competência (folha) e os meses de presença que ela cobre.
 export function admWatch(conj, comp) {
-  if (!db || !me || acessoAtual !== 'administrativo') return;
+  if (!db || !me || !admOn) return;
   const id = conj + '|' + comp;
   if (!admSubs.has(id)) admSubs.set(id, onSnapshot(doc(db, 'freqcomp', id), s => { cache.adm.comps[id] = s.exists() ? s.data() : null; changed(); }, e => cb.onError && cb.onError(e)));
   const [a, m] = comp.split('-').map(Number); const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;

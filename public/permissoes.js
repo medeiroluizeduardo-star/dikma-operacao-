@@ -8,6 +8,7 @@ export const GRUPOS_ABAS = [
   { t: 'Atividades Pátio · Atividades Bateria', mod: 'op' },
   { t: 'Operação (equipamentos)', mod: 'eq' },
   { t: 'Efetivo (escala, presença e fichas)', mod: 'ge' },
+  { t: 'Frequência e férias', mod: 'ad' },
   { t: 'Configurações', mod: 'cf' }
 ];
 const SO_ADMIN = ['usuarios', 'perfis', 'gimport'];
