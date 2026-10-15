@@ -33,7 +33,9 @@ const USUARIOS = {
   gestorSoAdm: { papel: 'gestor', modulos: ['operacao', 'gestao'], acessos: ['administrativo'] },
   liderAmbos: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acessos: ['operacao', 'administrativo'] },
   freqSo: { papel: 'supervisor', modulos: ['frequencia'] },
-  freqLeitor: { papel: 'leitor', modulos: ['operacao', 'frequencia'] }
+  freqLeitor: { papel: 'leitor', modulos: ['operacao', 'frequencia'] },
+  admv: { papel: 'administrativo', modulos: ['operacao', 'gestao'], nome: 'Assistente Adm' },
+  admvSo: { papel: 'administrativo', modulos: [] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
@@ -376,4 +378,50 @@ test('módulo Frequência e férias (dentro da Operação): lê e grava folha e 
   await assertSucceeds(getDocs(collection(db('freqLeitor'), 'ferias')));
   await assertFails(setDoc(doc(db('freqLeitor'), 'ferias', 'f10'), { nome: 'X Y' }));
   await assertSucceeds(getDoc(doc(db('gestorSoAdm'), 'semanas', SEM)), 'quem tinha o acesso Administrativo e módulos da Operação entra na Operação');
+});
+
+// ---------------- aprovação dos apontamentos ----------------
+test('aprovação: supervisor aprova ou devolve só nas áreas dele; coordenador em todas; líder e somente leitura não aprovam', async () => {
+  const ap = (area, v = { 'REC-001|1': { s: 'A', c: 'R' } }) => ({ area, mes: '2026-10', v });
+  await assertSucceeds(setDoc(doc(db('sup'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
+  await assertSucceeds(setDoc(doc(db('sup'), 'aprov', SEM), ap('RECEBIMENTO', { 'REC-002|1': { s: 'D', c: 'P', mot: 'Não foi feita' } }), { merge: true }));
+  await assertFails(setDoc(doc(db('sup'), 'aprov', SEM_PREP), ap('PREPARAÇÃO')));
+  await assertFails(setDoc(doc(db('sup'), 'aprov', SEM), ap('PREPARAÇÃO'), { merge: true }), 'não troca a área de um registro');
+  await assertSucceeds(setDoc(doc(db('coord'), 'aprov', SEM_PREP), ap('PREPARAÇÃO')));
+  await assertSucceeds(setDoc(doc(db('gestorP'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }));
+  await assertFails(setDoc(doc(db('liderRec'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o líder não aprova o próprio apontamento');
+  await assertFails(setDoc(doc(db('freqLeitor'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
+  await assertFails(setDoc(doc(db('admv'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o Administrativo não aprova apontamento');
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'aprov', SEM)), 'o líder vê o que foi aprovado ou devolvido');
+  await assertFails(getDoc(doc(db('liderEq'), 'aprov', SEM)), 'quem não tem as Atividades não lê');
+  await assertSucceeds(setDoc(doc(db('sup'), 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: { 'B1-001|1': { s: 'A', c: 'R' } } }));
+  await assertFails(setDoc(doc(db('liderRec'), 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: {} }, { merge: true }));
+  await assertFails(deleteDoc(doc(db('sup'), 'aprov', SEM)));
+});
+
+// ---------------- perfil Administrativo ----------------
+test('perfil Administrativo: vê as Atividades sem apontar; edita Frequência e férias; não entra na Administração do sistema', async () => {
+  await prepAdm();
+  const d = db('admv');
+  await assertSucceeds(getDoc(doc(d, 'semanas', SEM)));
+  await assertFails(updateDoc(doc(d, 'semanas', SEM), { s: { 'REC-001': 'R______' } }));
+  await assertSucceeds(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [{ nome: 'G', pessoas: [] }] }));
+  await assertSucceeds(setDoc(doc(d, 'ferias', 'fa1'), { nome: 'PESSOA X', inicio: null }));
+  await assertSucceeds(setDoc(doc(db('admvSo'), 'ferias', 'fa2'), { nome: 'PESSOA Y', inicio: null }), 'o perfil já traz Frequência e férias, mesmo sem marcar');
+  await assertFails(getDoc(doc(d, 'sistema', 'uso')));
+  await assertFails(getDoc(doc(d, 'seeds', 'seed-ferias')));
+  await assertFails(setDoc(doc(d, 'config', 'sistema'), { rotas: [] }));
+  await assertFails(updateDoc(doc(d, 'usuarios', 'admv'), { papel: 'admin' }));
+});
+test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e colhe assinatura; não muda o cadastro das fichas', async () => {
+  const d = db('admv');
+  await assertSucceeds(getDocs(collection(d, 'gcolab')));
+  await assertSucceeds(getDocs(collection(d, 'gocorr')));
+  await assertSucceeds(setDoc(doc(d, 'gocorr', 'adm-oc1'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'admv', recolhe: '' }));
+  await assertFails(setDoc(doc(d, 'gocorr', 'adm-oc2'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'outro' }));
+  await assertSucceeds(updateDoc(doc(d, 'gocorr', 'pre1'), { recolhe: 'ASSISTENTE ADM' }));
+  await assertSucceeds(setDoc(doc(d, 'gassin', 'adm-as1'), { area: 'BATERIA 1', por: 'admv', metodo: 'tela' }));
+  await assertFails(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [] }));
+  await assertFails(deleteDoc(doc(d, 'gocorr', 'rec1')));
+  await assertFails(getDocs(collection(db('admvSo'), 'gcolab')), 'sem o Efetivo marcado não lê as fichas');
 });

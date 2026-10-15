@@ -43,7 +43,7 @@ import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -128,9 +128,11 @@ export async function start(callbacks) {
       if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
       if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
+      // A Administração do sistema só aparece para o administrador; os demais sempre entram na Operação.
+      if (acessoAtual === 'sistema' && me.papel !== 'admin') acessoAtual = 'operacao';
       if (!podeAcesso(me, acessoAtual) || (acessoAtual === 'sistema' && me.papel !== 'admin')) { stopData(); cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual }); return; }
       if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); }
-      cb.onAuth({ status: 'ready', user: me });
+      cb.onAuth({ status: 'ready', user: me, acesso: acessoAtual });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
 }
@@ -282,7 +284,12 @@ function watchSet(k, meses) {
       st.monthsLoaded.add(m); changed();
     }, e => cb.onError && cb.onError(e));
     const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {} }; changed(); });
-    monthSubs.set(key(m), [a, b]);
+    // aprovação dos apontamentos pelo supervisor (aprov/{área|semana}: { area, mes, v: { 'pid|dia': { s, c, por, nome, em, mot } } })
+    const c = onSnapshot(query(collection(db, C('aprov', k)), where('mes', '==', m)), qs => {
+      qs.docChanges().forEach(x => { if (x.type === 'removed') delete st.aprov[x.doc.id]; else st.aprov[x.doc.id] = x.doc.data().v || {}; });
+      changed();
+    }, () => {});
+    monthSubs.set(key(m), [a, b, c]);
   }
   // limita os meses extras (fora da base) a 4 por conjunto
   const base = new Set(mesesBase());
@@ -311,6 +318,14 @@ export function setStatusMany(docId, changes) {
   args.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
   return track(updateDoc(doc(db, C('semanas'), docId), ...args));
 }
+// Aprovar ou devolver apontamentos (supervisor, coordenador, gestor, administrador). itens: { 'pid|dia': { s, c, mot? } }
+export function setAprov(docId, area, mes, itens) {
+  const v = {}; const em = new Date().toISOString();
+  for (const [k, x] of Object.entries(itens)) v[k] = { ...x, por: me.uid, nome: me.nome || me.login || '', em };
+  st0().aprov[docId] = { ...(st0().aprov[docId] || {}), ...v };
+  return track(setDoc(doc(db, C('aprov'), docId), { area, mes, v }, { merge: true }));
+}
+const st0 = () => S[cur];
 export function setSit(key, code) {
   const m = key.split('|')[1].slice(0, 7);
   return track(setDoc(doc(db, C('situacao'), m), { v: { [key]: code || deleteField() } }, { merge: true }));

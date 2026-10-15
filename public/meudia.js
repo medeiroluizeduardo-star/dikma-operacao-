@@ -1,6 +1,7 @@
 // Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
 import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, addMonth, ddmm } from './cal.js';
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './hoje.js';
+import { aprovaPapel, contarPendentes } from './aprovacao.js';
 
 const DIAS_L = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true };
@@ -15,7 +16,7 @@ export function criarMeuDia(X) {
 
   // O que a pessoa enxerga em cada módulo
   const temMod = m => X.modsDe(ME()).includes(m);
-  const todas = m => ME().papel === 'admin' || (['gestor', 'coordenador', 'leitor'].includes(ME().papel) && temMod(m));
+  const todas = m => ME().papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(ME().papel) && temMod(m));
   function areasDe(k) {
     if (!temMod(SETS[k].mod)) return [];
     if (todas(SETS[k].mod)) return SETS[k].areas;
@@ -99,6 +100,9 @@ export function criarMeuDia(X) {
       const nomeAreas = areas.length === SETS[k].areas.length ? 'todas as áreas' : areas.map(a => AREA_S[a]).join(' e ');
       if (r.hoje.total) progresso.push({ nome: `${SETS[k].curto} · hoje`, sub: nomeAreas, feitas: r.hoje.R + r.hoje.E + r.hoje.N, total: r.hoje.total, go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
       if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
+      { const st = DB.dados(k); // aprovação dos apontamentos: o supervisor vê o que falta aprovar; o líder, o que voltou para corrigir
+        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
+        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev'); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
       if (r.deficit.length) tiles.push({ n: r.deficit.length, t: `rota(s) com déficit amanhã · ${SETS[k].curto}`, s: `${ddmm(r.amanha)}`, tom: 'bad', go: [mod, 'escala', r.deficit[0].area] });
       const pend = r.rotas.filter(x => x.total);
       blocos.push(`<div class="card md-card"><header><h2>${SETS[k].nome}</h2><p>Hoje · ${esc(nomeAreas)}</p><span class="r">${ir(mod, 'apontar', areas.length === 1 ? areas[0] : '', `${I.apontar} Apontar`, true)}</span></header><div class="body stackcol" style="gap:14px">

@@ -3,6 +3,7 @@
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 import { competenciaDe, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
 import { abrirLancamento } from './presenca.js';
+import { APROV_DESDE, aprovaPapel, estadoAprov } from './aprovacao.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
 // Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
@@ -124,13 +125,54 @@ function setSt(doc, i, k, c, motivo) {
   if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
   const ch = localChange(doc, i, k, c, motivo);
   UI.flash = { id: doc.id, i, k, t: Date.now() };
-  DB.setStatusMany(doc.id, [ch]);
+  gravarApont(doc, [ch]);
   const p = PL.get(doc.ids[i]); const nm = { R: 'realizada', N: 'não realizada', P: 'voltou para programada', E: 'extra', _: 'extra removida' }[c];
   DB.log(`${p ? p.ativ : doc.ids[i]} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → ${nm}${c === 'N' && motivo ? ' (' + motivo + ')' : ''}`);
 }
 
+/* ---------------- aprovação dos apontamentos ---------------- */
+// O líder aponta; o supervisor (ou coordenador, gestor, administrador) aprova ou devolve com o motivo.
+// O que ainda espera aprovação já conta nos números, com o selo "aguardando". Vale dos apontamentos a partir de APROV_DESDE.
+const aprovador = () => !!ME && aprovaPapel(ME.papel);
+const areasAprov = () => (!aprovador() ? [] : todasAreas() ? AREAS : myAreas());
+const aprovDe = (doc, pid, k) => ((DB.cache.aprov || {})[doc.id] || {})[pid + '|' + k];
+// 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
+const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY);
+function listaAprov(areas, est = 'pend') {
+  const out = [];
+  for (const doc of Object.values(DB.cache.semanas)) {
+    if (!areas.includes(doc.area)) continue;
+    const ds = diasDe(doc); if (ds[6] < APROV_DESDE || ds[0] > TODAY) continue;
+    for (let i = 0; i < doc.ids.length; i++) { if (!PL.get(doc.ids[i])) continue; for (let k = 0; k < 7; k++) if (estAprov(doc, i, k) === est) out.push({ doc, i, k, dt: ds[k], p: PL.get(doc.ids[i]) }); }
+  }
+  return out.sort((a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id)));
+}
+// Grava o apontamento; quando quem aponta é supervisor para cima, já fica aprovado.
+function gravarApont(doc, ch) {
+  if (!ch.length) return;
+  DB.setStatusMany(doc.id, ch);
+  if (!aprovador() || !canEdit(doc.area)) return;
+  const it = {};
+  for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = { s: 'A', c }; }
+  if (Object.keys(it).length) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível registrar a aprovação'));
+}
+function aprovar(itens) {
+  const porDoc = new Map();
+  for (const x of itens) { if (!porDoc.has(x.doc)) porDoc.set(x.doc, {}); porDoc.get(x.doc)[x.doc.ids[x.i] + '|' + x.k] = { s: 'A', c: x.doc.d[x.i][x.k] }; }
+  for (const [doc, it] of porDoc) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível aprovar'));
+  if (itens.length) DB.log(`Aprovou ${itens.length === 1 ? `${itens[0].p.ativ} · ${itens[0].p.rota} · ${ddmm(itens[0].dt)}` : `${itens.length} apontamentos`}`);
+}
+function devolver(x, mot) {
+  const { doc, i, k } = x; const ant = doc.d[i][k];
+  const ch = localChange(doc, i, k, ant === 'E' ? '_' : 'P');
+  DB.setStatusMany(doc.id, [ch]);
+  Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, { [doc.ids[i] + '|' + k]: { s: 'D', c: 'P', ant, mot } })).catch(() => toast('Não foi possível devolver'));
+  DB.log(`Devolveu ao líder: ${x.p.ativ} · ${x.p.rota} · ${ddmm(x.dt)} (${mot})`);
+}
+
 /* ---------------- ícones ---------------- */
 const I = {
+  aprov: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
   ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   painel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
   prog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4M7 13h3M7 17h3M14 13h3"/></svg>',
@@ -159,6 +201,7 @@ const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
   { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
+  { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => aprovador() },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
   { id: 'relfoto', nome: 'Relatório fotográfico', ic: 'cam', grp: 'Acompanhar', mod: 'op' },
@@ -271,24 +314,28 @@ const $ = id => document.getElementById(id);
 function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
+// Troca entre a Operação e a Administração do sistema (só o administrador): recarrega para buscar os dados certos.
+function irAcesso(k) {
+  if (!isAdmin() || !ACESSO[k]) return;
+  UI.acesso = k; salvarAcesso(); if (DB.definirAcesso) DB.definirAcesso(k);
+  UI.modulo = k === 'sistema' ? 'config' : 'operacao'; UI.view = ACESSO[k].inicio; UI.modOpen = false; salvarUI();
+  $('view').innerHTML = M.ESQUELETO; location.reload();
+}
 function renderGate() {
   const s = AUTH.status;
   const sair = `<button class="btn" data-act="logout">${I.out} Sair</button>`;
   if (s === 'loading') return gate('<p class="muted">Carregando…</p>');
   if (s === 'noConfig') return gate(`<h2>Sistema ainda não conectado</h2><p>Este endereço não encontrou a configuração do Firebase. Publique pelo Firebase Hosting (veja o README do projeto).</p><a class="btn" href="?demo">Abrir a demonstração</a>`);
   if (s === 'signedOut') {
-    // 1) Escolha do acesso · 2) usuário e senha daquele acesso
-    if (!UI.escolha) return gate(`<h2>Entrar</h2><p class="muted m0">Escolha o acesso.</p>
-      <div class="acessos" role="list">${ACESSOS.map(a => `<button class="acard" role="listitem" data-escolha="${a.k}"><span class="ai">${ACESSO_IC[a.k]}</span><span class="minw"><b>${a.nome}</b><small>${a.sub}</small></span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`).join('')}</div>
-      ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
-      ${AUTH.msg ? `<p class="err m0" role="alert">${esc(AUTH.msg)}</p>` : ''}
-      ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
-    const ac = ACESSO[UI.escolha];
-    return gate(`<button class="btn ghost sm voltar" data-escolha="">‹ Outros acessos</button><h2>${ac.nome}</h2><p class="muted m0">${ac.sub}</p><form id="fLogin" class="stackform" novalidate>
+    // Todo mundo entra direto na Operação; a Administração do sistema o administrador abre lá dentro.
+    return gate(`<h2>Entrar</h2><p class="muted m0">Use o usuário e a senha que o administrador passou.</p>
+    ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
+    ${AUTH.msg ? `<p class="err m0" role="alert">${esc(AUTH.msg)}</p>` : ''}
+    <form id="fLogin" class="stackform" novalidate>
     <label class="sel"><span>Usuário</span><input class="in" id="lgUser" autocomplete="username" autocapitalize="none" spellcheck="false" required value="${esc(ultimoLogin())}"></label>
     ${senhaField('lgPass', 'Senha', 'current-password')}
     <p class="err" id="lgErr" role="alert" hidden></p>
-    <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar em ' + ac.nome}</button></form>
+    <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
   }
@@ -343,9 +390,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'esdia', 'esdim', 'esbal', 'imprimir', 'relfoto'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'relfoto'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, apontar: vApontar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -358,7 +405,7 @@ function renderNav() {
   // Selo de Pendências: só os atrasos dos últimos 7 dias, na área da pessoa (um número que dá para resolver).
   const atr = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
   const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
-  const pendUsers = 0;
+  const apv = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
   const ms = modsDe(ME);
   const cur = MODS[UI.modulo];
   const linha = m => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${MODS[m].sub}</small></span>`;
@@ -368,16 +415,17 @@ function renderNav() {
   </div>`, g = '';
   for (const v of viewsDoModulo()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
-    const badge = v.id === 'pend' && atr ? atr : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
-    h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
+    const badge = v.id === 'pend' && atr ? atr : v.id === 'aprovar' && apv ? apv : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
+    h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
   }
   pintar('nav', h);
   pintar('who', DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
-  { const w = $('who'); if (w && !w.querySelector('[data-act="trocarAcesso"]') && acessosDe(ME).length > 1) w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="trocarAcesso">${ACESSO_IC[UI.acesso] || ''} ${esc(ACESSO[UI.acesso].nome)} · trocar de acesso</button>`); }
+  // Só o administrador vê a Administração do sistema: um botão leva para lá e outro volta para a Operação.
+  { const w = $('who'); if (w && !w.querySelector('[data-act="irAcesso"]') && isAdmin()) { const k = UI.acesso === 'sistema' ? 'operacao' : 'sistema'; w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="irAcesso">${ACESSO_IC[k] || ''} ${k === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação'}</button>`); } }
   const tb = barraDe();
-  pintarBarra(tb, atr, gb);
+  pintarBarra(tb, atr, gb, apv);
 }
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais.
 function barraDe() {
@@ -386,15 +434,15 @@ function barraDe() {
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
+    : aprovador() ? [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
 }
-function pintarBarra(tb, atr, gb) {
-  const pendUsers = 0;
+function pintarBarra(tb, atr, gb, apv = 0) {
   const inMore = !tb.some(x => x[0] === UI.view);
-  const moreBadge = atr + pendUsers;
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}</button>`).join(''));
+  const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
 }
 function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -507,7 +555,7 @@ function renderTop() {
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar'].includes(UI.view);
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
@@ -528,6 +576,11 @@ function vPainel() {
   const seg = `<div class="filters" role="group" aria-label="Período"><button class="btn ${UI.escopo === 'semana' ? 'dark' : ''}" data-esc="semana">Semana</button><button class="btn ${UI.escopo === 'mes' ? 'dark' : ''}" data-esc="mes">Mês inteiro</button></div>`;
   let h = `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span></div>`;
   if (!docs.length) return h + '<div class="card"><div class="empty">Nenhuma programação gerada para este período.</div></div>';
+  {
+    const as = area === 'TODAS' ? AREAS : [area];
+    const pa = listaAprov(as).length, dv = listaAprov(as, 'dev').length;
+    if (pa || dv) h += `<div class="aprovbar"><span>${I.aprov}<span>${pa ? `<b class="num">${pa}</b> apontamento${pa > 1 ? 's' : ''} aguardando aprovação` : ''}${pa && dv ? ' · ' : ''}${dv ? `<b class="num">${dv}</b> devolvido${dv > 1 ? 's' : ''} ao líder para corrigir` : ''}<small>Já contam nos números abaixo.</small></span></span>${pa && aprovador() ? '<button class="btn pri sm" data-go="aprovar">Aprovar</button>' : dv && canEdit(as[0]) ? '<button class="btn sm" data-go="apontar">Abrir o Apontar</button>' : ''}</div>`;
+  }
   h += `<div class="kpis">
    <div class="kpi hero"><span class="lbl">Eficiência até hoje</span><span class="v num">${ef}%</span><span class="s num">${n0(s.Rhoje)} realizadas de ${n0(s.progHoje)} programadas até ${ddmm(TODAY)}</span><div class="meter"><i style="width:${ef}%"></i></div></div>
    <div class="kpi"><span class="lbl">Programadas</span><span class="v num">${n0(s.prog)}</span><span class="s">no período</span></div>
@@ -602,17 +655,23 @@ function vApontar() {
   const done = items.filter(x => 'RNE'.includes(doc.d[x.i][k])).length;
   const R = items.filter(x => doc.d[x.i][k] === 'R').length, N = items.filter(x => doc.d[x.i][k] === 'N').length, E = items.filter(x => doc.d[x.i][k] === 'E').length;
   const t = items.length || 1;
+  const apAqui = areasAprov().includes(area) ? items.filter(x => estAprov(doc, x.i, k) === 'pend').length : 0;
   let h = chipsArea + `<div class="dayscroll" role="group" aria-label="Dia">${DAYS.map((d, j) => { const dt = add(UI.ini, j); return `<button class="dbtn ${dt === TODAY ? 'hoje' : ''}" data-dia="${j}" aria-pressed="${j === k}"><small>${d}</small><b>${dt.slice(8)}</b></button>`; }).join('')}</div>
   <div class="rchips linha" role="group" aria-label="Rota">${rts.map(r => { const c = cnt(r), p = pendR(r); return `<button class="rchip" data-arota="${esc(r)}" aria-pressed="${r === UI.aRota}">${esc(r)}<span class="c num">${p ? p : c ? '✓' : '—'}</span></button>`; }).join('')}</div>
   <div class="apbar"><div class="row-between"><b>${esc(UI.aRota)} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}</b><span class="muted num">${done} de ${items.length} feitas</span></div>
   <div class="stack"><i style="width:${R / t * 100}%;background:var(--st-real)"></i><i style="width:${N / t * 100}%;background:var(--st-nreal)"></i><i style="width:${E / t * 100}%;background:var(--st-extra)"></i></div>
-  ${edit ? `<div class="row-gap">${items.length - done > 0 ? (UI.confirm === 'all' ? `<span class="confirm">Marcar as ${items.length - done} restantes como realizadas? <button class="btn pri sm" data-act="allok">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : '<button class="btn sm" data-act="askAll">✓ Marcar restantes</button>') : ''}<button class="btn sm" data-act="extra">${I.plus} Extra</button></div>` : '<p class="muted small m0">Somente leitura nesta área.</p>'}</div>`;
+  ${edit ? `<div class="row-gap">${items.length - done > 0 ? (UI.confirm === 'all' ? `<span class="confirm">Marcar as ${items.length - done} restantes como realizadas? <button class="btn pri sm" data-act="allok">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : '<button class="btn sm" data-act="askAll">✓ Marcar restantes</button>') : ''}<button class="btn sm" data-act="extra">${I.plus} Extra</button>${apAqui ? `<button class="btn sm" data-act="aprvGrupo" data-k="${esc(add(UI.ini, k) + '|' + area + '|' + UI.aRota)}">${I.ok} Aprovar ${apAqui}</button>` : ''}</div>` : '<p class="muted small m0">Somente leitura nesta área.</p>'}</div>`;
   if (items.length && done === items.length) h += `<div class="card fimrota"><div class="body row-between"><span><b>Rota concluída.</b>${proxima ? ` Próxima com pendência: ${esc(proxima)} (${pendR(proxima)}).` : ' Nenhuma outra rota pendente neste dia.'}</span>${proxima ? `<button class="btn pri sm" data-arota="${esc(proxima)}">Ir para ${esc(proxima)}</button>` : ''}</div></div>`;
   if (!items.length) h += `<div class="card"><div class="empty">Nada programado para esta rota em ${DAYS[k]}. Se algo foi feito, registre como atividade extra.</div></div>`;
+  // extras que o supervisor devolveu (saíram da lista): o líder vê o motivo e registra de novo se for o caso
+  const exDev = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && x.p.rota === UI.aRota && doc.d[x.i][k] === '_' && estAprov(doc, x.i, k) === 'dev');
+  if (exDev.length) h += `<p class="aviso">${exDev.map(x => { const a = aprovDe(doc, x.p.id, k) || {}; return `Extra devolvida: <b>${esc(x.p.ativ)}</b> — ${esc(a.mot || '')}${a.nome ? ` (${esc(title(curto(a.nome)))})` : ''}`; }).join('<br>')}</p>`;
   h += '<div class="mlist">';
   for (const { i, p } of items) {
     const c = st(doc, i, k); const raw = doc.d[i][k]; const m = doc.m[p.id + '|' + k];
-    h += `<div class="act ${c}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}</div>${m ? `<div class="m">Motivo: ${esc(m)}</div>` : ''}</div>
+    const ea = estAprov(doc, i, k); const av = ea ? aprovDe(doc, p.id, k) || {} : null;
+    const selo = ea === 'pend' ? ' · <span class="pill neu">aguardando aprovação</span>' : ea === 'ok' ? ' · <span class="pill ok">aprovada</span>' : ea === 'dev' ? ' · <span class="pill bad">devolvida</span>' : '';
+    h += `<div class="act ${c}${ea === 'dev' ? ' devolvida' : ''}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}${selo}</div>${m ? `<div class="m">Motivo: ${esc(m)}</div>` : ''}${ea === 'dev' ? `<div class="m devm">Devolvida${av.nome ? ` por ${esc(title(curto(av.nome)))}` : ''}: ${esc(av.mot || '')}. Confira e aponte de novo.</div>` : ''}</div>
     ${(() => { const n = evCount(doc, p.id, k); return `<div class="bt evbt">${edit || n ? `<button class="ev-btn${n ? ' on' : ''}" data-ev="${esc(doc.id)}|${i}|${k}" aria-label="Fotos e arquivos (${n})" title="Fotos e arquivos">${I.cam}${n ? `<span class="num">${n}</span>` : ''}</button>` : ''}</div>`; })()}
     ${edit ? `<div class="bt">${raw === 'E' ? `<button class="no-btn" data-ap="${i}|${k}|rmE" aria-label="Remover extra" title="Remover extra">✕</button>` : `<button class="ok-btn" data-ap="${i}|${k}|R" aria-pressed="${raw === 'R'}" aria-label="Realizada">✓</button><button class="no-btn" data-ap="${i}|${k}|N" aria-pressed="${raw === 'N'}" aria-label="Não realizada">✕</button>`}</div>` : `<span class="chip ${c}">${CHIP[c]}</span>`}</div>`;
   }
@@ -1186,6 +1245,51 @@ function vEsDia() {
   </tbody>${cs.length ? `<tfoot><tr><th colspan="${isMobile() ? 1 : 2}">Presentes</th>${DAYS.map((_, k) => `<td class="c num ${tk[k] ? 'today' : ''}"><b class="${pres[k] < quadro[k] ? 'menos' : ''}">${pres[k]}</b><span class="muted">/${quadro[k]}</span></td>`).join('')}</tr></tfoot>` : ''}</table></div></div>`;
 }
 
+/* ---------------- APROVAÇÃO ---------------- */
+const NOME_AP = { R: 'Realizada', N: 'Não realizada', E: 'Extra' };
+const TOM_AP = { R: 'ok', N: 'bad', E: 'ext' };
+function vAprovar() {
+  const minhas = areasAprov();
+  if (!minhas.length) return '<div class="card"><div class="empty">Seu perfil não aprova apontamentos.</div></div>';
+  const area = minhas.includes(UI.aprArea) ? UI.aprArea : 'TODAS';
+  const todas = listaAprov(minhas);
+  const xs = area === 'TODAS' ? todas : todas.filter(x => x.doc.area === area);
+  const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev');
+  const grupos = new Map();
+  for (const x of xs) { const key = `${x.dt}|${x.doc.area}|${x.p.rota}`; if (!grupos.has(key)) grupos.set(key, []); grupos.get(key).push(x); }
+  let h = minhas.length > 1 ? `<div class="rchips linha" role="group" aria-label="Área"><button class="rchip" data-aprarea="TODAS" aria-pressed="${area === 'TODAS'}">Todas<span class="c num">${todas.length || '✓'}</span></button>${minhas.map(a => { const n = todas.filter(x => x.doc.area === a).length; return `<button class="rchip" data-aprarea="${a}" aria-pressed="${a === area}">${AREA_S[a]}<span class="c num">${n || '✓'}</span></button>`; }).join('')}</div>` : '';
+  h += `<div class="mini"><div><b class="num" style="color:${xs.length ? 'var(--st-atr)' : 'inherit'}">${xs.length}</b><span>Aguardando aprovação</span></div><div><b class="num">${grupos.size}</b><span>Rotas e dias</span></div><div><b class="num">${dev.length}</b><span>Devolvidas ao líder</span></div></div>
+  <div class="row-between"><p class="muted small m0">O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.</p>${xs.length > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${xs.length} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${xs.length})</button>`) : ''}</div>`;
+  if (!xs.length) h += '<div class="card"><div class="empty">Nada aguardando aprovação. Tudo o que os líderes apontaram já foi conferido.</div></div>';
+  const abertos = UI.aprTodas || [];
+  for (const [key, it] of [...grupos.entries()].slice(0, 30)) {
+    const [dt, a, r] = key.split('|'); const tudo = abertos.includes(key);
+    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar</p><span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span></header><div class="body"><div class="plist">
+    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; const n = evCount(x.doc, x.p.id, x.k); return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span>${m ? ` · ${esc(m)}` : ''}</div></div><div class="bt">${n ? `<button class="ev-btn on" data-ev="${ref}" aria-label="Fotos e arquivos (${n})" title="Fotos e arquivos">${I.cam}<span class="num">${n}</span></button>` : ''}<button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div></div>`; }).join('')}
+    ${it.length > 8 ? `<div class="pitem"><span class="muted">${tudo ? `${it.length} nesta rota` : `+ ${it.length - 8} nesta rota`}</span><button class="btn" data-act="aprTodas" data-k="${esc(key)}">${tudo ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
+    </div></div></div>`;
+  }
+  if (grupos.size > 30) h += `<p class="muted small">Mostrando as 30 rotas e dias mais recentes de ${grupos.size}. Aprove estas para ver as próximas.</p>`;
+  if (dev.length) h += `<div class="card"><header><h2>Devolvidas ao líder</h2><p>Esperando a correção · ${dev.length}</p></header><div class="body"><div class="plist">${dev.slice(0, 12).map(x => { const a = aprovDe(x.doc, x.p.id, x.k) || {}; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.rota)} · ${ddmm(x.dt)} · por ${esc(title(curto(a.nome || '')))}: ${esc(a.mot || '')}</div></div></div>`; }).join('')}${dev.length > 12 ? `<p class="muted small m0">+ ${dev.length - 12}</p>` : ''}</div></div></div>`;
+  return h;
+}
+function achaAprov(ref) {
+  const [id, i, k] = [ref.slice(0, ref.lastIndexOf('|', ref.lastIndexOf('|') - 1)), ...ref.split('|').slice(-2).map(Number)];
+  const doc = DB.cache.semanas[id]; if (!doc) return null; const p = PL.get(doc.ids[i]); if (!p) return null;
+  return { doc, i, k, dt: diasDe(doc)[k], p };
+}
+const MOTIVOS_DEV = ['Não foi feita', 'Foi feita em outro dia', 'Falta foto ou registro', 'Atividade errada', 'Motivo da não realização não confere'];
+function pedirDevolucao(x) {
+  const c = x.doc.d[x.i][x.k];
+  sheet('Devolver ao líder', `${esc(x.p.ativ)} · ${esc(x.p.rota)} · ${ddmm(x.dt)} · apontada como <b>${NOME_AP[c] || c}</b>`, [...MOTIVOS_DEV.map(t => ({ t })), { t: 'Outro motivo…', d: 'Escrever o motivo', outro: true, larga: true }], o => {
+    if (!o.outro) { devolver(x, o.t); toast('Devolvida ao líder'); render(); return; }
+    formSheet('Motivo da devolução', esc(x.p.ativ), '<label class="sel"><span>Motivo</span><input class="in" id="devMot" maxlength="120" autocomplete="off"></label>', 'Devolver', async () => {
+      const m = ($('devMot').value || '').trim(); if (!m) throw new Error('Escreva o motivo.');
+      devolver(x, m); toast('Devolvida ao líder'); render();
+    });
+  });
+}
+
 /* ---------------- PENDÊNCIAS ---------------- */
 function vPend() {
   const area = myArea() || UI.area;
@@ -1371,7 +1475,7 @@ function vUsuarios() {
    <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa vê só os <b>módulos</b> marcados (Frequência e férias inclusive); a Administração do sistema é só do administrador. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
+  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Administrativo:</b> Frequência e férias e as fichas do Efetivo (ocorrências, assinaturas e impressão); vê as Atividades sem apontar. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa vê só os <b>módulos</b> marcados (Frequência e férias inclusive); a Administração do sistema é só do administrador. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
   ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MODS[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
@@ -1695,8 +1799,9 @@ document.addEventListener('click', async e => {
       const naBarra = barraDe().map(x => x[0]);
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
-      const extra = [...(acessosDe(ME).length > 1 ? [{ t: 'Trocar de acesso', id: '__acesso', d: 'Agora: ' + ACESSO[UI.acesso].nome, ic: `<span class="opt-ic">${ACESSO_IC[UI.acesso]}</span>` }] : []), { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__acesso') { UI.escolha = null; return DB.signOut(); } if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
+      const extra = [...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
@@ -1731,6 +1836,7 @@ document.addEventListener('click', async e => {
   if (d.arota) { UI.aRota = d.arota; UI.confirm = null; render(); salvarUI(); { const a = document.querySelector('.rchips.linha [aria-pressed="true"]'); if (a) a.scrollIntoView({ inline: 'center', block: 'nearest' }); } if (t.closest('.fimrota')) scrollTo(0, 0); return; }
   if (d.efg) { const l = new Set(UI.efAbertas || []); if (l.has(d.efg)) l.delete(d.efg); else l.add(d.efg); UI.efAbertas = [...l]; render(); return; }
   if (d.pgrp) { const l = new Set(UI.progAbertas || []); if (l.has(d.pgrp)) l.delete(d.pgrp); else l.add(d.pgrp); UI.progAbertas = [...l]; render(); return; }
+  if (d.aprarea) { UI.aprArea = d.aprarea; UI.confirm = null; render(); return; }
   if (d.aparea) { UI.apArea = d.aparea; if (myAreas().length > 1) UI.area = d.aparea; UI.confirm = null; render(); salvarUI(); return; }
   if (d.ap) {
     const [i, k, v] = d.ap.split('|'); const doc = DB.cache.semanas[apArea() + '|' + UI.ini];
@@ -1770,6 +1876,7 @@ document.addEventListener('click', async e => {
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
     case 'trocarAcesso': UI.escolha = null; UI.modOpen = false; await DB.signOut(); break;
+    case 'irAcesso': irAcesso(UI.acesso === 'sistema' ? 'operacao' : 'sistema'); break;
     case 'senha': alterarSenhaSheet(); break;
     case 'logout': DB.signOut(); break;
     case 'permSalvar': {
@@ -1807,10 +1914,16 @@ document.addEventListener('click', async e => {
     case 'more': UI.more = +d.n; render(); break;
     case 'cancel': UI.confirm = null; render(); break;
     case 'askAll': UI.confirm = 'all'; render(); break;
+    case 'aprv': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } break; }
+    case 'devl': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) pedirDevolucao(x); break; }
+    case 'aprvGrupo': { const [dt, a, r] = d.k.split('|'); const xs = listaAprov(areasAprov().filter(z => z === a)).filter(x => x.dt === dt && x.p.rota === r); aprovar(xs); toast(`${xs.length} aprovada${xs.length > 1 ? 's' : ''}`); render(); break; }
+    case 'askAprvTudo': UI.confirm = 'aprvTudo'; render(); break;
+    case 'aprvTudo': { const m = areasAprov(); const xs = listaAprov(m.includes(UI.aprArea) ? [UI.aprArea] : m); aprovar(xs); UI.confirm = null; toast(`${xs.length} apontamentos aprovados`); render(); break; }
+    case 'aprTodas': { const l = UI.aprTodas || []; UI.aprTodas = l.includes(d.k) ? l.filter(x => x !== d.k) : [...l, d.k]; render(); break; }
     case 'allok': {
       const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; const k = UI.dia; const ch = [];
       doc.ids.forEach((id, i) => { const p = PL.get(id); if (p && p.rota === UI.aRota && doc.d[i][k] === 'P') ch.push(localChange(doc, i, k, 'R')); });
-      if (ch.length) DB.setStatusMany(doc.id, ch);
+      gravarApont(doc, ch);
       DB.log(`${UI.aRota} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}: ${ch.length} atividades marcadas como realizadas`);
       UI.confirm = null; toast(`${ch.length} atividades marcadas como realizadas`); render(); break;
     }
@@ -1825,7 +1938,7 @@ document.addEventListener('click', async e => {
     case 'rotaok': {
       const [a, r] = d.k.split('|'); const byDoc = new Map();
       for (const x of atrasadasAll(a)) { const p = PL.get(x.doc.ids[x.i]); if (!p || p.rota !== r) continue; if (!byDoc.has(x.doc)) byDoc.set(x.doc, []); byDoc.get(x.doc).push(localChange(x.doc, x.i, x.k, 'R')); }
-      let n = 0; for (const [doc, ch] of byDoc) { n += ch.length; DB.setStatusMany(doc.id, ch); }
+      let n = 0; for (const [doc, ch] of byDoc) { n += ch.length; gravarApont(doc, ch); }
       DB.log(`${r}: ${n} atrasadas marcadas como realizadas`); UI.confirm = null; toast(`${n} marcadas como realizadas`); render(); break;
     }
     case 'askDel': UI.confirm = 'del:' + d.id; render(); break;
@@ -1863,8 +1976,8 @@ document.addEventListener('submit', async e => {
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
     if (f.id === 'fLogin') {
-      UI.acesso = UI.escolha || UI.acesso; salvarAcesso(); DB.definirAcesso(UI.acesso);
-      UI.modulo = UI.acesso === 'sistema' ? 'config' : (MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao');
+      UI.acesso = 'operacao'; salvarAcesso(); DB.definirAcesso(UI.acesso);
+      UI.modulo = MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao';
       UI.view = ACESSO[UI.acesso].inicio; salvarUI();
       try { localStorage.setItem('dikma-ultimo-login', DB.normLogin($('lgUser').value)); } catch (e) { /* ignora */ }
       await DB.signIn($('lgUser').value, $('lgPass').value); return;
@@ -1915,6 +2028,8 @@ document.addEventListener('change', e => {
     const uid = t.dataset.upapel; const admins = DB.cache.usuarios.filter(u => u.papel === 'admin').length;
     if (uid === ME.uid && t.value !== 'admin' && admins < 2) { toast('Antes, deixe outra pessoa como administrador'); t.value = 'admin'; return; }
     const patch = { papel: t.value }; if (!['lider', 'supervisor'].includes(t.value)) patch.area = null; if (t.value !== 'supervisor') patch.area2 = null;
+    // Administrativo: Frequência e férias e as fichas do Efetivo vêm marcados (dá para desmarcar depois)
+    if (t.value === 'administrativo') { const u = DB.cache.usuarios.find(x => x.uid === uid); const m = modsReais(u); patch.modulos = [...new Set([...m, 'gestao', 'frequencia'])]; }
     DB.setUsuario(uid, patch); toast('Perfil atualizado');
   }
   if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
@@ -1936,7 +2051,7 @@ document.addEventListener('change', e => {
     if (t.value && u && t.value === u.area) { toast('A 2ª área precisa ser diferente da primeira'); t.value = u.area2 || ''; return; }
     DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
   }
-  if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; }
+  if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; if (p === 'administrativo') for (const m of ['operacao', 'gestao', 'frequencia']) { const c = $('nuM_' + m); if (c) c.checked = true; } }
 });
 // Atalho: "/" leva para a busca da tela (quando não está digitando em outro campo).
 document.addEventListener('keydown', e => {
@@ -1991,7 +2106,7 @@ const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet,
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
 DB.start({
-  onAuth: a => { AUTH = a; ME = a.user || null; if (ME && myArea()) UI.area = myArea(); render(); },
+  onAuth: a => { AUTH = a; ME = a.user || null; if (a.acesso && ACESSO[a.acesso] && a.acesso !== UI.acesso) { UI.acesso = a.acesso; salvarAcesso(); if (UI.acesso === 'operacao' && UI.modulo === 'config') { UI.modulo = 'operacao'; UI.view = 'meudia'; } } if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { if (AUTH.status === 'ready') schedule(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });

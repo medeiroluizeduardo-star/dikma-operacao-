@@ -5,7 +5,7 @@ import { podeAcesso } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
 
 export const isMock = true;
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -25,7 +25,7 @@ let cb = {}, me = null;
 let versao = 0;
 const changed = () => { versao++; persist(); cb.onData && cb.onData(); };
 function persist() {
-  const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
+  const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, aprov: S[k].aprov, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
   try { localStorage.setItem(LS, JSON.stringify({ v: 2, sets, log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
 }
 const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
@@ -78,6 +78,7 @@ async function fresh() {
     { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'] },
     { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] },
+    { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] },
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
 }
@@ -87,7 +88,7 @@ export async function start(callbacks) {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { /* ignora */ }
   if (saved && saved.v === 2 && saved.sets) {
-    for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, sitExtra: x.sitExtra || {}, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
+    for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, sitExtra: x.sitExtra || {}, aprov: x.aprov || {}, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
     Object.assign(cache, { log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     await carregarE(saved.e);
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await seed_('seed-gestao.json'); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
@@ -96,6 +97,7 @@ export async function start(callbacks) {
   try { amostras(); } catch (e) { /* sem canvas */ }
   await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
+  if (me && !cache.usuarios.some(u => u.uid === 'admv')) cache.usuarios.push({ uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] });
   if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] });
   await iniciarAdm();
   emitAuth(); changed();
@@ -105,9 +107,10 @@ export const definirAcesso = k => { acessoAtual = k === 'sistema' ? 'sistema' : 
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
+  if (acessoAtual === 'sistema' && me.papel !== 'admin') acessoAtual = 'operacao';
   if (!podeAcesso(me, acessoAtual)) return cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual });
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
-  cb.onAuth({ status: 'ready', user: me });
+  cb.onAuth({ status: 'ready', user: me, acesso: acessoAtual });
 }
 export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
 export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
@@ -148,6 +151,11 @@ export async function setStatusMany(docId, changes) {
 export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '' }; };
 export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {} };
 export async function setSitExtra(campo, key, val) { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x[campo] ||= {}); if (val) o[key] = val; else delete o[key]; changed(); }
+export async function setAprov(docId, area, mes, itens) {
+  const em = new Date().toISOString(); const a = (S[cur].aprov[docId] ||= {});
+  for (const [k, x] of Object.entries(itens)) a[k] = { ...x, por: me.uid, nome: me.nome, em };
+  changed();
+}
 export async function setSit(key, code) { const m = key.split('|')[1].slice(0, 7); const o = (cache.sitByMonth[m] ||= {}); if (code) o[key] = code; else delete o[key]; changed(); }
 export async function savePlano(area, itens) { cache.plano[area] = itens; changed(); }
 export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].colabs[area] = itens; changed(); }

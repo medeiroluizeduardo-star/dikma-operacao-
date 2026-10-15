@@ -132,6 +132,7 @@ Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3
 - **Programação:** a aba foi tirada (Pátio e Bateria). O dia a dia fica no **Apontar**, o atrasado em **Pendências** e a semana impressa e exportada na **Folha do líder**.
 - **Efetivo diário:** com muitas rotas na tela, elas começam fechadas com "presentes hoje"; toque para ver as pessoas. A legenda das siglas fica em **Legenda das siglas**.
 - **Pendências:** o número no menu conta só os atrasos dos últimos 7 dias da sua área.
+- **Aprovação** (supervisor, coordenador, gestor e administrador): cada apontamento do líder (realizada, não realizada ou extra) fica com o selo **aguardando aprovação** e já conta nos números. Na aba **Aprovação**, por rota e dia, o supervisor **aprova** (um por um, a rota inteira ou tudo) ou **devolve** com o motivo: a atividade volta para "a fazer" e o líder vê, no Apontar e no Meu dia, o motivo para corrigir. O que o supervisor (ou acima) aponta já entra aprovado. O número no menu mostra quantos esperam; o Painel avisa também. Vale a partir dos apontamentos de 15/10/2026.
 
 ## Meu dia
 - **Agora:** até 3 itens, do mais urgente para o menos, cada um com o botão que resolve (Apontar, Recolher, Abrir…). O resto fica em **Mais**.
@@ -167,7 +168,7 @@ Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em r
 
 ## Acessos: Operação e Administração do sistema
 
-Ao abrir o sistema aparecem dois acessos; cada um pede usuário e senha.
+Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na **Operação**. A **Administração do sistema** só aparece para o administrador: lá dentro, o botão **Administração do sistema** (no menu lateral ou em **Mais**, no celular) abre os ajustes, e **Voltar para a Operação** volta. Os demais perfis nunca veem esse acesso.
 
 | Acesso | O que tem | Quem entra |
 |---|---|---|
@@ -341,7 +342,8 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 | Gestor | Aponta e edita em todas as áreas e usa as telas de administração dos módulos marcados (plano padrão, gerador de meses, rotas, configurações, tipos de ocorrência, importar dados, cadastro de colaboradores). Não mexe em usuários |
 | Coordenador | Aponta e edita em todas as áreas dos módulos marcados, sem as telas de administração |
 | Supervisor | Aponta em até 2 áreas (podem ser uma do Pátio e outra da Bateria). Com duas áreas no mesmo módulo, escolhe a área no filtro |
-| Líder | Aponta em 1 área |
+| Líder | Aponta em 1 área. O que ele aponta fica **aguardando aprovação** até o supervisor conferir |
+| Administrativo | Frequência e férias (edita) e as fichas do Efetivo de todas as áreas: ocorrências, assinaturas e impressão. Vê as Atividades sem apontar e não aprova. Ao escolher o perfil, Efetivo e Frequência e férias já vêm marcados |
 | Somente leitura | Vê tudo e não altera nada |
 | Bloqueado | Não entra |
 
@@ -378,7 +380,9 @@ public/
   permissoes.js       abas por perfil e exceção por pessoa
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
-  acessos.js          os três acessos e as férias em comum
+  acessos.js          os acessos (Operação e, só para o administrador, Administração do sistema) e as férias em comum
+  aprovacao.js        aprovação dos apontamentos do líder pelo supervisor
+  presenca.js         o jeito único de lançar presença (Frequência e Efetivo diário)
   administrativo.js   módulo Frequência e férias (frequência, férias, importar)
   planilhas-adm.js    leitura das planilhas de frequência e férias
   exportar.js         baixar listas como planilha do Excel
@@ -418,6 +422,7 @@ ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gera
 | `colaboradores/{ÁREA}` | efetivo da área por rota |
 | `situacao/{AAAA-MM}` | folgas, férias, atestados etc. do mês |
 | `semanas/{ÁREA\|AAAA-MM-DD}` | programação da semana com o status de cada dia e os motivos |
+| `aprov/{ÁREA\|AAAA-MM-DD}` | aprovação dos apontamentos da semana: aprovado ou devolvido (com motivo), quem e quando. Na Bateria, `b_aprov` |
 | `historico` | registro de quem apontou o quê |
 | `eq/config`, `eq/cadastro` | Operação: turnos, causas, metas, pesos, feriados · operadores e frota |
 | `eqlanc`, `eqpar`, `eqinsp` | Operação: lançamentos, paradas e inspeções (campo `mes`) |

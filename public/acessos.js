@@ -14,7 +14,8 @@ const antigoAdm = u => Array.isArray(u.acessos) && u.acessos.includes('administr
 export const acessosDe = u => (!u ? [] : u.papel === 'admin' ? ACESSOS.map(a => a.k) : ['operacao']);
 export const podeAcesso = (u, k) => acessosDe(u).includes(k === 'administrativo' ? 'operacao' : k);
 // Módulo Frequência e férias: marcado no usuário (modulos) ou o antigo acesso Administrativo.
-export const temFreq = u => !!u && (u.papel === 'admin' || (Array.isArray(u.modulos) && u.modulos.includes('frequencia')) || antigoAdm(u));
+// O perfil Administrativo já tem o módulo, mesmo sem marcar.
+export const temFreq = u => !!u && (u.papel === 'admin' || u.papel === 'administrativo' || (Array.isArray(u.modulos) && u.modulos.includes('frequencia')) || antigoAdm(u));
 // Módulos do usuário (os marcados); usuário antigo só do Administrativo não ganha a Operação sem querer.
 export const modulosDe = u => {
   if (!u) return [];
