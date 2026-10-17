@@ -425,3 +425,16 @@ test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e c
   await assertFails(deleteDoc(doc(d, 'gocorr', 'rec1')));
   await assertFails(setDoc(doc(db('admvSo'), 'gocorr', 'adm-oc3'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'admvSo' }), 'sem o Efetivo marcado não registra ocorrência');
 });
+
+test('Painel Coqueria: cada pessoa ativa lê e grava só o próprio painel; ninguém mais, nem o administrador', async () => {
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'painel', 'liderRec', 'tasks', 't1'), { title: 'Medição', status: 'todo' }));
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'painel', 'liderRec', 'tasks', 't1')));
+  await assertSucceeds(getDocs(collection(db('liderRec'), 'painel', 'liderRec', 'registros')));
+  await assertSucceeds(deleteDoc(doc(db('liderRec'), 'painel', 'liderRec', 'tasks', 't1')));
+  await assertFails(getDoc(doc(db('admin'), 'painel', 'liderRec', 'tasks', 't1')));
+  await assertFails(setDoc(doc(db('admin'), 'painel', 'liderRec', 'tasks', 't2'), { title: 'x' }));
+  await assertFails(getDocs(collection(db('liderPrep'), 'painel', 'liderRec', 'tasks')));
+  await assertFails(setDoc(doc(db('bloq'), 'painel', 'bloq', 'tasks', 't1'), { title: 'x' }));
+  await assertFails(setDoc(doc(db('semPerfil'), 'painel', 'semPerfil', 'tasks', 't1'), { title: 'x' }));
+  await assertFails(getDoc(doc(db(null), 'painel', 'liderRec', 'tasks', 't1')));
+});
