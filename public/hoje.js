@@ -1,6 +1,6 @@
 // Dikma Gestão — cálculos do "Meu dia". Funções puras, usadas pela tela (navegador)
 // e pela rotina de avisos no celular (GitHub Actions), para os dois mostrarem a mesma coisa.
-import { add, weekOf, AUSENTE } from './cal.js';
+import { add, weekOf, AUSENTE, AUSENCIA } from './cal.js';
 
 const linha = (doc, i) => (doc.d ? doc.d[i] : ((doc.s && doc.s[doc.ids[i]]) || '_______'));
 const diaSemana = data => (new Date(data + 'T12:00:00').getDay() + 6) % 7; // 0 = segunda
@@ -32,7 +32,7 @@ export function resumoAtividades(d) {
   }
   // quem falta hoje
   const faltas = [];
-  for (const c of d.colabs) { if (!d.areas.includes(c.area)) continue; const cod = d.sit[c.id + '|' + hoje]; if (cod && AUSENTE.has(cod) && cod !== 'DS') faltas.push({ nome: c.nome, funcao: c.funcao, area: c.area, rota: c.rota, cod }); }
+  for (const c of d.colabs) { if (!d.areas.includes(c.area)) continue; const cod = d.sit[c.id + '|' + hoje]; if (cod && AUSENCIA.has(cod)) faltas.push({ nome: c.nome, funcao: c.funcao, area: c.area, rota: c.rota, cod }); }
   // déficit de efetivo amanhã (mesma conta da tela Escala e efetivo)
   const deficit = [];
   const docA = a => d.semanas[a + '|' + iniA];

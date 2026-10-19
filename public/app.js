@@ -1,6 +1,6 @@
 // Dikma Gestão — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
-import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
+import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, AUSENCIA, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 import { competenciaDe, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
 import { abrirLancamento } from './presenca.js';
 import { APROV_DESDE, aprovaPapel, estadoAprov } from './aprovacao.js';
@@ -748,14 +748,16 @@ const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area)
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 function cardAusencias(area) {
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
-  const folgaHoje = cs.filter(c => sitDia(c, TODAY).auto).length;
-  const aus = cs.map(c => ({ c, v: DB.sit(c.id + '|' + TODAY) })).filter(x => AUSENTE.has(x.v)).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
+  const sh = new Map(cs.map(c => [c.id, sitDia(c, TODAY)]));
+  const folgaHoje = cs.filter(c => { const x = sh.get(c.id); return x.auto || x.v === 'F'; }).length;
+  const ferias = cs.filter(c => sh.get(c.id).v === 'FE').length;
+  const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && AUSENCIA.has(x.v)).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
   const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length;
   const por = {}; aus.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
-  const pres = cs.length - aus.length - folgaHoje;
+  const pres = cs.length - aus.length - folgaHoje - ferias;
   const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}${AUS_COBRIVEL.has(x.v) ? (cobertoPor(x.c.id, TODAY) ? ` · coberto por ${esc(curto(nomeDe(cobertoPor(x.c.id, TODAY))))}` : ' · <em class="semt">sem substituto</em>') : ''}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente hoje.</div>';
   return `<div class="card"><header><h2>Ausências de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
-    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga da escala</span></div><div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje)}%</b><span>Presença dos escalados</span></div></div>
+    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga</span></div>${ferias ? `<div><b class="num">${ferias}</b><span>Férias</span></div>` : ''}<div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje - ferias)}%</b><span>Presença dos escalados</span></div></div>
     ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}</div>` : ''}
     ${lista}</div></div>`;
 }
@@ -765,15 +767,15 @@ function cardBalanco(area, ini) {
   const esc7 = rs.map(r => escalaRota(r, ini));
   const dias = DAYS.map((_, k) => {
     const dt = add(ini, k); const quadro = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS');
-    const mot = {}; let aus = 0, fe = 0;
-    quadro.forEach(c => { const x = sitDia(c, dt); if (x.auto) { fe++; return; } const v = x.v; if (AUSENTE.has(v)) { aus++; mot[v] = (mot[v] || 0) + 1; } });
+    const mot = {}; let aus = 0, fe = 0, fer = 0;
+    quadro.forEach(c => { const x = sitDia(c, dt); if (x.auto || x.v === 'F') { fe++; return; } if (x.v === 'FE') { fer++; return; } if (AUSENCIA.has(x.v)) { aus++; mot[x.v] = (mot[x.v] || 0) + 1; } });
     const nec = esc7.reduce((n, e) => n + e.days[k].nec, 0);
     const def = rs.filter((r, i) => r.rota !== 'GESTÃO' && esc7[i].days[k].prog > 0 && esc7[i].days[k].disp < esc7[i].days[k].nec).length;
     const ids = new Set(cs.map(c => c.id)); const cob = cobDoDia(dt).filter(x => ids.has(x.aus)).length;
     const heD = cs.filter(c => DB.sit(c.id + '|' + dt) === 'HE' && DB.sitInfo(c.id + '|' + dt).he === 'DIKMA').length, heA = cs.filter(c => DB.sit(c.id + '|' + dt) === 'HE' && DB.sitInfo(c.id + '|' + dt).he === 'ARCELOR').length, heN = cs.filter(c => DB.sit(c.id + '|' + dt) === 'HE' && !DB.sitInfo(c.id + '|' + dt).he).length;
-    return { cob, heD, heA, heN, q: quadro.length, fe, esc: quadro.length - fe, aus, mot, disp: quadro.length - fe - aus, nec, saldo: quadro.length - fe - aus - nec, def };
+    return { cob, heD, heA, heN, q: quadro.length, fe, fer, esc: quadro.length - fe - fer, aus, mot, disp: quadro.length - fe - fer - aus, nec, saldo: quadro.length - fe - fer - aus - nec, def };
   });
-  const motivos = [...AUSENTE].filter(m => m !== 'DS' && dias.some(d => d.mot[m]));
+  const motivos = [...AUSENCIA].filter(m => dias.some(d => d.mot[m]));
   const soma = f => dias.reduce((n, d) => n + f(d), 0);
   const cel = (k, v, cls = '') => `<td class="c num ${tk[k] ? 'today' : ''} ${cls}">${v}</td>`;
   const linha = (rot, f, tot, cls) => `<tr${cls ? ` class="${cls}"` : ''}><th scope="row">${rot}</th>${dias.map((d, k) => cel(k, f(d))).join('')}<td class="c num tot">${tot}</td></tr>`;
@@ -782,7 +784,8 @@ function cardBalanco(area, ini) {
   return `<div class="card"><header><h2>Balanço semanal do efetivo</h2><p>${weekLabel(ini)} · pessoas por dia</p></header>
     <div class="tw"><table class="bal"><thead><tr><th></th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(ini, k).slice(8)}</span></th>`).join('')}<th class="c">Semana</th></tr></thead><tbody>
     ${linha('Quadro', d => d.q, '')}
-    ${linha('<span class="sub">Folga da escala</span>', d => d.fe || '·', soma(d => d.fe), 'mot')}
+    ${linha('<span class="sub">Folga</span>', d => d.fe || '·', soma(d => d.fe), 'mot')}
+    ${soma(d => d.fer) ? linha('<span class="sub">Férias</span>', d => d.fer || '·', soma(d => d.fer), 'mot') : ''}
     ${linha('Escalados', d => d.esc, '')}
     ${motivos.map(m => linha(`<span class="sub">${SIT_NOME[m]}</span>`, d => d.mot[m] || '·', soma(d => d.mot[m] || 0), 'mot')).join('')}
     ${linha('Ausências', d => d.aus, soma(d => d.aus), 'aus')}
@@ -793,7 +796,7 @@ function cardBalanco(area, ini) {
     ${soma(d => d.heD + d.heA + d.heN) ? `${linha('Hora extra', d => (d.heD + d.heA + d.heN) || '·', soma(d => d.heD + d.heA + d.heN))}${linha('<span class="sub">a pedido da Dikma</span>', d => d.heD || '·', soma(d => d.heD), 'mot')}${linha('<span class="sub">a pedido da ArcelorMittal</span>', d => d.heA || '·', soma(d => d.heA), 'mot')}${soma(d => d.heN) ? linha('<span class="sub">sem origem informada</span>', d => d.heN || '·', soma(d => d.heN), 'mot') : ''}` : ''}
     <tr><th scope="row">Rotas em déficit</th>${dias.map((d, k) => cel(k, d.def ? `<span class="pill bad">${d.def}</span>` : '0')).join('')}<td class="c num tot">${soma(d => d.def)}</td></tr>
     </tbody></table></div>
-    <div class="body pt0"><p class="muted small m0">Escalados = quadro − folga da escala (pela turma e pelo regime). Disponíveis = escalados − ausências. Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
+    <div class="body pt0"><p class="muted small m0">Escalados = quadro − folga (da escala ou lançada) − férias. Ausências = atestado, afastamento, treinamento, falta, abono e suspensão (folga e férias não contam). Disponíveis = escalados − ausências. Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
 }
 // Seletor rápido da situação: abre colado no dia tocado, um toque aplica. "Repetir" leva até o fim da semana.
 // ---- Substituição (quem cobre uma ausência) e origem da hora extra ----
@@ -1145,11 +1148,13 @@ function dimRotas(area) {
 }
 function miniEscala(area) {
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
-  const fe = cs.filter(c => sitDia(c, TODAY).auto).length;
-  const aus = cs.filter(c => !sitDia(c, TODAY).auto && indisponivel(c, TODAY)).length;
+  // folga (da escala ou lançada) e férias não são ausência: só tiram a pessoa da escala do dia
+  const hoje = cs.map(c => sitDia(c, TODAY));
+  const fe = hoje.filter(x => x.auto || x.v === 'F').length, fer = hoje.filter(x => x.v === 'FE').length;
+  const aus = hoje.filter(x => !x.auto && AUSENCIA.has(x.v)).length;
   const { def } = dimRotas(area);
   const t4 = escala().turmasDoDia('4x4', TODAY), t3 = escala().turmasDoDia('3x3', TODAY);
-  return `${t4.length || t3.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${t4.length ? `<span class="tchip">4x4 · ${t4.join(' ')}</span>` : ''}${t3.length ? `<span class="tchip">3x3 · ${t3.join(' ')}</span>` : ''}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div><div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
+  return `${t4.length || t3.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${t4.length ? `<span class="tchip">4x4 · ${t4.join(' ')}</span>` : ''}${t3.length ? `<span class="tchip">3x3 · ${t3.join(' ')}</span>` : ''}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe - fer}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - fer - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div>${fer ? `<div><b class="num">${fer}</b><span>De férias</span></div>` : ''}<div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
 }
 // Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
 const podeTurma = () => isAdmin() || (!!ME && ME.papel === 'gestor');
@@ -1187,11 +1192,12 @@ function vEsBal() {
   const area = areaScope();
   // quem tem alguma ausência na semana, com os dias
   const cs = colabsDa(area);
-  const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => sitDia(c, add(UI.ini, k))) })).filter(x => x.d.some(y => !y.auto && AUSENTE.has(y.v) && y.v !== 'DS')).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
+  const ehAus = y => !y.auto && AUSENCIA.has(y.v); // só ausência de verdade (folga e férias ficam de fora)
+  const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => sitDia(c, add(UI.ini, k))) })).filter(x => x.d.some(ehAus)).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
   return miniEscala(area) + `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>
-  <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência</p></header>${sem.length ? `<div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Rota</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
-    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="sit ${y.v} ro${y.auto ? ' auto' : ''}" title="${y.auto ? esc(y.motivo) : SIT_NOME[y.v] || y.v}">${y.v === 'P' ? I.ok : y.v}</span></td>`).join('')}</tr>`).join('')}
+  <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência · só atestado, afastamento, treinamento, falta, abono e suspensão (folga e férias não entram)</p></header>${sem.length ? `<div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Rota</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
+    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}">${ehAus(y) ? `<span class="sit ${y.v} ro" title="${SIT_NOME[y.v] || y.v}">${y.v}</span>` : '<span class="muted" aria-hidden="true">·</span>'}</td>`).join('')}</tr>`).join('')}
   </tbody></table></div>` : '<div class="body"><div class="empty">Ninguém ausente nesta semana.</div></div>'}</div>`;
 }
 // Líder de cada pessoa das Atividades, pela ficha do Efetivo (só para quem tem as fichas). Nomes do mesmo líder viram um só.
@@ -1241,7 +1247,7 @@ function vEsDia() {
       ant = g; const doG = cs.filter(x => gk(x) === g);
       const rot = porLider ? (g === 'L|~' ? 'Sem líder na ficha' : 'LÍDER ' + g.slice(2)) : c.rota; const kh = DAYS.findIndex((_, k) => tk[k]);
       const ph = kh >= 0 ? doG.filter(x => { const v = sitDia(x, TODAY).v; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
-      const eh = kh >= 0 ? doG.filter(x => DB.sit(x.id + '|' + TODAY) !== 'DS' && !folgaEscala(x, TODAY)).length : null;
+      const eh = kh >= 0 ? doG.filter(x => { const s = sitDia(x, TODAY); return s.v !== 'DS' && !s.auto && s.v !== 'F' && s.v !== 'FE'; }).length : null; // folga e férias não contam como escalado
       cab = `<tr class="grp-row"><th colspan="${isMobile() ? 8 : 9}">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porLider ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porLider ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
     }
     if (fechado) return cab;
@@ -1592,7 +1598,7 @@ function exportEsdia() {
   const ordem = new Map(rotasDa(area).map((r, i) => [r.area + '|' + r.rota, i]));
   const cs = colabsDa(area).slice().sort((x, y) => (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
   const linhas = [['Nome', 'Função', 'Área', 'Rota', 'Regime', 'Turma', ...dias.map((d, k) => `${DAYS[k]} ${dataBR(d).slice(0, 5)}`), 'Ausências na semana']];
-  for (const c of cs) { const v = dias.map(d => sitDia(c, d).v); linhas.push([title(c.nome), c.funcao || '', AREA_S[c.area] || c.area, c.rota, regimeNome(c), turmaDe(c) || '', ...v, v.filter(x => x !== 'DS' && x !== 'F' && AUSENTE.has(x)).length]); }
+  for (const c of cs) { const v = dias.map(d => sitDia(c, d).v); linhas.push([title(c.nome), c.funcao || '', AREA_S[c.area] || c.area, c.rota, regimeNome(c), turmaDe(c) || '', ...v, v.filter(x => AUSENCIA.has(x)).length]); }
   const leg = [['Código', 'Significado'], ...SITS];
   baixarExcel(`efetivo-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${UI.ini}`, [{ nome: 'Efetivo ' + dataBR(UI.ini).slice(0, 5).replace('/', '-'), linhas }, { nome: 'Legenda', linhas: leg }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
