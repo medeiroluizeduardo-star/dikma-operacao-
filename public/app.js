@@ -188,6 +188,8 @@ function devolver(x, mot) {
 
 /* ---------------- ícones ---------------- */
 const I = {
+  qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 14h2M14 18v2M18 18h2v2"/></svg>',
+  relogio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>',
   causas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16"/><path d="M6 17V7M10 17V10M14 17v-4M18 17v-2"/><path d="M5 5l5 3 4 2 5 1"/></svg>',
   aprov: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
   ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
@@ -220,6 +222,8 @@ const VIEWS = [
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => aprovador() },
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Acompanhar', mod: 'op' },
+  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Acompanhar', mod: 'op' },
+  { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Acompanhar', mod: 'op', req: () => aprovador() || admMod() },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
@@ -228,6 +232,7 @@ const VIEWS = [
   { id: 'esdia', nome: 'Efetivo diário', ic: 'escala', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
+  { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   ...VIEWS_E,
   ...VIEWS_G,
   ...VIEWS_A,
@@ -406,7 +411,7 @@ function render() {
     const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
   }
 }
-const ES_VIEWS = ['esdia', 'esdim', 'esbal'];
+const ES_VIEWS = ['esdia', 'esdim', 'esbal', 'eshe'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
@@ -421,9 +426,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -504,13 +509,13 @@ function mudarFiltro(id, v) {
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
 function filtroCompacto(comSet) {
   const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
-  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'causas' ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
+  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'etiquetas' ? '' : ['causas', 'eshe'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 function filtroSheet() {
   const L = $('layer');
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
-  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: UI.view !== 'causas' })}`;
+  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -587,13 +592,13 @@ function renderTop() {
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Dias de hora extra por pessoa e por origem · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
-  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas'].includes(UI.view);
+  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe'].includes(UI.view);
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
   else {
-    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: UI.view !== 'causas' });
+    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   }
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
@@ -1249,6 +1254,30 @@ function liderDosColabs() {
   LIDk = fichas; LIDc = c => { if (!m.has(c.id)) { const r = busca(c.nome, c.mat); const k = r && r.item.lider ? canon(r.item.lider) : ''; m.set(c.id, k ? graf.get(k) || k : ''); } return m.get(c.id); };
   return LIDc;
 }
+/* ---------------- CHECK-IN DO TURNO ---------------- */
+// O líder confirma a equipe no início do turno (dia, noite ou administrativo): presente, falta ou atraso, um toque por pessoa.
+// Vira a presença do dia (o mesmo Efetivo diário) e fica registrado quem confirmou e a que horas.
+const PER_NOME = { D: 'Turno diurno', N: 'Turno noturno', ADM: 'Administrativo' };
+function equipeCheckin() {
+  const areas = myAreas().filter(a => AREAS.includes(a)); const out = [];
+  for (const a of areas) {
+    const g = {};
+    for (const c of COLABS.filter(c => c.area === a)) { const x = sitDia(c, TODAY); if (x.auto || ['F', 'FE', 'DS'].includes(x.v)) continue; const per = periodoDe(c, TODAY) || 'ADM'; (g[per] = g[per] || []).push({ c, v: x.v }); }
+    for (const per of ['D', 'N', 'ADM']) if (g[per]) out.push({ a, per, ps: g[per].sort((x, y) => x.c.nome.localeCompare(y.c.nome)), ck: (DB.sitExtraMes(TODAY.slice(0, 7)).ck || {})[`ck|${TODAY}|${a}|${per}`] || '' });
+  }
+  return out;
+}
+function cardCheckin() {
+  const gs = equipeCheckin(); if (!gs.length) return '';
+  const tom = v => (v === 'FT' ? 'bad' : v === 'ATR' ? 'warn' : AUSENCIA.has(v) ? 'neu' : 'ok');
+  return `<div class="card checkin"><header><h2>Check-in do turno</h2><p>${ddmm(TODAY)} · confirme quem está na equipe: presente, falta ou atraso</p></header><div class="body stackcol">${gs.map(g => {
+    const [por, nome, hora, conta] = g.ck.split('|');
+    if (g.ck) return `<div class="ckok"><span class="pill ok">✓</span> <b>${PER_NOME[g.per]}</b> · ${AREA_S[g.a]} · check-in às ${esc(hora || '')} por ${esc(nome || '')}${conta ? ` · ${esc(conta)} presentes` : ''} <button class="btn ghost link" data-ckre="${esc(g.a)}|${g.per}">refazer</button></div>`;
+    const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length;
+    return `<div class="ckg"><div class="row-between"><b>${PER_NOME[g.per]} · ${AREA_S[g.a]}</b><span class="row-gap"><span class="muted small">${pres} de ${g.ps.length} presentes</span><button class="btn sm pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar</button></span></div><div class="plist">${g.ps.map(x => `<div class="pitem"><div class="minw"><div class="t">${esc(title(x.c.nome))}</div><div class="l">${esc(x.c.rota)}${turmaDe(x.c) ? ' · turma ' + esc(turmaDe(x.c)) : ''}</div></div><div class="bt ckbt"><button class="btn sm ${x.v === 'P' || x.v === 'HE' ? 'on ok' : ''}" data-ck="${esc(x.c.id)}|P" aria-pressed="${x.v === 'P' || x.v === 'HE'}">Presente</button><button class="btn sm ${x.v === 'ATR' ? 'on warn' : ''}" data-ck="${esc(x.c.id)}|ATR" aria-pressed="${x.v === 'ATR'}">Atraso</button><button class="btn sm ${x.v === 'FT' ? 'on bad' : ''}" data-ck="${esc(x.c.id)}|FT" aria-pressed="${x.v === 'FT'}">Falta</button>${!['P', 'HE', 'ATR', 'FT'].includes(x.v) ? `<span class="pill ${tom(x.v)}">${SIT_NOME[x.v] || x.v}</span>` : ''}</div></div>`).join('')}</div><button class="btn pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar check-in · ${pres} de ${g.ps.length} presentes</button></div>`;
+  }).join('')}</div></div>`;
+}
+const checkinPendentes = () => { try { return equipeCheckin().filter(g => !g.ck && (g.per !== 'N' || new Date().getHours() >= 17)).length; } catch (e) { return 0; } };
 function vEsDia() {
   const area = areaScope();
   const rs = rotasDa(area);
@@ -1296,7 +1325,7 @@ function vEsDia() {
     if (fechado) return cab;
     return cab + `<tr><td class="fnome"><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() || porGrupo ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${isMobile() ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
   }).join('');
-  return miniEscala(area) + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
+  return miniEscala(area) + (tk.includes(true) ? cardCheckin() : '') + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
   <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo ? 'selected' : ''}>Rota</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}</div>
   ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
   <details class="legdet body pb0 pt0"${isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></details>
@@ -1413,6 +1442,62 @@ function novaAcaoSheet(causa) {
     await DB.salvarAcao('', { causa, area: ar, acao, resp: ($('acResp').value || '').trim(), prazo: $('acPrazo').value || '', status: 'aberta' });
     DB.log(`Plano de ação: ${causa} → ${acao}`); toast('Ação criada'); render();
   });
+}
+
+/* ---------------- ETIQUETAS QR ---------------- */
+// Uma etiqueta por rota: o link abre o Apontar de hoje já na rota (?r=ÁREA|ROTA). Imprimir e colar no local.
+let QR = null;
+const linkRota = r => `${location.origin}${location.pathname}?m=${UI.modulo}&v=apontar&r=${encodeURIComponent(r.area + '|' + r.rota)}`;
+function vEtiquetas() {
+  if (!QR) { import('./vendor/qrcode.js').then(m => { QR = m.default || m.qrcode; render(); }).catch(() => toast('Não foi possível carregar o gerador de QR Code')); return M.ESQUELETO; }
+  const area = areaScope(); const rs = rotasDa(area).filter(r => r.carga > 0 || r.rota !== 'GESTÃO');
+  const svg = url => { const q = QR(0, 'M'); q.addData(url); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+  return `<div class="row-between noprint"><p class="muted m0">${rs.length} etiqueta${rs.length === 1 ? '' : 's'} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}. Ao ler o código com a câmera do celular, abre o Apontar de hoje nesta rota (é preciso estar com o login feito).</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir etiquetas</button>` : ''}</div>
+  <div class="qrgrid">${rs.map(r => `<div class="qret"><div class="qrsvg">${svg(linkRota(r))}</div><div class="qrtxt"><b>${esc(r.rota)}</b><span>${AREA_S[r.area]} · ${SETS[SK].nome}</span><small>Aponte a câmera para abrir esta rota no Dikma Gestão</small></div></div>`).join('')}</div>`;
+}
+
+/* ---------------- RESUMO DA SEMANA ---------------- */
+function vResumo() {
+  const area = areaScope(); const docs = docsFor({ ini: UI.ini, area }); const s = stats(docs);
+  const ef = pct(s.Rhoje, s.progHoje);
+  const porArea = (area === 'TODAS' ? AREAS : [area]).map(a => ({ a, x: stats(docsFor({ ini: UI.ini, area: a })) }));
+  const { por, total } = contarCausas(docs); const causas = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(d => d.id));
+  const pa = listaAprov(as).filter(x => ids.has(x.doc.id)).length, dv = listaAprov(as, 'dev').filter(x => ids.has(x.doc.id)).length;
+  const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
+  const cs = colabsDa(area); const dias = DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
+  cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
+  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && AUSENCIA.has(x.v)) aus[x.v] = (aus[x.v] || 0) + 1; }));
+  return `<div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
+  <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Semana:</b> ${weekLabel(UI.ini)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis"><div><b>${ef}%</b><span>Eficiência até ${ddmm(TODAY < add(UI.ini, 6) ? TODAY : add(UI.ini, 6))}</span></div><div><b>${n0(s.prog)}</b><span>Programadas</span></div><div><b>${n0(s.R)}</b><span>Realizadas</span></div><div><b>${n0(s.N)}</b><span>Não realizadas</span></div><div><b>${n0(s.A)}</b><span>Atrasadas</span></div><div><b>${n0(s.E)}</b><span>Extras</span></div></div>
+  <h4>Por área</h4><table><thead><tr><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">Atrasadas</th><th class="r">Eficiência</th></tr></thead><tbody>${porArea.map(({ a, x }) => `<tr><td>${AREA_S[a]}</td><td class="r">${x.prog}</td><td class="r">${x.R}</td><td class="r">${x.N}</td><td class="r">${x.A}</td><td class="r"><b>${pct(x.Rhoje, x.progHoje)}%</b></td></tr>`).join('')}</tbody></table>
+  <div class="rcols"><div><h4>Principais causas das não realizadas</h4>${causas.length ? `<table><tbody>${causas.map(([c, n]) => `<tr><td>${esc(c)}</td><td class="r">${n}</td><td class="r">${pct(n, total)}%</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma não realizada.</p>'}</div>
+  <div><h4>Aprovação e plano de ação</h4><table><tbody><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr><tr><td>Devolvidas ao líder</td><td class="r">${dv}</td></tr><tr><td>Ações abertas</td><td class="r">${acoes.length}</td></tr><tr><td>Ações com prazo vencido</td><td class="r">${acoes.filter(a => a.prazo && a.prazo < TODAY).length}</td></tr></tbody></table></div></div>
+  <div class="rcols"><div><h4>Ausências (pessoas × dias)</h4>${Object.keys(aus).length ? `<table><tbody>${Object.entries(aus).map(([k, n]) => `<tr><td>${SIT_NOME[k]}</td><td class="r">${n}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma ausência.</p>'}</div>
+  <div><h4>Horas extras (dias)</h4><table><tbody><tr><td>A pedido da Dikma</td><td class="r">${he.DIKMA}</td></tr><tr><td>A pedido da ArcelorMittal</td><td class="r">${he.ARCELOR}</td></tr>${he[''] ? `<tr><td>Sem origem informada</td><td class="r">${he['']}</td></tr>` : ''}</tbody></table></div></div>
+  ${acoes.length ? `<h4>Ações em andamento</h4><table><thead><tr><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th></tr></thead><tbody>${acoes.slice(0, 10).map(a => `<tr><td>${esc(a.causa)}</td><td>${esc(a.acao)}</td><td>${esc(a.resp || '')}</td><td>${a.prazo ? ddmm(a.prazo) : ''}</td></tr>`).join('')}</tbody></table>` : ''}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+}
+
+/* ---------------- BANCO DE HORAS EXTRAS ---------------- */
+// Dias de hora extra (código HE no Efetivo diário) por pessoa no mês, por origem; horas = dias × horas por dia (ajustável).
+const heCfg = () => ({ ciclo: 12, adm: 8, limite: 0, ...((DB.cache.config && DB.cache.config.he) || {}) });
+function vEsHe() {
+  const area = areaScope(); const cfg = heCfg(); const m = UI.mes;
+  const dias = []; for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
+  const linhas = colabsDa(area).map(c => { const x = { c, DIKMA: 0, ARCELOR: 0, '': 0 }; dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') x[DB.sitInfo(c.id + '|' + d).he || '']++; }); x.dias = x.DIKMA + x.ARCELOR + x['']; const r = escala().regimes[regimeDe(c)]; x.hd = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm; x.horas = x.dias * x.hd; return x; }).filter(x => x.dias).sort((a, b) => b.dias - a.dias || a.c.nome.localeCompare(b.c.nome));
+  const tot = k => linhas.reduce((n, x) => n + x[k], 0); const acima = cfg.limite ? linhas.filter(x => x.dias > cfg.limite).length : 0;
+  const ed = admMod();
+  return `<div class="mini"><div><b class="num">${tot('dias')}</b><span>Dias de hora extra</span></div><div><b class="num">${tot('horas').toLocaleString('pt-BR')}</b><span>Horas (estimadas)</span></div><div><b class="num">${tot('DIKMA')}</b><span>A pedido da Dikma</span></div><div><b class="num">${tot('ARCELOR')}</b><span>A pedido da ArcelorMittal</span></div><div><b class="num">${linhas.length}</b><span>Pessoas</span></div>${cfg.limite ? `<div><b class="num" style="color:${acima ? 'var(--st-nreal)' : 'inherit'}">${acima}</b><span>Acima do limite (${cfg.limite} dias)</span></div>` : ''}</div>
+  <div class="card"><header><h2>Por pessoa</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · horas = dias × ${cfg.ciclo} h (turno) ou ${cfg.adm} h (administrativo)</p>${!framed && !isMobile() && linhas.length ? `<span class="r"><button class="btn sm" data-act="expHe">${I.dl} Exportar Excel</button></span>` : ''}</header>${linhas.length ? `<div class="tw"><table><thead><tr><th>Colaborador</th><th>Rota</th><th class="r">Dikma</th><th class="r">ArcelorMittal</th><th class="r">Sem origem</th><th class="r">Dias</th><th class="r">Horas</th></tr></thead><tbody>${linhas.map(x => `<tr${cfg.limite && x.dias > cfg.limite ? ' class="acima"' : ''}><td><b>${esc(title(x.c.nome))}</b></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td><td class="r num">${x.DIKMA || '·'}</td><td class="r num">${x.ARCELOR || '·'}</td><td class="r num">${x[''] || '·'}</td><td class="r num"><b>${x.dias}</b>${cfg.limite && x.dias > cfg.limite ? ' <span class="pill bad">acima</span>' : ''}</td><td class="r num">${x.horas}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><div class="empty">Nenhuma hora extra lançada neste mês.</div></div>'}</div>
+  <div class="card"><header><h2>Ajustes</h2><p>${ed ? 'Valem para todos' : 'Só o administrador ou o gestor altera'}</p></header><div class="body row-gap"><label class="sel"><span>Horas por dia · turno</span><input class="in numin" type="number" min="1" max="24" data-hecfg="ciclo" value="${cfg.ciclo}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Horas por dia · administrativo</span><input class="in numin" type="number" min="1" max="24" data-hecfg="adm" value="${cfg.adm}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Limite de dias no mês (0 = sem limite)</span><input class="in numin" type="number" min="0" max="31" data-hecfg="limite" value="${cfg.limite}" ${ed ? '' : 'disabled'}></label></div></div>`;
+}
+function exportHe() {
+  const area = areaScope(); const cfg = heCfg(); const m = UI.mes; const dias = []; for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
+  const linhas = [['Nome', 'Área', 'Rota', 'Dikma', 'ArcelorMittal', 'Sem origem', 'Dias', 'Horas (estimadas)']];
+  colabsDa(area).forEach(c => { const x = { DIKMA: 0, ARCELOR: 0, '': 0 }; dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') x[DB.sitInfo(c.id + '|' + d).he || '']++; }); const n = x.DIKMA + x.ARCELOR + x['']; if (!n) return; const r = escala().regimes[regimeDe(c)]; linhas.push([title(c.nome), AREA_S[c.area] || c.area, c.rota, x.DIKMA, x.ARCELOR, x[''], n, n * (r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm)]); });
+  baixarExcel(`horas-extras-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${m}`, [{ nome: 'Horas extras ' + m, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
 
 /* ---------------- PENDÊNCIAS ---------------- */
@@ -1834,6 +1919,9 @@ document.addEventListener('click', async e => {
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
   }
   if (d.eye) { toggleEye(t); return; }
+  if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`); render(); return; }
+  if (d.ckok) { const [a, per] = d.ckok.split('|'); const g = equipeCheckin().find(x => x.a === a && x.per === per); if (!g) return; const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, `${ME.uid}|${curto(title(ME.nome || ME.login || ''))}|${new Date().toTimeString().slice(0, 5)}|${pres}/${g.ps.length}`); DB.log(`Check-in ${PER_NOME[per].toLowerCase()} · ${AREA_S[a]}: ${pres} de ${g.ps.length} presentes`); toast('Check-in confirmado'); render(); return; }
+  if (d.ckre) { const [a, per] = d.ckre.split('|'); if (!myAreas().includes(a)) return; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, null); render(); return; }
   if (d.just) { const [i, k] = d.just.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc && canEdit(doc.area)) pedirJustificativa(doc, i, k, m => { setSt(doc, i, k, 'N', m); toast('Justificativa atualizada'); render(); }); return; }
   if (d.reset) {
     const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
@@ -1893,6 +1981,7 @@ document.addEventListener('click', async e => {
     case 'more': UI.more = +d.n; render(); break;
     case 'cancel': UI.confirm = null; render(); break;
     case 'askAll': UI.confirm = 'all'; render(); break;
+    case 'expHe': exportHe(); break;
     case 'novaAcao': novaAcaoSheet(d.k); break;
     case 'acaoSt': { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) break; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); break; }
     case 'aprv': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } break; }
@@ -2029,6 +2118,7 @@ document.addEventListener('change', e => {
     if (t.value && u && t.value === u.area) { toast('A 2ª área precisa ser diferente da primeira'); t.value = u.area2 || ''; return; }
     DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
   }
+  if (t.dataset.hecfg) { if (!admMod()) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
   if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; if (p === 'administrativo') for (const m of ['operacao', 'gestao', 'frequencia']) { const c = $('nuM_' + m); if (c) c.checked = true; } }
 });
 // Atalho: "/" leva para a busca da tela (quando não está digitando em outro campo).
@@ -2053,7 +2143,7 @@ if (DB.definirChaveArea) DB.definirChaveArea(c => {
   const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
   return ok ? chaveFicha(PES.lotacao(c).area) : null;
 });
-const MD = criarMeuDia({ get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+const MD = criarMeuDia({ checkinPend: () => checkinPendentes(), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
 // Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).
@@ -2064,6 +2154,9 @@ function abrirLink(busca) {
   if (daOperacao && UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; }
   if (m && MODS[m]) UI.modulo = m;
   if (v) UI.view = v;
+  // QR Code da rota: ?r=ÁREA|ROTA abre o Apontar de hoje já nessa rota
+  const sem = p.get('s'); if (sem && /^\d{4}-\d{2}-\d{2}$/.test(sem)) { UI.ini = weekOf(sem); UI.mes = monthOfWeek(UI.ini); }
+  const r = p.get('r'); if (r && r.includes('|')) { const [a, rota] = r.split('|'); UI.apArea = a; UI.aRotaPor = { ...(UI.aRotaPor || {}), [a]: rota }; UI.aRota = rota; UI.dia = null; UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; if (UI.area !== 'TODAS' && UI.area !== a) UI.area = 'TODAS'; }
   if (m || v) { UI.confirm = null; salvarUI(); }
   return !!(m || v);
 }

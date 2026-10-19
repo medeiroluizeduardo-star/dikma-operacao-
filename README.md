@@ -178,6 +178,12 @@ Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na
 - Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
 - O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
 
+### Etiquetas QR, resumo da semana, banco de horas extras e check-in do turno
+- **Etiquetas QR das rotas** (Atividades › Acompanhar, supervisor e acima): uma etiqueta por rota para imprimir e colar no local. A câmera do celular lê o código e abre o Apontar de hoje já naquela rota (com o login feito).
+- **Resumo da semana:** a semana numa página (eficiência, por área, causas, aprovação, ações, ausências e horas extras), pronta para imprimir ou salvar em PDF. O aviso de segunda-feira abre o resumo da semana que passou.
+- **Banco de horas extras** (Efetivo › Escala e presença): dias de hora extra por pessoa no mês, por origem (Dikma, ArcelorMittal, sem origem), com horas estimadas (dias × horas por dia, 12 h no turno e 8 h no administrativo, ajustável) e limite de dias no mês. Exporta para Excel.
+- **Check-in do turno** (Efetivo diário, para líder e supervisor): a equipe do dia separada em turno diurno, noturno e administrativo; um toque marca presente, atraso ou falta, e **Confirmar** registra quem confirmou e a que horas. O Meu dia lembra o check-in que falta (o noturno a partir das 17h).
+
 ### Causas e ações, prazo de aprovação, lembretes e modo TV
 - **Causas e ações** (Atividades › Acompanhar): Pareto das justificativas do mês (total e percentual acumulado), semana a semana, rotas com mais não realizadas e a causa principal de cada uma. Supervisor, coordenador, gestor e administrador criam uma **ação** para a causa (o que fazer, responsável, prazo), concluem ou retiram. Cada ação mostra o **efeito**: a média por semana da causa nas 4 semanas antes e depois.
 - **Prazo de aprovação:** o que o líder apontou num dia deve ser aprovado até o dia seguinte. A Aprovação mostra os mais antigos primeiro, com "fora do prazo · há N dias".
