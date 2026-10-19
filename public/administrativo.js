@@ -35,6 +35,8 @@ export function criarAdministrativo(X) {
   const pode = () => editaAdm(ME());
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
   const nomeComp = c => { const [a, m] = c.split('-').map(Number); return `${MESES_L[m - 1]} ${a}`; };
+  // A folha aparece pelas datas (16 a 15), como o RH confere: "16/10 a 15/11/2026".
+  const periodoComp = c => { const d = diasDaCompetencia(c); if (!d.length) return nomeComp(c); const i = d[0], f = d[d.length - 1]; return `${i.slice(8)}/${i.slice(5, 7)}${i.slice(0, 4) !== f.slice(0, 4) ? '/' + i.slice(0, 4) : ''} a ${f.slice(8)}/${f.slice(5, 7)}/${f.slice(0, 4)}`; };
   const compMais = (c, n) => { let [a, m] = c.split('-').map(Number); m += n; while (m > 12) { m -= 12; a++; } while (m < 1) { m += 12; a--; } return `${a}-${String(m).padStart(2, '0')}`; };
   const diasEntre = (a, b) => Math.round((new Date(b + 'T12:00:00') - new Date(a + 'T12:00:00')) / 864e5);
 
@@ -76,7 +78,7 @@ export function criarAdministrativo(X) {
   function topo(view) {
     if (view !== 'afreq') return '';
     return `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>
-      <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${nomeComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
+      <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${periodoComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
   }
 
   /* ---------- Frequência ---------- */
@@ -94,7 +96,7 @@ export function criarAdministrativo(X) {
     if (doc === undefined) return '<div class="card skel"><i></i><i></i><i></i></div>';
     if (!doc) {
       const ant = compDoc(conj, compMais(comp, -1));
-      return `<div class="card"><div class="empty"><b>A folha de ${nomeComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri" data-a="abrirComp">Abrir a folha com os grupos de ${nomeComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
+      return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri" data-a="abrirComp">Abrir a folha com os grupos de ${periodoComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
     }
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj); const fRH = funcaoRH();
     // No celular a folha mostra uma semana por vez (os 30 dias não cabem): ‹ › troca a semana dentro da competência.
@@ -175,7 +177,7 @@ export function criarAdministrativo(X) {
   function addPessoa(gi) {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
     const ops = opcoesPessoa();
-    formSheet('Incluir na folha', `${esc(doc.grupos[+gi].nome)} · ${nomeComp(comp)}`, `<label class="sel"><span>Nome (escolha da lista ou digite)</span><input class="in" id="apNome" list="apLista" autocomplete="off" required></label><datalist id="apLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist><label class="sel"><span>Turma (turno)</span><input class="in" id="apTurma" maxlength="1" placeholder="A, B, I, J…"></label>`, 'Incluir', async () => {
+    formSheet('Incluir na folha', `${esc(doc.grupos[+gi].nome)} · ${periodoComp(comp)}`, `<label class="sel"><span>Nome (escolha da lista ou digite)</span><input class="in" id="apNome" list="apLista" autocomplete="off" required></label><datalist id="apLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist><label class="sel"><span>Turma (turno)</span><input class="in" id="apTurma" maxlength="1" placeholder="A, B, I, J…"></label>`, 'Incluir', async () => {
       const nome = $('apNome').value.trim().toUpperCase(); if (normNome(nome).split(' ').length < 2) throw new Error('Informe o nome completo.');
       const rh = criarBusca(A().rh || [])(nome); const mat = rh ? String(rh.item.mat || '') : '';
       const at = criarBusca(A().colabs[conj] || [])(nome, mat);
@@ -203,7 +205,7 @@ export function criarAdministrativo(X) {
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj);
     const linhas = [['Grupo', 'Nome', 'Matrícula', ...datas.map(d => ddmm(d)), ...CONTA.map(k => NOMES_CODIGO[k])]];
     for (const g of doc.grupos) for (const p of g.pessoas) { const t = totais(conj, comp, doc, g, p, datas, cmap); linhas.push([g.nome, p.nome, p.mat || '', ...datas.map(dt => codigo(conj, comp, doc, g, p, dt, cmap).v), ...CONTA.map(k => t[k] || '')]); }
-    baixarExcel(`frequencia-${conj}-${comp}`, [{ nome: `${SETS[conj].curto} ${nomeComp(comp)}`, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+    baixarExcel(`frequencia-${conj}-${comp}`, [{ nome: `${SETS[conj].curto} ${periodoComp(comp).replace(/\//g, "-")}`, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
   /* ---------- Férias ---------- */
@@ -341,7 +343,7 @@ export function criarAdministrativo(X) {
     else if (a === 'addPessoa') addPessoa(v);
     else if (a === 'novoGrupo') {
       const doc = A().comps[U.conj + '|' + U.comp]; if (!doc) return;
-      formSheet('Novo grupo', `${SETS[U.conj].curto} · ${nomeComp(U.comp)}`, '<label class="sel"><span>Nome do grupo</span><input class="in" id="agNome" required placeholder="Ex.: LIDER FULANO - SUPERVISÃO CICLANO"></label><label class="mchip"><input type="checkbox" id="agTurno"><span>Grupo de turno (D e N são dias trabalhados)</span></label>', 'Criar', async () => {
+      formSheet('Novo grupo', `${SETS[U.conj].curto} · ${periodoComp(U.comp)}`, '<label class="sel"><span>Nome do grupo</span><input class="in" id="agNome" required placeholder="Ex.: LIDER FULANO - SUPERVISÃO CICLANO"></label><label class="mchip"><input type="checkbox" id="agTurno"><span>Grupo de turno (D e N são dias trabalhados)</span></label>', 'Criar', async () => {
         const nome = $('agNome').value.trim().toUpperCase(); if (!nome) throw new Error('Informe o nome.');
         const grupos = [...doc.grupos, { nome, turno: $('agTurno').checked, pessoas: [] }]; doc.grupos = grupos; await DB.admSalvarGrupos(U.conj, U.comp, grupos); toast('Grupo criado'); render();
       });
@@ -350,7 +352,7 @@ export function criarAdministrativo(X) {
       const ant = A().comps[U.conj + '|' + compMais(U.comp, -1)]; if (!ant) return;
       const datas = diasDaCompetencia(U.comp);
       const grupos = ant.grupos.map(g => ({ ...g, pessoas: g.pessoas.filter(p => !p.desligado).map(p => ({ ...p, notas: [] })) }));
-      await DB.admSalvarComp(U.conj, U.comp, { ini: datas[0], fim: datas[datas.length - 1], grupos, d: {} }); toast(`Folha de ${nomeComp(U.comp)} aberta`); render();
+      await DB.admSalvarComp(U.conj, U.comp, { ini: datas[0], fim: datas[datas.length - 1], grupos, d: {} }); toast(`Folha de ${periodoComp(U.comp)} aberta`); render();
     }
     else if (a === 'exportar') exportar();
     else if (a === 'fAba') { U.fAba = v; render(); }
