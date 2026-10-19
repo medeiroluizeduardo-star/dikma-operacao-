@@ -120,6 +120,22 @@ service cloud.firestore {
       allow delete: if admMod('operacao');
     }
 
+    // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
+    function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
+    function acaoPode(area, m) { return area == 'TODAS' ? (admin() || (todasAreas() && acOp() && m in mods())) : (m == 'operacao' ? aprovaDa(area) : aprovaDaB(area)); }
+    match /acoes/{id} {
+      allow read: if op();
+      allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'operacao');
+      allow update: if acaoOk(request.resource.data) && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'operacao');
+      allow delete: if admMod('operacao');
+    }
+    match /b_acoes/{id} {
+      allow read: if ba();
+      allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'bateria');
+      allow update: if acaoOk(request.resource.data) && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'bateria');
+      allow delete: if admMod('bateria');
+    }
+
     // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
     match /evidencias/{id} {
       allow read: if op();

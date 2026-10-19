@@ -178,6 +178,13 @@ Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na
 - Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
 - O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
 
+### Causas e ações, prazo de aprovação, lembretes e modo TV
+- **Causas e ações** (Atividades › Acompanhar): Pareto das justificativas do mês (total e percentual acumulado), semana a semana, rotas com mais não realizadas e a causa principal de cada uma. Supervisor, coordenador, gestor e administrador criam uma **ação** para a causa (o que fazer, responsável, prazo), concluem ou retiram. Cada ação mostra o **efeito**: a média por semana da causa nas 4 semanas antes e depois.
+- **Prazo de aprovação:** o que o líder apontou num dia deve ser aprovado até o dia seguinte. A Aprovação mostra os mais antigos primeiro, com "fora do prazo · há N dias".
+- **Lembretes no celular:** o líder recebe na hora cada atividade devolvida (com o motivo); supervisor e acima recebem às 8h o que espera aprovação há mais de 1 dia. Dá para desligar no Meu dia.
+- **Dia e noite:** o Dimensionamento mostra, em rota de turno, quantos estão de dia (D) e de noite (N), em vermelho quando um turno fica sem ninguém. A Equipe e frota mostra "Trabalhando · dia/noite" para quem é 4x4.
+- **Modo TV:** botão **Modo TV** no Painel (computador) abre o Painel em tela cheia, sem menus, trocando de área sozinho a cada 30 segundos (endereço com `?tv`).
+
 ### Tema claro ou escuro
 - Botão **Tema** no menu lateral (no celular, em **Mais › Tema da tela**) e na tela de entrada: **Automático** (segue o aparelho), **Claro** ou **Escuro**. Vale só naquele aparelho e já abre no tema certo, sem piscar.
 

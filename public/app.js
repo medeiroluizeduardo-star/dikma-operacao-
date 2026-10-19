@@ -10,6 +10,8 @@ import { baixarExcel, dataBR } from './exportar.js';
 // Assim a prévia nunca mexe nos dados reais.
 const PREVIA = location.hostname.includes('--');
 const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
+// Modo TV (?tv): Painel em tela cheia para a sala de controle, trocando de área sozinho a cada 30 s.
+const TV = new URLSearchParams(location.search).has('tv');
 // Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
 { const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 const DB = await import(DEMO ? './data-mock.js' : './data.js');
@@ -44,6 +46,7 @@ try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.v
 // Acesso (porta de entrada) desta sessão: operacao | sistema (o antigo Administrativo agora é um módulo da Operação).
 try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
 if (!UI.acesso) UI.acesso = 'operacao';
+if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (!['operacao', 'bateria'].includes(UI.modulo)) UI.modulo = 'operacao'; }
 const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
 const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } };
@@ -185,6 +188,7 @@ function devolver(x, mot) {
 
 /* ---------------- ícones ---------------- */
 const I = {
+  causas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20h16"/><path d="M6 17V7M10 17V10M14 17v-4M18 17v-2"/><path d="M5 5l5 3 4 2 5 1"/></svg>',
   aprov: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg>',
   ok: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   painel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -215,6 +219,7 @@ const VIEWS = [
   { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => aprovador() },
+  { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Acompanhar', mod: 'op' },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
@@ -416,9 +421,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -499,13 +504,13 @@ function mudarFiltro(id, v) {
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
 function filtroCompacto(comSet) {
   const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
-  const partes = [comSet ? SETS[SK].curto : '', semanaCurta(UI.ini), area].filter(Boolean);
+  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'causas' ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 function filtroSheet() {
   const L = $('layer');
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
-  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view) })}`;
+  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: UI.view !== 'causas' })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -582,26 +587,33 @@ function renderTop() {
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
-  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar'].includes(UI.view);
+  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas'].includes(UI.view);
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
   else {
-    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view) });
+    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: UI.view !== 'causas' });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   }
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
 }
 
 /* ---------------- PAINEL ---------------- */
+let tvT = 0;
+function tvGirar() {
+  clearTimeout(tvT); if (DB.marcarUso) DB.marcarUso(); // a TV fica ligada o dia todo: conta como uso tvT = setTimeout(() => { if (AUTH.status === 'ready' && UI.view === 'painel' && !myArea()) { const l = ['TODAS', ...AREAS]; UI.area = l[(l.indexOf(UI.area) + 1) % l.length]; render(); } tvGirar(); }, 30000);
+}
 function vPainel() {
+  if (TV) { UI.escopo = 'semana'; if (UI.ini !== CUR_WEEK) { UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; } if (!tvT) tvGirar(); }
   const area = areaScope();
   const scope = UI.escopo === 'semana' ? { ini: UI.ini, area } : { mes: UI.mes, area };
   const docs = docsFor(scope); const s = stats(docs);
   const ef = pct(s.Rhoje, s.progHoje), ap = pct(s.R + s.N, s.progHoje);
   const seg = `<div class="filters" role="group" aria-label="Período"><button class="btn ${UI.escopo === 'semana' ? 'dark' : ''}" data-esc="semana">Semana</button><button class="btn ${UI.escopo === 'mes' ? 'dark' : ''}" data-esc="mes">Mês inteiro</button></div>`;
-  let h = `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span></div>`;
+  const hm = new Date().toTimeString().slice(0, 5);
+  let h = TV ? `<div class="tvhead"><b>${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]}</b><span>${SETS[SK].nome} · ${weekLabel(UI.ini)} · atualizado às ${hm}</span><a class="btn sm ghost" href="${location.pathname}${DEMO ? '?demo' : ''}">Sair do modo TV</a></div>`
+    : `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span>${!framed && !isMobile() ? `<a class="btn sm ghost" href="${location.pathname}?tv${DEMO ? '&demo' : ''}" target="_blank" rel="noopener" title="Painel em tela cheia, trocando de área sozinho (sala de controle)">Modo TV</a>` : ''}</div>`;
   if (!docs.length) return h + '<div class="card"><div class="empty">Nenhuma programação gerada para este período.</div></div>';
   {
     const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(d => d.id)); // só o período que o Painel mostra
@@ -755,7 +767,9 @@ function escalaRota(r, ini) {
     for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && COLABS.some(c => c.id === x.sub)) mov++; if (ids.has(x.sub)) { const sc = cs.find(c => c.id === x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; } }
     let prog = 0; if (doc) doc.ids.forEach((id, i) => { if (PL.get(id) && PL.get(id).rota === r.rota && doc.d[i][k] !== '_') prog++; });
     const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * fator) : (r.rota === 'GESTÃO' ? Math.min(r.ef, escd) : 0);
-    out.push({ disp: aloc - aus + mov, nec, prog, aloc, mov });
+    // quem está disponível de dia e de noite (turno pela letra)
+    const per = { D: 0, N: 0 }; cs.forEach(c => { if (DB.sit(c.id + '|' + dt) === 'DS' || indisponivel(c, dt)) return; const p = periodoDe(c, dt); if (p) per[p]++; });
+    out.push({ disp: aloc - aus + mov, nec, prog, aloc, mov, dispD: per.D, dispN: per.N });
   }
   return { cs, days: out };
 }
@@ -1208,8 +1222,8 @@ function irEscala(rota) {
 function vEsDim() {
   const area = areaScope(); const { rows } = dimRotas(area);
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão (em rota de turno, só a parte do quadro que trabalha por dia). Disponível já desconta a folga da escala. Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
-  ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes">${d.disp}/${d.nec}</span></td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
+  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão (em rota de turno, só a parte do quadro que trabalha por dia). Disponível já desconta a folga da escala. Em rota de turno, D e N mostram quantos estão de dia e de noite (em vermelho quando um dos turnos fica sem ninguém). Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
+  ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes${d.dispD + d.dispN ? ` · turno: ${d.dispD} de dia e ${d.dispN} de noite` : ''}">${d.disp}/${d.nec}</span>${d.dispD + d.dispN ? `<small class="dnx${(d.dispD === 0 || d.dispN === 0) && d.prog ? ' bad' : ''}">D${d.dispD} · N${d.dispN}</small>` : ''}</td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 function vEsBal() {
@@ -1301,21 +1315,23 @@ function vAprovar() {
   const todas = listaAprov(minhas);
   const xs = area === 'TODAS' ? todas : todas.filter(x => x.doc.area === area);
   const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev');
+  // prazo de aprovação: o que o líder apontou num dia deve ser aprovado até o fim do dia seguinte
+  const PRAZO_APROV = 1; const limite = add(TODAY, -PRAZO_APROV); const foraPrazo = xs.filter(x => x.dt < limite).length;
   const grupos = new Map();
   for (const x of xs) { const key = `${x.dt}|${x.doc.area}|${x.p.rota}`; if (!grupos.has(key)) grupos.set(key, []); grupos.get(key).push(x); }
   let h = minhas.length > 1 ? `<div class="rchips linha" role="group" aria-label="Área"><button class="rchip" data-aprarea="TODAS" aria-pressed="${area === 'TODAS'}">Todas<span class="c num">${todas.length || '✓'}</span></button>${minhas.map(a => { const n = todas.filter(x => x.doc.area === a).length; return `<button class="rchip" data-aprarea="${a}" aria-pressed="${a === area}">${AREA_S[a]}<span class="c num">${n || '✓'}</span></button>`; }).join('')}</div>` : '';
-  h += `<div class="mini"><div><b class="num" style="color:${xs.length ? 'var(--st-atr)' : 'inherit'}">${xs.length}</b><span>Aguardando aprovação</span></div><div><b class="num">${grupos.size}</b><span>Rotas e dias</span></div><div><b class="num">${dev.length}</b><span>Devolvidas ao líder</span></div></div>
+  h += `<div class="mini"><div><b class="num" style="color:${xs.length ? 'var(--st-atr)' : 'inherit'}">${xs.length}</b><span>Aguardando aprovação</span></div><div><b class="num">${grupos.size}</b><span>Rotas e dias</span></div><div><b class="num">${dev.length}</b><span>Devolvidas ao líder</span></div><div><b class="num" style="color:${foraPrazo ? 'var(--st-nreal)' : 'inherit'}">${foraPrazo}</b><span>Fora do prazo (mais de 1 dia)</span></div></div>
   <div class="row-between"><p class="muted small m0">O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.</p>${xs.length > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${xs.length} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${xs.length})</button>`) : ''}</div>`;
   if (!xs.length) h += '<div class="card"><div class="empty">Nada aguardando aprovação. Tudo o que os líderes apontaram já foi conferido.</div></div>';
   const abertos = UI.aprTodas || [];
-  for (const [key, it] of [...grupos.entries()].slice(0, 30)) {
+  for (const [key, it] of [...grupos.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(0, 30)) { // mais antigos primeiro: o que está fora do prazo fica no topo
     const [dt, a, r] = key.split('|'); const tudo = abertos.includes(key);
-    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar</p><span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span></header><div class="body"><div class="plist">
+    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar${dt < limite ? ` · <span class="pill bad">fora do prazo · há ${Math.round((pd(TODAY) - pd(dt)) / 864e5)} dias</span>` : ''}</p><span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span></header><div class="body"><div class="plist">
     ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div><div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div></div>`; }).join('')}
     ${it.length > 8 ? `<div class="pitem"><span class="muted">${tudo ? `${it.length} nesta rota` : `+ ${it.length - 8} nesta rota`}</span><button class="btn" data-act="aprTodas" data-k="${esc(key)}">${tudo ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
     </div></div></div>`;
   }
-  if (grupos.size > 30) h += `<p class="muted small">Mostrando as 30 rotas e dias mais recentes de ${grupos.size}. Aprove estas para ver as próximas.</p>`;
+  if (grupos.size > 30) h += `<p class="muted small">Mostrando as 30 rotas e dias mais antigos de ${grupos.size}. Aprove estas para ver as próximas.</p>`;
   if (dev.length) h += `<div class="card"><header><h2>Devolvidas ao líder</h2><p>Esperando a correção · ${dev.length}</p></header><div class="body"><div class="plist">${dev.slice(0, 12).map(x => { const a = aprovDe(x.doc, x.p.id, x.k) || {}; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.rota)} · ${ddmm(x.dt)} · por ${esc(title(curto(a.nome || '')))}: ${esc(a.mot || '')}</div></div></div>`; }).join('')}${dev.length > 12 ? `<p class="muted small m0">+ ${dev.length - 12}</p>` : ''}</div></div></div>`;
   return h;
 }
@@ -1333,6 +1349,69 @@ function pedirDevolucao(x) {
       const m = ($('devMot').value || '').trim(); if (!m) throw new Error('Escreva o motivo.');
       devolver(x, m); toast('Devolvida ao líder'); render();
     });
+  });
+}
+
+/* ---------------- CAUSAS E AÇÕES ---------------- */
+// Pareto das justificativas das não realizadas (mês e área do topo), semana a semana, por rota, e o plano de ação de cada causa.
+const OUTRAS = 'Outras justificativas (escritas)';
+const causaDe = m => (MOTIVOS.includes(m) ? m : OUTRAS);
+const podeAcao = area => aprovador() && (area === 'TODAS' ? todasAreas() : areasAprov().includes(area));
+function contarCausas(docs, rota) {
+  const por = {}, escritas = {}; let total = 0;
+  for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p || (rota && p.rota !== rota)) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = d.m[id + '|' + k] || 'Sem justificativa'; const c = m === 'Sem justificativa' ? m : causaDe(m); por[c] = (por[c] || 0) + 1; total++; if (c === OUTRAS) escritas[m] = (escritas[m] || 0) + 1; } });
+  return { por, escritas, total };
+}
+// Quantas vezes a causa apareceu por semana nas 4 semanas antes e depois de uma data (só os meses carregados)
+function efeitoAcao(causa, area, desde) {
+  const ini = weekOf(desde.slice(0, 10)); let antes = 0, depois = 0, sa = 0, sd = 0;
+  for (let w = -4; w <= 4; w++) {
+    if (w === 0) continue; const wk = add(ini, 7 * w); if (wk > CUR_WEEK) continue;
+    const ds = docsFor({ ini: wk, area: area === 'TODAS' ? 'TODAS' : area }); if (!ds.length) continue;
+    const n = contarCausas(ds).por[causa] || 0; if (w < 0) { antes += n; sa++; } else { depois += n; sd++; }
+  }
+  return { antes: sa ? antes / sa : null, depois: sd ? depois / sd : null };
+}
+function vCausas() {
+  const area = areaScope(); const docs = docsFor({ mes: UI.mes, area });
+  const { por, escritas, total } = contarCausas(docs);
+  const lista = Object.entries(por).sort((a, b) => b[1] - a[1]); const mx = Math.max(1, ...lista.map(x => x[1]));
+  let acum = 0; const nf = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const atrasadas = atrasadasAll(area).filter(x => x.doc.mes === UI.mes).length;
+  const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status !== 'cancelada' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
+  const abertas = acoes.filter(a => a.status !== 'feita');
+  const vencidas = abertas.filter(a => a.prazo && a.prazo < TODAY);
+  let h = `<div class="mini"><div><b class="num" style="color:${total ? 'var(--st-nreal)' : 'inherit'}">${total}</b><span>Não realizadas no mês</span></div><div><b class="num">${lista.length}</b><span>Causas diferentes</span></div><div><b class="num">${atrasadas}</b><span>Atrasadas sem apontar</span></div><div><b class="num">${abertas.length}</b><span>Ações abertas</span></div><div><b class="num" style="color:${vencidas.length ? 'var(--st-nreal)' : 'inherit'}">${vencidas.length}</b><span>Ações com prazo vencido</span></div></div>`;
+  if (!total) h += `<div class="card"><div class="empty">Nenhuma atividade não realizada em ${monthLabel(UI.mes)}${area === 'TODAS' ? '' : ' · ' + AREA_S[area]}.</div></div>`;
+  else {
+    const top = lista.slice(0, 3).reduce((n, x) => n + x[1], 0);
+    h += `<div class="card"><header><h2>Pareto das causas</h2><p>${monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · as ${Math.min(3, lista.length)} primeiras somam ${pct(top, total)}%</p></header><div class="body"><div class="bars pareto">${lista.map(([c, n]) => { acum += n; const ac = acoes.filter(a => a.causa === c && a.status !== 'feita'); return `<div class="barrow mot"><span class="n">${esc(c)}${ac.length ? ` <span class="pill neu">${ac.length} ação${ac.length > 1 ? 'ões' : ''}</span>` : ''}</span><div class="stack clear"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}<small class="muted"> · ${pct(acum, total)}%</small></span>${podeAcao(area === 'TODAS' ? (todasAreas() ? 'TODAS' : myArea()) : area) && c !== 'Sem justificativa' ? `<button class="btn sm ghost" data-act="novaAcao" data-k="${esc(c)}" title="Criar ação para esta causa">${I.plus} Ação</button>` : ''}</div>`; }).join('')}</div>
+    <p class="muted small m0">O número à direita é o total da causa · o percentual é o acumulado (as causas de cima explicam a maior parte).</p>
+    ${Object.keys(escritas).length ? `<details class="m0"><summary class="small">Ver as ${Object.keys(escritas).length} justificativas escritas</summary><div class="plist">${Object.entries(escritas).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([t, n]) => `<div class="pitem"><div class="minw"><div class="l">${esc(t)}</div></div><span class="num">${n}</span></div>`).join('')}</div></details>` : ''}</div></div>`;
+    // semana a semana
+    const ws = weeksOfMonth(UI.mes); const porSem = ws.map(w => contarCausas(docs.filter(d => d.ini === w)).por);
+    h += `<div class="card"><header><h2>Semana a semana</h2><p>Quantas não realizadas por causa em cada semana do mês</p></header><div class="tw"><table><thead><tr><th>Causa</th>${ws.map(w => `<th class="r">${weekLabel(w).split(' · ')[0]}</th>`).join('')}<th class="r">Mês</th></tr></thead><tbody>${lista.slice(0, 8).map(([c, n]) => `<tr><td>${esc(c)}</td>${porSem.map(p => `<td class="r num">${p[c] || '·'}</td>`).join('')}<td class="r num"><b>${n}</b></td></tr>`).join('')}</tbody></table></div></div>`;
+    // por rota
+    const rs = rotasDa(area).map(r => ({ r, x: contarCausas(docsFor({ mes: UI.mes, area: r.area }), r.rota) })).filter(y => y.x.total).sort((a, b) => b.x.total - a.x.total).slice(0, 10);
+    h += `<div class="card"><header><h2>Rotas com mais não realizadas</h2><p>E a causa principal de cada uma</p></header><div class="tw"><table><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Não realizadas</th><th>Causa principal</th></tr></thead><tbody>${rs.map(({ r, x }) => { const [c, n] = Object.entries(x.por).sort((a, b) => b[1] - a[1])[0]; return `<tr><td><b>${esc(r.rota)}</b></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${x.total}</td><td>${esc(c)} <span class="muted small">(${n})</span></td></tr>`; }).join('')}</tbody></table></div></div>`;
+  }
+  // plano de ação
+  const ord = { aberta: 0, feita: 1 };
+  h += `<div class="card"><header><h2>Plano de ação</h2><p>O que está sendo feito para cada causa · o efeito compara a média por semana nas 4 semanas antes e depois da ação</p></header><div class="body">${acoes.length ? `<div class="plist">${acoes.slice().sort((a, b) => (ord[a.status] || 0) - (ord[b.status] || 0) || String(a.prazo || '9').localeCompare(String(b.prazo || '9'))).map(a => {
+    const ef = efeitoAcao(a.causa, a.area, a.em || TODAY); const venc = a.status !== 'feita' && a.prazo && a.prazo < TODAY; const ed = podeAcao(a.area);
+    return `<div class="pitem acao"><div class="minw"><div class="t">${esc(a.acao)}</div><div class="l">${esc(a.causa)} · ${a.area === 'TODAS' ? 'todas as áreas' : AREA_S[a.area] || esc(a.area)}${a.resp ? ` · resp. ${esc(a.resp)}` : ''}${a.prazo ? ` · prazo ${ddmm(a.prazo)}` : ''}</div><div class="l">${ef.antes != null ? `Antes: ${nf(ef.antes)}/semana` : 'Antes: sem dados'} · ${ef.depois != null ? `depois: <b>${nf(ef.depois)}/semana</b>${ef.antes != null ? (ef.depois < ef.antes ? ' <span class="pill ok">caiu</span>' : ef.depois > ef.antes ? ' <span class="pill bad">subiu</span>' : ' <span class="pill neu">igual</span>') : ''}` : 'depois: aguardando a próxima semana'}</div></div><div class="row-gap">${a.status === 'feita' ? '<span class="pill ok">feita</span>' : venc ? '<span class="pill bad">prazo vencido</span>' : '<span class="pill warn">aberta</span>'}${ed ? (a.status === 'feita' ? `<button class="btn sm" data-act="acaoSt" data-k="${esc(a.id)}|aberta">Reabrir</button>` : `<button class="btn sm pri" data-act="acaoSt" data-k="${esc(a.id)}|feita">Concluir</button>`) + `<button class="btn sm ghost" data-act="acaoSt" data-k="${esc(a.id)}|cancelada" title="Tirar do plano">✕</button>` : ''}</div></div>`;
+  }).join('')}</div>` : `<div class="empty">Nenhuma ação ainda.${aprovador() ? ' Toque em “+ Ação” ao lado de uma causa no Pareto.' : ''}</div>`}</div></div>`;
+  return h;
+}
+function novaAcaoSheet(causa) {
+  const area = areaScope(); const opts = area !== 'TODAS' ? [area] : todasAreas() ? ['TODAS', ...AREAS] : areasAprov();
+  formSheet('Nova ação', esc(causa), `<label class="sel"><span>O que vai ser feito</span><textarea class="in" id="acTxt" rows="3" maxlength="300" placeholder="Ex.: combinar com a operação a liberação da área às 8h"></textarea></label>
+    <div class="row2"><label class="sel"><span>Responsável</span><input class="in" id="acResp" maxlength="60" autocomplete="off"></label><label class="sel"><span>Prazo</span><input class="in" type="date" id="acPrazo" value="${add(TODAY, 7)}"></label></div>
+    <label class="sel"><span>Área</span><select class="in" id="acArea">${opts.map(a => `<option value="${a}">${a === 'TODAS' ? 'Todas as áreas' : AREA_S[a]}</option>`).join('')}</select></label>`, 'Criar ação', async () => {
+    const acao = ($('acTxt').value || '').replace(/\s+/g, ' ').trim(); if (acao.length < 5) throw new Error('Descreva a ação.');
+    const ar = $('acArea').value; if (!podeAcao(ar)) throw new Error('Seu perfil não cria ação nesta área.');
+    await DB.salvarAcao('', { causa, area: ar, acao, resp: ($('acResp').value || '').trim(), prazo: $('acPrazo').value || '', status: 'aberta' });
+    DB.log(`Plano de ação: ${causa} → ${acao}`); toast('Ação criada'); render();
   });
 }
 
@@ -1814,6 +1893,8 @@ document.addEventListener('click', async e => {
     case 'more': UI.more = +d.n; render(); break;
     case 'cancel': UI.confirm = null; render(); break;
     case 'askAll': UI.confirm = 'all'; render(); break;
+    case 'novaAcao': novaAcaoSheet(d.k); break;
+    case 'acaoSt': { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) break; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); break; }
     case 'aprv': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } break; }
     case 'devl': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) pedirDevolucao(x); break; }
     case 'aprvGrupo': { const [dt, a, r] = d.k.split('|'); const xs = listaAprov(areasAprov().filter(z => z === a)).filter(x => x.dt === dt && x.p.rota === r); aprovar(xs); toast(`${xs.length} aprovada${xs.length > 1 ? 's' : ''}`); render(); break; }
@@ -1997,7 +2078,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   if (typeof ensureModulo === 'function') ensureModulo();
   aplicarSet(); render(); scrollTo(0, 0);
 });
-const EQ = criarEquip({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
+const EQ = criarEquip({ escala: () => escala(), PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
 const AD = criarAdministrativo({ pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();

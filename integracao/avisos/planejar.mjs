@@ -3,9 +3,10 @@
 import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
+import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true };
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
@@ -114,6 +115,29 @@ export function planejar(d) {
       if (mods(x.u).includes('equipamentos') && abertas) linhas.push(`Operação: ${abertas} parada${abertas > 1 ? 's' : ''} sem liberação`);
       if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=painel` : '/?v=meudia' });
       marcar.add(chave);
+    }
+  }
+  // 6) Aprovação dos apontamentos (das 7h em diante):
+  //    líder → cada atividade devolvida pelo supervisor, assim que for devolvida (uma vez por atividade);
+  //    supervisor e acima → uma vez por dia, o que espera aprovação há mais de 1 dia nas áreas dele.
+  if (hora >= 7) {
+    const celulas = (S, areas, fn) => { for (const [id, doc] of Object.entries(S.semanas || {})) { if (!areas.includes(doc.area)) continue; const ap = (S.aprov || {})[id] || {}; for (const [pid, str] of Object.entries(doc.s || {})) for (let k = 0; k < 7; k++) { const dt = add(doc.ini || id.split('|')[1], k); fn({ id, pid, k, dt, c: str[k], a: ap[pid + '|' + k], m: (doc.m || {})[pid + '|' + k] }); } } };
+    for (const x of alvo) {
+      if (!x.prefs.aprovacao) continue;
+      if (x.u.papel === 'lider') {
+        const novas = []; let mod = null;
+        for (const k of SET_KEYS) { const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue; celulas(S, areas, z => { if (estadoAprov(z.c, z.dt, z.a, hoje, z.m) !== 'dev') return; const ch = `devi|${k}|${z.id}|${z.pid}|${z.k}|${(z.a && z.a.em) || ''}`; if (d.enviados[ch]) return; novas.push({ ...z, ch }); mod = mod || SETS[k].mod; }); }
+        if (novas.length) {
+          msgs.push({ uid: x.uid, titulo: novas.length === 1 ? 'O supervisor devolveu 1 atividade' : `O supervisor devolveu ${novas.length} atividades`, corpo: novas.slice(0, 3).map(z => `${z.dt.slice(8)}/${z.dt.slice(5, 7)}: ${(z.a && z.a.mot) || 'sem motivo'}`).join('\n') + '\nToque para corrigir no Apontar.', tag: 'aprovacao', url: `/?m=${mod}&v=apontar` });
+          novas.forEach(z => marcar.add(z.ch));
+        }
+      } else if (aprovaPapel(x.u.papel) && hora >= 8) {
+        const chave = `apr|${x.uid}|${hoje}`; if (d.enviados[chave]) continue;
+        let n = 0, mod = null; const limite = add(hoje, -1);
+        for (const k of SET_KEYS) { const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue; celulas(S, areas, z => { if (z.dt < limite && estadoAprov(z.c, z.dt, z.a, hoje, z.m) === 'pend') { n++; mod = mod || SETS[k].mod; } }); }
+        if (n) msgs.push({ uid: x.uid, titulo: `${n} apontamento${n > 1 ? 's' : ''} esperando aprovação há mais de 1 dia`, corpo: 'Toque para aprovar ou devolver.', tag: 'aprovacao', url: `/?m=${mod}&v=aprovar` });
+        marcar.add(chave);
+      }
     }
   }
   return { msgs, marcar: [...marcar] };

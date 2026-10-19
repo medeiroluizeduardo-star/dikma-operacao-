@@ -11,7 +11,7 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje', 'escala', 'pessoas']) {
+for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao']) {
   const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
 }
@@ -52,9 +52,14 @@ for (const k of SET_KEYS) {
   (await db.collection(C('colaboradores')).get()).forEach(x => colabs.push(...(x.data().itens || [])));
   // segunda-feira: também a semana que passou (resumo semanal)
   const segunda = new Date(hoje + 'T12:00:00').getDay() === 1;
-  for (const ini of new Set([weekOf(hoje), weekOf(amanha), ...(segunda ? [add(hoje, -7)] : [])])) for (const a of SETS[k].areas) { const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data(); }
+  // aprovação: também a semana anterior (apontamentos esperando aprovação e devolvidos ao líder)
+  const aprov = {};
+  for (const ini of new Set([weekOf(hoje), weekOf(amanha), add(weekOf(hoje), -7), ...(segunda ? [add(hoje, -7)] : [])])) for (const a of SETS[k].areas) {
+    const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data();
+    const ap = await db.doc(`${C('aprov')}/${a}|${ini}`).get(); if (ap.exists) aprov[ap.id] = ap.data().v || {};
+  }
   for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) Object.assign(sit, s.data().v || {}); }
-  sets[k] = { plano, colabs, semanas, sit, rotas: cfg.data().rotas || [] };
+  sets[k] = { plano, colabs, semanas, sit, aprov, rotas: cfg.data().rotas || [] };
 }
 
 // Escala de turno: quem está de folga pela letra da turma não conta como disponível amanhã.

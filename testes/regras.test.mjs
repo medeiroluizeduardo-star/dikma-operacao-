@@ -438,3 +438,20 @@ test('Painel Coqueria: cada pessoa ativa lê e grava só o próprio painel; ning
   await assertFails(setDoc(doc(db('semPerfil'), 'painel', 'semPerfil', 'tasks', 't1'), { title: 'x' }));
   await assertFails(getDoc(doc(db(null), 'painel', 'liderRec', 'tasks', 't1')));
 });
+
+// ---------- plano de ação das causas ----------
+test('plano de ação: supervisor cria e conclui na área dele; coordenador também em todas; líder e leitura só leem', async () => {
+  const a = { causa: 'Efetivo insuficiente', area: 'RECEBIMENTO', acao: 'Remanejar duas pessoas da Melhorias', resp: 'X', prazo: '2026-10-30', status: 'aberta' };
+  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), a));
+  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), { status: 'feita' }, { merge: true }));
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac1'), { area: 'PREPARAÇÃO' }, { merge: true }), 'não troca a área');
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac2'), { ...a, area: 'PREPARAÇÃO' }), 'fora da área dele');
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac3'), { ...a, area: 'TODAS' }), 'supervisor não cria para todas as áreas');
+  await assertSucceeds(setDoc(doc(db('coord'), 'acoes', 'ac4'), { ...a, area: 'TODAS' }));
+  await assertFails(setDoc(doc(db('liderRec'), 'acoes', 'ac5'), a), 'líder não cria ação');
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'acoes', 'ac1')));
+  await assertFails(setDoc(doc(db('freqLeitor'), 'acoes', 'ac6'), a));
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac7'), { ...a, acao: 'x'.repeat(401) }), 'texto muito longo');
+  await assertSucceeds(setDoc(doc(db('sup'), 'b_acoes', 'b1'), { ...a, area: 'BATERIA 1' }));
+  await assertFails(deleteDoc(doc(db('sup'), 'acoes', 'ac1')));
+});
