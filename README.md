@@ -178,6 +178,9 @@ Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na
 - Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
 - O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
 
+### Tema claro ou escuro
+- Botão **Tema** no menu lateral (no celular, em **Mais › Tema da tela**) e na tela de entrada: **Automático** (segue o aparelho), **Claro** ou **Escuro**. Vale só naquele aparelho e já abre no tema certo, sem piscar.
+
 ### Turno diurno e noturno
 - Em **Administração do sistema › Escalas e turnos**, cada turno em ciclo diz quais dias de trabalho são de **dia (D)** e de **noite (N)**. O padrão do 4x4 é 2 dias + 2 noites (DDNN) e o do 3x3 é DDN. Toque no dia para trocar e salve.
 - A noite conta no **dia em que começa** (a noite de segunda para terça é da segunda).
