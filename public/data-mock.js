@@ -5,7 +5,7 @@ import { podeAcesso } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
 
 export const isMock = true;
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -29,7 +29,7 @@ const persistLogo = () => { clearTimeout(persistT); persistT = setTimeout(persis
 addEventListener('pagehide', () => { if (persistT) { clearTimeout(persistT); persist(); } });
 const changed = () => { versao++; persistLogo(); cb.onData && cb.onData(); };
 function persist() {
-  const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, aprov: S[k].aprov, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
+  const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, aprov: S[k].aprov, acoes: S[k].acoes, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
   try { localStorage.setItem(LS, JSON.stringify({ v: 2, sets, log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
 }
 const toLocal = (id, x) => ({ ...x, id, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => x.s[p] || '_______') });
@@ -92,7 +92,7 @@ export async function start(callbacks) {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(LS) || 'null'); } catch (e) { /* ignora */ }
   if (saved && saved.v === 2 && saved.sets) {
-    for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, sitExtra: x.sitExtra || {}, aprov: x.aprov || {}, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
+    for (const k of SET_KEYS) { const x = saved.sets[k]; const st = S[k] = novoSet(); if (!x || !x.config) { await freshSet(k); continue; } Object.assign(st, { config: x.config, configLoaded: true, plano: x.plano, colabs: x.colabs, sitByMonth: x.sitByMonth, sitExtra: x.sitExtra || {}, aprov: x.aprov || {}, acoes: x.acoes || {}, semanas: Object.fromEntries(Object.entries(x.semanas).map(([i, v]) => [i, toLocal(i, v)])) }); }
     Object.assign(cache, { log: (saved.log || []).map(l => ({ ...l, at: new Date(l.at) })), usuarios: saved.usuarios });
     await carregarE(saved.e);
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await seed_('seed-gestao.json'); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
@@ -155,6 +155,10 @@ export async function setStatusMany(docId, changes) {
 export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '' }; };
 export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {} };
 export async function setSitExtra(campo, key, val) { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x[campo] ||= {}); if (val) o[key] = val; else delete o[key]; changed(); }
+export async function salvarAcao(id, dados) {
+  const i = id || 'ac' + Date.now().toString(36); const x = id ? { ...dados, atualizadoEm: new Date().toISOString() } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome };
+  S[cur].acoes[i] = { ...(S[cur].acoes[i] || {}), id: i, ...x }; changed();
+}
 export async function setAprov(docId, area, mes, itens) {
   const em = new Date().toISOString(); const a = (S[cur].aprov[docId] ||= {});
   for (const [k, x] of Object.entries(itens)) a[k] = { ...x, por: me.uid, nome: me.nome, em };

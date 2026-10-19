@@ -341,6 +341,19 @@ table.calesc th.fds{color:var(--ink-3)}
 .peri.N{background:#3d4fa8}
 .sit .peri{position:absolute;bottom:-5px;left:-5px;box-shadow:0 0 0 2px var(--surface)}
 .tchip .peri{margin:0 1px}
+body.tv .rail,body.tv .tabbar,body.tv .top{display:none}
+body.tv .app{grid-template-columns:minmax(0,1fr)}
+body.tv .wrap{max-width:none;padding:20px 28px;font-size:17px}
+body.tv .kpi .v{font-size:3.2em}
+.tvhead{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
+.tvhead b{font-size:30px;font-family:var(--f-disp,inherit);text-transform:uppercase;letter-spacing:.02em}
+.tvhead span{color:var(--ink-3);font-size:15px}
+.tvhead a{margin-left:auto}
+.pareto .barrow.mot{grid-template-columns:minmax(150px,260px) minmax(0,1fr) 92px auto}
+.pareto .barrow .p{white-space:nowrap;text-align:right}
+.pareto .barrow.mot:not(:has(> button)){grid-template-columns:minmax(150px,260px) minmax(0,1fr) 92px 74px}
+@media (max-width:860px){.pareto .barrow.mot,.pareto .barrow.mot:not(:has(> button)){grid-template-columns:minmax(0,1fr) 70px auto}.pareto .barrow .stack{grid-column:1/-1;grid-row:2}}
+.dnx{display:block;font-size:10px;color:var(--ink-3);margin-top:2px;font-variant-numeric:tabular-nums}.dnx.bad{color:var(--st-nreal);font-weight:700}
 .perx{font-size:.6em;color:var(--ink-3);font-weight:700}
 .sit .cobi{position:absolute;top:-6px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-style:normal;font-size:9px;line-height:15px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
 .sitleg .sit .cobi{top:-5px;right:-5px;width:12px;height:12px;line-height:12px;font-size:8px}

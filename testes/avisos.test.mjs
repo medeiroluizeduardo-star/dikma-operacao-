@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   fs.mkdirSync(lib, { recursive: true });
-  for (const f of ['cal', 'hoje', 'escala', 'pessoas']) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'"));
+  for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao']) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'"));
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -100,4 +100,22 @@ test('resumo da semana: segunda às 7h, só administrador, gestor e coordenador,
   assert.equal(cedo.msgs.filter(m => m.tag === 'semanal').length, 0, 'antes das 7h não');
   const ja = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: { [`sem|gest|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG });
   assert.equal(de(ja, 'gest', 'semanal').length, 0, 'uma vez');
+});
+
+test('aprovação: líder recebe o que foi devolvido (uma vez); supervisor recebe o que espera há mais de 1 dia (uma vez por dia)', () => {
+  const H = '2026-10-21'; const ini = '2026-10-19';
+  const S = { plano: [{ id: 'R1', rota: 'RECEBIMENTO' }, { id: 'R2', rota: 'RECEBIMENTO' }], rotas: [], colabs: [], sit: {},
+    semanas: { [`RECEBIMENTO|${ini}`]: { area: 'RECEBIMENTO', ini, ids: ['R1', 'R2'], s: { R1: 'RNP____', R2: 'RPP____' } } },
+    aprov: { [`RECEBIMENTO|${ini}`]: { 'R2|0': { s: 'A', c: 'R' }, 'R2|1': { s: 'D', c: 'P', mot: 'Não foi feita', em: 'e1' } } } };
+  const us = { ...usuarios, supRec: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Sup' } };
+  const av = { ...avisos, supRec: tok };
+  const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${H}T08:10:00`), hoje: H });
+  const ana = de(r, 'liderRec', 'aprovacao');
+  assert.equal(ana.length, 1); assert.equal(ana[0].titulo, 'O supervisor devolveu 1 atividade'); assert.match(ana[0].corpo, /Não foi feita/);
+  assert.equal(de(r, 'liderPrep', 'aprovacao').length, 0, 'outra área não recebe');
+  const sup = de(r, 'supRec', 'aprovacao');
+  assert.equal(sup.length, 1); assert.equal(sup[0].titulo, '1 apontamento esperando aprovação há mais de 1 dia'); // R1 de segunda; o de terça ainda está no prazo
+  const env = Object.fromEntries(r.marcar.map(k => [k, H]));
+  const r2 = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: env, agora: new Date(`${H}T09:10:00`), hoje: H });
+  assert.equal(r2.msgs.filter(m => m.tag === 'aprovacao').length, 0, 'não repete');
 });

@@ -4,7 +4,7 @@ import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora 
 import { aprovaPapel, contarPendentes } from './aprovacao.js';
 
 const DIAS_L = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true };
 
 export function criarMeuDia(X) {
   const { DB, esc, title, I, toast, render } = X;
@@ -55,6 +55,8 @@ export function criarMeuDia(X) {
       temMod('equipamentos') && ['paradas', 'Parada sem liberação há mais de 2 horas'],
       temMod('gestao') && ME().papel !== 'leitor' && ['assinaturas', 'Assinatura com você ou da sua área há mais de 7 dias (às 8h)'],
       (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(ME().papel) && ['atividades', 'Atividades do dia ainda sem apontar (às 15h)'],
+      (temMod('operacao') || temMod('bateria')) && ME().papel === 'lider' && ['aprovacao', 'Atividade devolvida pelo supervisor (na hora)'],
+      (temMod('operacao') || temMod('bateria')) && aprovaPapel(ME().papel) && ['aprovacao', 'Apontamentos esperando sua aprovação há mais de 1 dia (às 8h)'],
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)'],
       ['admin', 'gestor', 'coordenador'].includes(ME().papel) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)']
     ].filter(Boolean);

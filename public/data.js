@@ -43,7 +43,7 @@ import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -231,6 +231,8 @@ function startData() {
     if (!temSet(me, k)) { st.configLoaded = true; continue; }
     on(doc(db, C('config', k), 'sistema'), s => { st.config = s.exists() ? s.data() : null; st.configLoaded = true; changed(); });
     on(collection(db, C('plano', k)), qs => { st.plano = {}; qs.forEach(d => { st.plano[d.id] = d.data().itens || []; }); changed(); });
+    // plano de ação das causas de não realização (acoes/{id}: { causa, area, acao, resp, prazo, status, em, por })
+    on(collection(db, C('acoes', k)), qs => { st.acoes = {}; qs.forEach(d => { st.acoes[d.id] = { id: d.id, ...d.data() }; }); changed(); });
     on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; }); st.colabsLoaded = !qs.metadata.fromCache || qs.size > 0; changed(); if (gestaoOn) conferirAreas(); });
   }
   on(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(40)), qs => {
@@ -326,6 +328,13 @@ export function setAprov(docId, area, mes, itens) {
   return track(setDoc(doc(db, C('aprov'), docId), { area, mes, v }, { merge: true }));
 }
 const st0 = () => S[cur];
+// Plano de ação das causas: cria (id vazio) ou altera uma ação.
+export function salvarAcao(id, dados) {
+  const ref = id ? doc(db, C('acoes'), id) : doc(collection(db, C('acoes')));
+  const x = id ? { ...dados, atualizadoEm: new Date().toISOString(), atualizadoPor: me.uid } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome || me.login || '' };
+  st0().acoes[ref.id] = { ...(st0().acoes[ref.id] || {}), id: ref.id, ...x };
+  return track(setDoc(ref, x, { merge: true }));
+}
 export function setSit(key, code) {
   const m = key.split('|')[1].slice(0, 7);
   return track(setDoc(doc(db, C('situacao'), m), { v: { [key]: code || deleteField() } }, { merge: true }));

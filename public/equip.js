@@ -418,10 +418,12 @@ export function criarEquip(X) {
     const fora = ops.filter(o => C.ausenteEm(o, TODAY));
     const ult = n => E().lanc.filter(l => l.op === n).map(l => l.data).sort().pop();
     const ext = extFreq();
+    // turno do dia pela letra (escala central): dia ou noite
+    const perHoje = o => { if (o.escala !== '4x4' || !X.escala) return ''; const p = X.escala().previsto('4x4', o.turma, TODAY); return p && p.trab && p.periodo ? (p.periodo === 'N' ? ' · noite' : ' · dia') : ''; };
     const sitTxt = o => {
       const daFreq = ext(o, TODAY);
-      if (daFreq !== undefined) return daFreq ? `<span class="pill warn">${esc(title(daFreq))}</span><div class="muted small">pela Frequência / Efetivo diário</div>` : `<span class="pill ok">Trabalhando</span><div class="muted small">pela Frequência / Efetivo diário</div>`;
-      if (!o.situacao || o.situacao === 'TRABALHANDO') return `<span class="pill ok">Trabalhando</span>${ext.achou(o) ? '' : '<div class="muted small">fora da Frequência</div>'}`; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
+      if (daFreq !== undefined) return daFreq ? `<span class="pill warn">${esc(title(daFreq))}</span><div class="muted small">pela Frequência / Efetivo diário</div>` : `<span class="pill ok">Trabalhando${perHoje(o)}</span><div class="muted small">pela Frequência / Efetivo diário</div>`;
+      if (!o.situacao || o.situacao === 'TRABALHANDO') return `<span class="pill ok">Trabalhando${perHoje(o)}</span>${ext.achou(o) ? '' : '<div class="muted small">fora da Frequência</div>'}`; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
     // Busca e filtro de operadores: valem para a lista e para a escala do mês.
     const kOp = o => semAcento([o.nome, o.funcao, o.escala, o.turma ? 'turma ' + o.turma : '', o.situacao].filter(Boolean).join(' '));
     const FO = { todos: () => true, trab: o => !C.ausenteEm(o, TODAY), fora: o => !!C.ausenteEm(o, TODAY), x4: o => o.escala === '4x4', adm: o => o.escala !== '4x4' };

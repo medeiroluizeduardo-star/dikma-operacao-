@@ -1,6 +1,7 @@
 name: Avisos no celular
 
-# De hora em hora, das 6h às 22h (Brasília): paradas sem liberação há mais de 2 h, assinaturas pendentes há mais
+# De hora em hora, das 6h às 22h (Brasília): paradas sem liberação há mais de 2 h, atividade devolvida ao líder,
+# aprovação esperando há mais de 1 dia (8h), assinaturas pendentes há mais
 # de 7 dias (a partir das 8h), atividades do dia sem apontar (a partir das 15h) e déficit de efetivo amanhã (17h).
 # Cada pessoa recebe só o que é dela. Enquanto ninguém ligar os avisos no sistema, só registra "nada a enviar".
 on:
