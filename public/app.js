@@ -1,7 +1,7 @@
 // Dikma Gestão — interface. Atividades Pátio e Atividades Bateria usam as mesmas telas (conjunto ativo em SK).
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, AUSENCIA, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
-import { competenciaDe, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
+import { competenciaDe, diasDaCompetencia, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
 import { abrirLancamento } from './presenca.js';
 import { APROV_DESDE, aprovaPapel, estadoAprov } from './aprovacao.js';
 import { baixarExcel, dataBR } from './exportar.js';
@@ -1119,7 +1119,7 @@ function vCfConf() {
   if (nunca.length) item('neu', 'Ainda não criaram a própria senha', 'Receberam a senha provisória e não entraram.', nunca.map(u => `${title(u.nome)} (${u.login || ''})`), 'usuarios', 'Usuários e acessos');
   // 5) Frequência e férias: folha atual e férias
   const A = DB.cache.adm || {}; const comp = competenciaDe(TODAY);
-  for (const k of SET_KEYS) { const c = (A.comps || {})[k + '|' + comp]; if (c === null) item('warn', `Folha de ${monthLabel(comp)} não aberta · ${SETS[k].curto}`, 'A frequência da competência atual ainda não foi aberta em Frequência e férias.', [], null); else if (c) { const sem = c.grupos.flatMap(g => g.pessoas.filter(p => !p.mat).map(p => title(p.nome))); if (sem.length) item('neu', `Na folha sem ficha no RH · ${SETS[k].curto}`, 'Entram na folha, mas sem matrícula as férias e o Efetivo não se ligam a elas.', sem, null); const sAt = c.grupos.flatMap(g => g.pessoas.filter(p => !p.ativ && !p.desligado && g.turno).map(p => title(p.nome))); if (sAt.length) item('neu', `Turno na folha, fora das Atividades · ${SETS[k].curto}`, 'A presença delas fica só na folha (não aparece no Efetivo diário).', sAt, null); } }
+  for (const k of SET_KEYS) { const c = (A.comps || {})[k + '|' + comp]; if (c === null) item('warn', `Folha de ${(d => `${d[0].slice(8)}/${d[0].slice(5, 7)} a ${d.at(-1).slice(8)}/${d.at(-1).slice(5, 7)}`)(diasDaCompetencia(comp))} não aberta · ${SETS[k].curto}`, 'A frequência da competência atual ainda não foi aberta em Frequência e férias.', [], null); else if (c) { const sem = c.grupos.flatMap(g => g.pessoas.filter(p => !p.mat).map(p => title(p.nome))); if (sem.length) item('neu', `Na folha sem ficha no RH · ${SETS[k].curto}`, 'Entram na folha, mas sem matrícula as férias e o Efetivo não se ligam a elas.', sem, null); const sAt = c.grupos.flatMap(g => g.pessoas.filter(p => !p.ativ && !p.desligado && g.turno).map(p => title(p.nome))); if (sAt.length) item('neu', `Turno na folha, fora das Atividades · ${SETS[k].curto}`, 'A presença delas fica só na folha (não aparece no Efetivo diário).', sAt, null); } }
   if (A.fLoaded) {
     const marcadas = new Set((A.ferias || []).filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || nk(f.nome)));
     const venc = (A.ferias || []).filter(f => f.limite && f.limite < TODAY && !marcadas.has(f.mat || nk(f.nome)));

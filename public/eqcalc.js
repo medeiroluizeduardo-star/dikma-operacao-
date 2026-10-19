@@ -124,10 +124,12 @@ export function criarCalc(cfg, cad, ext) {
       const x = { o, aloc: lo.length, final: cnt(lo, l => l.status === 'OPERAÇÃO FINALIZADA'), he: cnt(lo, l => STATUS_HE.includes(l.status)), heh: sum(lo, l => l.he), cob: cnt(lo, l => l.sub),
         fora: cnt(lo, l => l.status === 'FORA DE OPERAÇÃO'), manut: cnt(lo, l => l.status === 'EM MANUTENÇÃO'), hprev: sum(lo, l => l.jan), hoper: sum(lo, l => l.hoper), hpar: sum(lo, l => l.hpar),
         hparOp: sum(po.filter(p => p.resp === 'OPERADOR'), p => p.dur), npar: cnt(po, p => p.ini), ninsp: io.length };
-      x.diasOp = diasPrevistosOp(o, jIni, jFim);
+      // dias depois do desligamento não são previstos (nem contam como ausência)
+      const desl = contar(jIni, jFim, d => ausenteEm(o, d) === 'DESLIGADO' && escalado(o, d));
+      x.diasOp = Math.max(0, diasPrevistosOp(o, jIni, jFim) - desl);
       let ferd = 0;
-      if (ext) ferd = contar(jIni, jFim, d => { const s = ausenteEm(o, d); return !!s && sitDesconta(s) && escalado(o, d); });
-      else if (o.situacao && o.situacao !== 'TRABALHANDO' && sitDesconta(o.situacao)) {
+      if (ext) ferd = contar(jIni, jFim, d => { const s = ausenteEm(o, d); return !!s && s !== 'DESLIGADO' && sitDesconta(s) && escalado(o, d); });
+      else if (o.situacao && o.situacao !== 'TRABALHANDO' && o.situacao !== 'DESLIGADO' && sitDesconta(o.situacao)) {
         const a = [o.de || jIni, jIni].sort()[1], b = [o.ate || '9999-12-31', jFim].sort()[0];
         ferd = a > b ? 0 : diasPrevistosOp(o, a, b);
       }
