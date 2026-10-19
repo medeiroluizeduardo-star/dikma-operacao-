@@ -178,6 +178,13 @@ Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na
 - Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
 - O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
 
+### Turno diurno e noturno
+- Em **Administração do sistema › Escalas e turnos**, cada turno em ciclo diz quais dias de trabalho são de **dia (D)** e de **noite (N)**. O padrão do 4x4 é 2 dias + 2 noites (DDNN) e o do 3x3 é DDN. Toque no dia para trocar e salve.
+- A noite conta no **dia em que começa** (a noite de segunda para terça é da segunda).
+- **Efetivo diário e Frequência:** cada presença de turno ganha a marca **D** (diurno) ou **N** (noturno). "Trabalham hoje" mostra as letras de dia e de noite. O quadro "Turno dia · noite" e o "x/y presentes hoje" de cada grupo separam os dois períodos.
+- **Agrupar por › Dia e noite:** separa as pessoas em Administrativo, Turno diurno, Turno noturno e Folga ou férias, com as letras de cada grupo.
+- Se duas letras estiverem no mesmo dia do ciclo (datas iguais ou equivalentes), Escalas e turnos avisa para conferir as datas.
+
 ### Frequência e Efetivo diário: o mesmo jeito de lançar
 As duas telas têm o mesmo visual (grupos que recolhem, busca, filtro de grupo ou rota, legenda das siglas, ✓ = presente, rodapé com os presentes de cada dia) e o mesmo lançamento: toque no dia → escolha a situação → escolha até quando vale (só este dia, 3, 5, 7, 15 ou 30 dias, até domingo ou até o fim da competência). No Efetivo diário, depois de uma ausência num dia de trabalho, o sistema pergunta quem cobre; depois de uma hora extra, a pedido de quem.
 - **Líder com o nome escrito de jeitos diferentes** (KAUAN, KAUAN SOUZA, KAUAN SUZA): os grupos da Frequência viram um só e o Efetivo diário pode **agrupar por líder** com o mesmo nome. O reconhecimento usa o cadastro do RH: nome que é o começo de uma única pessoa, ou com uma letra trocada; quando o RH tem duas pessoas possíveis e a lista não desempata, não troca.
