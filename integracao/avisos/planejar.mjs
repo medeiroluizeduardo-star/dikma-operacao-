@@ -113,7 +113,7 @@ export function planejar(d) {
       }
       if (mods(x.u).includes('gestao') && pend) linhas.push(`Efetivo: ${pend} assinatura${pend > 1 ? 's' : ''} pendente${pend > 1 ? 's' : ''}`);
       if (mods(x.u).includes('equipamentos') && abertas) linhas.push(`Operação: ${abertas} parada${abertas > 1 ? 's' : ''} sem liberação`);
-      if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=painel` : '/?v=meudia' });
+      if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=resumo&s=${ini}` : '/?v=meudia' });
       marcar.add(chave);
     }
   }

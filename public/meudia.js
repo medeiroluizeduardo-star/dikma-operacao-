@@ -144,6 +144,7 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
+    if (X.checkinPend) { const n = X.checkinPend(); if (n) tiles.push({ n, t: n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar', s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Fazer' }); }
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };
