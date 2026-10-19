@@ -7,9 +7,10 @@ export const APROVADORES = ['admin', 'gestor', 'coordenador', 'supervisor'];
 export const aprovaPapel = papel => APROVADORES.includes(papel);
 // c = código da célula, dt = data, a = registro de aprovação (ou nada), hoje = AAAA-MM-DD
 // devolve 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
-export function estadoAprov(c, dt, a, hoje) {
+// m = justificativa atual da não realizada: se o líder trocar depois de aprovada, volta a esperar aprovação.
+export function estadoAprov(c, dt, a, hoje, m) {
   if (dt < APROV_DESDE || dt > hoje) return null;
-  if (c === 'R' || c === 'N' || c === 'E') return a && a.s === 'A' && a.c === c ? 'ok' : 'pend';
+  if (c === 'R' || c === 'N' || c === 'E') return a && a.s === 'A' && a.c === c && (c !== 'N' || a.m == null || m == null || a.m === m) ? 'ok' : 'pend';
   return a && a.s === 'D' && (c === 'P' || (c === '_' && a.ant === 'E')) ? 'dev' : null;
 }
 // Quantos apontamentos esperam aprovação (ou foram devolvidos, est = 'dev') nas áreas, olhando as semanas carregadas de um conjunto (Pátio ou Bateria).
@@ -20,7 +21,7 @@ export function contarPendentes(semanas, aprov, areas, hoje, est = 'pend') {
     const a = (aprov || {})[doc.id] || {};
     for (let k = 0; k < 7; k++) {
       const dt = somaDias(doc.ini, k); if (dt < APROV_DESDE || dt > hoje) continue;
-      for (let i = 0; i < doc.ids.length; i++) if (estadoAprov(doc.d[i][k], dt, a[doc.ids[i] + '|' + k], hoje) === est) n++;
+      for (let i = 0; i < doc.ids.length; i++) if (estadoAprov(doc.d[i][k], dt, a[doc.ids[i] + '|' + k], hoje, (doc.m || {})[doc.ids[i] + '|' + k]) === est) n++;
     }
   }
   return n;

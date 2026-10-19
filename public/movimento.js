@@ -5,7 +5,10 @@ const reduzir = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- marcador do menu lateral: desliza até o item ativo ----------
 let indTop = null;
-export function moverIndicador() {
+// mede no quadro seguinte, quando o navegador já calculou a página (não atrasa o toque)
+let indRaf = 0;
+export function moverIndicador() { cancelAnimationFrame(indRaf); indRaf = requestAnimationFrame(moverAgora); }
+function moverAgora() {
   const nav = document.getElementById('nav'); if (!nav) return;
   const rail = nav.closest('.rail'); if (!rail || getComputedStyle(rail).display === 'none') return;
   let ind = rail.querySelector('.nav-ind');
@@ -25,8 +28,9 @@ export function moverIndicador() {
 // ---------- entrada da tela (só quando a pessoa troca de tela, não quando os dados atualizam) ----------
 export function entrarTela(view) {
   if (reduzir()) return;
-  view.classList.remove('entra', 'barras'); void view.offsetWidth; view.classList.add('entra', 'barras');
-  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 450);
+  // tira e põe a classe no quadro seguinte (sem forçar o recálculo da página na hora do toque)
+  view.classList.remove('entra', 'barras'); cancelAnimationFrame(view._raf);
+  view._raf = requestAnimationFrame(() => { view.classList.add('entra', 'barras'); clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 450); });
   contarNumeros(view);
 }
 
@@ -67,8 +71,8 @@ export function pulsar(el) {
   if (!el) return;
   vibrar();
   if (reduzir()) return;
-  el.classList.remove('pulsa'); void el.offsetWidth; el.classList.add('pulsa');
-  setTimeout(() => el.classList.remove('pulsa'), 600);
+  el.classList.remove('pulsa');
+  requestAnimationFrame(() => { el.classList.add('pulsa'); setTimeout(() => el.classList.remove('pulsa'), 600); });
 }
 
 // Toque curto de confirmação no celular (Android; no iPhone o navegador não vibra).

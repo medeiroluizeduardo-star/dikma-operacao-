@@ -23,7 +23,11 @@ export const seed = seed_;
 let cb = {}, me = null;
 
 let versao = 0;
-const changed = () => { versao++; persist(); cb.onData && cb.onData(); };
+// Gravar tudo no aparelho a cada toque deixava o toque lento: junta as gravações (e grava antes de fechar a página).
+let persistT = 0;
+const persistLogo = () => { clearTimeout(persistT); persistT = setTimeout(persist, 500); };
+addEventListener('pagehide', () => { if (persistT) { clearTimeout(persistT); persist(); } });
+const changed = () => { versao++; persistLogo(); cb.onData && cb.onData(); };
 function persist() {
   const sets = Object.fromEntries(SET_KEYS.map(k => [k, { config: S[k].config, plano: S[k].plano, colabs: S[k].colabs, sitByMonth: S[k].sitByMonth, sitExtra: S[k].sitExtra, aprov: S[k].aprov, semanas: Object.fromEntries(Object.entries(S[k].semanas).map(([i, v]) => [i, { ...v, d: undefined, ev: undefined }])) }]));
   try { localStorage.setItem(LS, JSON.stringify({ v: 2, sets, log: cache.log.slice(0, 40), usuarios: cache.usuarios, me: me && me.uid, g: { config: cache.g.config, colabs: cache.g.colabs, ocorr: cache.g.ocorr }, gAssin: Object.fromEntries(Object.entries(cache.gAssin).filter(([, a]) => a.metodo !== 'papel')), e: { config: cache.e.config, cad: cache.e.cad, lanc: cache.e.lanc, par: cache.e.par, insp: cache.e.insp, aval: cache.e.aval } })); } catch (e) { /* sem armazenamento */ }
