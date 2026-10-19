@@ -106,15 +106,20 @@ function stats(docs, { rota = 'TODAS', tipo = 'TODOS' } = {}) {
   return s;
 }
 const rotasDa = area => rotas().filter(r => area === 'TODAS' || r.area === area);
+const ATR_MEMO = new Map();
 function atrasadasAll(area) {
+  const mk = `${typeof DATAV === 'undefined' ? 0 : DATAV}|${SK}|${TODAY}|${area}`; // o menu pede isto a cada desenho
+  if (ATR_MEMO.has(mk)) return ATR_MEMO.get(mk);
+  if (ATR_MEMO.size > 20) ATR_MEMO.clear();
   const out = [];
   for (const doc of docsFor({ area })) for (let i = 0; i < doc.ids.length; i++) for (let k = 0; k < 7; k++)
     if (doc.d[i][k] === 'P' && diasDe(doc)[k] < TODAY) out.push({ doc, i, k, dt: diasDe(doc)[k] });
-  return out.sort((a, b) => (a.dt < b.dt ? -1 : 1));
+  out.sort((a, b) => (a.dt < b.dt ? -1 : 1)); ATR_MEMO.set(mk, out); return out;
 }
 
 /* ---------------- gravações ---------------- */
 function localChange(doc, i, k, c, motivo) {
+  DATAV++;
   const a = [...doc.d[i]]; a[k] = c; const str = a.join('');
   const pid = doc.ids[i];
   doc.d[i] = str; if (doc.s) doc.s[pid] = str;
@@ -137,28 +142,36 @@ const aprovador = () => !!ME && aprovaPapel(ME.papel);
 const areasAprov = () => (!aprovador() ? [] : todasAreas() ? AREAS : myAreas());
 const aprovDe = (doc, pid, k) => ((DB.cache.aprov || {})[doc.id] || {})[pid + '|' + k];
 // 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
-const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY);
+const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY, doc.m[doc.ids[i] + '|' + k]);
+// A lista é usada no menu, no Painel, no Apontar e no Meu dia a cada desenho: guarda até os dados mudarem.
+let DATAV = 0; const APROV_MEMO = new Map();
 function listaAprov(areas, est = 'pend') {
+  const mk = `${DATAV}|${SK}|${TODAY}|${est}|${areas.join(',')}`;
+  if (APROV_MEMO.has(mk)) return APROV_MEMO.get(mk);
+  if (APROV_MEMO.size > 40) APROV_MEMO.clear();
   const out = [];
   for (const doc of Object.values(DB.cache.semanas)) {
     if (!areas.includes(doc.area)) continue;
     const ds = diasDe(doc); if (ds[6] < APROV_DESDE || ds[0] > TODAY) continue;
     for (let i = 0; i < doc.ids.length; i++) { if (!PL.get(doc.ids[i])) continue; for (let k = 0; k < 7; k++) if (estAprov(doc, i, k) === est) out.push({ doc, i, k, dt: ds[k], p: PL.get(doc.ids[i]) }); }
   }
-  return out.sort((a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id)));
+  out.sort((a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id)));
+  APROV_MEMO.set(mk, out); return out;
 }
 // Grava o apontamento; quando quem aponta é supervisor para cima, já fica aprovado.
 function gravarApont(doc, ch) {
+  DATAV++;
   if (!ch.length) return;
   DB.setStatusMany(doc.id, ch);
   if (!aprovador() || !canEdit(doc.area)) return;
   const it = {};
-  for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = { s: 'A', c }; }
+  for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = c === 'N' ? { s: 'A', c, m: x.motivo || '' } : { s: 'A', c }; }
   if (Object.keys(it).length) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível registrar a aprovação'));
 }
 function aprovar(itens) {
+  DATAV++;
   const porDoc = new Map();
-  for (const x of itens) { if (!porDoc.has(x.doc)) porDoc.set(x.doc, {}); porDoc.get(x.doc)[x.doc.ids[x.i] + '|' + x.k] = { s: 'A', c: x.doc.d[x.i][x.k] }; }
+  for (const x of itens) { if (!porDoc.has(x.doc)) porDoc.set(x.doc, {}); const c = x.doc.d[x.i][x.k]; const key = x.doc.ids[x.i] + '|' + x.k; porDoc.get(x.doc)[key] = c === 'N' ? { s: 'A', c, m: x.doc.m[key] || '' } : { s: 'A', c }; }
   for (const [doc, it] of porDoc) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível aprovar'));
   if (itens.length) DB.log(`Aprovou ${itens.length === 1 ? `${itens[0].p.ativ} · ${itens[0].p.rota} · ${ddmm(itens[0].dt)}` : `${itens.length} apontamentos`}`);
 }
@@ -204,7 +217,6 @@ const VIEWS = [
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => aprovador() },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
-  { id: 'relfoto', nome: 'Relatório fotográfico', ic: 'cam', grp: 'Acompanhar', mod: 'op' },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Administração', admin: true, mod: 'op' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Administração', admin: true, mod: 'op' },
@@ -281,14 +293,14 @@ function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
   if (UI.modulo === 'gestao') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
   if (UI.modulo === 'config') { const ss = setsDe(ME); k = ss.includes(UI.cfSet) ? UI.cfSet : (ss[0] || 'patio'); UI.cfSet = k; }
-  if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', rfRota: 'TODAS', rfIni: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
+  if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
   if (!AREAS.includes(UI.pArea)) UI.pArea = AREAS[0];
   if (UI.area !== 'TODAS' && !AREAS.includes(UI.area)) UI.area = 'TODAS';
   if (myArea()) UI.area = myArea();
 }
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { prog: 'apontar', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq' };
+const VIEW_NOVA = { prog: 'apontar', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
@@ -390,9 +402,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = 'painel';
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'relfoto'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, relfoto: vRelFoto, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -471,14 +483,14 @@ function mudarFiltro(id, v) {
 }
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
 function filtroCompacto(comSet) {
-  const area = UI.view === 'apontar' ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
+  const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
   const partes = [comSet ? SETS[SK].curto : '', semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 function filtroSheet() {
   const L = $('layer');
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
-  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: UI.view !== 'apontar' })}`;
+  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view) })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -555,13 +567,13 @@ function renderTop() {
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', relfoto: 'Fotos das atividades, separadas por rota', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar'].includes(UI.view);
   const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
   else {
-    if (comFiltro) ctr = periodControls({ area: UI.view !== 'apontar' });
+    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view) });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   }
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
@@ -577,9 +589,9 @@ function vPainel() {
   let h = `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span></div>`;
   if (!docs.length) return h + '<div class="card"><div class="empty">Nenhuma programação gerada para este período.</div></div>';
   {
-    const as = area === 'TODAS' ? AREAS : [area];
-    const pa = listaAprov(as).length, dv = listaAprov(as, 'dev').length;
-    if (pa || dv) h += `<div class="aprovbar"><span>${I.aprov}<span>${pa ? `<b class="num">${pa}</b> apontamento${pa > 1 ? 's' : ''} aguardando aprovação` : ''}${pa && dv ? ' · ' : ''}${dv ? `<b class="num">${dv}</b> devolvido${dv > 1 ? 's' : ''} ao líder para corrigir` : ''}<small>Já contam nos números abaixo.</small></span></span>${pa && aprovador() ? '<button class="btn pri sm" data-go="aprovar">Aprovar</button>' : dv && canEdit(as[0]) ? '<button class="btn sm" data-go="apontar">Abrir o Apontar</button>' : ''}</div>`;
+    const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(d => d.id)); // só o período que o Painel mostra
+    const pa = listaAprov(as).filter(x => ids.has(x.doc.id)).length, dv = listaAprov(as, 'dev').filter(x => ids.has(x.doc.id)).length;
+    if (pa || dv) h += `<div class="aprovbar"><span>${I.aprov}<span>${pa ? `<b class="num">${pa}</b> apontamento${pa > 1 ? 's' : ''} aguardando aprovação` : ''}${pa && dv ? ' · ' : ''}${dv ? `<b class="num">${dv}</b> devolvido${dv > 1 ? 's' : ''} ao líder para corrigir` : ''}<small>${UI.escopo === 'semana' ? 'Nesta semana' : 'Neste mês'} · já contam nos números abaixo.</small></span></span>${pa && aprovador() ? '<button class="btn pri sm" data-go="aprovar">Aprovar</button>' : dv && canEdit(as[0]) ? '<button class="btn sm" data-go="apontar">Abrir o Apontar</button>' : ''}</div>`;
   }
   h += `<div class="kpis">
    <div class="kpi hero"><span class="lbl">Eficiência até hoje</span><span class="v num">${ef}%</span><span class="s num">${n0(s.Rhoje)} realizadas de ${n0(s.progHoje)} programadas até ${ddmm(TODAY)}</span><div class="meter"><i style="width:${ef}%"></i></div></div>
@@ -671,9 +683,8 @@ function vApontar() {
     const c = st(doc, i, k); const raw = doc.d[i][k]; const m = doc.m[p.id + '|' + k];
     const ea = estAprov(doc, i, k); const av = ea ? aprovDe(doc, p.id, k) || {} : null;
     const selo = ea === 'pend' ? ' · <span class="pill neu">aguardando aprovação</span>' : ea === 'ok' ? ' · <span class="pill ok">aprovada</span>' : ea === 'dev' ? ' · <span class="pill bad">devolvida</span>' : '';
-    h += `<div class="act ${c}${ea === 'dev' ? ' devolvida' : ''}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}${selo}</div>${m ? `<div class="m">Motivo: ${esc(m)}</div>` : ''}${ea === 'dev' ? `<div class="m devm">Devolvida${av.nome ? ` por ${esc(title(curto(av.nome)))}` : ''}: ${esc(av.mot || '')}. Confira e aponte de novo.</div>` : ''}</div>
-    ${(() => { const n = evCount(doc, p.id, k); return `<div class="bt evbt">${edit || n ? `<button class="ev-btn${n ? ' on' : ''}" data-ev="${esc(doc.id)}|${i}|${k}" aria-label="Fotos e arquivos (${n})" title="Fotos e arquivos">${I.cam}${n ? `<span class="num">${n}</span>` : ''}</button>` : ''}</div>`; })()}
-    ${edit ? `<div class="bt">${raw === 'E' ? `<button class="no-btn" data-ap="${i}|${k}|rmE" aria-label="Remover extra" title="Remover extra">✕</button>` : `<button class="ok-btn" data-ap="${i}|${k}|R" aria-pressed="${raw === 'R'}" aria-label="Realizada">✓</button><button class="no-btn" data-ap="${i}|${k}|N" aria-pressed="${raw === 'N'}" aria-label="Não realizada">✕</button>`}</div>` : `<span class="chip ${c}">${CHIP[c]}</span>`}</div>`;
+    h += `<div class="act ${c}${ea === 'dev' ? ' devolvida' : ''}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}${selo}</div>${raw === 'N' ? `<div class="m">${m ? `Justificativa: ${esc(m)}` : '<span class="semt">Sem justificativa</span>'}${edit ? ` <button class="btn ghost link" data-just="${i}|${k}">${m ? 'editar' : 'justificar'}</button>` : ''}</div>` : ''}${ea === 'dev' ? `<div class="m devm">Devolvida${av.nome ? ` por ${esc(title(curto(av.nome)))}` : ''}: ${esc(av.mot || '')}. Confira e aponte de novo.</div>` : ''}</div>
+    ${edit ? `<div class="bt">${raw === 'E' ? `<button class="no-btn" data-ap="${i}|${k}|rmE" aria-label="Remover extra" title="Remover extra">✕</button>` : `<button class="ok-btn" data-ap="${i}|${k}|R" aria-pressed="${raw === 'R'}" aria-label="Realizada">✓</button><button class="no-btn" data-ap="${i}|${k}|N" aria-pressed="${raw === 'N'}" aria-label="Não realizada">✕</button>`}</div>` : `<span class="pill ${{ R: 'ok', E: 'ok', N: 'bad', A: 'warn' }[c] || 'neu'}">${{ R: 'Realizada', E: 'Extra', N: 'Não realizada', A: 'Atrasada', P: 'A fazer' }[c] || ST_NOME[c] || ''}</span>`}</div>`;
   }
   return h + '</div>';
 }
@@ -998,7 +1009,7 @@ function vCfGeral() {
     const st = DB.dados(k); const c = st.config;
     const nPlano = SETS[k].areas.reduce((n, a) => n + ((st.plano || {})[a] || []).length, 0);
     const ms = ((c && c.meses) || []).slice().sort();
-    h += card(MOD_IC[SETS[k].mod], SETS[k].nome, SETS[k].areas.map(a => AREA_S[a]).join(' · '), c ? kv([['Rotas', (c.rotas || []).length], ['Atividades no plano', nPlano], ['Meses gerados', ms.length ? ms.slice(-3).map(monthLabel).join(', ') : '—'], ['Foto ao concluir', c.exigirFoto ? 'obrigatória' : 'opcional']]) : '<p class="muted m0">Planilha ainda não importada.</p>', `${ir('config', 'Rotas e configurações', k)}${ir('plano', 'Plano padrão', k)}${ir('gerador', 'Gerador de meses', k)}`);
+    h += card(MOD_IC[SETS[k].mod], SETS[k].nome, SETS[k].areas.map(a => AREA_S[a]).join(' · '), c ? kv([['Rotas', (c.rotas || []).length], ['Atividades no plano', nPlano], ['Meses gerados', ms.length ? ms.slice(-3).map(monthLabel).join(', ') : '—']]) : '<p class="muted m0">Planilha ainda não importada.</p>', `${ir('config', 'Rotas e configurações', k)}${ir('plano', 'Plano padrão', k)}${ir('gerador', 'Gerador de meses', k)}`);
   }
   // Operação
   if (VIEWS.find(v => v.id === 'econfig').req()) { const e = DB.cache.e; const c = e && e.config; h += card(MOD_IC.equipamentos, 'Operação', 'Equipamentos e operadores', c ? kv([['Operadores', (e.cad.operadores || []).length], ['Frota', (e.cad.frota || []).length], ['Causas de parada', (c.causas || []).length], ['Turno ADM · 4x4', `${c.turno.admIni}–${c.turno.admFim} · ${c.turno.x4Ini}–${c.turno.x4Fim}`]]) : '<p class="muted m0">Planilha ainda não importada.</p>', ir('econfig', 'Configurações da Operação')); }
@@ -1265,7 +1276,7 @@ function vAprovar() {
   for (const [key, it] of [...grupos.entries()].slice(0, 30)) {
     const [dt, a, r] = key.split('|'); const tudo = abertos.includes(key);
     h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar</p><span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span></header><div class="body"><div class="plist">
-    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; const n = evCount(x.doc, x.p.id, x.k); return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span>${m ? ` · ${esc(m)}` : ''}</div></div><div class="bt">${n ? `<button class="ev-btn on" data-ev="${ref}" aria-label="Fotos e arquivos (${n})" title="Fotos e arquivos">${I.cam}<span class="num">${n}</span></button>` : ''}<button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div></div>`; }).join('')}
+    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div><div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div></div>`; }).join('')}
     ${it.length > 8 ? `<div class="pitem"><span class="muted">${tudo ? `${it.length} nesta rota` : `+ ${it.length - 8} nesta rota`}</span><button class="btn" data-act="aprTodas" data-k="${esc(key)}">${tudo ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
     </div></div></div>`;
   }
@@ -1278,7 +1289,7 @@ function achaAprov(ref) {
   const doc = DB.cache.semanas[id]; if (!doc) return null; const p = PL.get(doc.ids[i]); if (!p) return null;
   return { doc, i, k, dt: diasDe(doc)[k], p };
 }
-const MOTIVOS_DEV = ['Não foi feita', 'Foi feita em outro dia', 'Falta foto ou registro', 'Atividade errada', 'Motivo da não realização não confere'];
+const MOTIVOS_DEV = ['Não foi feita', 'Foi feita em outro dia', 'Justificativa não confere', 'Atividade errada'];
 function pedirDevolucao(x) {
   const c = x.doc.d[x.i][x.k];
   sheet('Devolver ao líder', `${esc(x.p.ativ)} · ${esc(x.p.rota)} · ${ddmm(x.dt)} · apontada como <b>${NOME_AP[c] || c}</b>`, [...MOTIVOS_DEV.map(t => ({ t })), { t: 'Outro motivo…', d: 'Escrever o motivo', outro: true, larga: true }], o => {
@@ -1300,7 +1311,7 @@ function vPend() {
   let h = '';
   if (myAreas().length > 1) h += `<div class="filters">${selMinhaArea('fArea')}</div>`;
   if (!myArea()) h += `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label></div>`;
-  h += `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${at.length}</b><span>Atrasadas</span></div><div><b class="num">${lista.length}</b><span>Rotas com atraso</span></div><div><b class="num">${at.length ? ddmm(at[0].dt) : '—'}</b><span>Mais antiga</span></div></div><p class="muted small m0">Considera o mês atual e o anterior.</p>`;
+  h += `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${at.length}</b><span>Atrasadas</span></div><div><b class="num">${lista.length}</b><span>Rotas com atraso</span></div><div><b class="num">${at.filter(x => x.dt >= add(TODAY, -7)).length}</b><span>Últimos 7 dias</span></div><div><b class="num">${at.length ? ddmm(at[0].dt) : '—'}</b><span>Mais antiga</span></div></div><p class="muted small m0">Considera o mês atual e o anterior. Sem apontamento, a atividade conta como atrasada; marque o que foi feito ou justifique o que não foi.</p>`;
   if (!at.length) h += '<div class="card"><div class="empty">Tudo apontado. Nenhuma atividade atrasada.</div></div>';
   h += '<div class="grid2"><div class="stackcol">';
   for (const [key, xs] of lista.slice(0, 12)) {
@@ -1311,9 +1322,9 @@ function vPend() {
     </div></div></div>`;
   }
   h += '</div>';
-  const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) mot[v] = (mot[v] || 0) + 1;
+  const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) { const key = MOTIVOS.includes(v) ? v : 'Outras justificativas (escritas)'; mot[key] = (mot[key] || 0) + 1; }
   const mt = Object.entries(mot).sort((a, b) => b[1] - a[1]); const mx = Math.max(1, ...mt.map(x => x[1]));
-  h += `<div class="stackcol"><div class="card"><header><h2>Por que não foi feito</h2><p>Motivos das não realizadas</p></header><div class="body">${mt.length ? `<div class="bars">${mt.map(([m, n]) => `<div class="barrow mot"><span class="n">${esc(m)}</span><div class="stack clear"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Sem registros.</div>'}</div></div>
+  h += `<div class="stackcol"><div class="card"><header><h2>Por que não foi feito</h2><p>Justificativas das não realizadas</p></header><div class="body">${mt.length ? `<div class="bars">${mt.map(([m, n]) => `<div class="barrow mot"><span class="n">${esc(m)}</span><div class="stack clear"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Sem registros.</div>'}</div></div>
 </div></div>`;
   return h;
 }
@@ -1338,90 +1349,9 @@ function vImprimir() {
   let g = '', n = 0;
   h += `<div class="tw"><div class="paper"><div class="hd"><div><h3>PROGRAMAÇÃO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Mês:</b> ${monthLabel(doc.mes)}</span><span><b>Semana:</b> ${weekLabel(doc.ini)}</span><span><b>Rota:</b> ${UI.iRota === 'TODAS' ? 'Todas' : esc(UI.iRota)}</span></div><div class="meta"><span id="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>☐ programado — marque ✓ feito ou ✕ não feito · — sem programação</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
   <table><thead><tr><th>Nº</th><th>Local / equipamento</th><th>Atividade</th>${DAYS.map((d, k) => `<th class="c">${d}<br>${ddmm(add(doc.ini, k))}</th>`).join('')}<th style="width:120px">Observação</th></tr></thead><tbody>
-  ${items.map(({ i, p }) => { let r = ''; if (p.rota !== g) { g = p.rota; r += `<tr class="grp"><td colspan="11">${esc(p.rota)}</td></tr>`; } n++; return r + `<tr><td class="c">${n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td></td></tr>`; }).join('')}
+  ${items.map(({ i, p }) => { let r = ''; if (p.rota !== g) { g = p.rota; r += `<tr class="grp"><td colspan="11">${esc(p.rota)}</td></tr>`; } n++; return r + `<tr><td class="c">${n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td class="obs">${DAYS.map((d, k) => (doc.d[i][k] === 'N' && doc.m[p.id + '|' + k] ? `${d}: ${esc(doc.m[p.id + '|' + k])}` : '')).filter(Boolean).join('; ')}</td></tr>`; }).join('')}
   </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div></div>`;
   return h;
-}
-
-/* ---------------- RELATÓRIO FOTOGRÁFICO ---------------- */
-// Busca as fotos das semanas escolhidas e agrupa por rota → atividade → dia.
-const RF = { sig: '', lista: null, erro: null, full: {}, preparando: 0 };
-const RF_MAX_PRINT = 60;
-function rfDocs() {
-  const area = myArea() || UI.area;
-  const ws = UI.rfIni && UI.rfIni !== 'TODAS' ? [UI.rfIni] : weeksOfMonth(UI.mes);
-  return docsFor({ mes: UI.mes, area }).filter(d => ws.includes(d.ini));
-}
-function rfCarregar(force) {
-  const docs = rfDocs();
-  const sig = docs.map(d => d.id + ':' + Object.values(d.ev || {}).reduce((a, b) => a + b, 0)).sort().join(',');
-  if (!force && sig === RF.sig) return;
-  RF.sig = sig; RF.erro = null;
-  const comFoto = docs.filter(d => Object.values(d.ev || {}).some(n => n > 0)).map(d => d.id);
-  if (!comFoto.length) { RF.lista = []; return; }
-  RF.lista = null;
-  DB.listarEvidenciasSemanas(comFoto).then(l => { if (RF.sig === sig) { RF.lista = l; if (UI.view === 'relfoto') render(); } })
-    .catch(err => { if (RF.sig === sig) { RF.lista = []; RF.erro = msgErro(err); if (UI.view === 'relfoto') render(); } });
-}
-function rfGrupos() {
-  const rota = UI.rfRota || 'TODAS'; const g = new Map();
-  for (const ev of RF.lista || []) {
-    const doc = DB.cache.semanas[ev.semana]; const p = PL.get(ev.pid); if (!doc || !p) continue;
-    if (rota !== 'TODAS' && p.rota !== rota) continue;
-    const key = doc.area + '|' + p.rota;
-    if (!g.has(key)) g.set(key, { area: doc.area, rota: p.rota, itens: new Map(), n: 0 });
-    const G = g.get(key); const ik = ev.semana + '|' + ev.pid + '|' + ev.k;
-    if (!G.itens.has(ik)) { const i = doc.ids.indexOf(ev.pid); G.itens.set(ik, { p, doc, i, k: ev.k, dt: add(doc.ini, ev.k), evs: [] }); }
-    G.itens.get(ik).evs.push(ev); G.n++;
-  }
-  const out = [...g.values()].sort((a, b) => (a.area + a.rota).localeCompare(b.area + b.rota));
-  for (const G of out) { G.itens = [...G.itens.values()].sort((a, b) => (a.dt === b.dt ? a.p.ativ.localeCompare(b.p.ativ) : a.dt < b.dt ? -1 : 1)); G.itens.forEach(x => x.evs.sort((a, b) => a.at - b.at)); }
-  return out;
-}
-function vRelFoto() {
-  rfCarregar(false);
-  const area = myArea() || UI.area;
-  const ws = weeksOfMonth(UI.mes);
-  if (UI.rfIni && UI.rfIni !== 'TODAS' && !ws.includes(UI.rfIni)) UI.rfIni = 'TODAS';
-  const rts = [...new Set(rotasDa(area).map(r => r.rota))];
-  if (UI.rfRota && UI.rfRota !== 'TODAS' && !rts.includes(UI.rfRota)) UI.rfRota = 'TODAS';
-  const periodo = UI.rfIni && UI.rfIni !== 'TODAS' ? weekLabel(UI.rfIni) : monthLabel(UI.mes);
-  let h = `<div class="filters noprint">
-    <label class="sel"><span>Mês</span><select class="in" id="rfMes">${meses().map(m => `<option value="${m}" ${m === UI.mes ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>
-    <label class="sel"><span>Semana</span><select class="in" id="rfSem"><option value="TODAS">Mês inteiro</option>${ws.map(w => `<option value="${w}" ${w === UI.rfIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
-    ${myArea() ? selMinhaArea('rfArea') : `<label class="sel"><span>Área</span><select class="in" id="rfArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label>`}
-    <label class="sel"><span>Rota</span><select class="in" id="rfRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rfRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
-    <button class="btn" data-act="rfreload" style="align-self:flex-end">Atualizar</button>
-    ${!framed ? `<button class="btn pri" data-act="rfprint" style="align-self:flex-end" ${RF.preparando ? 'disabled' : ''}>${I.print} ${RF.preparando ? `Preparando ${RF.preparando}…` : 'Imprimir / salvar PDF'}</button>` : ''}
-  </div>`;
-  if (RF.lista === null) return h + M.ESQUELETO;
-  if (RF.erro) h += `<p class="err">${esc(RF.erro)}</p>`;
-  const gs = rfGrupos();
-  const nFotos = gs.reduce((n, G) => n + G.n, 0), nAtiv = gs.reduce((n, G) => n + G.itens.length, 0);
-  h += `<div class="mini noprint"><div><b class="num">${nFotos}</b><span>Fotos e arquivos</span></div><div><b class="num">${nAtiv}</b><span>Atividades com foto</span></div><div><b class="num">${gs.length}</b><span>Rotas</span></div></div>`;
-  if (!gs.length) return h + `<div class="card"><div class="empty">Nenhuma foto em ${esc(periodo)}${UI.rfRota && UI.rfRota !== 'TODAS' ? ' na rota ' + esc(UI.rfRota) : ''}. As fotos entram aqui quando são anexadas no Apontar ou na Programação.</div></div>`;
-  const stChip = x => { const c = x.i >= 0 ? st(x.doc, x.i, x.k) : 'X'; return `<span class="pill ${c === 'R' || c === 'E' ? 'ok' : c === 'N' ? 'bad' : c === 'A' ? 'warn' : 'neu'}">${ST_NOME[c]}</span>`; };
-  // tela
-  h += '<div class="stackcol noprint">' + gs.map(G => `<div class="card"><header><h2>${esc(G.rota)}</h2><p>${AREA_S[G.area]} · ${G.itens.length} atividade(s) · ${G.n} foto(s)</p></header><div class="body"><div class="rflist">
-    ${G.itens.map(x => `<div class="rfitem"><div class="rfhd"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l muted small">${DAYS[x.k]} ${ddmm(x.dt)} · ${esc(x.p.local)} · <span class="mono">${x.p.id}</span></div></div>${stChip(x)}</div>
-      <div class="evgrid">${x.evs.map(e => `<button type="button" class="evitem" data-rfev="${e.id}" title="${esc(e.nome)} · ${esc(title(e.porNome || ''))} · ${fmtAt(e.at)}">${e.thumb ? `<img src="${e.thumb}" alt="${esc(x.p.ativ)}" loading="lazy">` : `<span class="evfile">${I.file}<small>${esc((e.nome.split('.').pop() || '').toUpperCase())}</small></span>`}<span class="evcap">${fmtAt(e.at)}</span></button>`).join('')}</div></div>`).join('')}
-  </div></div></div>`).join('') + '</div>';
-  // impressão
-  const ini = UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[0], fim = add(UI.rfIni && UI.rfIni !== 'TODAS' ? UI.rfIni : ws[ws.length - 1], 6);
-  h += `<div class="rfprint">${gs.map(G => `<div class="paper rfpg"><div class="hd"><div><h3>RELATÓRIO FOTOGRÁFICO</h3><div class="meta"><span><b>Área:</b> ${AREA_S[G.area]}</span><span><b>Rota:</b> ${esc(G.rota)}</span><span><b>Período:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Fotos:</b> ${G.n}</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
-    ${G.itens.map(x => `<div class="rfp-item"><div class="rfp-t"><b>${DAYS[x.k]} ${ddmm(x.dt)}</b> · ${esc(x.p.ativ)} · ${esc(x.p.local)} · ${ST_NOME[x.i >= 0 ? st(x.doc, x.i, x.k) : 'X']}</div><div class="rfp-grid">${x.evs.map(e => `<figure>${e.tipo && e.tipo.startsWith('image/') ? `<img src="${RF.full[e.id] || e.thumb}" alt="">` : `<div class="rfp-file">${esc(e.nome)}</div>`}<figcaption>${fmtAt(e.at)} · ${esc(title(e.porNome || ''))}</figcaption></figure>`).join('')}</div></div>`).join('')}
-    <div class="sign"><div>Líder</div><div>Supervisor</div></div></div>`).join('')}</div>`;
-  return h;
-}
-async function rfImprimir() {
-  const evs = rfGrupos().flatMap(G => G.itens.flatMap(x => x.evs)).filter(e => e.tipo && e.tipo.startsWith('image/'));
-  if (evs.length > RF_MAX_PRINT) { toast(`São ${evs.length} fotos. Escolha uma semana ou uma rota (até ${RF_MAX_PRINT} por impressão).`); return; }
-  const falta = evs.filter(e => !RF.full[e.id]);
-  RF.preparando = falta.length; if (falta.length) render();
-  for (const e of falta) { try { const d = await DB.abrirEvidencia(e.id); if (d) RF.full[e.id] = d; } catch (err) { /* usa a miniatura */ } RF.preparando--; const b = document.querySelector('[data-act="rfprint"]'); if (b && RF.preparando) b.textContent = `Preparando ${RF.preparando}…`; }
-  RF.preparando = 0; render();
-  await Promise.all([...document.querySelectorAll('.rfprint img')].map(im => (im.complete ? 0 : new Promise(r => { im.onload = im.onerror = r; }))));
-  window.print();
 }
 
 /* ---------------- PLANO PADRÃO ---------------- */
@@ -1548,7 +1478,7 @@ function vConfig() {
   return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
   ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><b>${esc(r.rota)}</b></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
   </tbody></table></div></div>
-  <div class="card"><header><h2>Validação por foto</h2></header><div class="body"><label class="switch"><input type="checkbox" id="cfgFoto" ${exigeFoto() ? 'checked' : ''}><span><b>Exigir foto ao marcar uma atividade como realizada</b><br><small class="muted">Ligado: ao tocar em ✓, o sistema pede a foto antes de concluir. Desligado: a foto é opcional.</small></span></label></div></div>
+
   <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>`;
 }
 
@@ -1587,13 +1517,7 @@ function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit) {
 function showErr(id, err) { const el = $(id); if (!el) return toast(msgErro(err)); el.textContent = msgErro(err); el.hidden = false; }
 const msgErro = err => (DB.erroAuth ? DB.erroAuth(err) : (err && err.message) || String(err));
 function toggleEye(b) { const i = $(b.dataset.eye); if (!i) return; i.type = i.type === 'password' ? 'text' : 'password'; b.setAttribute('aria-label', i.type === 'password' ? 'Mostrar senha' : 'Ocultar senha'); }
-/* ---------------- EVIDÊNCIAS ---------------- */
-const evCount = (doc, pid, k) => ((doc && doc.ev) || {})[pid + '|' + k] || 0;
-const exigeFoto = () => !!(DB.cache.config && DB.cache.config.exigirFoto);
-const fmtKB = n => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
-const LIM_ARQ = 700 * 1024;
-const MAX_EV = 6; // anexos por atividade em cada dia
-function lerDataURL(file) { return new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = () => ko(r.error); r.readAsDataURL(file); }); }
+/* ---------------- FOTO (via em papel das fichas do Efetivo) ---------------- */
 function carregarImg(file) { return new Promise((ok, ko) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => { ok(im); setTimeout(() => URL.revokeObjectURL(u), 1000); }; im.onerror = () => ko(new Error('Não foi possível abrir esta imagem.')); im.src = u; }); }
 // Reduz a foto (máx. 1600 px) e grava um carimbo com data, hora, atividade e usuário.
 async function prepararFoto(file, carimbo) {
@@ -1614,81 +1538,6 @@ async function prepararFoto(file, carimbo) {
   tc.getContext('2d').drawImage(cv, 0, 0, tc.width, tc.height);
   return { dados, thumb: tc.toDataURL('image/jpeg', 0.6), tipo: 'image/jpeg', tamanho: Math.round(dados.length * 0.75) };
 }
-async function prepararArquivo(file, carimbo) {
-  if (/^image\//.test(file.type) && !/svg/.test(file.type)) return { ...(await prepararFoto(file, carimbo)), nome: file.name.replace(/\.[^.]+$/, '') + '.jpg' };
-  if (file.size > LIM_ARQ) throw new Error(`"${file.name}" tem ${fmtKB(file.size)}. Arquivos (PDF, planilha etc.) podem ter até 700 KB. Fotos não têm limite: o sistema reduz sozinho.`);
-  return { dados: await lerDataURL(file), thumb: '', tipo: file.type || 'application/octet-stream', tamanho: file.size, nome: file.name };
-}
-function evidenciasSheet(doc, i, k, opts = {}) {
-  const p = PL.get(doc.ids[i]); const dt = add(doc.ini, k); const pode = canEdit(doc.area);
-  const L = $('layer'); let lista = null; let enviando = 0;
-  const desenhar = () => {
-    const sc = $('scrim'); if (!sc) return;
-    const grid = lista === null ? '<p class="muted m0">Carregando…</p>' : !lista.length ? `<p class="muted m0">${opts.exigir ? 'Anexe uma foto para concluir esta atividade como realizada.' : 'Nenhuma foto ou arquivo anexado.'}</p>` :
-      `<div class="evgrid">${lista.map(e => `<button type="button" class="evitem" data-evopen="${e.id}" title="${esc(e.nome)} · ${esc(title(e.porNome || ''))} · ${fmtAt(e.at)}">${e.thumb ? `<img src="${e.thumb}" alt="${esc(e.nome)}">` : `<span class="evfile">${I.file}<small>${esc((e.nome.split('.').pop() || '').toUpperCase())}</small></span>`}<span class="evcap">${fmtAt(e.at)}</span></button>`).join('')}</div>`;
-    sc.querySelector('.evbody').innerHTML = grid + (enviando ? `<p class="muted m0">Preparando ${enviando} arquivo(s)…</p>` : '');
-    const n = lista ? lista.length : 0, cheio = n >= MAX_EV;
-    const lim = sc.querySelector('.evlim'); if (lim) lim.textContent = lista === null ? '' : cheio ? `Limite de ${MAX_EV} fotos atingido. Para trocar, exclua uma.` : `${n} de ${MAX_EV} fotos`;
-    const bt = sc.querySelector('.evbtns'); if (bt) bt.hidden = cheio || lista === null;
-  };
-  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Fotos e arquivos"><h3>Fotos e arquivos</h3><div class="sub">${esc(p.ativ)}<br>${esc(p.rota)} · ${DAYS[k]} ${ddmm(dt)} · <span class="mono">${p.id}</span></div>
-    <div class="evbody"></div><p class="err" id="evErr" role="alert" hidden></p>
-    <p class="muted small m0 evlim"></p>
-    ${pode ? `<div class="row-gap evbtns"><label class="btn pri">${I.cam} Tirar foto<input type="file" accept="image/*" capture="environment" id="evCam" hidden></label><label class="btn">${I.file} Galeria ou arquivo<input type="file" accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" multiple id="evArq" hidden></label></div>` : ''}
-    <button class="btn center" type="button" data-close>${opts.exigir ? 'Cancelar' : 'Fechar'}</button></div></div>`;
-  const kd = e => { if (e.key === 'Escape') close(); };
-  const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); render(); };
-  document.addEventListener('keydown', kd);
-  $('scrim').onclick = e => {
-    e.stopPropagation();
-    if (e.target.id === 'scrim' || e.target.closest('[data-close]')) return close();
-    const o = e.target.closest('[data-evopen]'); if (o) verEvidencia(lista.find(x => x.id === o.dataset.evopen), () => { lista = lista.filter(x => x.id !== o.dataset.evopen); }, () => evidenciasSheet(doc, i, k, opts));
-  };
-  const enviar = async files => {
-    $('evErr').hidden = true;
-    const agora = new Date(); const carimbo = `${pad(agora.getDate())}/${pad(agora.getMonth() + 1)}/${agora.getFullYear()} ${pad(agora.getHours())}:${pad(agora.getMinutes())} · ${p.id} · ${p.ativ} · ${ME.login || title(ME.nome || '')}`;
-    const livre = MAX_EV - (lista ? lista.length : 0);
-    if (files.length > livre) { showErr('evErr', new Error(livre > 0 ? `Limite de ${MAX_EV} fotos por atividade no dia. Só ${livre === 1 ? 'a primeira foi enviada' : 'as primeiras ' + livre + ' foram enviadas'}.` : `Limite de ${MAX_EV} fotos atingido.`)); files = files.slice(0, Math.max(0, livre)); }
-    for (const f of files) {
-      enviando++; desenhar();
-      try {
-        const a = await prepararArquivo(f, carimbo);
-        const ev = DB.addEvidencia({ docId: doc.id, area: doc.area, pid: p.id, k, ...a });
-        lista = [...(lista || []), ev];
-        DB.log(`Anexou ${a.tipo.startsWith('image/') ? 'foto' : 'arquivo'} em ${p.ativ} · ${p.rota} · ${DAYS[k]} ${ddmm(dt)}`);
-      } catch (err) { showErr('evErr', err); }
-      enviando--; desenhar();
-    }
-    if (opts.exigir && lista && lista.length && doc.d[i][k] !== 'R') { setSt(doc, i, k, 'R'); L.innerHTML = ''; toast('Foto anexada e atividade marcada como realizada'); render(); return; }
-    if (lista && lista.length) toast(navigator.onLine ? 'Anexo salvo' : 'Anexo guardado no aparelho. Sobe quando o sinal voltar.');
-  };
-  ['evCam', 'evArq'].forEach(id => { const el = $(id); if (el) el.onchange = () => { const fs = [...el.files]; el.value = ''; if (fs.length) enviar(fs); }; });
-  desenhar();
-  DB.listarEvidencias(doc.id, p.id, k).then(l => { lista = l; desenhar(); }).catch(err => { lista = []; desenhar(); showErr('evErr', err); });
-}
-function verEvidencia(ev, onDel, voltar) {
-  const L = $('layer');
-  const podeExcluir = admMod() || (ev.por === ME.uid && canEdit(ev.area));
-  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet viewer" role="dialog" aria-modal="true" aria-label="${esc(ev.nome)}"><h3>${esc(ev.tipo.startsWith('image/') ? 'Foto' : 'Arquivo')}</h3><div class="sub">${esc(ev.nome)} · ${fmtKB(ev.tamanho || 0)}<br>Enviado por ${esc(title(ev.porNome || ''))} em ${fmtAt(ev.at)}</div>
-    <div class="vwbody"><p class="muted m0">Abrindo…</p></div>
-    <div class="row-gap"><button class="btn" type="button" data-back>Voltar</button>${podeExcluir ? (`<button class="btn danger" type="button" data-del>Excluir</button>`) : ''}</div></div></div>`;
-  const sc = $('scrim');
-  sc.onclick = async e => {
-    e.stopPropagation();
-    if (e.target.id === 'scrim' || e.target.closest('[data-back]')) return voltar();
-    if (e.target.closest('[data-del]')) {
-      const b = e.target.closest('[data-del]');
-      if (!b.dataset.ok) { b.dataset.ok = '1'; b.textContent = 'Confirmar exclusão'; return; }
-      await DB.removerEvidencia(ev); DB.log(`Excluiu o anexo ${ev.nome}`); onDel(); toast('Anexo excluído'); voltar();
-    }
-  };
-  DB.abrirEvidencia(ev.id).then(d => {
-    const box = sc.querySelector('.vwbody'); if (!box) return;
-    if (!d) { box.innerHTML = '<p class="muted m0">Arquivo ainda não sincronizado neste aparelho.</p>'; return; }
-    box.innerHTML = ev.tipo.startsWith('image/') ? `<img src="${d}" alt="${esc(ev.nome)}">` : `<a class="btn pri" href="${d}" download="${esc(ev.nome)}">${I.dl} Baixar ${esc(ev.nome)}</a>`;
-  }).catch(err => { const box = sc.querySelector('.vwbody'); if (box) box.innerHTML = `<p class="err">${esc(msgErro(err))}</p>`; });
-}
-
 function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'gestao' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
@@ -1711,19 +1560,28 @@ function toast(t, o = {}) {
 }
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 function cellMenu(doc, i, k) {
-  const nEv = evCount(doc, doc.ids[i], k);
-  if (!canEdit(doc.area)) { if (nEv) return evidenciasSheet(doc, i, k); toast('Seu perfil não pode apontar nesta área'); return; }
+  if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
   const p = PL.get(doc.ids[i]); const raw = doc.d[i][k]; const c = st(doc, i, k);
   const sub = `${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}<br>${esc(p.local)}`;
   const o = (raw === '_' || raw === 'E')
     ? [{ t: 'Registrar como extra', d: 'Feita fora da programação', v: 'E', ic: chipIc('E'), cur: raw === 'E' }, { t: 'Não programada', v: '_', ic: chipIc('X'), cur: raw === '_' }]
-    : [{ t: 'Realizado', v: 'R', ic: chipIc('R'), cur: raw === 'R' }, { t: 'Não realizado', d: 'Pede o motivo', v: 'N', ic: chipIc('N'), cur: raw === 'N' }, { t: 'Programado', d: c === 'A' ? 'Continua atrasado' : 'Sem apontamento', v: 'P', ic: chipIc(c === 'A' ? 'A' : 'P'), cur: raw === 'P' }];
-  o.push({ t: 'Fotos e arquivos', d: nEv ? `${nEv} anexo(s)` : 'Anexar evidência', v: 'EV', ic: `<span class="opt-ic">${I.cam}</span>` });
-  sheet(p.ativ, sub, o, x => (x.v === 'EV' ? evidenciasSheet(doc, i, k) : apply(doc, i, k, x.v)));
+    : [{ t: 'Realizado', v: 'R', ic: chipIc('R'), cur: raw === 'R' }, { t: 'Não realizado', d: 'Pede a justificativa', v: 'N', ic: chipIc('N'), cur: raw === 'N' }, { t: 'Programado', d: c === 'A' ? 'Continua atrasado' : 'Sem apontamento', v: 'P', ic: chipIc(c === 'A' ? 'A' : 'P'), cur: raw === 'P' }];
+  sheet(p.ativ, sub, o, x => apply(doc, i, k, x.v));
+}
+// Justificativa de por que a atividade não foi feita: um motivo da lista ou escrito pela pessoa (obrigatória).
+function pedirJustificativa(doc, i, k, ok) {
+  const p = PL.get(doc.ids[i]); const atual = doc.m[p.id + '|' + k] || '';
+  const sub = `${esc(p.ativ)} · ${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}${atual ? `<br>Agora: <b>${esc(atual)}</b>` : ''}`;
+  sheet('Por que não foi feita?', sub, [...MOTIVOS.map(t => ({ t, cur: t === atual })), { t: 'Escrever a justificativa…', d: 'Explique com as suas palavras', outro: true, larga: true, cur: !!atual && !MOTIVOS.includes(atual) }], o => {
+    if (!o.outro) return ok(o.t);
+    formSheet('Justificativa', esc(p.ativ), `<label class="sel"><span>Por que não foi feita</span><textarea class="in" id="jsTxt" rows="3" maxlength="200" placeholder="Ex.: caminhão de vácuo quebrado desde as 8h">${MOTIVOS.includes(atual) ? '' : esc(atual)}</textarea></label><p class="muted small m0">Até 200 caracteres. O supervisor vê na Aprovação.</p>`, 'Salvar', async () => {
+      const t = ($('jsTxt').value || '').replace(/\s+/g, ' ').trim(); if (t.length < 5) throw new Error('Escreva a justificativa (pelo menos 5 letras).');
+      ok(t);
+    });
+  }, { grade: false });
 }
 function apply(doc, i, k, v, motivo) {
-  if (v === 'R' && exigeFoto() && !evCount(doc, doc.ids[i], k) && doc.d[i][k] !== 'R') return evidenciasSheet(doc, i, k, { exigir: true });
-  if (v === 'N' && !motivo) return sheet('Motivo', esc(PL.get(doc.ids[i]).ativ), MOTIVOS.map(m => ({ t: m })), x => apply(doc, i, k, 'N', x.t));
+  if (v === 'N' && !motivo) return pedirJustificativa(doc, i, k, m => apply(doc, i, k, 'N', m));
   setSt(doc, i, k, v, motivo);
   toast({ R: 'Marcada como realizada', N: 'Marcada como não realizada', P: 'Apontamento desfeito', E: 'Extra registrada', _: 'Extra removida' }[v]);
   render();
@@ -1739,14 +1597,24 @@ function exportEsdia() {
   baixarExcel(`efetivo-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${UI.ini}`, [{ nome: 'Efetivo ' + dataBR(UI.ini).slice(0, 5).replace('/', '-'), linhas }, { nome: 'Legenda', linhas: leg }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
 function exportCSV() {
-  const area = areaScope(); const rows = [['ÁREA', 'SEMANA', 'ID', 'ROTA', 'LOCAL', 'ATIVIDADE', 'TIPO', ...DAYS, 'MOTIVOS']];
+  const area = areaScope(); const rows = [['ÁREA', 'SEMANA', 'ID', 'ROTA', 'LOCAL', 'ATIVIDADE', 'TIPO', ...DAYS, 'JUSTIFICATIVAS']];
   for (const d of docsFor({ ini: UI.ini, area })) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p) return; rows.push([d.area, weekLabel(d.ini), id, p.rota, p.local, p.ativ, p.tipo, ...[...d.d[i]].map(c => ({ P: 'PROGRAMADO', R: 'REALIZADO', N: 'NÃO REALIZADO', E: 'EXTRA', _: '' }[c])), Object.entries(d.m).filter(([k]) => k.startsWith(id + '|')).map(([k, v]) => DAYS[k.split('|')[1]] + ': ' + v).join('; ')]); });
   baixarExcel(`programacao-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${UI.ini}`, [{ nome: 'Programação ' + dataBR(UI.ini).slice(0, 5).replace('/', '-'), linhas: rows }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
 
 // Cabeçalho mais baixo ao rolar (celular) e altura do cabeçalho para o que fica preso logo abaixo dele.
 addEventListener('scroll', () => { const r = scrollY > 40; if (document.body.classList.contains('rolou') !== r) { document.body.classList.toggle('rolou', r); medirTopo(); } }, { passive: true });
-function medirTopo() { const t = document.querySelector('.top'); if (t) document.documentElement.style.setProperty('--topo', t.offsetHeight + 'px'); }
+// Mede o cabeçalho sem forçar o navegador a recalcular a página a cada desenho (era o passo mais lento de cada toque).
+let topoRO = null;
+function medirTopo() {
+  const t = document.querySelector('.top'); if (!t) return;
+  const pos = h => document.documentElement.style.setProperty('--topo', Math.round(h) + 'px');
+  if (!('ResizeObserver' in window)) return pos(t.offsetHeight);
+  if (topoRO && topoRO._t === t) return;
+  if (topoRO) topoRO.disconnect();
+  topoRO = new ResizeObserver(es => { const b = es[0].borderBoxSize && es[0].borderBoxSize[0]; pos(b ? b.blockSize : t.offsetHeight); });
+  topoRO._t = t; topoRO.observe(t);
+}
 function afterRender() {
   medirTopo();
   const on = (id, ev, fn) => { const e = $(id); if (e && !e['_on_' + ev]) { e['_on_' + ev] = 1; e.addEventListener(ev, fn); } };
@@ -1764,10 +1632,6 @@ function afterRender() {
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; const t = $('liderTxt'); if (t) t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); });
   on('fPArea', 'change', e => { UI.pArea = e.target.value; render(); });
-  on('rfMes', 'change', e => { UI.mes = e.target.value; UI.rfIni = 'TODAS'; DB.watchMonths([UI.mes]); render(); });
-  on('rfSem', 'change', e => { UI.rfIni = e.target.value; render(); });
-  on('rfArea', 'change', e => { UI.area = e.target.value; UI.rfRota = 'TODAS'; render(); });
-  on('rfRota', 'change', e => { UI.rfRota = e.target.value; render(); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
   on('fNova', 'submit', e => {
@@ -1855,7 +1719,7 @@ document.addEventListener('click', async e => {
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
   }
   if (d.eye) { toggleEye(t); return; }
-  if (d.ev) { const parts = d.ev.split('|'); return evidenciasSheet(DB.cache.semanas[parts[0] + '|' + parts[1]], +parts[2], +parts[3]); }
+  if (d.just) { const [i, k] = d.just.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc && canEdit(doc.area)) pedirJustificativa(doc, i, k, m => { setSt(doc, i, k, 'N', m); toast('Justificativa atualizada'); render(); }); return; }
   if (d.reset) {
     const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
     return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="8" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
@@ -1863,7 +1727,6 @@ document.addEventListener('click', async e => {
       await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
     });
   }
-  if (d.rfev) { const ev = (RF.lista || []).find(x => x.id === d.rfev); if (ev) verEvidencia(ev, () => { RF.lista = RF.lista.filter(x => x.id !== ev.id); }, () => { $('layer').innerHTML = ''; render(); }); return; }
   if (d.uabas) { abasPessoaSheet(d.uabas); return; }
   if (d.udel) {
     const u = DB.cache.usuarios.find(x => x.uid === d.udel); if (!u) return;
@@ -1962,8 +1825,6 @@ document.addEventListener('click', async e => {
       UI.busy = false; render(); break;
     }
     case 'print': window.print(); break;
-    case 'rfprint': rfImprimir(); break;
-    case 'rfreload': RF.sig = ''; render(); break;
     case 'csv': exportCSV(); break;
     case 'expEsdia': exportEsdia(); break;
     case 'rotasTodas': UI.rotasTodas = !UI.rotasTodas; render(); break;
@@ -2032,7 +1893,6 @@ document.addEventListener('change', e => {
     if (t.value === 'administrativo') { const u = DB.cache.usuarios.find(x => x.uid === uid); const m = modsReais(u); patch.modulos = [...new Set([...m, 'gestao', 'frequencia'])]; }
     DB.setUsuario(uid, patch); toast('Perfil atualizado');
   }
-  if (t.id === 'cfgFoto') { DB.saveConfig({ exigirFoto: t.checked }); DB.log(t.checked ? 'Passou a exigir foto ao marcar realizada' : 'Deixou a foto opcional'); toast(t.checked ? 'Foto obrigatória ligada' : 'Foto opcional'); }
   if (t.dataset.umod) {
     const [uid, m] = t.dataset.umod.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
     const atual = modsReais(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
@@ -2107,7 +1967,7 @@ M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (a.acesso && ACESSO[a.acesso] && a.acesso !== UI.acesso) { UI.acesso = a.acesso; salvarAcesso(); if (UI.acesso === 'operacao' && UI.modulo === 'config') { UI.modulo = 'operacao'; UI.view = 'meudia'; } } if (ME && myArea()) UI.area = myArea(); render(); },
-  onData: () => { if (AUTH.status === 'ready') schedule(); },
+  onData: () => { DATAV++; if (AUTH.status === 'ready') schedule(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });
 

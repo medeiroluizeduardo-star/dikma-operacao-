@@ -197,7 +197,7 @@ As duas telas têm o mesmo visual (grupos que recolhem, busca, filtro de grupo o
 - Para gerar de novo os dados de importação a partir das planilhas originais (que não vão para o repositório): `node ferramentas/gerar-adm.mjs <frequencia-patio.xlsx> <frequencia-bateria.xlsx> <ferias.xlsx>`.
 
 ## Módulo Atividades Bateria
-- Tem as mesmas telas do Atividades Pátio: Painel, Apontar, Escala e efetivo, Pendências, Folha do líder, Relatório fotográfico, Plano padrão, Gerador de meses e Rotas e configurações.
+- Tem as mesmas telas do Atividades Pátio: Painel, Apontar, Escala e efetivo, Pendências, Folha do líder, Plano padrão, Gerador de meses e Rotas e configurações.
 - **Primeiro acesso:** entre como administrador, escolha **Atividades Bateria** e clique em **Importar e gerar a programação**. Isso carrega as 120 atividades do plano padrão, as 18 rotas das áreas Bateria 1, Bateria 2, Trilho e CDQ e os 55 colaboradores, e gera a programação do mês atual e dos dois seguintes.
 - Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
@@ -323,17 +323,11 @@ O sistema já tem uma ponte para buscar os colaboradores no Senior todo dia, soz
 
 Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json` são o ponto de partida. Confirme-os com a TI, porque cada instalação do Senior pode ter serviços e campos próprios.
 
-## Fotos e arquivos (evidências)
-- Em **Apontar**, cada atividade tem o botão da câmera: **Tirar foto** abre a câmera do celular, e **Galeria ou arquivo** aceita imagens, PDF, Word, Excel e texto.
-- No **Apontar**, toque no ícone da câmera da atividade para anexar **fotos e arquivos**.
-- A foto é reduzida automaticamente (máx. 1600 px) e recebe um carimbo com **data, hora, atividade e usuário** de quem enviou.
-- Até **6 fotos ou arquivos** por atividade em cada dia.
-- Arquivos que não são foto podem ter até **700 KB**.
-- Sem sinal, o anexo fica guardado no aparelho e sobe quando a conexão voltar.
-- Quem enviou pode excluir o próprio anexo. O administrador pode excluir qualquer um.
-- **Validação por foto:** em **Rotas e configurações**, ligue **Exigir foto ao marcar uma atividade como realizada**. Com isso, o ✓ só conclui depois de anexar uma foto.
-- **Relatório fotográfico** (menu Acompanhar do Atividades Pátio): mostra as fotos do mês ou de uma semana, separadas por **rota**, com a atividade, o dia e a situação. Toque na miniatura para abrir a foto. **Imprimir / salvar PDF** gera uma página por rota com as fotos em boa qualidade (até 60 fotos por impressão; para mais, filtre por semana ou rota).
-- Os anexos ficam no próprio Firestore, que tem 1 GB grátis. Isso dá cerca de 5 a 8 mil fotos. Se um dia precisar de mais espaço, dá para migrar para o Firebase Storage (plano Blaze).
+## Justificativa das não realizadas
+- Ao marcar **✕ Não realizada** (no Apontar ou em Pendências), o sistema pergunta **por que não foi feita**: escolha um motivo da lista ou **Escrever a justificativa** (até 200 caracteres). Sem justificativa, não marca.
+- No Apontar, a justificativa aparece embaixo da atividade, com **editar** para quem aponta na área.
+- O supervisor vê a justificativa na **Aprovação** e pode devolver com "Justificativa não confere". Pendências mostra o resumo **Por que não foi feito** (as escritas entram em "Outras justificativas"). A Folha do líder e o Excel levam a justificativa.
+- **Fotos das atividades:** foram retiradas (botão da câmera, Relatório fotográfico e "Exigir foto"). As fotos antigas continuam guardadas no banco e na cópia de segurança, mas não aparecem mais no sistema. A foto da via em papel das fichas do Efetivo continua.
 
 ## Perfis
 | Perfil | O que faz |
