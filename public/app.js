@@ -326,6 +326,19 @@ const $ = id => document.getElementById(id);
 function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
+// Tema da tela neste aparelho: automático (segue o aparelho), claro ou escuro.
+const TEMAS = { auto: 'Automático', light: 'Claro', dark: 'Escuro' };
+const temaAtual = () => { try { const t = localStorage.getItem('dikma-tema'); return TEMAS[t] ? t : 'auto'; } catch (e) { return 'auto'; } };
+const IC_TEMA = { auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v16" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>', light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>', dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>' };
+function aplicarTema(t) {
+  try { if (t === 'auto') localStorage.removeItem('dikma-tema'); else localStorage.setItem('dikma-tema', t); } catch (e) { /* sem armazenamento: vale só agora */ }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const escuro = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', escuro ? '#14132e' : '#1C1B4A');
+  const w = $('who'); if (w) { const b = w.querySelector('[data-act="tema"]'); if (b) b.remove(); } render();
+}
+const proxTema = () => ({ auto: 'light', light: 'dark', dark: 'auto' })[temaAtual()];
+function temaSheet() { const t = temaAtual(); sheet('Tema da tela', 'Vale só neste aparelho', Object.entries(TEMAS).map(([k, n]) => ({ t: n, d: k === 'auto' ? 'Segue o claro ou escuro do aparelho' : '', k, cur: k === t, ic: `<span class="opt-ic">${IC_TEMA[k]}</span>` })), o => { aplicarTema(o.k); toast(`Tema ${o.t.toLowerCase()}`); }); }
 // Troca entre a Operação e a Administração do sistema (só o administrador): recarrega para buscar os dados certos.
 function irAcesso(k) {
   if (!isAdmin() || !ACESSO[k]) return;
@@ -349,6 +362,7 @@ function renderGate() {
     <p class="err" id="lgErr" role="alert" hidden></p>
     <button class="btn pri big" type="submit" ${UI.busy ? 'disabled' : ''}>${UI.busy ? 'Entrando…' : 'Entrar'}</button></form>
     <p class="muted small m0">Não tem acesso ou esqueceu a senha? Fale com o administrador do sistema.</p>
+    <button type="button" class="btn ghost sm temab" data-act="tema">${IC_TEMA[temaAtual()]} Tema: ${TEMAS[temaAtual()].toLowerCase()}</button>
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
   }
   if (s === 'semAcesso') return gate(`<h2>Sem acesso</h2><p>O usuário <b>${esc(AUTH.user.login || AUTH.user.nome || '')}</b> não entra em <b>${esc((ACESSO[AUTH.acesso] || {}).nome || '')}</b>.${AUTH.acesso === 'sistema' ? ' Esse acesso é só do administrador.' : ' Fale com o administrador do sistema.'}</p><button class="btn pri" data-act="trocarAcesso">Entrar em outro acesso</button>`);
@@ -434,6 +448,7 @@ function renderNav() {
   pintar('who', DEMO
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
+  { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
   // Só o administrador vê a Administração do sistema: um botão leva para lá e outro volta para a Operação.
   { const w = $('who'); if (w && !w.querySelector('[data-act="irAcesso"]') && isAdmin()) { const k = UI.acesso === 'sistema' ? 'operacao' : 'sistema'; w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="irAcesso">${ACESSO_IC[k] || ''} ${k === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação'}</button>`); } }
   const tb = barraDe();
@@ -1684,8 +1699,8 @@ document.addEventListener('click', async e => {
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
-      const extra = [...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      const extra = [...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
@@ -1760,6 +1775,7 @@ document.addEventListener('click', async e => {
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
   switch (d.act) {
     case 'trocarAcesso': UI.escolha = null; UI.modOpen = false; await DB.signOut(); break;
+    case 'tema': temaSheet(); break;
     case 'irAcesso': irAcesso(UI.acesso === 'sistema' ? 'operacao' : 'sistema'); break;
     case 'senha': alterarSenhaSheet(); break;
     case 'logout': DB.signOut(); break;
