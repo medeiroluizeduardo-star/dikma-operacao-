@@ -1545,11 +1545,13 @@ function vImprimir() {
   </div>`;
   if (!doc) return h + '<div class="card"><div class="empty">Semana não gerada.</div></div>';
   const items = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && (UI.iRota === 'TODAS' || x.p.rota === UI.iRota) && doc.d[x.i] !== '_______');
-  let g = '', n = 0;
-  h += `<div class="tw"><div class="paper"><div class="hd"><div><h3>PROGRAMAÇÃO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Mês:</b> ${monthLabel(doc.mes)}</span><span><b>Semana:</b> ${weekLabel(doc.ini)}</span><span><b>Rota:</b> ${UI.iRota === 'TODAS' ? 'Todas' : esc(UI.iRota)}</span></div><div class="meta"><span id="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>☐ programado — marque ✓ feito ou ✕ não feito · — sem programação</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
+  // Uma folha por rota (página própria): o líder preenche a da rota dele, com o próprio cabeçalho e assinaturas.
+  const porRota = new Map(); items.forEach(x => { if (!porRota.has(x.p.rota)) porRota.set(x.p.rota, []); porRota.get(x.p.rota).push(x); });
+  if (porRota.size > 1) h += `<p class="muted small noprint">${porRota.size} rotas · cada rota sai numa folha separada.</p>`;
+  h += '<div class="tw folhas">' + [...porRota.entries()].map(([rota, its]) => `<div class="paper folha"><div class="hd"><div><h3>PROGRAMAÇÃO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Mês:</b> ${monthLabel(doc.mes)}</span><span><b>Semana:</b> ${weekLabel(doc.ini)}</span><span><b>Rota:</b> ${esc(rota)}</span></div><div class="meta"><span class="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>☐ programado — marque ✓ feito ou ✕ não feito · — sem programação</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
   <table><thead><tr><th>Nº</th><th>Local / equipamento</th><th>Atividade</th>${DAYS.map((d, k) => `<th class="c">${d}<br>${ddmm(add(doc.ini, k))}</th>`).join('')}<th style="width:120px">Observação</th></tr></thead><tbody>
-  ${items.map(({ i, p }) => { let r = ''; if (p.rota !== g) { g = p.rota; r += `<tr class="grp"><td colspan="11">${esc(p.rota)}</td></tr>`; } n++; return r + `<tr><td class="c">${n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td class="obs">${DAYS.map((d, k) => (doc.d[i][k] === 'N' && doc.m[p.id + '|' + k] ? `${d}: ${esc(doc.m[p.id + '|' + k])}` : '')).filter(Boolean).join('; ')}</td></tr>`; }).join('')}
-  </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div></div>`;
+  ${its.map(({ i, p }, j) => `<tr><td class="c">${j + 1}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td>${DAYS.map((_, k) => `<td class="c">${doc.d[i][k] === '_' ? '—' : '<span class="box"></span>'}</td>`).join('')}<td class="obs">${DAYS.map((d, k) => (doc.d[i][k] === 'N' && doc.m[p.id + '|' + k] ? `${d}: ${esc(doc.m[p.id + '|' + k])}` : '')).filter(Boolean).join('; ')}</td></tr>`).join('')}
+  </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div>`).join('') + '</div>';
   return h;
 }
 
@@ -1829,7 +1831,7 @@ function afterRender() {
   on('fERota', 'change', e => { UI.eRota = e.target.value; render(); });
   on('fEAgr', 'change', e => { UI.eAgr = e.target.value; UI.efAbertas = []; render(); });
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
-  on('fLider', 'input', e => { UI.lider = e.target.value; const t = $('liderTxt'); if (t) t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); });
+  on('fLider', 'input', e => { UI.lider = e.target.value; document.querySelectorAll('.liderTxt').forEach(t => { t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); }); });
   on('fPArea', 'change', e => { UI.pArea = e.target.value; render(); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
