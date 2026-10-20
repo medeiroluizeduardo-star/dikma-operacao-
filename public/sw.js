@@ -1,6 +1,6 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v48';
+const V = 'dikma-operacao-v49';
 const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
 
 self.addEventListener('install', e => {
@@ -45,6 +45,8 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const alvo = new URL((e.notification.data && e.notification.data.url) || './?v=meudia', self.location.origin).href;
+  // Aviso de outro site (ex.: o Painel Coqueria): abre direto, sem passar pelo Dikma Gestão.
+  if (!alvo.startsWith(self.location.origin)) { e.waitUntil(self.clients.openWindow(alvo)); return; }
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
     for (const c of cs) if (c.url.startsWith(self.location.origin)) { c.postMessage({ tipo: 'abrir', url: alvo }); return c.focus(); }
     return self.clients.openWindow(alvo);

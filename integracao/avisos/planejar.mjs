@@ -6,7 +6,10 @@ import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true };
+// Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
+export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
+const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
@@ -137,6 +140,47 @@ export function planejar(d) {
         for (const k of SET_KEYS) { const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue; celulas(S, areas, z => { if (z.dt < limite && estadoAprov(z.c, z.dt, z.a, hoje, z.m) === 'pend') { n++; mod = mod || SETS[k].mod; } }); }
         if (n) msgs.push({ uid: x.uid, titulo: `${n} apontamento${n > 1 ? 's' : ''} esperando aprovação há mais de 1 dia`, corpo: 'Toque para aprovar ou devolver.', tag: 'aprovacao', url: `/?m=${mod}&v=aprovar` });
         marcar.add(chave);
+      }
+    }
+  }
+  // 7) Painel Coqueria, só em dia útil e só para quem usa o painel (d.painel[uid], lido pela rotina):
+  //    às 7h, tarefas do dia, atrasadas e entregas de amanhã; às 16h, o que ficou em aberto e os lançamentos da
+  //    Medição pendentes no mês. Mostra títulos de processos e contagens, nunca nomes de colaboradores.
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  if (d.painel && dow > 0 && dow < 6) {
+    const s = n => (n > 1 ? 's' : '');
+    const curto = t => String(t.title || '').replace(/\s·\s\d{2}\/\d{2}$/, '');
+    for (const x of alvo) {
+      const P = d.painel[x.uid]; if (!P || !x.prefs.painel) continue;
+      const abertas = (P.tasks || []).filter(t => t && !t.deleted && t.due && t.status !== 'done');
+      const doDia = abertas.filter(t => t.due === hoje), atr = abertas.filter(t => t.due < hoje);
+      const cm = `pnl-m|${x.uid}|${hoje}`;
+      if (hora >= 7 && !d.enviados[cm]) {
+        const amanha = abertas.filter(t => t.due === add(hoje, 1) && !PAINEL_DIARIOS.has(t.pid));
+        if (doDia.length || atr.length || amanha.length) {
+          const linhas = [];
+          if (doDia.length) linhas.push(doDia.slice(0, 3).map(curto).join(' · ') + (doDia.length > 3 ? ` · +${doDia.length - 3}` : ''));
+          if (atr.length) linhas.push(`${atr.length} atrasada${s(atr.length)}`);
+          if (amanha.length) linhas.push('Amanhã: ' + amanha.slice(0, 2).map(curto).join(' · '));
+          msgs.push({ uid: x.uid, titulo: doDia.length ? `Painel: ${doDia.length} tarefa${s(doDia.length)} para hoje` : atr.length ? `Painel: ${atr.length} tarefa${s(atr.length)} atrasada${s(atr.length)}` : 'Painel: entrega amanhã', corpo: linhas.join('\n'), tag: 'painel', url: PAINEL_URL });
+        }
+        marcar.add(cm);
+      }
+      const ct = `pnl-t|${x.uid}|${hoje}`;
+      if (hora >= 16 && !d.enviados[ct]) {
+        const regs = (P.regs || []).filter(r => r && r.data && r.data.slice(0, 7) === hoje.slice(0, 7));
+        const sem = tp => regs.filter(r => r.tipo === tp && !r.lancado).length;
+        const f = sem('falta'), he = sem('he'), hp = sem('hp'), ind = regs.filter(r => r.tipo === 'ind' && r.status !== 'corrigido').length;
+        const aberto = doDia.length + atr.length, med = f + he + hp;
+        if (aberto || med || ind) {
+          const linhas = [];
+          if (aberto) linhas.push([...atr, ...doDia].slice(0, 3).map(curto).join(' · ') + (aberto > 3 ? ` · +${aberto - 3}` : ''));
+          const partes = [f && `${f} falta${s(f)}`, he && `${he} hora${s(he)} extra${s(he)}`, hp && `${hp} hora${s(hp)} perdida${s(hp)}`].filter(Boolean);
+          if (partes.length) linhas.push(`Medição sem lançar: ${partes.join(', ')}`);
+          if (ind) linhas.push(`${ind} correção${ind > 1 ? 'ões' : ''} ICCC/ICCP pendente${s(ind)}`);
+          msgs.push({ uid: x.uid, titulo: aberto ? `Painel: ${aberto} tarefa${s(aberto)} ainda em aberto` : `Painel: ${med + ind} lançamento${s(med + ind)} da Medição pendente${s(med + ind)}`, corpo: linhas.join('\n'), tag: 'painel', url: PAINEL_URL });
+        }
+        marcar.add(ct);
       }
     }
   }
