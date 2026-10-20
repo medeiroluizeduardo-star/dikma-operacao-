@@ -1,7 +1,7 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v47';
-const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png', 'painel/index.html', 'painel/painel.js'];
+const V = 'dikma-operacao-v48';
+const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
@@ -19,8 +19,8 @@ self.addEventListener('fetch', e => {
     if (u.pathname.startsWith('/__/')) return; // configuração e login do Firebase: sempre pela rede
     const pagina = e.request.mode === 'navigate' || u.pathname === '/' || u.pathname.endsWith('.html');
     if (pagina) {
-      // Cada página guarda a própria cópia: o Painel (painel/) não pode ocupar o lugar da tela principal.
-      const chave = u.pathname.startsWith('/painel') ? 'painel/index.html' : 'index.html';
+      // Só a tela principal fica guardada para abrir sem sinal (outros endereços, como /painel, são redirecionados).
+      const chave = 'index.html';
       e.respondWith(fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(V).then(ca => ca.put(chave, c)); } return r; })
         .catch(() => caches.match(chave)));
       return;

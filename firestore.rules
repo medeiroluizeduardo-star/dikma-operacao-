@@ -300,7 +300,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Painel Coqueria (public/painel/): espaço pessoal de cada usuário ativo (tarefas, Medição, Queda Zero).
+    // Painel Coqueria (repositório Gest-o-Eduardo, gestao-eduardo.web.app): espaço pessoal de cada usuário ativo (tarefas, Medição, Queda Zero).
     // Só a própria pessoa lê e grava; nem o administrador vê o painel dos outros.
     match /painel/{uid}/{document=**} {
       allow read, write: if ativo() && request.auth.uid == uid;
