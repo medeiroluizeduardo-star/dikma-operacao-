@@ -371,6 +371,10 @@ tr.acima td{background:color-mix(in srgb,var(--st-nreal) 7%,transparent)}
 .ckbt .btn.on.warn{background:color-mix(in srgb,var(--st-atr) 16%,transparent);border-color:var(--st-atr);color:var(--st-atr)}
 .ckbt .btn.on.bad{background:color-mix(in srgb,var(--st-nreal) 16%,transparent);border-color:var(--st-nreal);color:var(--st-nreal)}
 .ckok{font-size:13.5px}
+/* rodapé "Presentes" no celular: presentes em cima, total embaixo (antes os números encostavam uns nos outros) */
+@media (max-width:860px){.efd tfoot td.c{padding-left:1px;padding-right:1px;line-height:1.1}.efd tfoot td.c b{display:block;font-size:13px}.efd tfoot td.c .muted{display:block;font-size:10px}.efd tfoot th{font-size:10.5px;letter-spacing:.02em}}
+.folhas{display:flex;flex-direction:column;gap:18px}
+@media print{.folhas{display:block}.paper.folha{break-after:page}.paper.folha:last-child{break-after:auto}}
 .dnx{display:block;font-size:10px;color:var(--ink-3);margin-top:2px;font-variant-numeric:tabular-nums}.dnx.bad{color:var(--st-nreal);font-weight:700}
 .perx{font-size:.6em;color:var(--ink-3);font-weight:700}
 .sit .cobi{position:absolute;top:-6px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--accent);color:#fff;font-style:normal;font-size:9px;line-height:15px;text-align:center;box-shadow:0 0 0 2px var(--surface)}

@@ -78,18 +78,17 @@ export function criarGestao(X) {
     if (t === 'u') return c => (c.subsetor || '') === v;
     const L = lot(); return c => { const l = L.get(String(c.mat)); return !!l && (l.area === v || (v === AREA_OP && !!l.op)); };
   }
+  // Filtro de área enxuto: só as áreas do sistema (Pátio, Bateria, Operação), com quantas pessoas ativas em cada.
+  // (Antes vinham também as áreas e os setores da planilha do RH: era informação demais para escolher.)
   function selArea(id) {
-    const cs = G().colabs; const porSetor = new Map();
-    // Quem só vê uma área (líder) não precisa escolher área: o filtro some.
     if (X.ME && !veTodasFichas(X.ME) && areasFichaDe(X.ME).length <= 1) { U.fa = ''; return ''; }
-    for (const c of cs) { const s0 = setorDe(c); if (!porSetor.has(s0)) porSetor.set(s0, new Map()); if (c.subsetor) { const m = porSetor.get(s0); m.set(c.subsetor, (m.get(c.subsetor) || 0) + 1); } }
-    const conta = s0 => cs.filter(c => setorDe(c) === s0).length;
-    const setores = [...porSetor.keys()].sort((a, b) => a.localeCompare(b));
+    if (U.fa && !U.fa.startsWith('a:')) U.fa = '';
+    const cs = G().colabs.filter(c => !c.dem || c.dem > TODAY);
+    const minhas = X.ME && !veTodasFichas(X.ME) ? new Set(areasFichaDe(X.ME)) : null;
+    const grupos = PES.gruposArea().filter(([g]) => g !== 'Geral').map(([g, l]) => [g, l.filter(a => !minhas || minhas.has(a)).map(a => [a, cs.filter(filtroArea('a:' + a)).length]).filter(([, n]) => n)]).filter(([, l]) => l.length);
     const o = (v, t) => `<option value="${esc(v)}" ${U.fa === v ? 'selected' : ''}>${esc(t)}</option>`;
     return `<label class="sel"><span>Área</span><select class="in" id="${id}" data-gfa="1"><option value="">Todas as áreas</option>
-      <optgroup label="Áreas (planilha do RH)">${setores.map(s0 => o('s:' + s0, `${s0} (${conta(s0)})`)).join('')}</optgroup>
-      ${setores.filter(s0 => porSetor.get(s0).size > 1).map(s0 => `<optgroup label="${esc(s0)} · setores">${[...porSetor.get(s0).entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([u, n]) => o('u:' + u, `${u} (${n})`)).join('')}</optgroup>`).join('')}
-      ${PES.gruposArea().filter(([g]) => g !== 'Geral').map(([g, l]) => `<optgroup label="No sistema · ${esc(g)}">${l.map(a => o('a:' + a, PES.areaNome(a))).join('')}</optgroup>`).join('')}
+      ${grupos.map(([g, l]) => `<optgroup label="${esc(g)}">${l.map(([a, n]) => o('a:' + a, `${PES.areaNome(a)} (${n})`)).join('')}</optgroup>`).join('')}
     </select></label>`;
   }
   const pillSt = s => `<span class="pill ${s === 'Em dia' ? 'ok' : s === 'Desligado' ? 'neu' : s === 'Recusou assinar' ? 'bad' : 'warn'}">${s}</span>`;
@@ -179,7 +178,7 @@ export function criarGestao(X) {
       ${!framed && !matchMedia('(max-width:860px)').matches ? `<button class="btn" data-g="expOc" style="align-self:flex-end" title="Ocorrências de quem está na lista">${I.dl} Exportar ocorrências</button>` : ''}
       ${podeEditar() ? `<button class="btn" data-g="novaOc" style="align-self:flex-end">${I.plus} Ocorrência</button>` : ''}
       ${isAdmin() ? `<button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Colaborador</button>` : ''}</div>
-      <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k !== 'comigo' || n('comigo')).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
+      <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k === 'ativos' || U.filtro === k || (k === 'todos' ? n('todos') !== n('ativos') : n(k) > 0)).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
     if (adm && SEL.size) h += `<div class="selbar" role="region" aria-label="Selecionados"><b>${SEL.size} selecionado(s)</b><button class="btn danger" data-g="excluirSel">Excluir selecionados</button><button class="btn" data-g="limparSel">Limpar seleção</button></div>`;
     if (!lista.length) return h + '<div class="card"><div class="empty">Ninguém com esse filtro.</div></div>';
     // Celular: cartões em vez da tabela larga
