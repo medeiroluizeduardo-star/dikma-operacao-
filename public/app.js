@@ -1775,10 +1775,11 @@ function pedirJustificativa(doc, i, k, ok) {
   const sub = `${esc(p.ativ)} · ${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}${atual ? `<br>Agora: <b>${esc(atual)}</b>` : ''}`;
   sheet('Por que não foi feita?', sub, [...MOTIVOS.map(t => ({ t, cur: t === atual })), { t: 'Escrever a justificativa…', d: 'Explique com as suas palavras', outro: true, larga: true, cur: !!atual && !MOTIVOS.includes(atual) }], o => {
     if (!o.outro) return ok(o.t);
-    formSheet('Justificativa', esc(p.ativ), `<label class="sel"><span>Por que não foi feita</span><textarea class="in" id="jsTxt" rows="3" maxlength="200" placeholder="Ex.: caminhão de vácuo quebrado desde as 8h">${MOTIVOS.includes(atual) ? '' : esc(atual)}</textarea></label><p class="muted small m0">Até 200 caracteres. O supervisor vê na Aprovação.</p>`, 'Salvar', async () => {
+    formSheet('Justificativa', esc(p.ativ), `<label class="sel"><span>Por que não foi feita</span><textarea class="in" id="jsTxt" rows="6" maxlength="500" placeholder="Ex.: caminhão de vácuo quebrado desde as 8h">${MOTIVOS.includes(atual) ? '' : esc(atual)}</textarea></label><p class="muted small m0"><span id="jsCont">0</span> de 500 caracteres. O supervisor vê na Aprovação.</p>`, 'Salvar', async () => {
       const t = ($('jsTxt').value || '').replace(/\s+/g, ' ').trim(); if (t.length < 5) throw new Error('Escreva a justificativa (pelo menos 5 letras).');
       ok(t);
     });
+    { const t = $('jsTxt'), n = $('jsCont'); if (t && n) { const f = () => { n.textContent = t.value.length; }; t.addEventListener('input', f); f(); } }
   }, { grade: false });
 }
 function apply(doc, i, k, v, motivo) {
