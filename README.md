@@ -347,7 +347,7 @@ O sistema já tem uma ponte para buscar os colaboradores no Senior todo dia, soz
 Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json` são o ponto de partida. Confirme-os com a TI, porque cada instalação do Senior pode ter serviços e campos próprios.
 
 ## Justificativa das não realizadas
-- Ao marcar **✕ Não realizada** (no Apontar ou em Pendências), o sistema pergunta **por que não foi feita**: escolha um motivo da lista ou **Escrever a justificativa** (até 200 caracteres). Sem justificativa, não marca.
+- Ao marcar **✕ Não realizada** (no Apontar ou em Pendências), o sistema pergunta **por que não foi feita**: escolha um motivo da lista ou **Escrever a justificativa** (até 500 caracteres, com contador). Sem justificativa, não marca.
 - No Apontar, a justificativa aparece embaixo da atividade, com **editar** para quem aponta na área.
 - O supervisor vê a justificativa na **Aprovação** e pode devolver com "Justificativa não confere". Pendências mostra o resumo **Por que não foi feito** (as escritas entram em "Outras justificativas"). A Folha do líder e o Excel levam a justificativa.
 - **Fotos das atividades:** foram retiradas (botão da câmera, Relatório fotográfico e "Exigir foto"). As fotos antigas continuam guardadas no banco e na cópia de segurança, mas não aparecem mais no sistema. A foto da via em papel das fichas do Efetivo continua.
