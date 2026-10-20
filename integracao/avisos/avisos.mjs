@@ -74,7 +74,19 @@ const sitEscala = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) ret
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};
-const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, agora: new Date() });
+// Painel Coqueria: só nas horas dos avisos dele (7h e 16h) e só as tarefas em aberto e os lançamentos do mês.
+const painel = {};
+{
+  const h = new Date().getHours(), dow = new Date().getDay();
+  if (dow > 0 && dow < 6 && h >= 7) for (const uid of comToken) {
+    const precisaM = !enviados[`pnl-m|${uid}|${hoje}`], precisaT = h >= 16 && !enviados[`pnl-t|${uid}|${hoje}`];
+    if (!precisaM && !precisaT) continue;
+    const tasks = (await db.collection(`painel/${uid}/tasks`).where('status', 'in', ['todo', 'doing', 'review']).get()).docs.map(x => x.data());
+    const regs = precisaT ? (await db.collection(`painel/${uid}/registros`).where('data', '>=', mes + '-01').get()).docs.map(x => x.data()) : [];
+    if (tasks.length || regs.length) painel[uid] = { tasks, regs };
+  }
+}
+const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

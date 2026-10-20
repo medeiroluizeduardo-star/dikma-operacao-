@@ -119,3 +119,40 @@ test('aprovação: líder recebe o que foi devolvido (uma vez); supervisor receb
   const r2 = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: env, agora: new Date(`${H}T09:10:00`), hoje: H });
   assert.equal(r2.msgs.filter(m => m.tag === 'aprovacao').length, 0, 'não repete');
 });
+
+test('Painel Coqueria: dia útil, 7h tarefas do dia e atrasadas; 16h abertas e Medição sem lançar; só quem usa; sem nomes', () => {
+  const painel = {
+    admin: {
+      tasks: [
+        { pid: 'P07', title: 'Gestão operacional · 14/10', due: HOJE, status: 'todo' },
+        { pid: 'P04', title: 'Planejamento · Pátio de Carvão · 13/10', due: '2026-10-13', status: 'doing' },
+        { pid: 'P02', title: 'Relatório fotográfico · Pátio de Carvão · 15/10', due: '2026-10-15', status: 'todo' },
+        { pid: 'P08', title: 'Gestão administrativa · 14/10', due: HOJE, status: 'todo', deleted: true }
+      ],
+      regs: [
+        { tipo: 'falta', data: HOJE, quem: 'FULANO DA SILVA', lancado: false },
+        { tipo: 'he', data: '2026-10-02', quem: 'CICLANO SOUZA', horas: 2, lancado: true },
+        { tipo: 'hp', data: '2026-10-03', quem: 'Pá carregadeira 03', horas: 1, lancado: false },
+        { tipo: 'ind', data: '2026-10-05', cat: 'ICCC', status: 'pendente' },
+        { tipo: 'falta', data: '2026-09-30', quem: 'MÊS PASSADO', lancado: false }
+      ]
+    }
+  };
+  const manha = de(rodar(7, { painel }), 'admin', 'painel');
+  assert.equal(manha.length, 1);
+  assert.equal(manha[0].titulo, 'Painel: 1 tarefa para hoje', 'tarefa apagada não conta');
+  assert.match(manha[0].corpo, /Gestão operacional/);
+  assert.match(manha[0].corpo, /1 atrasada/);
+  assert.match(manha[0].corpo, /Amanhã: Relatório fotográfico · Pátio de Carvão/);
+  assert.equal(manha[0].url, 'https://gestao-eduardo.web.app/');
+  assert.equal(de(rodar(7, { painel, enviados: { [`pnl-m|admin|${HOJE}`]: HOJE } }), 'admin', 'painel').length, 0, 'uma vez por dia');
+  const tarde = de(rodar(16, { painel, enviados: { [`pnl-m|admin|${HOJE}`]: HOJE } }), 'admin', 'painel');
+  assert.equal(tarde.length, 1);
+  assert.equal(tarde[0].titulo, 'Painel: 2 tarefas ainda em aberto');
+  assert.match(tarde[0].corpo, /Medição sem lançar: 1 falta, 1 hora perdida/);
+  assert.match(tarde[0].corpo, /1 correção ICCC\/ICCP pendente/);
+  for (const m of [...manha, ...tarde]) for (const n of ['FULANO', 'CICLANO', 'MÊS PASSADO', 'carregadeira']) assert.ok(!(m.titulo + m.corpo).includes(n), 'nome no aviso');
+  assert.equal(de(rodar(7, { painel }), 'liderRec', 'painel').length, 0, 'quem não usa o painel não recebe');
+  assert.equal(de(rodar(9, { painel, hoje: '2026-10-17', agora: new Date('2026-10-17T09:30:00') }), 'admin', 'painel').length, 0, 'sábado: sem aviso do painel');
+  assert.equal(de(rodar(7, { painel, avisos: { ...avisos, admin: { tokens: ['t'], prefs: { painel: false } } } }), 'admin', 'painel').length, 0, 'preferência desligada');
+});
