@@ -1563,7 +1563,7 @@ function vPlano() {
   const a = UI.pArea;
   const ps = (DB.cache.plano[a] || []).filter(p => p.ativo !== false);
   const rts = rotasDa(a).filter(r => r.rota !== 'GESTÃO').map(r => r.rota);
-  return `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fPArea">${AREAS.map(x => `<option value="${x}" ${x === a ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label><span class="muted" style="align-self:flex-end">${ps.length} atividades · alterações valem para os meses gerados depois</span></div>
+  return `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fPArea">${AREAS.map(x => `<option value="${x}" ${x === a ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label><span class="muted" style="align-self:flex-end">${ps.length} atividades · rota, local, atividade e tipo mudam na hora (inclusive nos meses já gerados); os dias valem para os meses gerados depois</span></div>
   <div class="card"><header><h2>Nova atividade</h2></header><div class="body"><form id="fNova" class="form">
    <label class="sel"><span>Rota</span><select class="in" id="nRota">${rts.map(r => `<option>${esc(r)}</option>`).join('')}</select></label>
    <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required placeholder="Ex.: CORREIA C5613A"></label>
@@ -1573,7 +1573,7 @@ function vPlano() {
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
-  ${ps.map(p => `<tr><td class="mono muted">${p.id}</td><td class="small">${esc(p.rota)}</td><td><div class="loc" title="${esc(p.local)}">${esc(p.local)}</div></td><td>${esc(p.ativ)}</td><td><span class="tag">${esc(p.tipo)}</span></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
+  ${ps.map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" aria-label="Rota de ${p.id}">${[...new Set([p.rota, ...rts])].map(r => `<option ${r === p.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" aria-label="Tipo de ${p.id}">${[...new Set([p.tipo, ...tipos()])].map(t => `<option ${t === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 
@@ -1680,7 +1680,7 @@ function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s =
 /* ---------------- CONFIG ---------------- */
 function vConfig() {
   return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
-  ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><b>${esc(r.rota)}</b></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
+  ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><input class="in pin" data-rnome="${i}" value="${esc(r.rota)}" maxlength="60" aria-label="Nome da rota ${esc(r.rota)}" title="Mudar o nome troca também no plano padrão e nos colaboradores da rota"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
   </tbody></table></div></div>
 
   <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>`;
@@ -2123,6 +2123,29 @@ document.addEventListener('change', e => {
     const u = DB.cache.usuarios.find(x => x.uid === t.dataset.uarea2);
     if (t.value && u && t.value === u.area) { toast('A 2ª área precisa ser diferente da primeira'); t.value = u.area2 || ''; return; }
     DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
+  }
+  // Plano padrão: rota, local, atividade e tipo editáveis na própria linha
+  if (t.dataset.prota || t.dataset.pcampo) {
+    if (!admMod()) return;
+    const [id, campo] = t.dataset.prota ? [t.dataset.prota, 'rota'] : t.dataset.pcampo.split('|'); const p = PL.get(id); if (!p) return;
+    const v = String(t.value || '').replace(/\s+/g, ' ').trim(); if (!v) { toast('O campo não pode ficar vazio'); t.value = p[campo]; return; }
+    if (v === p[campo]) return;
+    const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, [campo]: v } : x));
+    DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); rebuild();
+    DB.log(`Plano padrão: ${id} · ${{ rota: 'rota', local: 'local', ativ: 'atividade', tipo: 'tipo' }[campo]} "${p[campo]}" → "${v}"`); toast('Plano atualizado · vale para os meses gerados e já gerados'); render(); return;
+  }
+  // Renomear rota: troca na lista de rotas, no plano padrão e nos colaboradores da rota (mesma área)
+  if (t.dataset.rnome) {
+    if (!admMod()) return;
+    const i = +t.dataset.rnome; const r = rotas()[i]; const novo = String(t.value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!r || !novo || novo === r.rota) { t.value = r ? r.rota : ''; return; }
+    if (rotas().some((x, j) => j !== i && x.area === r.area && x.rota === novo)) { toast('Já existe uma rota com esse nome nesta área'); t.value = r.rota; return; }
+    const velho = r.rota;
+    const rs = rotas().map((x, j) => (j === i ? { ...x, rota: novo } : x)); DB.cache.config.rotas = rs; DB.saveRotas(rs);
+    const pl = (DB.cache.plano[r.area] || []); if (pl.some(x => x.rota === velho)) { const itens = pl.map(x => (x.rota === velho ? { ...x, rota: novo } : x)); DB.cache.plano[r.area] = itens; DB.savePlano(r.area, itens); }
+    const cs = (DB.cache.colabs[r.area] || []); if (cs.some(x => x.rota === velho)) { const itens = cs.map(x => (x.rota === velho ? { ...x, rota: novo } : x)); DB.cache.colabs[r.area] = itens; DB.salvarColabsArea(r.area, itens); }
+    if (UI.aRotaPor && UI.aRotaPor[r.area] === velho) UI.aRotaPor[r.area] = novo; if (UI.aRota === velho) UI.aRota = novo;
+    rebuild(); DB.log(`Rota renomeada: ${velho} → ${novo} (${AREA_S[r.area]})`); toast(`Rota renomeada para ${novo}`); render(); return;
   }
   if (t.dataset.hecfg) { if (!admMod()) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
   if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; if (p === 'administrativo') for (const m of ['operacao', 'gestao', 'frequencia']) { const c = $('nuM_' + m); if (c) c.checked = true; } }
