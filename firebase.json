@@ -9,6 +9,18 @@
       "**/*.xls",
       "**/*.csv"
     ],
+    "redirects": [
+      {
+        "source": "/painel",
+        "destination": "https://gestao-eduardo.web.app/",
+        "type": 301
+      },
+      {
+        "source": "/painel/**",
+        "destination": "https://gestao-eduardo.web.app/",
+        "type": 301
+      }
+    ],
     "headers": [
       {
         "source": "**",
