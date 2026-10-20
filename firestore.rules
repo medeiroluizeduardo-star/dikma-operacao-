@@ -112,8 +112,10 @@ service cloud.firestore {
       allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
 
-    // Aprovação dos apontamentos: o supervisor (e coordenador, gestor, administrador) aprova ou devolve o que o líder apontou.
-    function aprovaDa(area) { return admin() || (gestorDa(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    // Aprovação dos apontamentos: só o supervisor da área aprova ou devolve o que foi apontado.
+    function aprovaDa(area) { return gestorDa(area) && perfil().papel == 'supervisor'; }
+    // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também.
+    function acompanhaDa(area) { return admin() || (gestorDa(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
     match /aprov/{id} {
       allow read: if op();
       allow create, update: if aprovaDa(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
@@ -122,7 +124,7 @@ service cloud.firestore {
 
     // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
     function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
-    function acaoPode(area, m) { return area == 'TODAS' ? (admin() || (todasAreas() && acOp() && m in mods())) : (m == 'operacao' ? aprovaDa(area) : aprovaDaB(area)); }
+    function acaoPode(area, m) { return area == 'TODAS' ? (admin() || (todasAreas() && acOp() && m in mods())) : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
     match /acoes/{id} {
       allow read: if op();
       allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'operacao');
@@ -177,7 +179,8 @@ service cloud.firestore {
       allow create, delete: if admMod('bateria');
       allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
     }
-    function aprovaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    function aprovaDaB(area) { return gestorDaB(area) && perfil().papel == 'supervisor'; }
+    function acompanhaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
     match /b_aprov/{id} {
       allow read: if ba();
       allow create, update: if aprovaDaB(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
