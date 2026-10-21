@@ -191,6 +191,15 @@ test('Atividades: líder aponta só na própria área e não muda a área da sem
   await assertSucceeds(updateDoc(doc(db('coord'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }));
   await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { s: { 'B1-001': 'R______' } }));
 });
+test('Atividades: fora da programação só pelo coordenador e pelo supervisor da área', async () => {
+  const fp = (pid, k) => ({ [`fp.${pid}|${k}`]: { por: 'x', nome: 'X', em: '2026-10-21' } });
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', SEM), { 's.REC-001': 'P______', ...fp('REC-001', 0) }));
+  await assertSucceeds(updateDoc(doc(db('coord'), 'semanas', SEM_PREP), { 's.PRE-001': 'P______', ...fp('PRE-001', 0) }));
+  await assertSucceeds(updateDoc(doc(db('sup'), 'semanas', SEM), { 's.REC-002': 'P______', ...fp('REC-002', 0) }));
+  await assertFails(updateDoc(doc(db('sup'), 'semanas', SEM_PREP), { 's.PRE-002': 'P______', ...fp('PRE-002', 0) }));
+  await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { 's.B1-002': 'P______', ...fp('B1-002', 0) }));
+  await assertFails(updateDoc(doc(db('leitorG'), 'semanas', SEM), { 's.REC-003': 'P______', ...fp('REC-003', 0) }));
+});
 test('Atividades: foto só na própria área, em nome próprio, e no máximo 6 por atividade no dia', async () => {
   const ev = (semana, extra = {}) => ({ semana, area: 'RECEBIMENTO', pid: 'REC-001', k: 2, por: 'liderRec', thumb: 'x', ...extra });
   await assertSucceeds(setDoc(doc(db('liderRec'), 'evidencias', 'e1'), ev(SEM)));

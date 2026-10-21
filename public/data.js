@@ -266,7 +266,7 @@ function stopData() {
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
-const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
+const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, fp: x.fp || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
 
 // Meses em tempo real. O mês anterior, o atual e o próximo ficam sempre ligados (Meu dia, Painel, avisos);
 // os outros que a pessoa abrir ficam ligados até 4 de cada vez (os mais antigos saem). Assim, voltar a uma
@@ -319,6 +319,11 @@ export function setStatusMany(docId, changes) {
   for (const c of changes) args.push(new FieldPath('m', c.pid + '|' + c.k), c.motivo ? c.motivo : deleteField());
   args.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
   return track(updateDoc(doc(db, C('semanas'), docId), ...args));
+}
+// Atividade fora da programação: o coordenador ou supervisor programa uma atividade num dia (s fica 'P') e marca fp;
+// o líder aponta como qualquer outra. info = { por, nome, em } para incluir; null para tirar (volta a '_').
+export function setForaProg(docId, pid, k, str, info) {
+  return track(updateDoc(doc(db, C('semanas'), docId), new FieldPath('s', pid), str, new FieldPath('fp', pid + '|' + k), info || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid));
 }
 // Aprovar ou devolver apontamentos (supervisor, coordenador, gestor, administrador). itens: { 'pid|dia': { s, c, mot? } }
 export function setAprov(docId, area, mes, itens) {

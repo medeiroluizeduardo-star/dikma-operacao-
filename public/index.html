@@ -1272,6 +1272,10 @@ button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-we
 @keyframes gSobe{from{opacity:0;transform:translateY(12px)}}
 @keyframes gBrilho{0%{left:-60%}35%,100%{left:130%}}
 .resabas{margin:0 0 12px}.row-between>.resabas{margin:0}
+.chip.fp{outline:2px dashed var(--st-extra);outline-offset:1px}
+body.sem-exportar :is([data-act="csv"],[data-act^="exp"],[data-e^="exp"],[data-g^="exp"],[data-a^="exportar"]),body.sem-imprimir :is([data-act="print"],[data-g="imprimir"]){display:none!important}
+.perm tr.item-perm td:first-child{padding-left:22px;font-size:13px}.perm tr.item-perm .it-ic{color:var(--accent);font-weight:700}
+.tgl-row.item{padding-left:10px}.tgl-row.item span{font-size:13px}
 </style>
 </head>
 <body>
