@@ -50,7 +50,14 @@ if (!UI.acesso) UI.acesso = 'operacao';
 if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (!['operacao', 'bateria'].includes(UI.modulo)) UI.modulo = 'operacao'; }
 const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
-const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } };
+const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } marcarHistorico(); };
+// Botão Voltar (celular e navegador): fecha a janela aberta ou volta para a tela anterior, em vez de sair do sistema.
+let HIST_IGNORA = false;
+function marcarHistorico() {
+  const st = history.state || {};
+  if (!st.v) history.replaceState({ v: UI.view, m: UI.modulo }, '');
+  else if ((st.v !== UI.view || st.m !== UI.modulo) && !st.s) history.pushState({ v: UI.view, m: UI.modulo }, '');
+}
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
@@ -336,7 +343,7 @@ let VIEW_MUDOU = false;
 function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; if (id === 'view') VIEW_MUDOU = true; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; $('gate').hidden = false; $('gate').innerHTML = `<div class="gatecard"><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div>${html}</div>`; }
+function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; { const g = $('gate'); const novo = g.hidden || !g.querySelector('.brand'); g.hidden = false; const h = new Date().getHours(); const saud = h < 5 ? 'Boa noite' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }); g.innerHTML = `<div class="gatecard${novo ? ' anim' : ''}"><div class="gsimb" aria-hidden="true"><img src="img/dikma-simbolo.png" alt=""></div><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div><p class="gsaud">${saud} · ${hoje}</p>${html}</div>`; } }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 // Tema da tela neste aparelho: automático (segue o aparelho), claro ou escuro.
@@ -1451,12 +1458,12 @@ function novaAcaoSheet(causa) {
 
 /* ---------------- ETIQUETAS QR ---------------- */
 // Uma etiqueta por rota: o link abre o Apontar de hoje já na rota (?r=ÁREA|ROTA). Imprimir e colar no local.
-let QR = null;
+let QR = null; const QR_SVG = new Map(); // o desenho de cada código fica guardado: atualizar a tela não refaz os QR
 const linkRota = r => `${location.origin}${location.pathname}?m=${UI.modulo}&v=apontar&r=${encodeURIComponent(r.area + '|' + r.rota)}`;
 function vEtiquetas() {
   if (!QR) { import('./vendor/qrcode.js').then(m => { QR = m.default || m.qrcode; render(); }).catch(() => toast('Não foi possível carregar o gerador de QR Code')); return M.ESQUELETO; }
   const area = areaScope(); const rs = rotasDa(area).filter(r => r.carga > 0 || r.rota !== 'GESTÃO');
-  const svg = url => { const q = QR(0, 'M'); q.addData(url); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+  const svg = url => { let t = QR_SVG.get(url); if (!t) { const q = QR(0, 'M'); q.addData(url); q.make(); t = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); QR_SVG.set(url, t); } return t; };
   return `<div class="row-between noprint"><p class="muted m0">${rs.length} etiqueta${rs.length === 1 ? '' : 's'} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}. Ao ler o código com a câmera do celular, abre o Apontar de hoje nesta rota (é preciso estar com o login feito).</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir etiquetas</button>` : ''}</div>
   <div class="qrgrid">${rs.map(r => `<div class="qret"><div class="qrsvg">${svg(linkRota(r))}</div><div class="qrtxt"><b>${esc(r.rota)}</b><span>${AREA_S[r.area]} · ${SETS[SK].nome}</span><small>Aponte a câmera para abrir esta rota no Dikma Gestão</small></div></div>`).join('')}</div>`;
 }
@@ -2234,4 +2241,42 @@ if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') {
     setInterval(ver, 20 * 60e3);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ver(); });
   }).catch(() => {});
+}
+
+// Virada do dia: TODAY é fixado ao abrir. Quem deixa o sistema aberto de um dia para o outro
+// (Modo TV, celular do líder) passaria a ver a data de ontem; recarrega sozinho quando a data muda,
+// desde que ninguém esteja editando nem haja gravação pendente.
+{
+  const livre = () => !DB.pendingWrites() && !$('layer').children.length && !(document.activeElement && document.activeElement.matches('input:not([type=checkbox]):not([type=radio]),textarea,select'));
+  const virou = () => { if (today() !== TODAY && livre()) location.reload(); };
+  setInterval(virou, 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') virou(); });
+}
+
+// Voltar: janelas (folhas) entram no histórico ao abrir; fechar pela tela tira a entrada, e o Voltar fecha a janela.
+{
+  const L = $('layer');
+  new MutationObserver(() => {
+    const aberta = !!L.children.length, st = history.state || {};
+    if (aberta && !st.s) history.pushState({ ...st, s: 1 }, '');
+    else if (!aberta && st.s) { HIST_IGNORA = true; history.back(); }
+  }).observe(L, { childList: true });
+  addEventListener('popstate', e => {
+    if (HIST_IGNORA) { HIST_IGNORA = false; return; }
+    if (L.children.length) { L.innerHTML = ''; return; }
+    const st = e.state || {};
+    if (!st.v || !ME) return;
+    if (st.m && st.m !== UI.modulo && modsDe(ME).includes(st.m)) UI.modulo = st.m;
+    UI.view = st.v; UI.confirm = null; ensureModulo(); aplicarSet();
+    try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (x) { /* ignora */ }
+    render(); scrollTo(0, 0);
+  });
+}
+
+// Fechar a aba com apontamento ainda não enviado (sem sinal): o navegador pergunta antes de sair.
+addEventListener('beforeunload', e => { if (!DEMO && DB.pendingWrites() > 0) { e.preventDefault(); e.returnValue = ''; } });
+// Modo TV: mantém a tela da sala de controle acesa enquanto o painel está aberto.
+if (TV && 'wakeLock' in navigator) {
+  const acender = () => navigator.wakeLock.request('screen').catch(() => {});
+  acender(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') acender(); });
 }

@@ -25,8 +25,14 @@ export const ATIVOS = new Set(['admin', 'gestor', 'coordenador', 'supervisor', '
 
 export const pad = n => String(n).padStart(2, '0');
 export const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-export const pd = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
-export const add = (s, n) => { const d = pd(s); d.setDate(d.getDate() + n); return iso(d); };
+export const pd = s => (s.length === 10 ? new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) : (([y, m, d]) => new Date(y, m - 1, d))(s.split('-').map(Number)));
+// add() é chamada milhares de vezes por tela (semanas, escalas, prazos): guarda as contas já feitas.
+const ADD = new Map();
+export const add = (s, n) => {
+  const k = s + '|' + n; let r = ADD.get(k); if (r !== undefined) return r;
+  const d = pd(s); d.setDate(d.getDate() + n); r = iso(d);
+  if (ADD.size > 50000) ADD.clear(); ADD.set(k, r); return r;
+};
 export const ddmm = s => s.slice(8, 10) + '/' + s.slice(5, 7);
 export const today = () => iso(new Date());
 

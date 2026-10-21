@@ -857,8 +857,6 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 
 /* tela de entrada */
 @media (prefers-reduced-motion:no-preference){
-  .gatecard{animation:gateIn .45s var(--ease) both}
-  .gatecard .brand{animation:entra .45s var(--ease) .08s both}
 }
 @keyframes gateIn{from{opacity:0;transform:translateY(14px) scale(.985)}}
 .gatecard{border-radius:16px;box-shadow:var(--e2);border-color:var(--line-2)}
@@ -1195,10 +1193,56 @@ button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-we
 .avm .avg .in{width:100%;min-width:0}
 .avm .avnota{text-align:right}.avm .avnota b{font-family:var(--f-display);font-size:22px;display:block;line-height:1}.avm .avnota small{color:var(--ink-3)}
 .avm>.in{width:100%}
+
+/* ================= Abertura animada (tela de entrada) =================
+   Fundo azul Dikma com luzes laranja e índigo que flutuam devagar e hexágonos (o formato da marca) subindo;
+   o símbolo gira e pulsa, e o cartão entra em sequência. Quem pede menos movimento no aparelho vê tudo parado. */
+#gate{position:relative;overflow:hidden;isolation:isolate;background:radial-gradient(120% 90% at 50% 0%,#2E2C78 0%,#1C1B4A 55%,#100F2E 100%)}
+#gate::before{content:"";position:absolute;inset:-30%;z-index:-2;pointer-events:none;
+  background:radial-gradient(38% 32% at 22% 30%,rgba(240,90,38,.42),transparent 70%),radial-gradient(34% 30% at 78% 70%,rgba(96,92,230,.45),transparent 70%),radial-gradient(28% 24% at 70% 18%,rgba(240,90,38,.22),transparent 70%);
+  filter:blur(18px)}
+#gate::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Cpath d='M30 2h30l15 26-15 26H30L15 28z'/%3E%3Cpath d='M90 52h30l15 26-15 26H90L75 78z'/%3E%3Cpath d='M-30 52h30l15 26-15 26h-30l-15-26z'/%3E%3C/g%3E%3C/svg%3E");background-size:120px 104px}
+.gatecard{position:relative;border:0;box-shadow:0 30px 80px -20px rgba(5,4,30,.65),0 0 0 1px rgba(255,255,255,.06)}
+.gatecard::before{content:"";position:absolute;left:24px;right:24px;top:0;height:3px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,var(--accent),#FF9A5C,var(--accent));background-size:200% 100%}
+.gsimb{width:64px;height:64px;margin:-60px auto 0;border-radius:50%;display:grid;place-items:center;background:var(--surface);box-shadow:0 10px 30px -8px rgba(240,90,38,.55),0 0 0 6px color-mix(in srgb,var(--surface) 40%,transparent);position:relative}
+.gsimb img{width:42px;height:42px}
+.gsimb::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(240,90,38,.55);opacity:0}
+.gatecard{margin-top:34px}
+.gsaud{text-align:center;color:var(--ink-3);font-size:13px;margin:-6px 0 0!important;text-transform:none}
+.gsaud::first-letter{text-transform:uppercase}
+.gatecard .brand.big{justify-content:center}
+.gatecard.splash{align-items:center;text-align:center;color:var(--ink-3)}
+.gatecard .btn.pri.big{position:relative;overflow:hidden}
+.gatecard .btn.pri.big::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);transform:skewX(-18deg)}
+@media (prefers-reduced-motion:no-preference){
+  #gate::before{animation:gAurora 18s ease-in-out infinite alternate}
+  #gate::after{animation:gHex 40s linear infinite}
+  .gatecard::before{animation:gFaixa 4s linear infinite}
+  .gsimb::after{animation:gPulso 2.4s var(--ease) infinite}
+  .gatecard.splash .gsimb img{animation:gGira 1.6s var(--ease) infinite}
+  .gatecard.anim{animation:gCartao .7s cubic-bezier(.2,.9,.25,1.15) both}
+  .gatecard.anim .gsimb img{animation:gSimb .9s cubic-bezier(.2,.9,.3,1.3) .15s both}
+  .gatecard.anim .brand{animation:gSobe .5s var(--ease) .3s both}
+  .gatecard.anim .gsaud{animation:gSobe .5s var(--ease) .4s both}
+  .gatecard.anim>:nth-child(n+4){animation:gSobe .5s var(--ease) both}
+  .gatecard.anim>:nth-child(4){animation-delay:.48s}.gatecard.anim>:nth-child(5){animation-delay:.54s}.gatecard.anim>:nth-child(6){animation-delay:.6s}
+  .gatecard.anim>:nth-child(7){animation-delay:.66s}.gatecard.anim>:nth-child(8){animation-delay:.72s}.gatecard.anim>:nth-child(n+9){animation-delay:.78s}
+  .gatecard .btn.pri.big:not(:disabled)::after{animation:gBrilho 3.2s ease-in-out 1.4s infinite}
+}
+@keyframes gAurora{0%{transform:translate(0,0) rotate(0)}50%{transform:translate(4%,-3%) rotate(8deg)}100%{transform:translate(-4%,3%) rotate(-6deg)}}
+@keyframes gHex{to{background-position:0 -208px}}
+@keyframes gFaixa{to{background-position:-200% 0}}
+@keyframes gPulso{0%{transform:scale(.9);opacity:.8}100%{transform:scale(1.35);opacity:0}}
+@keyframes gGira{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(.9)}100%{transform:rotate(360deg) scale(1)}}
+@keyframes gCartao{from{opacity:0;transform:translateY(40px) scale(.94)}}
+@keyframes gSimb{from{opacity:0;transform:rotate(-200deg) scale(.3)}}
+@keyframes gSobe{from{opacity:0;transform:translateY(12px)}}
+@keyframes gBrilho{0%{left:-60%}35%,100%{left:130%}}
 </style>
 </head>
 <body>
-<div id="gate"><div class="gatecard"><p>Carregando…</p></div></div>
+<div id="gate"><div class="gatecard splash"><div class="gsimb" aria-hidden="true"><img src="img/dikma-simbolo.png" alt=""></div><p>Carregando…</p></div></div>
 <div class="app" id="shell" hidden>
   <aside class="rail" aria-label="Menu">
     <div class="brand"><img class="logo" src="img/dikma-logo-branco.png" alt="Dikma" width="104" height="34"><div class="prod"><b>GESTÃO</b></div></div>

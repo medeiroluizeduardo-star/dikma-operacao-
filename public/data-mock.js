@@ -98,7 +98,6 @@ export async function start(callbacks) {
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await seed_('seed-gestao.json'); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
   } else { saved = null; await fresh(); }
   for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m));
-  try { amostras(); } catch (e) { /* sem canvas */ }
   await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   if (me && !cache.usuarios.some(u => u.uid === 'admv')) cache.usuarios.push({ uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] });
@@ -117,7 +116,7 @@ function emitAuth() {
   cb.onAuth({ status: 'ready', user: me, acesso: acessoAtual });
 }
 export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
-export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); try { amostras(); } catch (e) { /* sem canvas */ } me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
+export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
@@ -199,38 +198,7 @@ const EV = [];
 export async function saveConfig(patch) { Object.assign(cache.config, patch); changed(); }
 export async function listarEvidencias(docId, pid, k) { return EV.filter(e => e.semana === docId && e.pid === pid && e.k === k); }
 export async function listarEvidenciasSemanas(ids) { return EV.filter(e => ids.includes(e.semana)).map(({ dados, ...m }) => m); }
-// Fotos de exemplo para o relatório fotográfico (desenhadas na hora, só na demonstração).
-function fotoExemplo(txt, cor, w, h) {
-  const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d');
-  const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, cor); gr.addColorStop(1, '#1C1B4A'); g.fillStyle = gr; g.fillRect(0, 0, w, h);
-  g.fillStyle = 'rgba(255,255,255,.12)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.arc((i * 137) % w, h * .7 + (i % 3) * 20, 40 + i * 12, 0, 7); g.fill(); }
-  g.fillStyle = '#fff'; g.font = `600 ${Math.round(h / 14)}px system-ui,sans-serif`; g.fillText('FOTO DE EXEMPLO', w * .06, h * .16);
-  g.font = `${Math.round(h / 22)}px system-ui,sans-serif`; g.fillText(txt.slice(0, 48), w * .06, h * .26);
-  return cv.toDataURL('image/jpeg', .7);
-}
-function amostras() {
-  if (EV.length || typeof document === 'undefined') return;
-  const hoje = today(); let n = 0;
-  for (const sk of SET_KEYS) { n = 0; const plano = new Map(Object.values(S[sk].plano).flat().map(p => [p.id, p]));
-  const cores = ['#F05A26', '#2E7D5B', '#3B5BA9', '#B98200'];
-  for (const w of Object.values(S[sk].semanas).sort((a, b) => (a.ini < b.ini ? 1 : -1))) {
-    if (w.ini > hoje || w.ini < add(hoje, -40)) continue;
-    w.ids.forEach((pid, i) => {
-      for (let k = 0; k < 7; k++) {
-        if (n >= 18 || w.d[i][k] !== 'R' || add(w.ini, k) >= hoje) continue;
-        const r = rnd(hash('ev' + w.id + pid + k)); if (r > .02) continue;
-        const p = plano.get(pid); if (!p) continue;
-        const q = 1 + Math.floor(r * 150) % 3;
-        for (let j = 0; j < q; j++) {
-          const dados = fotoExemplo(p.ativ, cores[(n + j) % 4], 640, 480), thumb = fotoExemplo(p.ativ, cores[(n + j) % 4], 240, 180);
-          EV.push({ id: 'ex' + sk + n + '_' + j, semana: w.id, area: w.area, pid, k, nome: `foto-${j + 1}.jpg`, tipo: 'image/jpeg', tamanho: Math.round(dados.length * .75), thumb, dados, por: 'admin', porNome: 'Demonstração', at: new Date(add(w.ini, k) + 'T' + String(8 + j).padStart(2, '0') + ':15:00') });
-        }
-        w.ev[pid + '|' + k] = (w.ev[pid + '|' + k] || 0) + q; n++;
-      }
-    });
-  }
-  }
-}
+// As fotos das atividades saíram do sistema: a demonstração não desenha mais fotos de exemplo (era o que mais pesava ao abrir).
 export async function abrirEvidencia(id) { const e = EV.find(x => x.id === id); return e ? e.dados : null; }
 export function addEvidencia(e) {
   const x = { ...e, id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), semana: e.docId, por: me.uid, porNome: me.nome, at: new Date() };
