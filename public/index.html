@@ -1195,6 +1195,131 @@ button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-we
 .avm .avg .in{width:100%;min-width:0}
 .avm .avnota{text-align:right}.avm .avnota b{font-family:var(--f-display);font-size:22px;display:block;line-height:1}.avm .avnota small{color:var(--ink-3)}
 .avm>.in{width:100%}
+
+/* ================= Estilos visuais (escolha por aparelho em Aparência) =================
+   O padrão Dikma continua sendo a identidade oficial. Retrô, Minimalista e Futurista são propostas
+   que só trocam tokens (cores, letras, cantos, sombras) e alguns acabamentos — nenhuma tela muda de lugar. */
+
+/* ---- Retrô: papel envelhecido, letra de placa industrial (slab), bordas firmes e sombra chapada ---- */
+:root[data-estilo="retro"]{
+  --bg:#EFE6D2; --surface:#FBF6EA; --surface-2:#F3EAD6; --line:#C9B897; --line-2:#DCCDAE;
+  --ink:#2A1F14; --ink-2:#5A4632; --ink-3:#8A7458;
+  --rail:#3B2A1A; --rail-2:#55402A; --rail-ink:#F1E3C6; --rail-ink-2:#C2A97F;
+  --navy:#3B2A1A; --accent:#D2561E; --accent-ink:#FFF8EA; --focus:#2E6E73;
+  --st-prog:#7A6A55; --st-real:#4E7A2E; --st-nreal:#B5361F; --st-extra:#6D4C8C; --st-atr:#B07D12;
+  --f-display:"Zilla Slab",Rockwell,"Roboto Slab",Georgia,serif;
+  --f-body:"Work Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"Courier Prime","Courier New",monospace;
+  --r:3px; --rc:3px;
+  --shadow:3px 3px 0 rgba(42,31,20,.18);
+  --e1:2px 2px 0 rgba(42,31,20,.14); --e2:4px 4px 0 rgba(42,31,20,.2); --e3:8px 8px 0 rgba(42,31,20,.28);
+}
+@media (prefers-color-scheme: dark){:root[data-estilo="retro"]:not([data-theme="light"]){
+  --bg:#1D1610; --surface:#2A2018; --surface-2:#322619; --line:#4A3A28; --line-2:#3A2D1F;
+  --ink:#F1E3C6; --ink-2:#CDB892; --ink-3:#9C855F;
+  --rail:#140F0A; --rail-2:#33261A; --rail-ink:#F1E3C6; --rail-ink-2:#A88E64;
+  --accent:#E8743A; --focus:#6DB3B8;
+  --st-prog:#B3A184; --st-real:#8DB85C; --st-nreal:#E2654A; --st-extra:#A98BC8; --st-atr:#E2B04A;
+  --shadow:3px 3px 0 rgba(0,0,0,.45); --e1:2px 2px 0 rgba(0,0,0,.35); --e2:4px 4px 0 rgba(0,0,0,.45); --e3:8px 8px 0 rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-estilo="retro"][data-theme="dark"]{
+  --bg:#1D1610; --surface:#2A2018; --surface-2:#322619; --line:#4A3A28; --line-2:#3A2D1F;
+  --ink:#F1E3C6; --ink-2:#CDB892; --ink-3:#9C855F;
+  --rail:#140F0A; --rail-2:#33261A; --rail-ink:#F1E3C6; --rail-ink-2:#A88E64;
+  --accent:#E8743A; --focus:#6DB3B8;
+  --st-prog:#B3A184; --st-real:#8DB85C; --st-nreal:#E2654A; --st-extra:#A98BC8; --st-atr:#E2B04A;
+  --shadow:3px 3px 0 rgba(0,0,0,.45); --e1:2px 2px 0 rgba(0,0,0,.35); --e2:4px 4px 0 rgba(0,0,0,.45); --e3:8px 8px 0 rgba(0,0,0,.55); color-scheme:dark}
+[data-estilo="retro"] .card,[data-estilo="retro"] .sheet{border-width:2px;border-color:var(--ink-3);box-shadow:var(--e1)}
+[data-estilo="retro"] .btn{border-radius:2px;border-width:2px}
+[data-estilo="retro"] .btn.pri{box-shadow:2px 2px 0 var(--ink);text-transform:uppercase;letter-spacing:.04em}
+[data-estilo="retro"] .btn.pri:active{transform:translate(2px,2px);box-shadow:none}
+[data-estilo="retro"] .card>header{border-bottom:2px dashed var(--line)}
+[data-estilo="retro"] .card>header h2,[data-estilo="retro"] .top h1{letter-spacing:.01em}
+[data-estilo="retro"] .chip{border-radius:2px}
+[data-estilo="retro"] .nav button[aria-current="page"]{background:var(--accent);color:var(--accent-ink)}
+[data-estilo="retro"] .nav button[aria-current="page"]::before{display:none}
+[data-estilo="retro"] body{background-image:radial-gradient(color-mix(in srgb,var(--ink) 6%,transparent) 1px,transparent 1px);background-size:6px 6px}
+
+/* ---- Minimalista: branco e cinza, sem sombras, linhas finas, cor só onde informa ---- */
+:root[data-estilo="minimal"]{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface-2:#F7F7F8; --line:#E6E6E9; --line-2:#F0F0F2;
+  --ink:#111114; --ink-2:#4B4B55; --ink-3:#8A8A94;
+  --rail:#FAFAFB; --rail-2:#EFEFF2; --rail-ink:#2B2B33; --rail-ink-2:#8A8A94;
+  --navy:#111114; --accent:#111114; --accent-ink:#FFFFFF; --focus:#2F6FEB;
+  --st-prog:#8A8A94; --st-real:#1F9254; --st-nreal:#D93636; --st-extra:#6E56CF; --st-atr:#C28A00;
+  --f-display:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-body:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:ui-monospace,Menlo,Consolas,monospace;
+  --r:12px; --rc:10px;
+  --shadow:none; --e1:none; --e2:0 1px 2px rgba(0,0,0,.04); --e3:0 12px 40px rgba(0,0,0,.12);
+}
+@media (prefers-color-scheme: dark){:root[data-estilo="minimal"]:not([data-theme="light"]){
+  --bg:#0B0B0D; --surface:#0B0B0D; --surface-2:#141417; --line:#26262B; --line-2:#1C1C20;
+  --ink:#F2F2F4; --ink-2:#B4B4BC; --ink-3:#7C7C86;
+  --rail:#0B0B0D; --rail-2:#1A1A1E; --rail-ink:#E4E4E8; --rail-ink-2:#7C7C86;
+  --accent:#F2F2F4; --accent-ink:#0B0B0D; --focus:#6E9BFF;
+  --st-prog:#8C8C96; --st-real:#3CC27A; --st-nreal:#F06464; --st-extra:#A08BF0; --st-atr:#E8B23C;
+  --shadow:none; --e1:none; --e2:none; --e3:0 12px 40px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-estilo="minimal"][data-theme="dark"]{
+  --bg:#0B0B0D; --surface:#0B0B0D; --surface-2:#141417; --line:#26262B; --line-2:#1C1C20;
+  --ink:#F2F2F4; --ink-2:#B4B4BC; --ink-3:#7C7C86;
+  --rail:#0B0B0D; --rail-2:#1A1A1E; --rail-ink:#E4E4E8; --rail-ink-2:#7C7C86;
+  --accent:#F2F2F4; --accent-ink:#0B0B0D; --focus:#6E9BFF;
+  --st-prog:#8C8C96; --st-real:#3CC27A; --st-nreal:#F06464; --st-extra:#A08BF0; --st-atr:#E8B23C;
+  --shadow:none; --e1:none; --e2:none; --e3:0 12px 40px rgba(0,0,0,.6); color-scheme:dark}
+[data-estilo="minimal"] .rail{border-right:1px solid var(--line)}
+[data-estilo="minimal"] .brand b,[data-estilo="minimal"] .nav button[aria-current="page"]{color:var(--ink)}
+[data-estilo="minimal"] .nav button[aria-current="page"]::before{background:var(--ink)}
+[data-estilo="minimal"] .card>header h2,[data-estilo="minimal"] .sheet h3,[data-estilo="minimal"] tr.grp td,[data-estilo="minimal"] .mgrp,[data-estilo="minimal"] .disp{text-transform:none;letter-spacing:-.01em;font-weight:600}
+[data-estilo="minimal"] .top h1{font-weight:650;letter-spacing:-.02em}
+[data-estilo="minimal"] .kpi .v{font-weight:600;letter-spacing:-.02em}
+[data-estilo="minimal"] .top{background:color-mix(in srgb,var(--bg) 94%,transparent)}
+[data-estilo="minimal"] .btn{border-radius:999px}
+[data-estilo="minimal"] .nav .badge{background:var(--ink);color:var(--bg)}
+[data-estilo="minimal"] .who select,[data-estilo="minimal"] .who select.in{color:var(--rail-ink);border-color:var(--line)}
+[data-estilo="minimal"] .rail-btn{border-color:var(--line)}
+/* Menu claro no minimalista: logo colorida (no escuro continua a branca). */
+:root[data-estilo="minimal"]:not([data-theme="dark"]) .rail .brand .logo{content:url(img/dikma-logo.png)}
+@media (prefers-color-scheme: dark){:root[data-estilo="minimal"]:not([data-theme="light"]) .rail .brand .logo{content:url(img/dikma-logo-branco.png)}}
+
+/* ---- Futurista: painel de controle — vidro escuro, brilho ciano, números técnicos ---- */
+:root[data-estilo="futuro"]{
+  --bg:#EAF1F8; --surface:#F7FBFF; --surface-2:#E3ECF6; --line:#C4D3E4; --line-2:#D6E2EF;
+  --ink:#0A1628; --ink-2:#3A4D66; --ink-3:#6C7F98;
+  --rail:#07101F; --rail-2:#10223D; --rail-ink:#BFD8F2; --rail-ink-2:#5F7EA3;
+  --navy:#07101F; --accent:#0891B2; --accent-ink:#FFFFFF; --focus:#7C3AED;
+  --st-prog:#64748B; --st-real:#059669; --st-nreal:#E11D48; --st-extra:#7C3AED; --st-atr:#D97706;
+  --f-display:"Chakra Petch","Arial Narrow",Arial,sans-serif;
+  --f-body:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --r:4px; --rc:4px;
+  --shadow:0 0 0 1px rgba(8,145,178,.08),0 6px 24px rgba(8,30,60,.08);
+  --e1:0 0 0 1px rgba(8,145,178,.06); --e2:0 8px 30px rgba(8,30,60,.12); --e3:0 20px 60px rgba(8,30,60,.3);
+}
+@media (prefers-color-scheme: dark){:root[data-estilo="futuro"]:not([data-theme="light"]){
+  --bg:#03060E; --surface:rgba(13,22,40,.82); --surface-2:#0C1730; --line:#1B2F52; --line-2:#132443;
+  --ink:#E2F1FF; --ink-2:#93AFCF; --ink-3:#5B7699;
+  --rail:#020510; --rail-2:#0D1E3A; --rail-ink:#A9C8EA; --rail-ink-2:#4F6D93;
+  --accent:#22D3EE; --accent-ink:#021018; --focus:#A78BFA;
+  --st-prog:#7C8DB0; --st-real:#34D399; --st-nreal:#FB7185; --st-extra:#C084FC; --st-atr:#FBBF24;
+  --shadow:0 0 0 1px rgba(34,211,238,.12),0 0 24px rgba(34,211,238,.06);
+  --e1:0 0 0 1px rgba(34,211,238,.08); --e2:0 0 30px rgba(34,211,238,.10); --e3:0 20px 60px rgba(0,0,0,.7); color-scheme:dark}}
+:root[data-estilo="futuro"][data-theme="dark"]{
+  --bg:#03060E; --surface:rgba(13,22,40,.82); --surface-2:#0C1730; --line:#1B2F52; --line-2:#132443;
+  --ink:#E2F1FF; --ink-2:#93AFCF; --ink-3:#5B7699;
+  --rail:#020510; --rail-2:#0D1E3A; --rail-ink:#A9C8EA; --rail-ink-2:#4F6D93;
+  --accent:#22D3EE; --accent-ink:#021018; --focus:#A78BFA;
+  --st-prog:#7C8DB0; --st-real:#34D399; --st-nreal:#FB7185; --st-extra:#C084FC; --st-atr:#FBBF24;
+  --shadow:0 0 0 1px rgba(34,211,238,.12),0 0 24px rgba(34,211,238,.06);
+  --e1:0 0 0 1px rgba(34,211,238,.08); --e2:0 0 30px rgba(34,211,238,.10); --e3:0 20px 60px rgba(0,0,0,.7); color-scheme:dark}
+[data-estilo="futuro"] body{background-image:linear-gradient(color-mix(in srgb,var(--accent) 5%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--accent) 5%,transparent) 1px,transparent 1px);background-size:32px 32px;background-attachment:fixed}
+[data-estilo="futuro"] .card{backdrop-filter:blur(10px);box-shadow:var(--e1);position:relative}
+[data-estilo="futuro"] .card>header h2,[data-estilo="futuro"] .top h1,[data-estilo="futuro"] .sheet h3{letter-spacing:.06em}
+[data-estilo="futuro"] .kpi .v{font-family:var(--f-mono);font-weight:500;letter-spacing:-.02em;color:var(--accent)}
+[data-estilo="futuro"] .btn{border-radius:2px;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+[data-estilo="futuro"] .btn.pri{box-shadow:0 0 18px color-mix(in srgb,var(--accent) 45%,transparent);text-transform:uppercase;letter-spacing:.08em}
+[data-estilo="futuro"] .nav button[aria-current="page"]{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 22%,transparent),transparent);color:#fff}
+[data-estilo="futuro"] .nav button[aria-current="page"]::before{box-shadow:0 0 10px var(--accent)}
+@media print{[data-estilo] body{background-image:none}}
 </style>
 </head>
 <body>

@@ -50,7 +50,14 @@ if (!UI.acesso) UI.acesso = 'operacao';
 if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (!['operacao', 'bateria'].includes(UI.modulo)) UI.modulo = 'operacao'; }
 const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
-const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } };
+const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } marcarHistorico(); };
+// Botão Voltar (celular e navegador): fecha a janela aberta ou volta para a tela anterior, em vez de sair do sistema.
+let HIST_IGNORA = false;
+function marcarHistorico() {
+  const st = history.state || {};
+  if (!st.v) history.replaceState({ v: UI.view, m: UI.modulo }, '');
+  else if ((st.v !== UI.view || st.m !== UI.modulo) && !st.s) history.pushState({ v: UI.view, m: UI.modulo }, '');
+}
 
 const rotas = () => (DB.cache.config && DB.cache.config.rotas) || [];
 const tipos = () => (DB.cache.config && DB.cache.config.tipos) || [];
@@ -351,7 +358,20 @@ function aplicarTema(t) {
   const w = $('who'); if (w) { const b = w.querySelector('[data-act="tema"]'); if (b) b.remove(); } render();
 }
 const proxTema = () => ({ auto: 'light', light: 'dark', dark: 'auto' })[temaAtual()];
-function temaSheet() { const t = temaAtual(); sheet('Tema da tela', 'Vale só neste aparelho', Object.entries(TEMAS).map(([k, n]) => ({ t: n, d: k === 'auto' ? 'Segue o claro ou escuro do aparelho' : '', k, cur: k === t, ic: `<span class="opt-ic">${IC_TEMA[k]}</span>` })), o => { aplicarTema(o.k); toast(`Tema ${o.t.toLowerCase()}`); }); }
+// Estilo visual neste aparelho: o padrão (identidade atual) ou uma das três propostas.
+const ESTILOS = { padrao: ['Padrão Dikma', 'Identidade atual'], retro: ['Retrô', 'Papel envelhecido, letras de placa industrial, bordas firmes'], minimal: ['Minimalista', 'Tudo branco e cinza, só o essencial em destaque'], futuro: ['Futurista', 'Painel de controle: vidro, brilho ciano e números técnicos'] };
+const estiloAtual = () => { try { const s = localStorage.getItem('dikma-estilo'); return ESTILOS[s] ? s : 'padrao'; } catch (e) { return 'padrao'; } };
+const IC_ESTILO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.6-.9 1.2-1.8-.5-1 .2-2.2 1.3-2.2H17a4 4 0 0 0 4-4c0-5.5-4-10-9-10z"/><circle cx="7.5" cy="11" r="1.2" fill="currentColor"/><circle cx="10.5" cy="7" r="1.2" fill="currentColor"/><circle cx="15" cy="7.5" r="1.2" fill="currentColor"/></svg>';
+function aplicarEstilo(s) {
+  try { if (s === 'padrao') localStorage.removeItem('dikma-estilo'); else localStorage.setItem('dikma-estilo', s); } catch (e) { /* vale só agora */ }
+  if (window.dikmaEstilo) window.dikmaEstilo(s); render();
+}
+function temaSheet() {
+  const t = temaAtual(), e = estiloAtual();
+  const opts = [...Object.entries(TEMAS).map(([k, n]) => ({ t: 'Tema ' + n.toLowerCase(), d: k === 'auto' ? 'Segue o claro ou escuro do aparelho' : '', k, cur: k === t, ic: `<span class="opt-ic">${IC_TEMA[k]}</span>` })),
+    ...Object.entries(ESTILOS).map(([k, [n, d]]) => ({ t: 'Estilo ' + n, d, est: k, cur: k === e, ic: `<span class="opt-ic">${IC_ESTILO}</span>` }))];
+  sheet('Aparência', 'Tema e estilo valem só neste aparelho', opts, o => { if (o.est) { aplicarEstilo(o.est); toast(o.t); } else { aplicarTema(o.k); toast(o.t); } });
+}
 // Troca entre a Operação e a Administração do sistema (só o administrador): recarrega para buscar os dados certos.
 function irAcesso(k) {
   if (!isAdmin() || !ACESSO[k]) return;
@@ -1451,12 +1471,12 @@ function novaAcaoSheet(causa) {
 
 /* ---------------- ETIQUETAS QR ---------------- */
 // Uma etiqueta por rota: o link abre o Apontar de hoje já na rota (?r=ÁREA|ROTA). Imprimir e colar no local.
-let QR = null;
+let QR = null; const QR_SVG = new Map(); // o desenho de cada código fica guardado: atualizar a tela não refaz os QR
 const linkRota = r => `${location.origin}${location.pathname}?m=${UI.modulo}&v=apontar&r=${encodeURIComponent(r.area + '|' + r.rota)}`;
 function vEtiquetas() {
   if (!QR) { import('./vendor/qrcode.js').then(m => { QR = m.default || m.qrcode; render(); }).catch(() => toast('Não foi possível carregar o gerador de QR Code')); return M.ESQUELETO; }
   const area = areaScope(); const rs = rotasDa(area).filter(r => r.carga > 0 || r.rota !== 'GESTÃO');
-  const svg = url => { const q = QR(0, 'M'); q.addData(url); q.make(); return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); };
+  const svg = url => { let t = QR_SVG.get(url); if (!t) { const q = QR(0, 'M'); q.addData(url); q.make(); t = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); QR_SVG.set(url, t); } return t; };
   return `<div class="row-between noprint"><p class="muted m0">${rs.length} etiqueta${rs.length === 1 ? '' : 's'} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}. Ao ler o código com a câmera do celular, abre o Apontar de hoje nesta rota (é preciso estar com o login feito).</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir etiquetas</button>` : ''}</div>
   <div class="qrgrid">${rs.map(r => `<div class="qret"><div class="qrsvg">${svg(linkRota(r))}</div><div class="qrtxt"><b>${esc(r.rota)}</b><span>${AREA_S[r.area]} · ${SETS[SK].nome}</span><small>Aponte a câmera para abrir esta rota no Dikma Gestão</small></div></div>`).join('')}</div>`;
 }
@@ -1871,7 +1891,7 @@ document.addEventListener('click', async e => {
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
-      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), ...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), ...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Aparência', id: '__tema', d: `Tema ${TEMAS[temaAtual()].toLowerCase()} · estilo ${ESTILOS[estiloAtual()][0]}`, ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
@@ -2234,4 +2254,42 @@ if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') {
     setInterval(ver, 20 * 60e3);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ver(); });
   }).catch(() => {});
+}
+
+// Virada do dia: TODAY é fixado ao abrir. Quem deixa o sistema aberto de um dia para o outro
+// (Modo TV, celular do líder) passaria a ver a data de ontem; recarrega sozinho quando a data muda,
+// desde que ninguém esteja editando nem haja gravação pendente.
+{
+  const livre = () => !DB.pendingWrites() && !$('layer').children.length && !(document.activeElement && document.activeElement.matches('input:not([type=checkbox]):not([type=radio]),textarea,select'));
+  const virou = () => { if (today() !== TODAY && livre()) location.reload(); };
+  setInterval(virou, 60e3);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') virou(); });
+}
+
+// Voltar: janelas (folhas) entram no histórico ao abrir; fechar pela tela tira a entrada, e o Voltar fecha a janela.
+{
+  const L = $('layer');
+  new MutationObserver(() => {
+    const aberta = !!L.children.length, st = history.state || {};
+    if (aberta && !st.s) history.pushState({ ...st, s: 1 }, '');
+    else if (!aberta && st.s) { HIST_IGNORA = true; history.back(); }
+  }).observe(L, { childList: true });
+  addEventListener('popstate', e => {
+    if (HIST_IGNORA) { HIST_IGNORA = false; return; }
+    if (L.children.length) { L.innerHTML = ''; return; }
+    const st = e.state || {};
+    if (!st.v || !ME) return;
+    if (st.m && st.m !== UI.modulo && modsDe(ME).includes(st.m)) UI.modulo = st.m;
+    UI.view = st.v; UI.confirm = null; ensureModulo(); aplicarSet();
+    try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (x) { /* ignora */ }
+    render(); scrollTo(0, 0);
+  });
+}
+
+// Fechar a aba com apontamento ainda não enviado (sem sinal): o navegador pergunta antes de sair.
+addEventListener('beforeunload', e => { if (!DEMO && DB.pendingWrites() > 0) { e.preventDefault(); e.returnValue = ''; } });
+// Modo TV: mantém a tela da sala de controle acesa enquanto o painel está aberto.
+if (TV && 'wakeLock' in navigator) {
+  const acender = () => navigator.wakeLock.request('screen').catch(() => {});
+  acender(); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') acender(); });
 }
