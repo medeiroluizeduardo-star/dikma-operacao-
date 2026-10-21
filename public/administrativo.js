@@ -76,7 +76,7 @@ export function criarAdministrativo(X) {
 
   /* ---------- topo: Pátio | Bateria e competência ---------- */
   function topo(view) {
-    if (view !== 'afreq') return '';
+    if (view !== 'afreq' && view !== 'fpainel') return '';
     return `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>
       <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${periodoComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
   }
@@ -327,9 +327,95 @@ export function criarAdministrativo(X) {
     render();
   }
 
+
+  /* ---------- Painel de frequência e resumo da semana (módulo Painel) ---------- */
+  // Códigos de cada pessoa em cada data, pela mesma regra da folha (escala, férias, desligamento e lançamentos).
+  // Uma semana pode cruzar duas folhas (16 a 15): cada data usa a folha da sua competência.
+  function levantar(conj, datas) {
+    const cmap = colabPorId(conj); const pessoas = new Map(); let carregando = false;
+    for (const dt of datas) {
+      const comp = competenciaDe(dt); const doc = compDoc(conj, comp);
+      if (doc === undefined) { carregando = true; continue; } if (!doc) continue;
+      for (const g of doc.grupos || []) for (const p of g.pessoas || []) {
+        const key = p.mat ? 'm' + p.mat : 'n' + normNome(p.nome);
+        let x = pessoas.get(key); if (!x) { x = { nome: p.nome, grupo: g.nome, c: {} }; pessoas.set(key, x); }
+        x.c[dt] = codigo(conj, comp, doc, g, p, dt, cmap);
+      }
+    }
+    return { carregando, pessoas: [...pessoas.values()] };
+  }
+  // Fora da conta de presença: desligado, folga (da escala ou lançada) e férias — férias e folga não são ausência.
+  const NAOCONTA = c => !c || !c.v || c.v === 'DS' || c.v === 'F' || c.v === 'FE' || (c.auto && c.por === 'escala');
+  function indicadores(lev, datas) {
+    const ate = datas.filter(dt => dt <= TODAY);
+    const t = { FT: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0, AF: 0, TR: 0 }; const dia = ate.map(() => ({ p: 0, q: 0 })); const grupos = new Map();
+    for (const x of lev.pessoas) {
+      const g = grupos.get(x.grupo) || { nome: x.grupo, p: 0, q: 0, FT: 0, AT: 0, n: 0 }; g.n++; grupos.set(x.grupo, g);
+      x.t = { FT: 0, AT: 0, AB: 0, SP: 0 };
+      ate.forEach((dt, i) => {
+        const c = x.c[dt]; if (!c) return;
+        if (c.v in t) t[c.v]++; if (c.v in x.t) x.t[c.v]++; if (c.v === 'FT') g.FT++; if (c.v === 'AT') g.AT++;
+        if (NAOCONTA(c)) return; dia[i].q++; g.q++; if (presente(c.v)) { dia[i].p++; g.p++; }
+      });
+    }
+    const P = dia.reduce((s, d) => s + d.p, 0), Q = dia.reduce((s, d) => s + d.q, 0);
+    return { t, dia, ate, grupos: [...grupos.values()], pres: Q ? P / Q : 0, P, Q };
+  }
+  const pc = v => `${Math.round(v * 1000) / 10}`.replace('.', ',') + '%';
+  const feriasProximas = () => { const l = A().ferias || []; const em30 = add(TODAY, 30), em7 = add(TODAY, 7);
+    return { agora: l.filter(f => f.inicio && f.inicio <= TODAY && (f.termino || f.inicio) >= TODAY), saem: l.filter(f => f.inicio > TODAY && f.inicio <= em30).sort((a, b) => (a.inicio < b.inicio ? -1 : 1)), voltam: l.filter(f => f.retorno && f.retorno > TODAY && f.retorno <= em7) }; };
+  function vPainelFreq() {
+    const conj = U.conj, comp = U.comp, datas = diasDaCompetencia(comp);
+    const lev = levantar(conj, datas);
+    if (lev.carregando && !lev.pessoas.length) return '<div class="card skel"><i></i><i></i><i></i></div>';
+    if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em Frequência e férias › Frequência.</div></div>`;
+    const k = indicadores(lev, datas); const fe = feriasProximas();
+    const hojeI = k.ate.indexOf(TODAY); const hj = hojeI >= 0 ? k.dia[hojeI] : null;
+    const kp = (l, v, sub, cor) => `<div class="kpi"><span class="lbl">${cor ? `<i class="dot" style="background:${cor}"></i>` : ''}${l}</span><span class="v num">${v}</span><span class="s">${sub}</span></div>`;
+    let h = `<div class="kpis k8">
+      ${kp('Presença no período', pc(k.pres), `${k.P} presenças de ${k.Q} dias previstos · até ${dBR(k.ate[k.ate.length - 1] || datas[0])}`, 'var(--st-real)')}
+      ${kp('Presentes hoje', hj ? hj.p : '–', hj ? `de ${hj.q} escalados hoje` : 'hoje fora desta folha')}
+      ${kp('Pessoas na folha', lev.pessoas.length, `${SETS[conj].curto} · ${periodoComp(comp)}`)}
+      ${kp('Faltas', k.t.FT, 'dias de falta no período', 'var(--st-nreal)')}
+      ${kp('Atestados', k.t.AT, `${k.t.AF} dias de afastamento`, 'var(--st-atr)')}
+      ${kp('Abonos e suspensões', k.t.AB + k.t.SP, `${k.t.AB} abonos · ${k.t.SP} suspensões`)}
+      ${kp('Horas extras', k.t.HE, 'dias com hora extra', 'var(--st-extra)')}
+      ${kp('Em férias hoje', fe.agora.length, `${fe.saem.length} saem nos próximos 30 dias`)}
+    </div>`;
+    h += `<div class="grid2"><div class="card"><header><h2>Presença por dia</h2><p>Presentes ÷ escalados · ${periodoComp(comp)}</p></header><div class="body">
+      <div class="cols cmes" role="img" aria-label="Presença por dia">${k.dia.map((d, i) => `<div class="col" title="${dBR(k.ate[i])}: ${d.p} de ${d.q} presentes">${d.q ? `<i style="height:${d.p / d.q * 100}%;background:${d.p / d.q >= .95 ? 'var(--st-real)' : d.p / d.q >= .85 ? 'var(--st-atr)' : 'var(--st-nreal)'}"></i>` : ''}</div>`).join('')}${datas.slice(k.ate.length).map(() => '<div class="col"></div>').join('')}</div>
+      <div class="colx cmes">${datas.map((dt, i) => `<div class="${dt === TODAY ? 'today' : ''}">${i % 5 === 0 || dt === TODAY ? `<b>${dt.slice(8)}</b>` : ''}</div>`).join('')}</div>
+      <div class="legend"><span><i style="background:var(--st-real)"></i>95% ou mais</span><span><i style="background:var(--st-atr)"></i>85 a 95%</span><span><i style="background:var(--st-nreal)"></i>abaixo de 85%</span></div></div></div>
+      <div class="card"><header><h2>Presença por grupo</h2><p>Do menor para o maior</p></header><div class="body"><div class="bars">${k.grupos.filter(g => g.q).sort((a, b) => a.p / a.q - b.p / b.q).slice(0, 12).map(g => `<div class="barrow"><span class="n">${esc(title(g.nome))}<small>${g.n} pessoas${g.FT ? ` · ${g.FT} falta${g.FT > 1 ? 's' : ''}` : ''}${g.AT ? ` · ${g.AT} atestado${g.AT > 1 ? 's' : ''}` : ''}</small></span><div class="stack"><i style="width:${g.p / g.q * 100}%;background:var(--st-real)"></i></div><span class="p num">${pc(g.p / g.q)}</span></div>`).join('') || '<div class="empty">Sem dias previstos ainda.</div>'}</div></div></div></div>`;
+    const oc = lev.pessoas.filter(x => x.t.FT + x.t.AT + x.t.SP > 0).sort((a, b) => (b.t.FT * 2 + b.t.AT + b.t.SP * 2) - (a.t.FT * 2 + a.t.AT + a.t.SP * 2)).slice(0, 10);
+    h += `<div class="grid2"><div class="card"><header><h2>Mais ocorrências</h2><p>Faltas, atestados e suspensões no período</p></header><div class="tw"><table><thead><tr><th>Colaborador</th><th>Grupo</th><th class="r">Faltas</th><th class="r">Atestados</th><th class="r">Abonos</th><th class="r">Suspensões</th></tr></thead><tbody>${oc.map(x => `<tr><td><b>${esc(title(x.nome))}</b></td><td class="muted">${esc(title(x.grupo))}</td><td class="r num">${x.t.FT || ''}</td><td class="r num">${x.t.AT || ''}</td><td class="r num">${x.t.AB || ''}</td><td class="r num">${x.t.SP || ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nenhuma ocorrência no período.</td></tr>'}</tbody></table></div></div>
+      <div class="card"><header><h2>Férias</h2><p>Hoje e nos próximos dias · todos os conjuntos</p></header><div class="tw"><table><tbody>
+        ${fe.saem.slice(0, 8).map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>sai ${dBR(f.inicio)}</td><td class="r num">${f.dias || ''} dias</td></tr>`).join('')}
+        ${fe.voltam.map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>volta ${dBR(f.retorno)}</td><td></td></tr>`).join('')}
+        ${!fe.saem.length && !fe.voltam.length ? `<tr><td class="empty">${fe.agora.length} em férias hoje · ninguém sai nos próximos 30 dias.</td></tr>` : ''}
+      </tbody></table></div></div></div>`;
+    return h;
+  }
+  // Resumo da semana (folha de impressão): presença, ocorrências e férias da semana.
+  function resumoSemana(ini, conj) {
+    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = levantar(conj, datas);
+    if (lev.carregando && !lev.pessoas.length) return null;
+    const k = indicadores(lev, datas); const fe = A().ferias || [];
+    const DL7 = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const oc = lev.pessoas.map(x => ({ x, l: datas.filter(dt => dt <= TODAY && x.c[dt] && ['FT', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(x.c[dt].v)).map(dt => `${DL7[datas.indexOf(dt)]} ${NOMES_CODIGO[x.c[dt].v].toLowerCase()}`) })).filter(o => o.l.length).sort((a, b) => b.l.length - a.l.length);
+    const sai = fe.filter(f => f.inicio >= ini && f.inicio <= datas[6]), volta = fe.filter(f => f.retorno >= ini && f.retorno <= datas[6]);
+    return {
+      kpis: [[pc(k.pres), 'Presença na semana'], [lev.pessoas.length, 'Pessoas'], [k.t.FT, 'Faltas'], [k.t.AT, 'Atestados'], [k.t.HE, 'Dias com hora extra'], [k.t.FE, 'Dias de férias']],
+      corpo: `<h4>Presença por dia</h4><table><thead><tr><th></th>${datas.map((dt, i) => `<th class="r">${DL7[i]} ${ddmm(dt)}</th>`).join('')}</tr></thead><tbody><tr><td>Presentes / escalados</td>${datas.map(dt => { const i = k.ate.indexOf(dt); return `<td class="r">${i < 0 ? '' : `${k.dia[i].p}/${k.dia[i].q}`}</td>`; }).join('')}</tr><tr><td>Presença</td>${datas.map(dt => { const i = k.ate.indexOf(dt); return `<td class="r"><b>${i < 0 || !k.dia[i].q ? '' : pc(k.dia[i].p / k.dia[i].q)}</b></td>`; }).join('')}</tr></tbody></table>
+        <h4>Por grupo</h4><table><thead><tr><th>Grupo</th><th class="r">Pessoas</th><th class="r">Presença</th><th class="r">Faltas</th><th class="r">Atestados</th></tr></thead><tbody>${k.grupos.sort((a, b) => (a.q ? a.p / a.q : 1) - (b.q ? b.p / b.q : 1)).map(g => `<tr><td>${esc(title(g.nome))}</td><td class="r">${g.n}</td><td class="r"><b>${g.q ? pc(g.p / g.q) : '—'}</b></td><td class="r">${g.FT || ''}</td><td class="r">${g.AT || ''}</td></tr>`).join('')}</tbody></table>
+        <div class="rcols"><div><h4>Ocorrências da semana</h4>${oc.length ? `<table><tbody>${oc.slice(0, 15).map(o => `<tr><td>${esc(title(o.x.nome))}</td><td>${o.l.join(', ')}</td></tr>`).join('')}</tbody></table>${oc.length > 15 ? `<p class="muted small">e mais ${oc.length - 15} pessoas.</p>` : ''}` : '<p class="muted">Nenhuma falta, atestado ou afastamento.</p>'}</div>
+        <div><h4>Férias na semana</h4>${sai.length || volta.length ? `<table><tbody>${sai.map(f => `<tr><td>${esc(title(f.nome))}</td><td>sai ${ddmm(f.inicio)}</td></tr>`).join('')}${volta.map(f => `<tr><td>${esc(title(f.nome))}</td><td>volta ${ddmm(f.retorno)}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém sai ou volta de férias nesta semana.</p>'}</div></div>`
+    };
+  }
+
   /* ---------- eventos ---------- */
   document.addEventListener('click', async e => {
-    const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || UI.modulo !== 'frequencia') return;
+    const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || (UI.modulo !== 'frequencia' && !(UI.modulo === 'paineis' && ['conj', 'comp'].includes(t.dataset.a)))) return;
     const a = t.dataset.a, v = t.dataset.v;
     if (a === 'conj') { U.conj = v; render(); }
     else if (a === 'comp') { U.comp = compMais(U.comp, +v); U.fSem = null; render(); }
@@ -389,5 +475,5 @@ export function criarAdministrativo(X) {
     if (view === 'aimport') return vImport();
     return vFreq();
   }
-  return { render: renderView, topo, badge: () => 0 };
+  return { render: renderView, topo, painel: vPainelFreq, resumoSemana, badge: () => 0 };
 }

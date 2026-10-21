@@ -141,6 +141,37 @@ export function criarEquip(X) {
     return h;
   }
 
+
+  /* ---------- resumo da semana (módulo Painel) ---------- */
+  function resumoSemana(ini) {
+    if (!E().loaded || !E().config) return null;
+    const fim = add(ini, 6); DB.eWatch([ini.slice(0, 7), fim.slice(0, 7)]);
+    const C = calc(); const DL7 = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i));
+    const L = E().lanc.filter(l => l.data >= ini && l.data <= fim), P = E().par.filter(p => p.data >= ini && p.data <= fim);
+    const linhas = L.map(l => { const jan = C.janela(l); const ps = P.filter(p => p.data === l.data && p.eq === l.eq && p.op === l.op && !p.subst); const hp = Math.min(jan, ps.reduce((s, p) => s + C.duracao(p), 0)); return { ...l, jan, hpar: hp, hoper: Math.max(0, jan - hp) }; });
+    const pars = P.map(p => ({ ...p, dur: C.duracao(p), resp: C.resp(p) }));
+    const sum = (a, f) => a.reduce((s, x) => s + (f(x) || 0), 0);
+    const hprev = sum(linhas, l => l.jan), hoper = sum(linhas, l => l.hoper), parEq = pars.filter(p => p.resp === 'EQUIPAMENTO'), hParEq = sum(parEq, p => p.dur);
+    const he = linhas.filter(l => STATUS_HE.includes(l.status)), fora = linhas.filter(l => l.status === 'FORA DE OPERAÇÃO' || l.status === 'EM MANUTENÇÃO');
+    const causas = {}; for (const p of pars) { if (!p.causa) continue; const c = causas[p.causa] || (causas[p.causa] = { causa: p.causa, resp: p.resp, n: 0, h: 0 }); c.n++; c.h += p.dur; }
+    const eqs = {}; for (const p of parEq) { const e = eqs[p.eq] || (eqs[p.eq] = { id: p.eq, n: 0, h: 0 }); e.n++; e.h += p.dur; }
+    const ops = {}; for (const l of linhas) { const o = ops[l.op] || (ops[l.op] = { nome: l.op, aloc: 0, h: 0, he: 0 }); o.aloc++; o.h += l.hoper; if (STATUS_HE.includes(l.status)) o.he++; }
+    const abertas = E().par.filter(p => !p.fim && p.data <= fim);
+    return {
+      kpis: [[L.length, 'Alocações'], [h1(hoper) + ' h', 'Horas operadas'], [pc(hprev ? hoper / hprev : 0), 'Aproveitamento'], [pc(hprev ? Math.max(0, 1 - hParEq / hprev) : 0), 'Disponibilidade física'], [P.length, 'Paradas'], [he.length, 'Alocações em HE']],
+      corpo: `<h4>Por dia</h4><table><thead><tr><th></th>${datas.map((dt, i) => `<th class="r">${DL7[i]} ${dt.slice(8)}/${dt.slice(5, 7)}</th>`).join('')}</tr></thead><tbody>
+        <tr><td>Alocações</td>${datas.map(dt => `<td class="r">${linhas.filter(l => l.data === dt).length || ''}</td>`).join('')}</tr>
+        <tr><td>Horas operadas</td>${datas.map(dt => { const v = sum(linhas.filter(l => l.data === dt), l => l.hoper); return `<td class="r">${v ? h1(v) : ''}</td>`; }).join('')}</tr>
+        <tr><td>Horas paradas</td>${datas.map(dt => { const v = sum(linhas.filter(l => l.data === dt), l => l.hpar); return `<td class="r">${v ? h1(v) : ''}</td>`; }).join('')}</tr>
+        <tr><td>Paradas</td>${datas.map(dt => `<td class="r">${P.filter(p => p.data === dt).length || ''}</td>`).join('')}</tr></tbody></table>
+        <div class="rcols"><div><h4>Principais causas de parada</h4>${Object.keys(causas).length ? `<table><tbody>${Object.values(causas).sort((a, b) => b.h - a.h).slice(0, 6).map(c => `<tr><td>${esc(c.causa)}<div class="muted small">${esc((c.resp || '').toLowerCase())}</div></td><td class="r">${c.n}×</td><td class="r">${h1(c.h)} h</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma parada na semana.</p>'}</div>
+        <div><h4>Equipamentos mais parados</h4>${Object.keys(eqs).length ? `<table><tbody>${Object.values(eqs).sort((a, b) => b.h - a.h).slice(0, 6).map(e => `<tr><td>${esc(e.id)}</td><td class="r">${e.n} falha${e.n > 1 ? 's' : ''}</td><td class="r">${h1(e.h)} h</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma falha de equipamento.</p>'}</div></div>
+        <div class="rcols"><div><h4>Operadores</h4>${Object.keys(ops).length ? `<table><thead><tr><th>Operador</th><th class="r">Aloc.</th><th class="r">Horas</th><th class="r">HE</th></tr></thead><tbody>${Object.values(ops).sort((a, b) => b.aloc - a.aloc).map(o => `<tr><td>${esc(short(o.nome))}</td><td class="r">${o.aloc}</td><td class="r">${h1(o.h)}</td><td class="r">${o.he || ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Sem lançamentos.</p>'}</div>
+        <div><h4>Pontos de atenção</h4><table><tbody><tr><td>Alocações fora de operação ou em manutenção</td><td class="r">${fora.length}</td></tr><tr><td>Paradas por falha de equipamento</td><td class="r">${parEq.length} · ${h1(hParEq)} h</td></tr><tr><td>Paradas por causa do operador</td><td class="r">${pars.filter(p => p.resp === 'OPERADOR').length}</td></tr><tr><td>Paradas ainda sem liberação</td><td class="r">${abertas.length}</td></tr><tr><td>Horas extras</td><td class="r">${hhmm(sum(linhas, l => l.he))}</td></tr></tbody></table></div></div>`
+    };
+  }
+
   /* ---------- lançamentos ---------- */
   const STATUS_CLS = { 'OPERAÇÃO FINALIZADA': 'ok', 'EM OPERAÇÃO': 'neu', 'HORA EXTRA': 'ext', 'HE NOTURNA': 'ext', 'FORA DE OPERAÇÃO': 'bad', 'EM MANUTENÇÃO': 'warn' };
   // Texto de busca de um lançamento: equipamento, tipo, operador, área, status e observação.
@@ -676,6 +707,7 @@ export function criarEquip(X) {
       DB.eWatch([U.mes, addMonth(U.mes, -1), U.dia.slice(0, 7), addMonth(U.dia.slice(0, 7), -1), U.avMes, U.inMes, TODAY.slice(0, 7)]);
       return ({ epainel: vPainel, elanc: vLancPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
     },
+    resumoSemana,
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
 }
