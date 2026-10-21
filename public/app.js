@@ -47,7 +47,7 @@ try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.v
 // Acesso (porta de entrada) desta sessão: operacao | sistema (o antigo Administrativo agora é um módulo da Operação).
 try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
 if (!UI.acesso) UI.acesso = 'operacao';
-if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (!['operacao', 'bateria'].includes(UI.modulo)) UI.modulo = 'operacao'; }
+if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (UI.modulo === 'bateria') UI.esSet = 'bateria'; UI.modulo = 'paineis'; }
 const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
 const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } marcarHistorico(); };
@@ -228,11 +228,11 @@ const I = {
 };
 const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
-  { id: 'painel', nome: 'Painel', ic: 'painel', grp: 'Acompanhar', mod: 'op' },
+  { id: 'painel', nome: 'Atividades', ic: 'painel', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 },
+  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => acompanha() },
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Acompanhar', mod: 'op' },
-  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Acompanhar', mod: 'op' },
   { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Acompanhar', mod: 'op', req: () => acompanha() || admMod() },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Acompanhar', mod: 'op' },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Acompanhar', mod: 'op' },
@@ -253,6 +253,17 @@ const VIEWS = [
   { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'prog', grp: 'Geral', admin: true, mod: 'cf' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'escala', grp: 'Geral', admin: true, mod: 'cf' }
 ];
+// Módulo Painel: os painéis de todos os módulos e o Resumo da semana num lugar só (saem dos outros módulos).
+// Os painéis de Equipamentos e Fichas vêm dos seus arquivos; aqui só mudam de módulo, nome e quem vê.
+const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel'];
+{
+  const ord = [];
+  for (const [id, nome, ic, req] of [['epainel', 'Equipamentos', 'painel', u => modsReais(u).includes('equipamentos')], ['gpainel', 'Fichas do efetivo', 'users', u => modsReais(u).includes('gestao')]]) {
+    const i = VIEWS.findIndex(v => v.id === id); if (i < 0) continue;
+    const v = VIEWS.splice(i, 1)[0]; Object.assign(v, { nome, ic, grp: 'Painéis', mod: 'pn', reqU: req }); ord.push(v);
+  }
+  VIEWS.splice(VIEWS.findIndex(v => v.id === 'resumo') + 1, 0, ...ord);
+}
 // As telas de administração de cada módulo passam a morar no módulo Configurações (mesmas telas, mesmos dados).
 {
   const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsReais(ME).includes(m));
@@ -269,7 +280,7 @@ const VIEWS = [
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'painel' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'painel' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'epainel' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
+const MODS = { paineis: { nome: 'Painel', curto: 'Painel', sub: 'Indicadores de todos os módulos', key: 'pn', inicio: 'painel' }, operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'apontar' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'apontar' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'elanc' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
 const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
@@ -286,6 +297,7 @@ const ACESSO_IC = {
   sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>'
 };
 MOD_IC.frequencia = ACESSO_IC.administrativo;
+MOD_IC.paineis = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16"/></svg>';
 function menuModulos(abrir) {
   UI.modOpen = abrir;
   const p = document.querySelector('.modpick'); if (!p) return;
@@ -303,7 +315,9 @@ const temFichas = u => modsReais(u).includes('gestao');
 const modsDe = u => {
   if (!u) return [];
   if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
-  const b = modsReais(u); return MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
+  const b = modsReais(u); const ms = MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
+  // Painel: aparece para quem tem algum módulo com painel (atividades, equipamentos ou fichas).
+  return (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao')) ? ['paineis', ...ms] : ms;
 };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
@@ -311,7 +325,7 @@ const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.mod
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
-  if (UI.modulo === 'gestao') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
+  if (UI.modulo === 'gestao' || UI.modulo === 'paineis') { const ss = setsDe(ME); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); UI.esSet = k; }
   if (UI.modulo === 'config') { const ss = setsDe(ME); k = ss.includes(UI.cfSet) ? UI.cfSet : (ss[0] || 'patio'); UI.cfSet = k; }
   if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
@@ -329,6 +343,8 @@ function normalizarView() {
 }
 function ensureModulo() {
   normalizarView();
+  // Links antigos e avisos que abriam um painel dentro de outro módulo: vão para o módulo Painel.
+  if (PN_VIEWS.includes(UI.view) && UI.modulo !== 'paineis' && ME && modsDe(ME).includes('paineis')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria') UI.esSet = UI.modulo === 'bateria' ? 'bateria' : 'patio'; UI.modulo = 'paineis'; }
   const ms = modsDe(ME); if (!ms.length) return;
   if (UI.modulo === 'escala') UI.modulo = 'gestao'; // módulo antigo, agora dentro do Efetivo
   if (!ms.includes(UI.modulo)) { UI.modulo = ms[0]; }
@@ -428,13 +444,13 @@ function renderTela() {
   ensureModulo(); aplicarSet(); rebuild();
   if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', AD.render(UI.view)); afterRender(); return; }
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
-  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos') { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.modulo === 'gestao' ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
+  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' || (UI.modulo === 'gestao' && UI.view !== 'epainel') ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
   ensurePeriod();
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
-  if (v.admin && !admMod()) UI.view = 'painel';
+  if (v.admin && !admMod()) UI.view = MODS[UI.modulo].inicio;
   renderNav(); renderTop();
   const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
@@ -449,9 +465,9 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
   // Selo de Pendências: só os atrasos dos últimos 7 dias, na área da pessoa (um número que dá para resolver).
-  const atr = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
+  const atr = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
   const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
-  const apv = !ge && !eqm && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
+  const apv = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
   const ms = modsDe(ME);
   const cur = MODS[UI.modulo];
   const linha = m => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${MODS[m].sub}</small></span>`;
@@ -479,12 +495,13 @@ function renderNav() {
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais.
 function barraDe() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['gpainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
-    : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['epainel', 'Painel', 'painel'], ['__more', 'Mais', 'more']]
+  const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['__more', 'Mais', 'more']]
+    : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['einsp', 'Inspeções', 'plano'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
-    : aprovador() ? [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
-    : [['meudia', 'Hoje', 'sol'], ['painel', 'Painel', 'painel'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']];
+    : UI.modulo === 'paineis' ? [['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['gpainel', 'Fichas', 'users'], ['meudia', 'Hoje', 'sol'], ['__more', 'Mais', 'more']]
+    : aprovador() ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
+    : [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['causas', 'Causas', 'causas'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
 }
@@ -526,7 +543,7 @@ function filtroCompacto(comSet) {
 }
 function filtroSheet() {
   const L = $('layer');
-  const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
+  const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
   const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
@@ -603,11 +620,11 @@ function renderTop() {
     pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Dias de hora extra por pessoa e por origem · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe'].includes(UI.view);
-  const comSet = ES_VIEWS.includes(UI.view) && setsDe(ME).length > 1;
+  const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
   else {
     if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' });
@@ -1232,7 +1249,7 @@ function turmaSheet(id) {
 // Abre o módulo Escala e Efetivo no conjunto atual, já na rota (area|rota) quando vier de um link.
 function irEscala(rota) {
   if (!setsDe(ME).length) return;
-  if (UI.modulo === 'operacao' || UI.modulo === 'bateria') UI.esSet = SK;
+  if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || UI.modulo === 'paineis') UI.esSet = SK;
   UI.modulo = 'gestao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
   salvarUI(); render(); scrollTo(0, 0);
 }
@@ -1623,7 +1640,7 @@ function vUsuarios() {
   </tbody></table></div></div>`;
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge', frequencia: 'ad' };
+const KEY_MOD = { paineis: 'pn', operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge', frequencia: 'ad' };
 const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v) && (!v.reqU || v.reqU(u))); };
 function celulaAbas(u) {
   if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
@@ -1751,7 +1768,16 @@ async function prepararFoto(file, carimbo) {
   tc.getContext('2d').drawImage(cv, 0, 0, tc.width, tc.height);
   return { dados, thumb: tc.toDataURL('image/jpeg', 0.6), tipo: 'image/jpeg', tamanho: Math.round(dados.length * 0.75) };
 }
-function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if (m === 'gestao' && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; UI.eRota = '*'; } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
+// Atalho para uma tela de outro módulo (ex.: do Painel para o Apontar): troca de módulo mantendo o conjunto (Pátio/Bateria).
+function irParaModuloDa(id) {
+  const tv = VIEWS.find(v => v.id === id); if (!tv || tv.mod === 'all' || viewsDoModulo().some(v => v.id === id)) return;
+  const ms = modsDe(ME), set = SK;
+  const alvo = tv.mod === 'pn' ? 'paineis' : tv.mod === 'eq' ? 'equipamentos' : tv.mod === 'ge' ? 'gestao' : tv.mod === 'ad' ? 'frequencia' : tv.mod === 'op' ? (set === 'bateria' && ms.includes('bateria') ? 'bateria' : ms.includes('operacao') ? 'operacao' : 'bateria') : null;
+  if (!alvo || !ms.includes(alvo)) return;
+  if (alvo === 'gestao' || alvo === 'paineis') UI.esSet = set;
+  UI.modulo = alvo; UI.modOpen = false; aplicarSet();
+}
+function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if ((m === 'gestao' || m === 'paineis') && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; if (m === 'gestao') UI.eRota = '*'; } if ((m === 'operacao' || m === 'bateria') && UI.modulo === 'paineis') { /* volta para o conjunto que estava no painel só se for o mesmo módulo */ } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -1882,6 +1908,7 @@ document.addEventListener('click', async e => {
       return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
+    irParaModuloDa(d.go);
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
   }
   if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }

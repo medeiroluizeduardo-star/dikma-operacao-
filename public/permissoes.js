@@ -5,6 +5,7 @@ export const PERFIS_ABAS = [['gestor', 'Gestor'], ['coordenador', 'Coordenador']
 // Grupos da tela: Pátio e Bateria usam as mesmas telas, então dividem a mesma configuração.
 export const GRUPOS_ABAS = [
   { t: 'Todos os módulos', mod: 'all' },
+  { t: 'Painel (indicadores e resumo)', mod: 'pn' },
   { t: 'Atividades Pátio · Atividades Bateria', mod: 'op' },
   { t: 'Operação (equipamentos)', mod: 'eq' },
   { t: 'Efetivo (escala, presença e fichas)', mod: 'ge' },
