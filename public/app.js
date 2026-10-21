@@ -229,7 +229,7 @@ const I = {
 const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
   { id: 'painel', nome: 'Atividades', ic: 'painel', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 },
-  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 },
+  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 || modsReais(u).includes('equipamentos') || modsReais(u).includes('frequencia') },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => acompanha() },
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Acompanhar', mod: 'op' },
@@ -255,13 +255,14 @@ const VIEWS = [
 ];
 // Módulo Painel: os painéis de todos os módulos e o Resumo da semana num lugar só (saem dos outros módulos).
 // Os painéis de Equipamentos e Fichas vêm dos seus arquivos; aqui só mudam de módulo, nome e quem vê.
-const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel'];
+const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel', 'fpainel'];
 {
   const ord = [];
   for (const [id, nome, ic, req] of [['epainel', 'Equipamentos', 'painel', u => modsReais(u).includes('equipamentos')], ['gpainel', 'Fichas do efetivo', 'users', u => modsReais(u).includes('gestao')]]) {
     const i = VIEWS.findIndex(v => v.id === id); if (i < 0) continue;
     const v = VIEWS.splice(i, 1)[0]; Object.assign(v, { nome, ic, grp: 'Painéis', mod: 'pn', reqU: req }); ord.push(v);
   }
+  ord.splice(1, 0, { id: 'fpainel', nome: 'Frequência', ic: 'prog', grp: 'Painéis', mod: 'pn', reqU: u => modsReais(u).includes('frequencia') });
   VIEWS.splice(VIEWS.findIndex(v => v.id === 'resumo') + 1, 0, ...ord);
 }
 // As telas de administração de cada módulo passam a morar no módulo Configurações (mesmas telas, mesmos dados).
@@ -316,8 +317,8 @@ const modsDe = u => {
   if (!u) return [];
   if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
   const b = modsReais(u); const ms = MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
-  // Painel: aparece para quem tem algum módulo com painel (atividades, equipamentos ou fichas).
-  return (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao')) ? ['paineis', ...ms] : ms;
+  // Painel: aparece para quem tem algum módulo com painel (atividades, equipamentos, fichas ou frequência).
+  return (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao') || b.includes('frequencia')) ? ['paineis', ...ms] : ms;
 };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
@@ -446,6 +447,7 @@ function renderTela() {
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' || (UI.modulo === 'gestao' && UI.view !== 'epainel') ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
+  if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && resTipo() !== 'ativ'))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? AD.painel() : vResumoOutro()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
   ensurePeriod();
@@ -499,7 +501,7 @@ function barraDe() {
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['einsp', 'Inspeções', 'plano'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'paineis' ? [['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['gpainel', 'Fichas', 'users'], ['meudia', 'Hoje', 'sol'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'paineis' ? [['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['fpainel', 'Frequência', 'prog'], ['gpainel', 'Fichas', 'users'], ['meudia', 'Hoje', 'sol'], ['__more', 'Mais', 'more']]
     : aprovador() ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['causas', 'Causas', 'causas'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
@@ -620,6 +622,8 @@ function renderTop() {
     pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if (v.id === 'resumo' && resTipo() !== 'ativ') { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê, módulo por módulo' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Dias de hora extra por pessoa e por origem · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
@@ -1486,6 +1490,23 @@ function vEtiquetas() {
 }
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
+// Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['oper', 'Operação', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
+const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME));
+const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
+const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
+const abasResumo = () => { const l = tiposRes(); return l.length > 1 ? `<div class="seg resabas noprint" role="tablist" aria-label="Tipo de resumo">${l.map(([k, n]) => `<button type="button" role="tab" data-rtipo="${k}" aria-selected="${resTipo() === k}">${n}</button>`).join('')}</div>` : ''; };
+function vResumoOutro() {
+  const tipo = resTipo(); const ini = UI.rIni || UI.ini || CUR_WEEK; UI.rIni = ini; const fim = add(ini, 6);
+  const conj = rConj();
+  const r = tipo === 'oper' ? EQ.resumoSemana(ini) : AD.resumoSemana(ini, conj);
+  const nav = `<div class="row-between noprint">${abasResumo()}<div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+  if (!r) return nav + M.ESQUELETO;
+  const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b></span>`;
+  return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+}
 function vResumo() {
   const area = areaScope(); const docs = docsFor({ ini: UI.ini, area }); const s = stats(docs);
   const ef = pct(s.Rhoje, s.progHoje);
@@ -1497,7 +1518,7 @@ function vResumo() {
   const cs = colabsDa(area); const dias = DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
   cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
   const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && AUSENCIA.has(x.v)) aus[x.v] = (aus[x.v] || 0) + 1; }));
-  return `<div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
+  return `${abasResumo()}<div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
   <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Semana:</b> ${weekLabel(UI.ini)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência até ${ddmm(TODAY < add(UI.ini, 6) ? TODAY : add(UI.ini, 6))}</span></div><div><b>${n0(s.prog)}</b><span>Programadas</span></div><div><b>${n0(s.R)}</b><span>Realizadas</span></div><div><b>${n0(s.N)}</b><span>Não realizadas</span></div><div><b>${n0(s.A)}</b><span>Atrasadas</span></div><div><b>${n0(s.E)}</b><span>Extras</span></div></div>
   <h4>Por área</h4><table><thead><tr><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">Atrasadas</th><th class="r">Eficiência</th></tr></thead><tbody>${porArea.map(({ a, x }) => `<tr><td>${AREA_S[a]}</td><td class="r">${x.prog}</td><td class="r">${x.R}</td><td class="r">${x.N}</td><td class="r">${x.A}</td><td class="r"><b>${pct(x.Rhoje, x.progHoje)}%</b></td></tr>`).join('')}</tbody></table>
@@ -1951,6 +1972,9 @@ document.addEventListener('click', async e => {
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
   if (d.goescala !== undefined) { irEscala(d.goescala); return; }
+  if (d.rtipo) { UI.resTipo = d.rtipo; render(); return; }
+  if (d.rsem) { UI.rIni = add(UI.rIni || UI.ini || CUR_WEEK, 7 * +d.rsem); if (UI.rIni > CUR_WEEK) UI.rIni = CUR_WEEK; render(); return; }
+  if (d.rconj) { UI.rConj = d.rconj; render(); return; }
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (d.sit) { lancarEfetivo(d.sit); return; }
