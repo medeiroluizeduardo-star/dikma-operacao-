@@ -32,6 +32,9 @@ service cloud.firestore {
     function geEdita() { return hasProfile() && geEditaU(perfil()); }
     function gestorDa(area) { return gestor() && acOp() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
     function ba() { return ativo() && acOp() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
+    // Atividade fora da programação (campo fp da semana): só coordenador e supervisor da área (e o administrador).
+    function criaForaDa(area) { return gestorDa(area) && perfil().papel in ['coordenador', 'supervisor']; }
+    function criaForaDaB(area) { return gestorDaB(area) && perfil().papel in ['coordenador', 'supervisor']; }
     function gestorDaB(area) { return gestor() && acOp() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
     // Efetivo por área: administrador, gestor, coordenador e somente leitura veem todas as áreas;
     // supervisor, as 2 dele; líder, a dele; quem tem a Operação de equipamentos, também os operadores.
@@ -109,7 +112,8 @@ service cloud.firestore {
     match /semanas/{id} {
       allow read: if op();
       allow create, delete: if admMod('operacao');
-      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
+        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
 
     // Aprovação dos apontamentos: só o supervisor da área aprova ou devolve o que foi apontado.
@@ -177,7 +181,8 @@ service cloud.firestore {
     match /b_semanas/{id} {
       allow read: if ba();
       allow create, delete: if admMod('bateria');
-      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']));
+      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
+        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
     function aprovaDaB(area) { return gestorDaB(area) && perfil().papel == 'supervisor'; }
     function acompanhaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }

@@ -32,7 +32,7 @@ export function criarAdministrativo(X) {
   const TODAY = today();
   const A = () => DB.cache.adm || { ferias: [], comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
   const U = UI.a || (UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' });
-  const pode = () => editaAdm(ME());
+  const pode = () => editaAdm(ME()) && (!X.podeItem || X.podeItem('i_freq'));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
   const nomeComp = c => { const [a, m] = c.split('-').map(Number); return `${MESES_L[m - 1]} ${a}`; };
   // A folha aparece pelas datas (16 a 15), como o RH confere: "16/10 a 15/11/2026".

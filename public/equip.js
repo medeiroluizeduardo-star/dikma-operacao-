@@ -29,7 +29,7 @@ export function criarEquip(X) {
   const TODAY = today();
   const E = () => DB.cache.e;
   const ME = () => X.ME;
-  const podeEditar = () => isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel);
+  const podeEditar = () => isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel) && (!X.podeItem || X.podeItem('i_operacao')));
   const U = UI.e || (UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null });
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const mesNome = ym => `${MESES_L[+ym.slice(5, 7) - 1]}/${ym.slice(0, 4)}`;
