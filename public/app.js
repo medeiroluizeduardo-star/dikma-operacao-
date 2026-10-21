@@ -1507,7 +1507,7 @@ function vProg() {
    ${!framed && !cel ? `<button class="btn" data-act="csv" style="align-self:flex-end">${I.dl} Exportar Excel</button>` : ''}
   </div>${cel ? `<details class="legdet"${UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' open' : ''}><summary>Filtrar por rota ou tipo</summary><div class="filters">${selRota}</div></details>` : ''}
   <div class="mini"><div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
-  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A', 'E'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura'}</span></div></details>`;
+  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A', 'E'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
   const q = UI.q.trim().toLowerCase();
   const rows = [];
   for (const doc of docs) doc.ids.forEach((id, i) => {
@@ -1816,7 +1816,7 @@ function vImportar() {
 // opts: [{ t, d, ic, cur, larga }] · cfg.grade: as opções curtas viram uma grade (situações do dia), as largas ficam embaixo
 function sheet(titleTxt, sub, opts, onPick, cfg = {}) {
   const L = $('layer');
-  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cfg.grade ? ' comgrade' : ''}" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}"><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}<div class="opts${cfg.grade ? ' grade' : ''}">${opts.map((o, i) => `<button class="opt${o.larga ? ' larga' : ''}" data-o="${i}" ${o.cur ? 'aria-current="true"' : ''}>${o.ic || ''}<span>${esc(o.t)}${o.d ? `<br><small class="muted">${esc(o.d)}</small>` : ''}</span></button>`).join('')}</div><button class="btn center" data-o="x">Cancelar</button></div></div>`;
+  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cfg.grade ? ' comgrade' : ''}" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}"><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}<div class="opts${cfg.grade ? ' grade' : ''}">${opts.map((o, i) => `<button class="opt${o.larga ? ' larga' : ''}" data-o="${i}" ${o.cur ? 'aria-current="true"' : ''}>${o.ic || ''}<span>${esc(o.t)}${o.d ? `<br><small class="muted">${esc(o.d)}</small>` : ''}</span></button>`).join('')}</div><button class="btn center" data-o="x">${cfg.fechar || 'Cancelar'}</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') close(); };
   const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
   document.addEventListener('keydown', kd);
@@ -1888,8 +1888,13 @@ function toast(t, o = {}) {
 }
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 function cellMenu(doc, i, k) {
-  if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
   const p = PL.get(doc.ids[i]); const raw = doc.d[i][k]; const c = st(doc, i, k);
+  // Quem só acompanha (somente leitura, ou outra área) não aponta, mas vê por que a atividade não foi feita.
+  if (!canEdit(doc.area)) {
+    if (c !== 'N') { toast(`${ST_NOME[c]} · seu perfil só acompanha esta área`); return; }
+    const m = doc.m[p.id + '|' + k];
+    return sheet(p.ativ, `${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}<br>${esc(p.local)}`, [{ t: m || 'Sem justificativa registrada', d: 'Justificativa de por que não foi feita', ic: chipIc('N'), larga: true }], () => {}, { fechar: 'Fechar' });
+  }
   const sub = `${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}<br>${esc(p.local)}`;
   const o = (raw === '_' || raw === 'E')
     ? [{ t: 'Registrar como extra', d: 'Feita fora da programação', v: 'E', ic: chipIc('E'), cur: raw === 'E' }, { t: 'Não programada', v: '_', ic: chipIc('X'), cur: raw === '_' }]
