@@ -30,7 +30,7 @@ export function entrarTela(view) {
   if (reduzir()) return;
   // tira e põe a classe no quadro seguinte (sem forçar o recálculo da página na hora do toque)
   view.classList.remove('entra', 'barras'); cancelAnimationFrame(view._raf);
-  view._raf = requestAnimationFrame(() => { view.classList.add('entra', 'barras'); clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 450); });
+  view._raf = requestAnimationFrame(() => { view.classList.add('entra', 'barras'); clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 1100); });
   contarNumeros(view);
 }
 
@@ -44,7 +44,7 @@ function contarNumeros(root) {
     const bruto = m[2]; const dec = (bruto.split(',')[1] || '').length; const alvo = parseFloat(bruto.replace(/\./g, '').replace(',', '.'));
     if (!isFinite(alvo) || alvo === 0) return;
     const fmt = v => m[1] + v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + m[3];
-    const t0 = performance.now(), dur = 350;
+    const t0 = performance.now(), dur = 700;
     const passo = agora => {
       if (!el.isConnected) return;
       const p = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - p, 3);
