@@ -343,8 +343,6 @@ table.calesc th.fds{color:var(--ink-3)}
 .tchip .peri{margin:0 1px}
 body.tv .rail,body.tv .tabbar,body.tv .top{display:none}
 body.tv .app{grid-template-columns:minmax(0,1fr)}
-body.tv .wrap{max-width:none;padding:20px 28px;font-size:17px}
-body.tv .kpi .v{font-size:3.2em}
 .tvhead{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap}
 .tvhead b{font-size:30px;font-family:var(--f-disp,inherit);text-transform:uppercase;letter-spacing:.02em}
 .tvhead span{color:var(--ink-3);font-size:15px}
@@ -1276,6 +1274,126 @@ button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-we
 body.sem-exportar :is([data-act="csv"],[data-act^="exp"],[data-e^="exp"],[data-g^="exp"],[data-a^="exportar"]),body.sem-imprimir :is([data-act="print"],[data-g="imprimir"]){display:none!important}
 .perm tr.item-perm td:first-child{padding-left:22px;font-size:13px}.perm tr.item-perm .it-ic{color:var(--accent);font-weight:700}
 .tgl-row.item{padding-left:10px}.tgl-row.item span{font-size:13px}
+
+/* ================= Modo TV ================= */
+body.tv .wrap{max-width:none;padding:0;font-size:18px}
+body.tv main{padding:0!important}body.tv{overflow:hidden}
+body.tv #view{transition:transform 2s linear}
+.tvx{height:100vh;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) auto;gap:18px;padding:22px 30px 16px;background:radial-gradient(120% 80% at 50% 0%,color-mix(in srgb,var(--rail-2) 55%,var(--bg)) 0%,var(--bg) 60%)}
+.tvtopo{display:flex;align-items:center;gap:26px}
+.tvtopo .logo{height:42px}
+:root:not([data-theme="dark"]) .tvtopo .logo{content:url(img/dikma-logo.png)}
+.tvtit{display:flex;flex-direction:column;margin-right:auto}
+.tvtit b{font-family:var(--f-display);font-size:46px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+.tvtit span{color:var(--ink-3);font-size:18px;margin-top:4px}
+.tvrel{display:flex;flex-direction:column;align-items:flex-end}
+.tvrel b{font-family:var(--f-display);font-size:58px;line-height:.95;letter-spacing:.02em}
+.tvrel span{color:var(--ink-3);font-size:17px;text-transform:capitalize}
+.tvcena{min-height:0;animation:tvIn .6s var(--ease) both}
+@keyframes tvIn{from{opacity:0;transform:translateY(16px) scale(.99)}}
+.tvcard{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px 26px;box-shadow:var(--e2)}
+.tvcard h3{font-family:var(--f-display);font-size:26px;text-transform:uppercase;letter-spacing:.03em;margin:0 0 16px}
+.tvgrid{display:grid;gap:18px;height:100%}
+.tvhoje,.tvefet,.tvequip{grid-template-columns:minmax(0,1.05fr) minmax(0,1.5fr)}
+.tvequip{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}
+.tvsem{grid-template-columns:minmax(0,.9fr) minmax(0,1.4fr);grid-template-rows:auto auto}
+.tvsem .tvlarga{grid-column:1/-1}
+.tvhero{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px}
+.tvanel{--p:0;--c:var(--accent);width:min(280px,30vh);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1%),color-mix(in srgb,var(--ink-3) 18%,transparent) 0);position:relative;animation:tvAnel 1.2s var(--ease) both}
+.tvanel>div{width:78%;aspect-ratio:1;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.tvanel b{font-family:var(--f-display);font-size:clamp(40px,7vh,78px);line-height:1}
+.tvanel small{color:var(--ink-3);font-size:16px;max-width:80%}
+@keyframes tvAnel{from{transform:scale(.85) rotate(-40deg);opacity:0}}
+.tvnums{display:flex;flex-wrap:wrap;justify-content:center;gap:14px 30px}
+.tvnums.col{flex-direction:row}
+.tvnums div{display:flex;flex-direction:column;align-items:center;min-width:110px}
+.tvnums b{font-family:var(--f-display);font-size:44px;line-height:1}
+.tvnums span{color:var(--ink-3);font-size:15px;text-align:center}
+.tvnums .ok b{color:var(--st-real)}.tvnums .bad b{color:var(--st-nreal)}.tvnums .warn b{color:var(--st-atr)}.tvnums .ext b{color:var(--st-extra)}
+.tvareas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.tvarea{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.tvarea>b{font-family:var(--f-display);font-size:26px;text-transform:uppercase;letter-spacing:.02em}
+.tvarea .tvanel{width:min(170px,19vh)}.tvarea .tvanel b{font-size:clamp(28px,4.6vh,46px)}.tvarea .tvanel small{font-size:13px}
+.tvarea .muted{font-size:16px}
+.dotn{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--st-nreal);margin-right:6px}
+.tvleg{display:flex;flex-wrap:wrap;gap:12px 26px;margin-bottom:14px;font-size:17px}
+.tvleg span{display:flex;align-items:center;gap:8px}.tvleg i{width:16px;height:16px;border-radius:4px}
+.tvleg .zero i{background:var(--st-nreal)}.tvleg .anda i{background:var(--st-atr)}.tvleg .fech i{background:var(--st-real)}.tvleg .fechn i{background:var(--st-extra)}
+.tvrotas{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.tvrotas.mini{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:9px}
+.tvrota{border-radius:14px;padding:13px 16px;background:var(--surface);border:2px solid var(--line);display:flex;flex-direction:column;gap:5px;animation:tvIn .5s var(--ease) both}
+.tvrota b{font-size:18px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tvrota small{color:var(--ink-3);font-size:13px}
+.tvrota>span{font-size:16px;font-weight:600}.tvrota em{color:var(--st-nreal);font-style:normal}
+.tvrota.zero{border-color:color-mix(in srgb,var(--st-nreal) 70%,transparent);background:color-mix(in srgb,var(--st-nreal) 9%,var(--surface))}
+.tvrota.anda{border-color:color-mix(in srgb,var(--st-atr) 70%,transparent)}
+.tvrota.fech{border-color:var(--st-real);background:color-mix(in srgb,var(--st-real) 12%,var(--surface))}
+.tvrota.fechn{border-color:var(--st-extra)}
+.tvbar{height:12px;border-radius:8px;background:color-mix(in srgb,var(--ink-3) 18%,transparent);overflow:hidden;display:flex}
+.tvbar i{display:block;height:100%;background:var(--st-real);border-radius:8px;animation:cresceX 1s var(--ease) both;transform-origin:left}
+.tvbar.multi i{border-radius:0}
+.tvrota.zero .tvbar i{background:var(--st-nreal)}.tvrota.anda .tvbar i{background:var(--st-atr)}.tvrota.fechn .tvbar i{background:var(--st-extra)}
+.tvcols{display:grid;grid-template-columns:repeat(7,1fr);gap:14px;height:min(40vh,380px);align-items:end}
+.tvcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:6px}
+.tvcol .pilha{width:70%;display:flex;flex-direction:column-reverse;border-radius:8px 8px 3px 3px;overflow:hidden;min-height:4px;animation:cresceY .9s var(--ease) both;transform-origin:bottom}
+.tvcol .pilha i{display:block}
+.tvcol>span{font-size:16px;color:var(--ink-3)}.tvcol>b{font-size:18px}.tvcol>small{color:var(--ink-3);font-size:14px}
+.tvcol.hoje>b{color:var(--accent)}
+.tvlinha{display:grid;grid-template-columns:minmax(160px,22%) 1fr 130px;align-items:center;gap:18px;padding:9px 0}
+.tvlinha>b{font-size:20px}.tvlinha .tvbar{height:20px}.tvlinha>span{font-family:var(--f-display);font-size:30px;text-align:right}
+.tvcausas .tvlinha>span{font-size:22px;font-family:inherit;font-weight:600}
+.tvchips{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.tvchips span{border:1px solid var(--line);border-radius:20px;padding:5px 14px;font-size:16px}
+.tvpar{display:flex;flex-direction:column;gap:10px}
+.tvparada{display:grid;grid-template-columns:140px 1fr auto;gap:16px;align-items:center;padding:12px 16px;border-radius:12px;background:color-mix(in srgb,var(--st-nreal) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--st-nreal) 40%,transparent)}
+.tvparada b{font-size:20px}.tvparada span{display:flex;flex-direction:column;font-size:18px}.tvparada small{color:var(--ink-3);font-size:14px}
+.tvparada em{font-style:normal;font-family:var(--f-display);font-size:30px;color:var(--st-nreal)}
+.tvalertas{display:flex;flex-direction:column;gap:14px;max-width:1300px;margin:0 auto;width:100%}
+.tvalerta{display:flex;align-items:center;gap:18px;padding:20px 26px;border-radius:16px;background:var(--surface);border:1px solid var(--line);font-size:26px;font-weight:600;animation:tvIn .5s var(--ease) both}
+.tvalerta:nth-child(2){animation-delay:.08s}.tvalerta:nth-child(3){animation-delay:.16s}.tvalerta:nth-child(4){animation-delay:.24s}.tvalerta:nth-child(n+5){animation-delay:.32s}
+.tvalerta i{width:18px;height:18px;border-radius:50%;flex:none;background:var(--st-prog)}
+.tvalerta.bad i{background:var(--st-nreal);box-shadow:0 0 0 6px color-mix(in srgb,var(--st-nreal) 25%,transparent);animation:tvPisca 1.6s ease-in-out infinite}
+.tvalerta.warn i{background:var(--st-atr)}.tvalerta.ok i{background:var(--st-real)}.tvalerta.neu i{background:var(--focus)}
+@keyframes tvPisca{50%{box-shadow:0 0 0 12px transparent}}
+.tvvazio{text-align:center;font-size:24px;color:var(--ink-3);padding:40px}.tvvazio.ok{color:var(--st-real)}
+.tvrodape{display:flex;flex-direction:column;gap:10px;min-width:0}
+.tvpontos{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.tvpontos button{border:1px solid var(--line);background:transparent;border-radius:20px;padding:4px 14px;font-size:14px;color:var(--ink-3)}
+.tvpontos button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.tvprog{height:4px;border-radius:4px;background:color-mix(in srgb,var(--ink-3) 18%,transparent);overflow:hidden}
+.tvprog i{display:block;height:100%;background:var(--accent);transform-origin:left;animation:tvProg linear both}
+.tvprog.pausa i{animation-play-state:paused;opacity:.4}
+@keyframes tvProg{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.tvticker{overflow:hidden;white-space:nowrap;border-radius:10px;background:var(--rail);color:var(--rail-ink);padding:10px 0;font-size:20px}
+.tvtk{display:inline-block;padding-left:100%;animation:tvTicker linear infinite}
+.tvtk span{margin-right:60px}.tvtk span::before{content:"●";margin-right:12px;color:var(--st-prog)}
+.tvtk .bad::before{color:var(--st-nreal)}.tvtk .warn::before{color:var(--st-atr)}.tvtk .ok::before{color:var(--st-real)}.tvtk .neu::before{color:var(--accent)}
+@keyframes tvTicker{to{transform:translateX(-50%)}}
+.tvctl{position:fixed;top:14px;right:14px;display:flex;gap:6px;opacity:0;transition:opacity .3s;z-index:30;background:color-mix(in srgb,var(--surface) 90%,transparent);border:1px solid var(--line);border-radius:12px;padding:6px}
+body.tvmexe .tvctl,.tvctl:focus-within{opacity:1}
+.tvctl button,.tvctl a{min-width:42px;height:38px;border:0;border-radius:8px;background:var(--surface-2);color:var(--ink);font-size:18px;display:grid;place-items:center;padding:0 10px;text-decoration:none}
+body.tv:not(.tvmexe){cursor:none}
+.tvfesta{position:fixed;inset:0;z-index:60;display:grid;place-items:center;pointer-events:none;background:color-mix(in srgb,#05040f 45%,transparent);animation:tvFestaFim 7s ease both}
+.tvfesta-c{background:var(--surface);border-radius:28px;padding:40px 70px;text-align:center;box-shadow:0 30px 90px rgba(0,0,0,.5);border:3px solid var(--st-real);animation:tvFestaIn .7s cubic-bezier(.2,.9,.3,1.3) both}
+.tvfesta-c span{display:block;color:var(--st-real);font-size:24px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.tvfesta-c b{display:block;font-family:var(--f-display);font-size:72px;line-height:1.05;margin:8px 0}
+.tvfesta-c small{color:var(--ink-3);font-size:22px}
+.tvconf{position:absolute;inset:0;overflow:hidden}
+.tvconf i{position:absolute;top:-20px;left:calc(var(--x)*1%);width:12px;height:18px;background:hsl(var(--h) 85% 58%);animation:tvConf 3.2s var(--d) linear infinite;border-radius:2px}
+@keyframes tvConf{to{transform:translateY(110vh) rotate(720deg)}}
+@keyframes tvFestaIn{from{transform:scale(.5);opacity:0}}
+@keyframes tvFestaFim{0%,88%{opacity:1}100%{opacity:0}}
+.tvcfg{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){.tvcena,.tvanel,.tvrota,.tvalerta,.tvbar i,.tvcol .pilha{animation:none}.tvtk{animation-duration:0s;padding-left:0}.tvconf{display:none}}
+@media (max-width:1100px){.tvhoje,.tvefet,.tvequip,.tvsem{grid-template-columns:1fr}.tvtit b{font-size:34px}.tvrel b{font-size:40px}}
+.tvcena{overflow:hidden}
+.tvsem{grid-template-rows:minmax(0,1fr) auto}
+.tvsem .tvcard{display:flex;flex-direction:column;min-height:0}
+.tvsem .tvcols{flex:1;height:auto;min-height:120px}
+.tvsem .tvanel{width:min(260px,26vh)}
+@media (max-height:820px){.tvx{gap:12px;padding:14px 22px 10px}.tvcard{padding:14px 20px}.tvcard h3{font-size:20px;margin-bottom:8px}.tvlinha{padding:3px 0}.tvlinha>b{font-size:17px}.tvlinha .tvbar{height:14px}.tvlinha>span{font-size:22px}.tvnums b{font-size:32px}.tvnums span{font-size:13px}.tvtit b{font-size:36px}.tvrel b{font-size:44px}.tvtopo .logo{height:34px}.tvticker{font-size:16px;padding:6px 0}.tvarea>b{font-size:20px}.tvrota{padding:9px 12px}.tvalerta{font-size:20px;padding:14px 20px}.tvparada{padding:8px 12px}.tvparada em{font-size:24px}}
+.tvrotas.mini .tvrota{padding:8px 11px;gap:3px}.tvrotas.mini .tvrota b{font-size:15px}.tvrotas.mini .tvrota small{font-size:11px}.tvrotas.mini .tvbar{height:8px}.tvrotas.mini .tvrota>span{font-size:14px}
+.tvrotas.micro{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px}.tvrotas.micro .tvrota{padding:6px 9px}.tvrotas.micro .tvrota b{font-size:13px}
 </style>
 </head>
 <body>
