@@ -657,7 +657,7 @@ function renderTop() {
   if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if (v.id === 'resumo' && resTipo() !== 'ativ') { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Dias de hora extra por pessoa e por origem · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe'].includes(UI.view);
   const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
@@ -916,7 +916,7 @@ function removerCobertura(ausId, dt) {
   const sid = cobertoPor(ausId, dt); if (!sid) return;
   DB.setSitExtra('cob', ausId + '|' + dt, null);
   const s = COLABS.find(x => x.id === sid);
-  if (s && DB.sit(sid + '|' + dt) === 'HE' && folgaEscala(s, dt)) { DB.setSit(sid + '|' + dt, null); DB.setSitExtra('he', sid + '|' + dt, null); }
+  if (s && DB.sit(sid + '|' + dt) === 'HE' && folgaEscala(s, dt)) { DB.setSit(sid + '|' + dt, null); (DB.setSitExtra('he', sid + '|' + dt, null), DB.setSitExtra('hed', sid + '|' + dt, null)); }
 }
 function opcoesSubst(c, dt) {
   return () => COLABS.filter(x => x.id !== c.id).map(x => {
@@ -951,7 +951,7 @@ function lancarEfetivo(key) {
     else extras.push({ t: 'Definir substituto', d: 'Ninguém cobrindo', v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
   }
   if (cobre) extras.push({ t: `Deixar de cobrir ${nomeDe(cobre)}`, v: 'sairCob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
-  if (sx.v === 'HE') extras.push({ t: 'Hora extra a pedido de…', d: info.he ? `Agora: ${HE_ORIG[info.he]}` : 'Não informado', v: 'heo', extra: true, ic: '<span class="sit HE">HE</span>' });
+  if (sx.v === 'HE') extras.push({ t: 'Hora extra a pedido de…', d: info.he ? `Agora: ${HE_ORIG[info.he]}` : 'Não informado', v: 'heo', extra: true, ic: '<span class="sit HE">HE</span>' }, { t: 'Horário da hora extra', d: textoHE(info.hed) || 'Informar início e fim', v: 'heh', extra: true, ic: `<span class="opt-ic">${I.relogio}</span>` });
   const k = (pd(dt).getDay() + 6) % 7; const domingo = add(dt, 6 - k);
   const depois = []; for (let i = 1; i <= 30; i++) depois.push(add(dt, i));
   const fimToque = () => { render(); const nb = document.querySelector(`[data-sit="${CSS.escape(key)}"]`); if (nb) { nb.focus({ preventScroll: true }); M.pulsar(nb); } };
@@ -964,15 +964,16 @@ function lancarEfetivo(key) {
       if (v === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`); fimToque(); toast('Substituto removido'); return; }
       if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
       if (v === 'heo') return passoHE(c, [dt], null, fimToque);
+      if (v === 'heh') return horarioHE(c, [dt], fimToque);
     },
     aoEscolher: (v, dias) => {
       const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
       // grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não
       const gravar = d => { if (!v) return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
-      dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') DB.setSitExtra('he', id + '|' + d, null); });
+      dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); });
       const nome = !v ? 'automático' : SIT_NOME[v];
       DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
-      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); DB.setSitExtra('he', id + '|' + d, inf.he || null); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
+      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
       fimToque();
       if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque);
       if (v === 'HE') return passoHE(c, dias, desfazer, fimToque);
@@ -1003,7 +1004,7 @@ function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
 function passoHE(c, dias, desfazer, fimToque) {
   sheet('Hora extra a pedido de quem?', `${esc(title(c.nome))} · ${dias.length > 1 ? `${dias.length} dias` : ddmm(dias[0])}`, [...Object.entries(HE_ORIG).map(([k, n]) => ({ t: n, v: k })), { t: 'Não informar agora', v: '' }], o => {
     if (!o.v) { if (desfazer) toast('Hora extra lançada', { desfazer }); return; }
-    dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined);
+    dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined); horarioHE(c, dias, fimToque);
   });
 }
 function sitPop(btn) {
@@ -1016,7 +1017,7 @@ function sitPop(btn) {
   const extras = [
     !sx.auto && AUS_COBRIVEL.has(cur) ? (info.cob ? `<div class="sp-cob">${I.swap} Coberto por <b>${esc(nomeDe(info.cob))}</b> <button type="button" class="btn ghost link" data-spx="cob">trocar</button> · <button type="button" class="btn ghost link" data-spx="semcob">remover</button></div>` : `<div class="sp-cob none">Ninguém cobrindo · <button type="button" class="btn ghost link" data-spx="cob">definir substituto</button></div>`) : '',
     cobre ? `<div class="sp-cob">${I.swap} Cobrindo <b>${esc(nomeDe(cobre))}</b> <button type="button" class="btn ghost link" data-spx="sairCob">remover</button></div>` : '',
-    cur === 'HE' ? `<div class="sp-cob"><span>Hora extra a pedido de:</span>${botoesHE(info.he)}</div>` : ''
+    cur === 'HE' ? `<div class="sp-cob"><span>Hora extra a pedido de:</span>${botoesHE(info.he)}<button type="button" class="btn sm ghost" data-spx="heh">${I.relogio} ${textoHE(info.hed) || 'Informar início e fim'}</button></div>` : ''
   ].join('');
   pop.innerHTML = `${cab}
     <div class="sp-esc">${prev ? (prev.trab ? `Pela escala: <b>trabalha</b>${turmaDe(c) ? ` (turma ${esc(turmaDe(c))})` : ''}` : `Pela escala: <b>folga</b> · ${esc(prev.motivo)}`) : `Sem turma definida: a escala não marca folga sozinha`}${manual ? ' · <button type="button" class="btn ghost link" data-sp="__esc">voltar ao da escala</button>' : ''}</div>
@@ -1058,17 +1059,18 @@ function sitPop(btn) {
     btn = document.querySelector(`[data-sit="${CSS.escape(key)}"]`) || btn;
     pop.innerHTML = `${cab}<div class="sp-ok">${I.ok} Lançado: hora extra${dias.length > 1 ? ` em ${dias.length} dias` : ''}</div><p class="small m0">A pedido de:</p>${botoesHE(DB.sitInfo(key).he)}<button type="button" class="btn ghost" data-spx="fechar">Não informar agora</button>`;
     posicionar(pop, btn);
-    pop._he = o => { dias.forEach(d => DB.setSitExtra('he', id + '|' + d, o)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dt)} a pedido da ${HE_ORIG[o]}`); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[o]}`, { desfazer }); };
+    pop._he = o => { dias.forEach(d => DB.setSitExtra('he', id + '|' + d, o)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dt)} a pedido da ${HE_ORIG[o]}`); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[o]}`, { desfazer }); horarioHE(c, dias, fimToque); };
     const b = pop.querySelector('[data-heo]'); if (b) b.focus();
   };
 
   pop.addEventListener('click', e => {
     const heo = e.target.closest('[data-heo]');
-    if (heo && !heo.dataset.sel) { if (pop._he) return pop._he(heo.dataset.heo); DB.setSitExtra('he', key, heo.dataset.heo); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[heo.dataset.heo]}`); return; }
+    if (heo && !heo.dataset.sel) { if (pop._he) return pop._he(heo.dataset.heo); DB.setSitExtra('he', key, heo.dataset.heo); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[heo.dataset.heo]}`); horarioHE(c, [dt], fimToque); return; }
     const x = e.target.closest('[data-spx]');
     if (x) {
       const a = x.dataset.spx;
       if (a === 'fechar') { fecharSitPop(); fimToque(); return; }
+      if (a === 'heh') { fecharSitPop(); horarioHE(c, [dt], fimToque); return; }
       if (a === 'okCob') { pop._cob(); return; }
       if (a === 'cob') { passoCobertura([dt]); return; }
       if (a === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`); fecharSitPop(); fimToque(); toast('Substituto removido'); return; }
@@ -1080,10 +1082,10 @@ function sitPop(btn) {
     const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
     // Grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não.
     const gravar = d => { if (v === '__esc') return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
-    dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') DB.setSitExtra('he', id + '|' + d, null); });
+    dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); });
     const nome = v === '__esc' ? 'como na escala' : SIT_NOME[v];
     DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
-    const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); DB.setSitExtra('he', id + '|' + d, inf.he || null); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
+    const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
     // ausência num dia de trabalho: pergunta quem cobre · hora extra: pergunta a pedido de quem
     if (AUS_COBRIVEL.has(v) && gravar(dt)) { render(); passoCobertura(dias, desfazer); return; }
     if (v === 'HE') { render(); passoHE(dias, desfazer); return; }
@@ -1369,7 +1371,7 @@ function vEsDia() {
     const dt = add(UI.ini, k); const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
     const per = ['P', 'ATR', 'HE'].includes(v) ? periodoDe(c, dt) : '';
-    const tt = (x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v) + (per ? ` · turno ${PERIODO[per].toLowerCase()}` : '') + (v === 'HE' && inf.he ? ` a pedido da ${HE_ORIG[inf.he]}` : '') + (cob ? ` · coberto por ${nomeDe(cob)}` : (!x.auto && AUS_COBRIVEL.has(v) ? ' · sem substituto' : '')) + (cobre ? ` · cobrindo ${nomeDe(cobre)}` : '');
+    const tt = (x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v) + (per ? ` · turno ${PERIODO[per].toLowerCase()}` : '') + (v === 'HE' && inf.he ? ` a pedido da ${HE_ORIG[inf.he]}` : '') + (v === 'HE' && inf.hed ? ' · ' + textoHE(inf.hed) : '') + (cob ? ` · coberto por ${nomeDe(cob)}` : (!x.auto && AUS_COBRIVEL.has(v) ? ' · sem substituto' : '')) + (cobre ? ` · cobrindo ${nomeDe(cobre)}` : '');
     return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${x.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${cob || cobre ? ' cobm' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${esc(tt)}" title="${esc(tt)}">${v === 'P' ? I.ok : v}${v === 'HE' && inf.he ? `<sup>${HE_SIG[inf.he]}</sup>` : ''}${cob || cobre ? '<i class="cobi" aria-hidden="true">⇄</i>' : ''}${marcaPer(per)}</button></td>`;
   };
   // agrupa por rota quando mostra várias rotas; com muitas rotas, os grupos começam fechados (toque para abrir)
@@ -1631,22 +1633,73 @@ function vResumo() {
 
 /* ---------------- BANCO DE HORAS EXTRAS ---------------- */
 // Dias de hora extra (código HE no Efetivo diário) por pessoa no mês, por origem; horas = dias × horas por dia (ajustável).
+// Detalhe da hora extra: início, fim, intervalo, motivo e observação (situacao.hed). Sem horário, a conta usa a estimativa por dia.
+const MOTIVOS_HE = ['Cobertura de ausência', 'Demanda operacional', 'Parada ou emergência', 'Limpeza ou serviço programado', 'Treinamento', 'Outro'];
+const minDe = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+const horasHE = d => { if (!d) return null; const a = minDe(d.ini), b = minDe(d.fim); if (a == null || b == null) return null; const t = ((b - a + 1440) % 1440 || 1440) - (+d.int || 0); return t > 0 ? Math.round(t / 6) / 10 : null; };
+const fmtH = h => (h == null ? '—' : `${Math.floor(h)}h${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
+const textoHE = d => (d && d.ini && d.fim ? `${d.ini} às ${d.fim}${+d.int ? ` (−${d.int} min)` : ''} · ${fmtH(horasHE(d))}` : '');
+function horarioHE(c, dias, fim) {
+  if (!dias.length) return;
+  const k0 = c.id + '|' + dias[0]; const d0 = DB.sitInfo(k0).hed || {};
+  const ehOutro = d0.mot && !MOTIVOS_HE.includes(d0.mot);
+  formSheet('Horário da hora extra', `${esc(title(c.nome))} · ${dias.length > 1 ? `${dias.length} dias (${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}) · o mesmo horário em todos` : ddmm(dias[0])}`,
+    `<div class="g2eq"><label class="sel"><span>Início</span><input class="in" type="time" id="heIni" required value="${esc(d0.ini || '')}"></label><label class="sel"><span>Fim</span><input class="in" type="time" id="heFim" required value="${esc(d0.fim || '')}"></label></div>
+    <label class="sel"><span>Intervalo (minutos, se houve)</span><input class="in" type="number" id="heInt" min="0" max="240" step="5" value="${+d0.int || 0}"></label>
+    <p class="hetot" id="heTot" role="status"></p>
+    <label class="sel"><span>Motivo</span><select class="in" id="heMot">${MOTIVOS_HE.map(m => `<option ${m === (ehOutro ? 'Outro' : d0.mot) ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+    <label class="sel"><span>Observação (opcional)</span><input class="in" id="heObs" maxlength="200" placeholder="Ex.: cobriu a falta do turno da noite na DG1" value="${esc(ehOutro ? d0.mot : d0.obs || '')}"></label>
+    <p class="muted small m0">Quando o fim é menor que o início, conta como virada para o dia seguinte.</p>`, 'Salvar horário', async () => {
+      const x = { ini: $('heIni').value, fim: $('heFim').value, int: Math.max(0, +$('heInt').value || 0), mot: $('heMot').value, obs: ($('heObs').value || '').trim().slice(0, 200) };
+      const h = horasHE(x); if (h == null) throw new Error('Informe o início e o fim.'); if (h > 16) throw new Error('Mais de 16 horas de hora extra num dia: confira o horário.');
+      const v = { ...x, por: ME.uid, nome: ME.nome || ME.login || '', em: new Date().toISOString() };
+      dias.forEach(d => DB.setSitExtra('hed', c.id + '|' + d, v));
+      DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} das ${x.ini} às ${x.fim} (${fmtH(h)})`);
+      toast(`Hora extra · ${x.ini} às ${x.fim} · ${fmtH(h)}`); if (fim) fim(); else render();
+    });
+  const atual = () => { const h = horasHE({ ini: $('heIni').value, fim: $('heFim').value, int: $('heInt').value }); const t = $('heTot'); if (t) t.innerHTML = h == null ? 'Informe o início e o fim' : `Total: <b>${fmtH(h)}</b>${h > 16 ? ' · confira, passou de 16 h' : ''}`; };
+  ['heIni', 'heFim', 'heInt'].forEach(i => $(i) && $(i).addEventListener('input', atual)); atual();
+}
 const heCfg = () => ({ ciclo: 12, adm: 8, limite: 0, ...((DB.cache.config && DB.cache.config.he) || {}) });
-function vEsHe() {
-  const area = areaScope(); const cfg = heCfg(); const m = UI.mes;
+// Registros de hora extra do mês: um por pessoa e dia, com horário (quando informado) e as horas.
+function registrosHE(area, m) {
+  const cfg = heCfg(); const out = [];
   const dias = []; for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
-  const linhas = colabsDa(area).map(c => { const x = { c, DIKMA: 0, ARCELOR: 0, '': 0 }; dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') x[DB.sitInfo(c.id + '|' + d).he || '']++; }); x.dias = x.DIKMA + x.ARCELOR + x['']; const r = escala().regimes[regimeDe(c)]; x.hd = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm; x.horas = x.dias * x.hd; return x; }).filter(x => x.dias).sort((a, b) => b.dias - a.dias || a.c.nome.localeCompare(b.c.nome));
-  const tot = k => linhas.reduce((n, x) => n + x[k], 0); const acima = cfg.limite ? linhas.filter(x => x.dias > cfg.limite).length : 0;
-  const ed = admMod();
-  return `<div class="mini"><div><b class="num">${tot('dias')}</b><span>Dias de hora extra</span></div><div><b class="num">${tot('horas').toLocaleString('pt-BR')}</b><span>Horas (estimadas)</span></div><div><b class="num">${tot('DIKMA')}</b><span>A pedido da Dikma</span></div><div><b class="num">${tot('ARCELOR')}</b><span>A pedido da ArcelorMittal</span></div><div><b class="num">${linhas.length}</b><span>Pessoas</span></div>${cfg.limite ? `<div><b class="num" style="color:${acima ? 'var(--st-nreal)' : 'inherit'}">${acima}</b><span>Acima do limite (${cfg.limite} dias)</span></div>` : ''}</div>
-  <div class="card"><header><h2>Por pessoa</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · horas = dias × ${cfg.ciclo} h (turno) ou ${cfg.adm} h (administrativo)</p>${!framed && !isMobile() && linhas.length ? `<span class="r"><button class="btn sm" data-act="expHe">${I.dl} Exportar Excel</button></span>` : ''}</header>${linhas.length ? `<div class="tw"><table><thead><tr><th>Colaborador</th><th>Rota</th><th class="r">Dikma</th><th class="r">ArcelorMittal</th><th class="r">Sem origem</th><th class="r">Dias</th><th class="r">Horas</th></tr></thead><tbody>${linhas.map(x => `<tr${cfg.limite && x.dias > cfg.limite ? ' class="acima"' : ''}><td><b>${esc(title(x.c.nome))}</b></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td><td class="r num">${x.DIKMA || '·'}</td><td class="r num">${x.ARCELOR || '·'}</td><td class="r num">${x[''] || '·'}</td><td class="r num"><b>${x.dias}</b>${cfg.limite && x.dias > cfg.limite ? ' <span class="pill bad">acima</span>' : ''}</td><td class="r num">${x.horas}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><div class="empty">Nenhuma hora extra lançada neste mês.</div></div>'}</div>
+  for (const c of colabsDa(area)) {
+    const r = escala().regimes[regimeDe(c)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm;
+    for (const d of dias) {
+      const key = c.id + '|' + d; if (DB.sit(key) !== 'HE') continue;
+      const inf = DB.sitInfo(key); const h = horasHE(inf.hed);
+      out.push({ c, d, key, orig: inf.he || '', det: inf.hed, horas: h, est, conta: h == null ? est : h, per: periodoDe(c, d) });
+    }
+  }
+  return out.sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : a.c.nome.localeCompare(b.c.nome)));
+}
+function vEsHe() {
+  const area = areaScope(); const cfg = heCfg(); const m = UI.mes; const ed = admMod();
+  const regs = registrosHE(area, m);
+  const por = new Map(); for (const x of regs) { const p = por.get(x.c.id) || { c: x.c, dias: 0, DIKMA: 0, ARCELOR: 0, '': 0, hInf: 0, hEst: 0, semH: 0 }; p.dias++; p[x.orig]++; if (x.horas == null) { p.hEst += x.est; p.semH++; } else p.hInf += x.horas; por.set(x.c.id, p); }
+  const linhas = [...por.values()].map(x => ({ ...x, total: x.hInf + x.hEst })).sort((a, b) => b.total - a.total || a.c.nome.localeCompare(b.c.nome));
+  const T = { dias: regs.length, hInf: regs.reduce((n, x) => n + (x.horas || 0), 0), hEst: regs.filter(x => x.horas == null).reduce((n, x) => n + x.est, 0), semH: regs.filter(x => x.horas == null).length, DIKMA: regs.filter(x => x.orig === 'DIKMA').length, ARCELOR: regs.filter(x => x.orig === 'ARCELOR').length };
+  const acima = cfg.limite ? linhas.filter(x => x.dias > cfg.limite).length : 0;
+  const soSem = !!UI.heSemH; const lista = soSem ? regs.filter(x => x.horas == null) : regs;
+  const LIM = UI.heMais || 60;
+  const mot = {}; regs.forEach(x => { const k = x.det ? (MOTIVOS_HE.includes(x.det.mot) ? x.det.mot : 'Outro') : 'Sem horário informado'; mot[k] = (mot[k] || 0) + (x.horas == null ? x.est : x.horas); });
+  const motL = Object.entries(mot).sort((a, b) => b[1] - a[1]); const motMx = motL.length ? motL[0][1] : 1;
+  return `<div class="mini"><div><b class="num">${fmtH(T.hInf + T.hEst)}</b><span>Horas no mês</span></div><div><b class="num">${fmtH(T.hInf)}</b><span>Com horário informado</span></div><div><b class="num" style="color:${T.semH ? 'var(--st-atr)' : 'inherit'}">${T.semH}</b><span>Sem horário (${fmtH(T.hEst)} estimadas)</span></div><div><b class="num">${T.dias}</b><span>Registros</span></div><div><b class="num">${T.DIKMA}</b><span>A pedido da Dikma</span></div><div><b class="num">${T.ARCELOR}</b><span>A pedido da ArcelorMittal</span></div>${cfg.limite ? `<div><b class="num" style="color:${acima ? 'var(--st-nreal)' : 'inherit'}">${acima}</b><span>Acima do limite (${cfg.limite} dias)</span></div>` : ''}</div>
+  <div class="card"><header><h2>Registros</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · horário de início e fim de cada hora extra${canEditSit(area === 'TODAS' ? null : area) || todasAreas() ? ' · toque em “Informar” ou no horário para ajustar' : ''}</p><span class="r row-gap"><label class="btn sm"><input type="checkbox" id="heSemH" ${soSem ? 'checked' : ''}> Só sem horário</label>${!framed && !isMobile() && regs.length ? `<button class="btn sm" data-act="expHe">${I.dl} Exportar Excel</button>` : ''}</span></header>
+  ${lista.length ? `<div class="tw"><table class="hetab"><thead><tr><th>Data</th><th>Colaborador</th><th>Rota</th><th>Início</th><th>Fim</th><th class="r">Horas</th><th>A pedido de</th><th>Motivo</th></tr></thead><tbody>${lista.slice(0, LIM).map(x => { const pode = canEditSit(x.c.area); const hr = x.det && x.det.ini ? `${esc(x.det.ini)}` : ''; return `<tr${x.horas == null ? ' class="semh"' : ''}><td class="num">${DAYS[(pd(x.d).getDay() + 6) % 7]} ${ddmm(x.d)}</td><td><b>${esc(title(x.c.nome))}</b>${x.per ? ` <span class="tag">${x.per === 'N' ? 'noite' : 'dia'}</span>` : ''}</td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.det && x.det.ini ? `<td class="num">${pode ? `<button class="btn ghost link" data-heh="${esc(x.key)}">${hr}</button>` : hr}</td><td class="num">${esc(x.det.fim)}${+x.det.int ? ` <small class="muted">−${x.det.int} min</small>` : ''}</td><td class="r num"><b>${fmtH(x.horas)}</b></td>` : `<td colspan="2">${pode ? `<button class="btn sm" data-heh="${esc(x.key)}">${I.relogio} Informar</button>` : '<span class="muted">sem horário</span>'}</td><td class="r num muted" title="Estimado: ${x.est} h por dia">~${fmtH(x.est)}</td>`}<td>${x.orig ? HE_ORIG[x.orig] : '<span class="muted">—</span>'}</td><td class="small">${x.det ? esc(x.det.mot || '') + (x.det.obs ? `<div class="muted">${esc(x.det.obs)}</div>` : '') : ''}</td></tr>`; }).join('')}</tbody></table></div>${lista.length > LIM ? `<div class="body"><button class="btn" data-act="heMais">Mostrar mais ${Math.min(100, lista.length - LIM)}</button></div>` : ''}` : `<div class="body"><div class="empty">${soSem ? 'Todas as horas extras do mês têm horário informado.' : 'Nenhuma hora extra lançada neste mês.'}</div></div>`}</div>
+  <div class="grid2"><div class="card"><header><h2>Por pessoa</h2><p>Horas informadas + estimadas para os dias sem horário (${cfg.ciclo} h turno · ${cfg.adm} h administrativo)</p></header>${linhas.length ? `<div class="tw"><table><thead><tr><th>Colaborador</th><th class="r">Dias</th><th class="r">Informadas</th><th class="r">Estimadas</th><th class="r">Total</th></tr></thead><tbody>${linhas.map(x => `<tr${cfg.limite && x.dias > cfg.limite ? ' class="acima"' : ''}><td><b>${esc(title(x.c.nome))}</b><div class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</div></td><td class="r num">${x.dias}${cfg.limite && x.dias > cfg.limite ? ' <span class="pill bad">acima</span>' : ''}</td><td class="r num">${x.hInf ? fmtH(x.hInf) : '·'}</td><td class="r num muted">${x.hEst ? '~' + fmtH(x.hEst) : '·'}</td><td class="r num"><b>${fmtH(x.total)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><div class="empty">Ninguém com hora extra neste mês.</div></div>'}</div>
+  <div class="card"><header><h2>Por motivo</h2><p>Horas no mês</p></header><div class="body">${motL.length ? `<div class="bars">${motL.map(([k, h]) => `<div class="barrow"><span class="n">${esc(k)}</span><div class="stack"><i style="width:${h / motMx * 100}%;background:${k === 'Sem horário informado' ? 'var(--st-prog)' : 'var(--st-extra)'}"></i></div><span class="p num">${fmtH(h)}</span></div>`).join('')}</div>` : '<div class="empty">Sem horas extras.</div>'}</div></div></div>
   <div class="card"><header><h2>Ajustes</h2><p>${ed ? 'Valem para todos' : 'Só o administrador ou o gestor altera'}</p></header><div class="body row-gap"><label class="sel"><span>Horas por dia · turno</span><input class="in numin" type="number" min="1" max="24" data-hecfg="ciclo" value="${cfg.ciclo}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Horas por dia · administrativo</span><input class="in numin" type="number" min="1" max="24" data-hecfg="adm" value="${cfg.adm}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Limite de dias no mês (0 = sem limite)</span><input class="in numin" type="number" min="0" max="31" data-hecfg="limite" value="${cfg.limite}" ${ed ? '' : 'disabled'}></label></div></div>`;
 }
 function exportHe() {
-  const area = areaScope(); const cfg = heCfg(); const m = UI.mes; const dias = []; for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
-  const linhas = [['Nome', 'Área', 'Rota', 'Dikma', 'ArcelorMittal', 'Sem origem', 'Dias', 'Horas (estimadas)']];
-  colabsDa(area).forEach(c => { const x = { DIKMA: 0, ARCELOR: 0, '': 0 }; dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') x[DB.sitInfo(c.id + '|' + d).he || '']++; }); const n = x.DIKMA + x.ARCELOR + x['']; if (!n) return; const r = escala().regimes[regimeDe(c)]; linhas.push([title(c.nome), AREA_S[c.area] || c.area, c.rota, x.DIKMA, x.ARCELOR, x[''], n, n * (r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm)]); });
-  baixarExcel(`horas-extras-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${m}`, [{ nome: 'Horas extras ' + m, linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+  const area = areaScope(); const m = UI.mes; const regs = registrosHE(area, m);
+  const det = [['Data', 'Nome', 'Área', 'Rota', 'Turno', 'Início', 'Fim', 'Intervalo (min)', 'Horas', 'Horas estimadas (sem horário)', 'A pedido de', 'Motivo', 'Observação', 'Registrado por']];
+  regs.slice().reverse().forEach(x => det.push([dataBR(x.d), title(x.c.nome), AREA_S[x.c.area] || x.c.area, x.c.rota, x.per === 'N' ? 'Noite' : x.per === 'D' ? 'Dia' : '', x.det ? x.det.ini : '', x.det ? x.det.fim : '', x.det ? +x.det.int || 0 : '', x.horas == null ? '' : x.horas, x.horas == null ? x.est : '', x.orig ? HE_ORIG[x.orig] : '', x.det ? x.det.mot || '' : '', x.det ? x.det.obs || '' : '', x.det ? title(x.det.nome || '') : '']));
+  const por = new Map(); for (const x of regs) { const p = por.get(x.c.id) || [title(x.c.nome), AREA_S[x.c.area] || x.c.area, x.c.rota, 0, 0, 0, 0]; p[3]++; if (x.horas == null) p[5] += x.est; else p[4] += x.horas; p[6] = Math.round((p[4] + p[5]) * 10) / 10; por.set(x.c.id, p); }
+  const res = [['Nome', 'Área', 'Rota', 'Dias', 'Horas informadas', 'Horas estimadas', 'Total de horas'], ...por.values()];
+  baixarExcel(`horas-extras-${SETS[SK].curto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()}-${m}`, [{ nome: 'Registros ' + m, linhas: det }, { nome: 'Por pessoa ' + m, linhas: res }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
 
 /* ---------------- PENDÊNCIAS ---------------- */
@@ -2000,6 +2053,7 @@ function afterRender() {
   on('fRota', 'change', e => { UI.rota = e.target.value; UI.more = 0; render(); });
   on('fTipo', 'change', e => { UI.tipo = e.target.value; render(); });
   on('fPend', 'change', e => { UI.soPend = e.target.checked; render(); });
+  on('heSemH', 'change', e => { UI.heSemH = e.target.checked; UI.heMais = 0; render(); });
   on('fQ', 'input', e => { UI.q = e.target.value; clearTimeout(window._qt); window._qt = setTimeout(schedule, 250); });
   on('escQ', 'input', e => { UI.escQ = e.target.value; filtrarLista($('escLista'), e.target.value); });
   on('fEQ', 'input', e => { UI.eQ = e.target.value; clearTimeout(window._eqt); window._eqt = setTimeout(schedule, 180); });
@@ -2087,6 +2141,7 @@ document.addEventListener('click', async e => {
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
   if (d.goescala !== undefined) { irEscala(d.goescala); return; }
+  if (d.heh) { const [id, dt] = d.heh.split('|'); const c = COLABS.find(x => x.id === id); if (c && canEditSit(c.area)) horarioHE(c, [dt]); return; }
   if (d.tirafp) { const [i, k] = d.tirafp.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc) tirarFora(doc, i, k); return; }
   if (d.rtipo) { UI.resTipo = d.rtipo; render(); return; }
   if (d.rsem) { UI.rIni = add(UI.rIni || UI.ini || CUR_WEEK, 7 * +d.rsem); if (UI.rIni > CUR_WEEK) UI.rIni = CUR_WEEK; render(); return; }
@@ -2164,6 +2219,7 @@ document.addEventListener('click', async e => {
     case 'cancel': UI.confirm = null; render(); break;
     case 'askAll': UI.confirm = 'all'; render(); break;
     case 'expHe': exportHe(); break;
+    case 'heMais': UI.heMais = (UI.heMais || 60) + 100; render(); break;
     case 'novaAcao': novaAcaoSheet(d.k); break;
     case 'acaoSt': { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) break; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); break; }
     case 'aprv': { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } break; }

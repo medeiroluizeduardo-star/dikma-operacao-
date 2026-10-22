@@ -155,8 +155,8 @@ export async function setForaProg(docId, pid, k, str, info) {
   const w = cache.semanas[docId]; w.s[pid] = str; w.fp = w.fp || {}; const key = pid + '|' + k; if (info) w.fp[key] = info; else delete w.fp[key];
   Object.assign(w, toLocal(docId, w)); changed();
 }
-export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '' }; };
-export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {} };
+export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null }; };
+export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {} };
 export async function setSitExtra(campo, key, val) { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x[campo] ||= {}); if (val) o[key] = val; else delete o[key]; changed(); }
 export async function salvarAcao(id, dados) {
   const i = id || 'ac' + Date.now().toString(36); const x = id ? { ...dados, atualizadoEm: new Date().toISOString() } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome };
