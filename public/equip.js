@@ -254,6 +254,11 @@ export function criarEquip(X) {
   // Local da atividade: a área das Atividades onde o equipamento trabalhou (filtra o Modo TV de cada área).
   const setDoEq = a => (/BATERIA|TRILHO|CDQ/i.test(a || '') ? 'bateria' : 'patio');
   const opcoesSetor = (areaEq, atual) => `<option value="">Não informado</option>${SETS[setDoEq(areaEq)].areas.map(a => `<option value="${esc(a)}" ${a === atual ? 'selected' : ''}>${esc(AREA_S[a] || a)}</option>`).join('')}`;
+  // Área de cada equipamento da frota: a do cadastro; sem cadastro, a do último lançamento (90 dias).
+  function frotaArea(f) {
+    const desde = add(TODAY, -90); const ult = E().lanc.filter(l => l.eq === f.id && l.data >= desde).sort((a, b) => (a.data < b.data ? 1 : -1))[0];
+    return { area: f.area || (ult && ult.area) || '', setor: f.setor || (ult && ult.setor) || '', auto: !f.area };
+  }
   function lancForm(l, pre) {
     const novo = !l; l = l || { data: U.dia, eq: '', op: (pre && pre.op) || '', area: E().config.areas[0] || '', status: 'EM OPERAÇÃO', ini: '', fim: '', he: 0, sub: '', obs: '' };
     const dia = () => ($('flData') && $('flData').value) || l.data;
@@ -485,7 +490,9 @@ export function criarEquip(X) {
     h += `<div class="card"><header><h2>Escala do mês</h2><p>● lançado · ! escalado sem lançamento · · escalado · vazio = folga · siglas = situação</p></header><div class="tw" id="eOEsc"><table class="escala"><thead><tr><th>Operador</th>${dias.map(d => `<th class="c ${d === TODAY ? 'today' : ''}">${d.slice(8)}</th>`).join('')}</tr></thead><tbody>
       ${opsF.map(o => `<tr data-k="${esc(kOp(o))}" ${casa(kOp(o), q) ? '' : 'hidden'}><td class="nowrap"><b>${esc(short(o.nome))}</b> <span class="muted small">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></td>${dias.map(d => cel(o, d)).join('')}</tr>`).join('')}
       </tbody></table></div></div>
-      <div class="card"><header><h2>Frota</h2><p>${E().cad.frota.length} equipamentos</p>${isAdmin() || podeEditar() ? `<span class="r"><button class="btn" data-e="novoEq">${I.plus} Equipamento</button></span>` : ''}</header><div class="body"><div class="rchips">${E().cad.frota.map(f => `<span class="rchip"><b class="mono">${esc(f.id)}</b><span class="c">${esc(title(f.tipo))}</span>${isAdmin() ? `<button class="btn ghost danger mini-x" data-e="delEq" data-id="${esc(f.id)}" aria-label="Remover ${esc(f.id)}">✕</button>` : ''}</span>`).join('')}</div></div></div>`;
+      ${(() => { const ed = isAdmin() || podeEditar(); const gr = new Map(); for (const f of E().cad.frota) { const x = frotaArea(f); const k = x.area || ''; if (!gr.has(k)) gr.set(k, []); gr.get(k).push({ f, x }); }
+        const ordem = [...E().config.areas, ''].filter(k => gr.has(k)).concat([...gr.keys()].filter(k => k && !E().config.areas.includes(k)));
+        return `<div class="card"><header><h2>Frota</h2><p>${E().cad.frota.length} equipamentos · por área${ed ? ' · toque no equipamento para definir a área e o local' : ''}</p>${ed ? `<span class="r"><button class="btn" data-e="novoEq">${I.plus} Equipamento</button></span>` : ''}</header><div class="body frotag">${ordem.map(k => `<div class="frota-g"><b>${k ? esc(title(k)) : 'Sem área'} <span class="muted small">· ${gr.get(k).length} equipamento${gr.get(k).length > 1 ? 's' : ''}</span></b><div class="rchips">${gr.get(k).map(({ f, x }) => `<span class="rchip${x.auto && x.area ? ' auto' : ''}">${ed ? `<button type="button" class="btn ghost link" data-e="eqArea" data-id="${esc(f.id)}" title="${x.auto && x.area ? 'Área pelo último lançamento · toque para fixar' : 'Definir área e local'}">` : ''}<b class="mono">${esc(f.id)}</b><span class="c">${esc(title(f.tipo))}${x.setor ? ' · ' + esc(AREA_S[x.setor] || x.setor) : ''}</span>${ed ? '</button>' : ''}${isAdmin() ? `<button class="btn ghost danger mini-x" data-e="delEq" data-id="${esc(f.id)}" aria-label="Remover ${esc(f.id)}">✕</button>` : ''}</span>`).join('')}</div></div>`).join('')}<p class="muted small m0">Em itálico: área pelo último lançamento (ainda não fixada no cadastro). O Modo TV de cada área conta os equipamentos daqui.</p></div></div>`; })()}`;
     return h;
   }
   function opForm(nome) {
@@ -657,6 +664,15 @@ export function criarEquip(X) {
         const id = $('neId').value.trim().toUpperCase(); if (!id) throw new Error('Informe a identificação.'); if (E().cad.frota.some(f => f.id === id)) throw new Error('Já cadastrado.');
         DB.eSalvarCad({ frota: [...E().cad.frota, { id, tipo: $('neTipo').value }] }); toast(id + ' adicionado');
       }); break;
+      case 'eqArea': {
+        const f = E().cad.frota.find(x => x.id === d.id); if (!f) break; const x = frotaArea(f);
+        formSheet('Área do equipamento', `${esc(f.id)} · ${esc(title(f.tipo))}`, `<label class="sel"><span>Área</span><select class="in" id="eaArea"><option value="">Sem área</option>${E().config.areas.map(a => `<option ${a === (f.area || x.area) ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label><label class="sel"><span>Local da atividade (área)</span><select class="in" id="eaSetor">${opcoesSetor(f.area || x.area, f.setor || x.setor)}</select></label><p class="muted small m0">Usado no Modo TV de cada área e como sugestão nos lançamentos.</p>`, 'Salvar', async () => {
+          const area = $('eaArea').value, setor = $('eaSetor').value;
+          DB.eSalvarCad({ frota: E().cad.frota.map(y => (y.id === f.id ? { ...y, area: area || null, setor: area ? setor || null : null } : y)) }); toast(`${f.id} · ${area ? title(area) : 'sem área'}`);
+        });
+        { const a = $('eaArea'); if (a) a.addEventListener('change', () => { $('eaSetor').innerHTML = opcoesSetor(a.value, $('eaSetor').value); }); }
+        break;
+      }
       case 'delEq': DB.eSalvarCad({ frota: E().cad.frota.filter(f => f.id !== d.id) }); toast(d.id + ' removido'); break;
       case 'novaInsp': inspForm(); break;
       case 'delInsp': if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; return; } DB.eDel('insp', d.id); toast('Inspeção excluída'); break;
@@ -711,7 +727,7 @@ export function criarEquip(X) {
       DB.eWatch([U.mes, addMonth(U.mes, -1), U.dia.slice(0, 7), addMonth(U.dia.slice(0, 7), -1), U.avMes, U.inMes, TODAY.slice(0, 7)]);
       return ({ epainel: vPainel, elanc: vLancPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
     },
-    resumoSemana,
+    resumoSemana, frotaArea: f => frotaArea(f), setDoEq: a => setDoEq(a),
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
 }

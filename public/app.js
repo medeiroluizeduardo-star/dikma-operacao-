@@ -680,6 +680,9 @@ function vPainel() {
   const scope = UI.escopo === 'semana' ? { ini: UI.ini, area } : { mes: UI.mes, area };
   const docs = docsFor(scope); const s = stats(docs);
   const ef = pct(s.Rhoje, s.progHoje), ap = pct(s.R + s.N, s.progHoje);
+  // Comparação com o período anterior (semana ou mês), para ver se está melhorando.
+  const sAnt = stats(docsFor(UI.escopo === 'semana' ? { ini: add(UI.ini, -7), area } : { mes: addMonth(UI.mes, -1), area })); const efAnt = sAnt.progHoje ? pct(sAnt.Rhoje, sAnt.progHoje) : null;
+  const difEf = efAnt == null || !s.progHoje ? '' : `<small class="dif ${ef >= efAnt ? 'up' : 'down'}" title="${UI.escopo === 'semana' ? 'Semana' : 'Mês'} anterior: ${efAnt}%">${ef === efAnt ? '=' : ef > efAnt ? '▲ ' + (ef - efAnt) : '▼ ' + (efAnt - ef)} pts</small>`;
   const seg = `<div class="filters" role="group" aria-label="Período"><button class="btn ${UI.escopo === 'semana' ? 'dark' : ''}" data-esc="semana">Semana</button><button class="btn ${UI.escopo === 'mes' ? 'dark' : ''}" data-esc="mes">Mês inteiro</button></div>`;
   const hm = new Date().toTimeString().slice(0, 5);
   let h = TV ? `<div class="tvhead"><b>${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]}</b><span>${SETS[SK].nome} · ${weekLabel(UI.ini)} · atualizado às ${hm}</span><a class="btn sm ghost" href="${location.pathname}${DEMO ? '?demo' : ''}">Sair do modo TV</a></div>`
@@ -691,7 +694,7 @@ function vPainel() {
     if (pa || dv) h += `<div class="aprovbar"><span>${I.aprov}<span>${pa ? `<b class="num">${pa}</b> apontamento${pa > 1 ? 's' : ''} aguardando aprovação` : ''}${pa && dv ? ' · ' : ''}${dv ? `<b class="num">${dv}</b> devolvido${dv > 1 ? 's' : ''} ao líder para corrigir` : ''}<small>${UI.escopo === 'semana' ? 'Nesta semana' : 'Neste mês'} · já contam nos números abaixo.</small></span></span>${pa && aprovador() ? '<button class="btn pri sm" data-go="aprovar">Aprovar</button>' : dv && canEdit(as[0]) ? '<button class="btn sm" data-go="apontar">Abrir o Apontar</button>' : ''}</div>`;
   }
   h += `<div class="kpis">
-   <div class="kpi hero"><span class="lbl">Eficiência até hoje</span><span class="v num">${ef}%</span><span class="s num">${n0(s.Rhoje)} realizadas de ${n0(s.progHoje)} programadas até ${ddmm(TODAY)}</span><div class="meter"><i style="width:${ef}%"></i></div></div>
+   <div class="kpi hero"><span class="lbl">Eficiência até hoje</span><span class="v num">${ef}%${difEf}</span><span class="s num">${n0(s.Rhoje)} realizadas de ${n0(s.progHoje)} programadas até ${ddmm(TODAY)}</span><div class="meter"><i style="width:${ef}%"></i></div></div>
    <div class="kpi"><span class="lbl">Programadas</span><span class="v num">${n0(s.prog)}</span><span class="s">no período</span></div>
    <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-real)"></i>Realizadas</span><span class="v num">${n0(s.R)}</span><span class="s">${pct(s.R, s.prog)}% do período</span></div>
    <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Não realizadas</span><span class="v num">${n0(s.N)}</span><span class="s">${pct(s.N, s.progHoje)}% até hoje</span></div>
@@ -711,7 +714,7 @@ function vPainel() {
     const mx = Math.max(1, ...s.day.map(d => d.R + d.N + d.P + d.A + d.E));
     right = `<div class="card"><header><h2>Dia a dia</h2><p>${weekLabel(UI.ini)}</p></header><div class="body">${legend.replace('</div>', '<span><i style="background:var(--st-extra)"></i>Extra</span></div>')}
     <div class="cols" role="img" aria-label="Atividades por dia da semana">${s.day.map((d, k) => { const t = d.R + d.N + d.P + d.A + d.E; return `<div class="col" title="${DAYS[k]}: ${d.R} realizadas, ${d.N} não realizadas, ${d.A} atrasadas, ${d.P} a fazer, ${d.E} extras"><span class="tot num">${t || ''}</span>${[['P', 'st-prog', 0.45], ['A', 'st-atr', 1], ['N', 'st-nreal', 1], ['E', 'st-extra', 1], ['R', 'st-real', 1]].map(([kk, c, o]) => (d[kk] ? `<i style="height:${d[kk] / mx * 100}%;background:var(--${c});opacity:${o}"></i>` : '')).join('')}</div>`; }).join('')}</div>
-    <div class="colx">${DAYS.map((d, k) => `<div class="${add(UI.ini, k) === TODAY ? 'today' : ''}"><b>${d}</b>${ddmm(add(UI.ini, k))}</div>`).join('')}</div></div></div>`;
+    <div class="colx">${DAYS.map((d, k) => `<div class="${add(UI.ini, k) === TODAY ? 'today' : ''}">${(() => { const x = s.day[k]; const b = x.R + x.N + x.A; return b ? `<em class="num" style="color:${pct(x.R, b) >= 90 ? 'var(--st-real)' : pct(x.R, b) >= 70 ? 'var(--st-atr)' : 'var(--st-nreal)'}" title="Realizadas ÷ (realizadas + não realizadas + atrasadas)">${pct(x.R, b)}%</em>` : '<em class="muted">—</em>'; })()}<b>${d}</b>${ddmm(add(UI.ini, k))}</div>`).join('')}</div></div></div>`;
   } else {
     right = `<div class="card"><header><h2>Semana a semana</h2><p>${monthLabel(UI.mes)}</p></header><div class="body">${legend}<div class="bars">${weeksOfMonth(UI.mes).map(w => { const x = stats(docsFor({ ini: w, area })); return `<div class="barrow"><span class="n">${weekLabel(w).split(' · ')[0]}<small>${weekLabel(w).split(' · ')[1]}</small></span>${bar(x)}<span class="p num">${x.progHoje ? pct(x.Rhoje, x.progHoje) + '%' : '—'}</span></div>`; }).join('')}</div></div></div>`;
   }
@@ -720,9 +723,11 @@ function vPainel() {
   const rs = rotasDa(area).filter(r => r.carga > 0).map(r => ({ r, x: stats(docsFor({ ...scope, area: r.area }), { rota: r.rota }) })).sort((a, b) => b.x.A - a.x.A || pct(a.x.Rhoje, a.x.progHoje) - pct(b.x.Rhoje, b.x.progHoje));
   const todasRotas = !!UI.rotasTodas || rs.length <= 8;
   h += `<div class="card"><header><h2>Rotas que pedem atenção</h2><p>Ordenadas por atrasadas${todasRotas ? '' : ` · as 8 primeiras de ${rs.length}`}</p>${rs.length > 8 ? `<span class="r"><button class="btn sm" data-act="rotasTodas">${UI.rotasTodas ? 'Só as 8 primeiras' : `Ver todas (${rs.length})`}</button></span>` : ''}</header><div class="tw"><table><thead><tr><th>Rota</th><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realiz.</th><th class="r">Atrasadas</th><th>Eficiência até hoje</th></tr></thead><tbody>
-  ${(todasRotas ? rs : rs.slice(0, 8)).map(({ r, x }) => { const e = pct(x.Rhoje, x.progHoje); return `<tr><td><b>${esc(r.rota)}</b></td><td class="muted">${AREA_S[r.area]}</td><td class="r num">${x.prog}</td><td class="r num">${x.R}</td><td class="r num">${x.N}</td><td class="r num">${x.A ? `<span class="pill warn">${x.A}</span>` : '0'}</td><td><span class="ef"><i style="width:${e}%"></i></span><span class="num">${e}%</span></td></tr>`; }).join('')}
+  ${(todasRotas ? rs : rs.slice(0, 8)).map(({ r, x }) => { const e = pct(x.Rhoje, x.progHoje); return `<tr class="clicavel" data-progrota="${esc(r.area + '|' + r.rota)}" title="Abrir a Programação desta rota"><td><b>${esc(r.rota)}</b></td><td class="muted">${AREA_S[r.area]}</td><td class="r num">${x.prog}</td><td class="r num">${x.R}</td><td class="r num">${x.N}</td><td class="r num">${x.A ? `<span class="pill warn">${x.A}</span>` : '0'}</td><td><span class="ef"><i style="width:${e}%"></i></span><span class="num">${e}%</span></td></tr>`; }).join('')}
   </tbody></table></div></div>`;
-  h += `<div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div>`;
+  { const { por, total } = contarCausas(docs); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5); const mx = cs.length ? cs[0][1] : 1;
+    h += `<div class="grid2"><div class="card"><header><h2>Por que não foi feito</h2><p>Principais causas no período</p><span class="r"><button class="btn sm" data-go="causas">Causas e ações</button></span></header><div class="body">${cs.length ? `<div class="bars">${cs.map(([c, n]) => `<div class="barrow"><span class="n">${esc(c)}<small>${pct(n, total)}% das não realizadas</small></span><div class="stack"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma não realizada no período.</div>'}</div></div>
+    <div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div></div>`; }
   return h;
 }
 function logHtml(n) {
@@ -2483,13 +2488,11 @@ const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (DB.cache.e &
 // Equipamentos desta TV: com área escolhida (ou líder/supervisor), só os lançados naquela área ("Local da atividade" do lançamento).
 // A parada vale para a área do lançamento do mesmo dia, equipamento e operador; sem ele, a do último lançamento do equipamento.
 function tvEquipEscopo() {
-  const E = DB.cache.e; const filtra = !!(tvUma() || tvMinhas().length); const as = new Set(tvAreas());
-  const ok = l => !filtra || as.has(l.setor);
-  const lanc = E.lanc.filter(ok);
-  const areaPar = p => { const l = E.lanc.find(x => x.data === p.data && x.eq === p.eq && x.op === p.op) || E.lanc.filter(x => x.eq === p.eq && x.data <= p.data).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; return l ? l.setor : null; };
-  const par = filtra ? E.par.filter(p => as.has(areaPar(p))) : E.par;
-  const desde = add(TODAY, -30); const frota = filtra ? new Set(lanc.filter(l => l.data >= desde).map(l => l.eq)).size : (E.cad.frota || []).length;
-  return { lanc, par, frota, filtra };
+  // Equipamentos destinados a esta TV pela área da frota (Equipe e frota): o conjunto aberto (Pátio ou Bateria);
+  // com área escolhida, os do local daquela área. Lançamentos e paradas contam só desses equipamentos.
+  const E = DB.cache.e; const uma = tvUma() || (tvMinhas().length ? tvAreas() : null); const as = new Set(tvAreas());
+  const eqs = new Set(E.cad.frota.filter(f => { const x = EQ.frotaArea(f); return uma ? as.has(x.setor) : x.area && EQ.setDoEq(x.area) === SK; }).map(f => f.id));
+  return { lanc: E.lanc.filter(l => eqs.has(l.eq)), par: E.par.filter(p => eqs.has(p.eq)), frota: eqs.size, filtra: true, eqs };
 }
 function tvAgendar() {
   clearTimeout(TV_TIMER); if (TVS.pausa) return;
@@ -2536,7 +2539,7 @@ function tvEfetivoRotas(area) {
     if (DB.sit(c.id + '|' + TODAY) === 'DS') continue; const x = por.get(c.rota) || { nome: c.rota, a: area, pres: 0, aus: {}, D: 0, N: 0 }; por.set(c.rota, x);
     const s = sitDia(c, TODAY); if (s.auto || s.v === 'F' || s.v === 'FE') continue; if (AUSENCIA.has(s.v)) x.aus[s.v] = (x.aus[s.v] || 0) + 1; else { x.pres++; const p = periodoDe(c, TODAY); if (p) x[p]++; }
   }
-  return [...por.values()].filter(x => x.pres || Object.keys(x.aus).length).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, innerHeight < 900 ? 6 : 8);
+  return [...por.values()].filter(x => x.pres || Object.keys(x.aus).length).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, 8);
 }
 function tvAlertas(h) {
   const out = [];
@@ -2562,7 +2565,7 @@ function tvCena(k, h) {
   if (k === 'hoje') {
     const t = h.t; const ap = t.R + t.N; const ef = pct(t.R, t.prog), apo = pct(ap, t.prog);
     return `<div class="tvgrid tvhoje"><div class="tvcard tvhero">${tvAnel(apo, 'var(--accent)', apo + '%', 'apontado hoje')}<div class="tvnums"><div><b class="num">${n0(t.prog)}</b><span>programadas hoje</span></div><div class="ok"><b class="num">${n0(t.R)}</b><span>realizadas</span></div><div class="bad"><b class="num">${n0(t.N)}</b><span>não realizadas</span></div><div><b class="num">${n0(t.P)}</b><span>a fazer</span></div>${t.FP ? `<div class="ext"><b class="num">${t.FP}</b><span>fora da programação</span></div>` : ''}<div class="ok"><b class="num">${ef}%</b><span>realizadas do programado</span></div></div></div>
-      ${tvUma() ? `<div class="tvareas rotas">${h.rotas.filter(r => r.prog).sort((a, b) => a.rota.localeCompare(b.rota)).slice(0, innerHeight < 900 ? 6 : 8).map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvcard tvarea"><b>${esc(r.rota)}</b>${tvAnel(p, corEf(pct(r.R, r.R + r.N || 1)), p + '%', `${r.R + r.N} de ${r.prog}`)}<span class="muted">${r.N ? `<i class="dotn"></i>${r.N} não realizada${r.N > 1 ? 's' : ''}` : r.R + r.N === r.prog ? 'tudo apontado' : `${r.prog - r.R - r.N} a fazer`}</span></div>`; }).join('')}</div>` : `<div class="tvareas">${tvAreas().map(a => { const x = h.porArea[a]; const p = pct(x.R + x.N, x.prog); return `<div class="tvcard tvarea"><b>${AREA_S[a]}</b>${tvAnel(p, x.prog ? corEf(pct(x.R, x.R + x.N || 1)) : 'var(--line)', x.prog ? p + '%' : '—', x.prog ? `${x.R + x.N} de ${x.prog}` : 'nada hoje')}<span class="muted">${x.N ? `<i class="dotn"></i>${x.N} não realizada${x.N > 1 ? 's' : ''}` : x.prog && x.P === 0 ? 'tudo apontado' : `${x.P} a fazer`}</span></div>`; }).join('')}</div>`}</div></div>`;
+      ${tvUma() ? `<div class="tvareas rotas">${h.rotas.filter(r => r.prog).sort((a, b) => a.rota.localeCompare(b.rota)).slice(0, 8).map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvcard tvarea"><b>${esc(r.rota)}</b>${tvAnel(p, corEf(pct(r.R, r.R + r.N || 1)), p + '%', `${r.R + r.N} de ${r.prog}`)}<span class="muted">${r.N ? `<i class="dotn"></i>${r.N} não realizada${r.N > 1 ? 's' : ''}` : r.R + r.N === r.prog ? 'tudo apontado' : `${r.prog - r.R - r.N} a fazer`}</span></div>`; }).join('')}</div>` : `<div class="tvareas">${tvAreas().map(a => { const x = h.porArea[a]; const p = pct(x.R + x.N, x.prog); return `<div class="tvcard tvarea"><b>${AREA_S[a]}</b>${tvAnel(p, x.prog ? corEf(pct(x.R, x.R + x.N || 1)) : 'var(--line)', x.prog ? p + '%' : '—', x.prog ? `${x.R + x.N} de ${x.prog}` : 'nada hoje')}<span class="muted">${x.N ? `<i class="dotn"></i>${x.N} não realizada${x.N > 1 ? 's' : ''}` : x.prog && x.P === 0 ? 'tudo apontado' : `${x.P} a fazer`}</span></div>`; }).join('')}</div>`}</div></div>`;
   }
   if (k === 'rotas') {
     const est = r => (!r.prog ? 'vazia' : r.R + r.N === r.prog ? (r.N ? 'fechn' : 'fech') : r.R + r.N ? 'anda' : 'zero');
@@ -2570,13 +2573,16 @@ function tvCena(k, h) {
     const rs = h.rotas.filter(r => r.prog).sort((a, b) => ord[est(a)] - ord[est(b)] || tvAreas().indexOf(a.area) - tvAreas().indexOf(b.area) || a.rota.localeCompare(b.rota));
     const n = { zero: 0, anda: 0, fech: 0, fechn: 0 }; rs.forEach(r => n[est(r)]++);
     return `<div class="tvleg"><span class="zero"><i></i>Sem apontamento · <b>${n.zero}</b></span><span class="anda"><i></i>Em andamento · <b>${n.anda}</b></span><span class="fech"><i></i>Tudo feito · <b>${n.fech}</b></span><span class="fechn"><i></i>Apontada com não realizadas · <b>${n.fechn}</b></span></div>
-      <div class="tvrotas${rs.length > (innerHeight < 900 ? 12 : 24) ? ' mini' : ''}${rs.length > (innerHeight < 760 ? 20 : innerHeight < 900 ? 30 : 48) ? ' micro' : ''}">${rs.map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvrota ${est(r)}"><b>${esc(r.rota)}</b><small>${AREA_S[r.area]}${r.FP ? ` · ${r.FP} fora da prog.` : ''}</small><div class="tvbar"><i style="width:${p}%"></i></div><span class="num">${r.R + r.N}/${r.prog}${r.N ? ` · <em>${r.N} ✕</em>` : ''}</span></div>`; }).join('') || '<div class="tvcard tvvazio">Nenhuma rota com atividade programada hoje.</div>'}</div>`;
+      <div class="tvrotas${rs.length > 24 ? ' mini' : ''}${rs.length > 48 ? ' micro' : ''}">${rs.map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvrota ${est(r)}"><b>${esc(r.rota)}</b><small>${AREA_S[r.area]}${r.FP ? ` · ${r.FP} fora da prog.` : ''}</small><div class="tvbar"><i style="width:${p}%"></i></div><span class="num">${r.R + r.N}/${r.prog}${r.N ? ` · <em>${r.N} ✕</em>` : ''}</span></div>`; }).join('') || '<div class="tvcard tvvazio">Nenhuma rota com atividade programada hoje.</div>'}</div>`;
   }
   if (k === 'semana') {
     const docsTV = tvAreas().flatMap(a => docsFor({ ini: CUR_WEEK, area: a })); const s = stats(docsTV); const ef = pct(s.Rhoje, s.progHoje); const mx = Math.max(1, ...s.day.map(d => d.R + d.N + d.P + d.A + d.E));
-    return `<div class="tvgrid tvsem"><div class="tvcard"><h3>Eficiência da semana</h3>${tvAnel(ef, corEf(ef), ef + '%', `${n0(s.Rhoje)} de ${n0(s.progHoje)} até hoje`)}<div class="tvnums col"><div class="ok"><b class="num">${n0(s.R)}</b><span>realizadas</span></div><div class="bad"><b class="num">${n0(s.N)}</b><span>não realizadas</span></div><div class="warn"><b class="num">${n0(s.A)}</b><span>atrasadas</span></div></div></div>
-      <div class="tvcard"><h3>Dia a dia</h3><div class="tvcols">${s.day.map((d, j) => { const dt = add(CUR_WEEK, j); const t = d.R + d.N + d.P + d.A + d.E; return `<div class="tvcol${dt === TODAY ? ' hoje' : ''}"><span class="num">${t || ''}</span><div class="pilha" style="height:${t / mx * 100}%">${[['R', 'st-real'], ['N', 'st-nreal'], ['A', 'st-atr'], ['E', 'st-extra'], ['P', 'st-prog']].map(([c, v]) => d[c] ? `<i style="flex:${d[c]};background:var(--${v})${c === 'P' ? ';opacity:.4' : ''}"></i>` : '').join('')}</div><b>${DAYS[j]}</b><small>${ddmm(dt)}</small></div>`; }).join('')}</div></div>
-      <div class="tvcard tvlarga"><h3>${tvUma() ? 'Por rota' : 'Por área'}</h3>${(tvUma() ? rotasDa(tvUma()).filter(r => r.carga > 0).map(r => [r.rota, stats(docsTV, { rota: r.rota })]).filter(([, x]) => x.prog).slice(0, 10) : tvAreas().map(a => [AREA_S[a], stats(docsFor({ ini: CUR_WEEK, area: a }))])).map(([nome, x]) => { const p = pct(x.Rhoje, x.progHoje); const tt = x.prog || 1; return `<div class="tvlinha"><b>${esc(nome)}</b><div class="tvbar multi"><i style="width:${x.R / tt * 100}%;background:var(--st-real)"></i><i style="width:${x.N / tt * 100}%;background:var(--st-nreal)"></i><i style="width:${x.A / tt * 100}%;background:var(--st-atr)"></i></div><span class="num" style="color:${corEf(p)}">${p}%</span></div>`; }).join('')}</div></div>`;
+    const ap = pct(s.R + s.N, s.progHoje);
+    const leg = `<div class="tvlegenda"><span><i style="background:var(--st-real)"></i>Realizada</span><span><i style="background:var(--st-nreal)"></i>Não realizada</span><span><i style="background:var(--st-atr)"></i>Atrasada</span><span><i style="background:var(--st-prog);opacity:.45"></i>A fazer</span>${s.E ? '<span><i style="background:var(--st-extra)"></i>Extra</span>' : ''}</div>`;
+    const linhas = tvUma() ? rotasDa(tvUma()).filter(r => r.carga > 0).map(r => [r.rota, stats(docsTV, { rota: r.rota })]).filter(([, x]) => x.prog).sort((a, b) => pct(a[1].Rhoje, a[1].progHoje) - pct(b[1].Rhoje, b[1].progHoje)).slice(0, 7) : tvAreas().map(a => [AREA_S[a], stats(docsFor({ ini: CUR_WEEK, area: a }))]);
+    return `<div class="tvgrid tvsem"><div class="tvcard tvefsem"><h3>Eficiência da semana</h3><div class="tvefl">${tvAnel(ef, corEf(ef), ef + '%', `${n0(s.Rhoje)} de ${n0(s.progHoje)} até hoje`)}<div class="tvnums col2"><div class="ok"><b class="num">${n0(s.R)}</b><span>realizadas</span></div><div class="bad"><b class="num">${n0(s.N)}</b><span>não realizadas</span></div><div class="warn"><b class="num">${n0(s.A)}</b><span>atrasadas</span></div><div><b class="num">${ap}%</b><span>apontado até hoje</span></div></div></div></div>
+      <div class="tvcard tvdia"><h3>Dia a dia</h3>${leg}<div class="tvcols">${s.day.map((d, j) => { const dt = add(CUR_WEEK, j); const t = d.R + d.N + d.P + d.A + d.E; const pe = d.R + d.N + d.A ? pct(d.R, d.R + d.N + d.A) : null; return `<div class="tvcol${dt === TODAY ? ' hoje' : ''}"><span class="num">${t || ''}</span><div class="pilha" style="height:${t / mx * 100}%">${[['R', 'st-real'], ['N', 'st-nreal'], ['A', 'st-atr'], ['E', 'st-extra'], ['P', 'st-prog']].map(([c, v]) => d[c] ? `<i style="flex:${d[c]};background:var(--${v})${c === 'P' ? ';opacity:.4' : ''}"></i>` : '').join('')}</div><b>${DAYS[j]}</b><small>${ddmm(dt)}</small><em class="num" style="color:${pe == null ? 'var(--ink-3)' : corEf(pe)}">${pe == null ? '—' : pe + '%'}</em></div>`; }).join('')}</div></div>
+      <div class="tvcard tvlarga"><div class="tvcab"><h3>${tvUma() ? 'Por rota · as que mais precisam de atenção' : 'Por área'}</h3>${leg}</div>${linhas.map(([nome, x]) => { const p = pct(x.Rhoje, x.progHoje); const tt = x.prog || 1; return `<div class="tvlinha"><b>${esc(nome)}<small>${n0(x.R)} de ${n0(x.prog)} · ${n0(x.A)} atrasada${x.A === 1 ? '' : 's'}</small></b><div class="tvbar multi"><i style="width:${x.R / tt * 100}%;background:var(--st-real)"></i><i style="width:${x.N / tt * 100}%;background:var(--st-nreal)"></i><i style="width:${x.A / tt * 100}%;background:var(--st-atr)"></i><i style="width:${(x.P - x.A) / tt * 100}%;background:var(--st-prog);opacity:.45"></i></div><span class="num" style="color:${corEf(p)}">${p}%</span></div>`; }).join('')}</div></div>`;
   }
   if (k === 'efetivo') {
     const ef = tvEfetivo(); const T = ef.reduce((o, x) => { o.quadro += x.quadro; o.pres += x.pres; o.folga += x.folga; o.ferias += x.ferias; o.D += x.D; o.N += x.N; o.atr += x.atr; for (const [c, n] of Object.entries(x.aus)) o.aus[c] = (o.aus[c] || 0) + n; return o; }, { quadro: 0, pres: 0, folga: 0, ferias: 0, D: 0, N: 0, atr: 0, aus: {} });
@@ -2590,9 +2596,9 @@ function tvCena(k, h) {
     const ab = Q.par.filter(p => !p.fim).sort((a, b) => ((a.data + (a.ini || '')) < (b.data + (b.ini || '')) ? -1 : 1));
     const hoje = Q.lanc.filter(l => l.data === TODAY); const parH = Q.par.filter(p => p.data === TODAY);
     const opHoje = new Set(hoje.map(l => l.op)).size, eqHoje = new Set(hoje.map(l => l.eq)).size;
-    const frota = Math.max(Q.frota, new Set(ab.map(p => p.eq)).size); const parados = new Set(ab.map(p => p.eq)).size;
-    return `<div class="tvgrid tvequip"><div class="tvcard tvhero">${tvAnel(pct(Math.max(0, frota - parados), frota || 1), parados ? 'var(--st-atr)' : 'var(--st-real)', frota - parados, `liberados de ${frota} ${Q.filtra ? 'usados na área' : 'equipamentos'}`)}<div class="tvnums"><div><b class="num">${eqHoje}</b><span>em uso hoje</span></div><div><b class="num">${opHoje}</b><span>operadores hoje</span></div><div class="bad"><b class="num">${ab.length}</b><span>paradas sem liberação</span></div><div><b class="num">${parH.length}</b><span>paradas hoje</span></div></div></div>
-      <div class="tvcard tvlarga"><h3>Paradas sem liberação</h3>${ab.length ? `<div class="tvpar">${ab.slice(0, innerHeight < 900 ? 5 : 8).map(p => `<div class="tvparada"><b class="mono">${esc(p.eq)}</b><span>${esc(p.causa || 'sem causa')}<small>${esc(p.op ? title(p.op.split(' ')[0]) : '')} · desde ${p.data === TODAY ? '' : ddmm(p.data) + ' '}${esc(p.ini || '')}</small></span><em class="num" data-desde="${esc(p.data + 'T' + (p.ini || '00:00'))}">${tvDecorrido(p.data + 'T' + (p.ini || '00:00'))}</em></div>`).join('')}</div>${ab.length > (innerHeight < 900 ? 5 : 8) ? `<p class="muted">e mais ${ab.length - (innerHeight < 900 ? 5 : 8)}</p>` : ''}` : '<div class="tvvazio ok">Todos os equipamentos liberados.</div>'}</div></div>`;
+    const frota = Q.frota; const parados = new Set(ab.map(p => p.eq)).size;
+    return `<div class="tvgrid tvequip"><div class="tvcard tvhero">${tvAnel(pct(Math.max(0, frota - parados), frota || 1), parados ? 'var(--st-atr)' : 'var(--st-real)', frota - parados, `liberados de ${frota} equipamento${frota === 1 ? '' : 's'} ${tvUma() ? 'da área' : SK === 'bateria' ? 'da Bateria' : 'do Pátio'}`)}<div class="tvnums"><div><b class="num">${eqHoje}</b><span>em uso hoje</span></div><div><b class="num">${opHoje}</b><span>operadores hoje</span></div><div class="bad"><b class="num">${ab.length}</b><span>paradas sem liberação</span></div><div><b class="num">${parH.length}</b><span>paradas hoje</span></div></div></div>
+      <div class="tvcard tvlarga"><h3>Equipamentos ${tvUma() ? 'da área' : SK === 'bateria' ? 'da Bateria' : 'do Pátio'} agora</h3>${Q.eqs.size ? `<div class="tveqs">${[...Q.eqs].map(id => { const f = E.cad.frota.find(x => x.id === id) || { id, tipo: '' }; const p = ab.find(x => x.eq === id); const l = hoje.filter(x => x.eq === id).sort((a, b) => ((a.ini || '') < (b.ini || '') ? 1 : -1))[0]; const st = p ? 'parado' : l ? (/FORA|MANUT/i.test(l.status) ? 'fora' : 'uso') : 'livre'; return { f, p, l, st }; }).sort((a, b) => ['parado', 'fora', 'uso', 'livre'].indexOf(a.st) - ['parado', 'fora', 'uso', 'livre'].indexOf(b.st) || a.f.id.localeCompare(b.f.id)).slice(0, 12).map(({ f, p, l, st }) => `<div class="tveq ${st}"><div><b class="mono">${esc(f.id)}</b><small>${esc(title(f.tipo || ''))}</small></div><span>${st === 'parado' ? `Parado · ${esc(p.causa || 'sem causa')}` : st === 'fora' ? esc(title(l.status)) : st === 'uso' ? `Em uso · ${esc(title((l.op || '').split(' ')[0]))}` : 'Sem lançamento hoje'}</span>${st === 'parado' ? `<em class="num" data-desde="${esc(p.data + 'T' + (p.ini || '00:00'))}">${tvDecorrido(p.data + 'T' + (p.ini || '00:00'))}</em>` : ''}</div>`).join('')}</div>${Q.eqs.size > 12 ? `<p class="muted">e mais ${Q.eqs.size - 12}</p>` : ''}` : `<div class="tvvazio">Nenhum equipamento destinado ${tvUma() ? 'a esta área' : 'a este conjunto'}. Defina a área de cada equipamento em Operação › Equipe e frota.</div>`}</div></div>`;
   }
   if (k === 'atencao') {
     const al = tvAlertas(h);
@@ -2654,7 +2660,13 @@ if (TV) {
   // relógio e tempo das paradas a cada segundo, sem redesenhar a tela
   setInterval(() => { const r = $('tvRelogio'); if (r) r.textContent = new Date().toTimeString().slice(0, 8); document.querySelectorAll('[data-desde]').forEach(e => { e.textContent = tvDecorrido(e.dataset.desde); }); }, 1000);
   // contra marca na tela (TV ligada o dia todo): desloca a tela 1 a 3 px a cada 3 minutos
-  setInterval(() => { const v = $('view'); if (v) v.style.transform = `translate(${Math.round(Math.random() * 4 - 2)}px,${Math.round(Math.random() * 4 - 2)}px)`; }, 180000);
+  // A TV é desenhada numa tela lógica grande e escala para caber em qualquer tela (sem cortar nem sobrar texto).
+  // Contra marca na tela: a cada 3 minutos a imagem se desloca 1 a 3 px.
+  let jit = [0, 0];
+  // A tela lógica tem pelo menos 1920 de largura ou 900 de altura e preenche a tela toda, em qualquer proporção.
+  const tvEscala = () => { const sc = Math.min(innerWidth / 1920, innerHeight / 900); const r = document.documentElement.style; r.setProperty('--tvs', sc); r.setProperty('--tvw', Math.ceil(innerWidth / sc) + 'px'); r.setProperty('--tvh', Math.ceil(innerHeight / sc) + 'px'); r.setProperty('--tvx', jit[0] + 'px'); r.setProperty('--tvy', jit[1] + 'px'); };
+  addEventListener('resize', tvEscala); tvEscala();
+  setInterval(() => { jit = [Math.round(Math.random() * 4 - 2), Math.round(Math.random() * 4 - 2)]; tvEscala(); }, 180000);
   let tm = 0; addEventListener('mousemove', () => { document.body.classList.add('tvmexe'); clearTimeout(tm); tm = setTimeout(() => document.body.classList.remove('tvmexe'), 3000); });
   addEventListener('keydown', e => {
     if ($('layer').children.length || AUTH.status !== 'ready') return;
@@ -2718,6 +2730,13 @@ document.addEventListener('click', e => {
   e.preventDefault(); e.stopImmediatePropagation(); toast(imp ? 'Seu perfil não imprime' : 'Seu perfil não exporta');
 }, true);
 setInterval(() => { if (!ME) return; document.body.classList.toggle('sem-exportar', !podeItem('i_exportar')); document.body.classList.toggle('sem-imprimir', !podeItem('i_imprimir')); }, 1000);
+// Painel › Rotas que pedem atenção: tocar na linha abre a Programação daquela rota.
+document.addEventListener('click', e => {
+  const tr = e.target.closest && e.target.closest('[data-progrota]'); if (!tr || !ME) return;
+  const [area, rota] = tr.dataset.progrota.split('|');
+  irParaModuloDa('prog'); UI.area = area; UI.rota = rota; UI.q = ''; UI.soPend = false; UI.tipo = 'TODOS'; UI.view = 'prog'; UI.confirm = null;
+  ensureModulo(); aplicarSet(); UI.area = myArea() || area; UI.rota = rota; salvarUI(); render(); scrollTo(0, 0);
+});
 // Fechar a aba com apontamento ainda não enviado (sem sinal): o navegador pergunta antes de sair.
 addEventListener('beforeunload', e => { if (!DEMO && DB.pendingWrites() > 0) { e.preventDefault(); e.returnValue = ''; } });
 // Modo TV: mantém a tela da sala de controle acesa enquanto o painel está aberto.
