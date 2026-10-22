@@ -285,7 +285,7 @@ function watchSet(k, meses) {
       qs.docChanges().forEach(c => { if (c.type === 'removed') delete st.semanas[c.doc.id]; else st.semanas[c.doc.id] = toLocal(c.doc.id, c.doc.data()); });
       st.monthsLoaded.add(m); changed();
     }, e => cb.onError && cb.onError(e));
-    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, ck: (s.exists() && s.data().ck) || {} }; changed(); });
+    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, hed: (s.exists() && s.data().hed) || {}, ck: (s.exists() && s.data().ck) || {} }; changed(); });
     // aprovação dos apontamentos pelo supervisor (aprov/{área|semana}: { area, mes, v: { 'pid|dia': { s, c, por, nome, em, mot } } })
     const c = onSnapshot(query(collection(db, C('aprov', k)), where('mes', '==', m)), qs => {
       qs.docChanges().forEach(x => { if (x.type === 'removed') delete st.aprov[x.doc.id]; else st.aprov[x.doc.id] = x.doc.data().v || {}; });
@@ -305,8 +305,8 @@ function watchSet(k, meses) {
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
-export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '' }; };
-export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {} };
+export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null }; };
+export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {} };
 
 
 // ---------- gravações ----------
