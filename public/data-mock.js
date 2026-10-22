@@ -254,6 +254,8 @@ async function carregarE(salvo) {
     e = { config: s.config, cad: { operadores: s.operadores, frota: s.frota }, lanc: s.lanc.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), par: s.paradas.map(x => ({ id: id(), ...x, mes: x.data.slice(0, 7) })), insp: [], aval: s.aval || {} };
   }
   e.cad = { ...e.cad, operadores: (e.cad.operadores || []).filter(o => !/^SITUA[ÇC][ÃA]O:/i.test(o.nome || '')) };
+  // Demonstração: cada equipamento trabalha sempre no mesmo local (área das Atividades), para o Modo TV por área ter o que mostrar.
+  { const h = t => [...t].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7); for (const l of e.lanc) if (!l.setor) { const as = SETS[/BATERIA/i.test(l.area || '') ? 'bateria' : 'patio'].areas; l.setor = as[h(l.eq) % as.length]; } }
   cache.e = { loaded: true, ...e, meses: new Set([...e.lanc.map(x => x.mes), new Date().toISOString().slice(0, 7)]) };
 }
 const ech = () => { cache.eVersao++; changed(); };
