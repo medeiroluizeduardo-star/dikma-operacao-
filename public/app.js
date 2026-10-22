@@ -2479,7 +2479,18 @@ let TVS = { i: 0, volta: 0, pausa: false, t0: Date.now() }, TV_TIMER = 0, TV_PRE
 const tvAreas = () => { if (TVC.area && AREAS.includes(TVC.area)) return [TVC.area]; const m = myAreas().filter(a => AREAS.includes(a)); return m.length ? m : AREAS; };
 const tvMinhas = () => (ME && ['lider', 'supervisor'].includes(ME.papel) ? [ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS_ATIV.includes(a)) : []);
 const tvUma = () => (tvAreas().length === 1 ? tvAreas()[0] : null);
-const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (!tvUma() && !myAreas().length && DB.cache.e && DB.cache.e.loaded && DB.cache.e.config));
+const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (DB.cache.e && DB.cache.e.loaded && DB.cache.e.config));
+// Equipamentos desta TV: com área escolhida (ou líder/supervisor), só os lançados naquela área ("Local da atividade" do lançamento).
+// A parada vale para a área do lançamento do mesmo dia, equipamento e operador; sem ele, a do último lançamento do equipamento.
+function tvEquipEscopo() {
+  const E = DB.cache.e; const filtra = !!(tvUma() || tvMinhas().length); const as = new Set(tvAreas());
+  const ok = l => !filtra || as.has(l.setor);
+  const lanc = E.lanc.filter(ok);
+  const areaPar = p => { const l = E.lanc.find(x => x.data === p.data && x.eq === p.eq && x.op === p.op) || E.lanc.filter(x => x.eq === p.eq && x.data <= p.data).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; return l ? l.setor : null; };
+  const par = filtra ? E.par.filter(p => as.has(areaPar(p))) : E.par;
+  const desde = add(TODAY, -30); const frota = filtra ? new Set(lanc.filter(l => l.data >= desde).map(l => l.eq)).size : (E.cad.frota || []).length;
+  return { lanc, par, frota, filtra };
+}
 function tvAgendar() {
   clearTimeout(TV_TIMER); if (TVS.pausa) return;
   TV_TIMER = setTimeout(() => tvIr(1), TVC.t * 1000);
@@ -2537,7 +2548,7 @@ function tvAlertas(h) {
   const dv = listaAprov(tvAreas(), 'dev').length; if (dv) out.push(['warn', `${dv} apontamento${dv > 1 ? 's' : ''} devolvido${dv > 1 ? 's' : ''} ao líder para corrigir`]);
   const ac = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (a.area === 'TODAS' || tvAreas().includes(a.area))); const venc = ac.filter(a => a.prazo && a.prazo < TODAY).length;
   if (venc) out.push(['bad', `${venc} ação${venc > 1 ? 'ões' : ''} de causas com prazo vencido`]);
-  const E = DB.cache.e; const ab = !tvUma() && !myAreas().length && E && E.loaded && E.config ? E.par.filter(p => !p.fim) : [];
+  const E = DB.cache.e; const ab = E && E.loaded && E.config ? tvEquipEscopo().par.filter(p => !p.fim) : [];
   if (ab.length) out.push(['bad', `${ab.length} parada${ab.length > 1 ? 's' : ''} de equipamento sem liberação`]);
   const ft = tvEfetivo().reduce((n, x) => n + (x.aus.FT || 0), 0); if (ft) out.push(['warn', `${ft} falta${ft > 1 ? 's' : ''} no efetivo de hoje`]);
   const feitas = h.rotas.filter(r => r.prog && r.R + r.N === r.prog);
@@ -2575,12 +2586,12 @@ function tvCena(k, h) {
       <div class="tvareas${tvUma() ? ' rotas' : ''}">${(tvUma() ? tvEfetivoRotas(tvUma()) : ef).map(x => { const na = Object.values(x.aus).reduce((a, b) => a + b, 0); const e = x.pres + na; return `<div class="tvcard tvarea"><b>${esc(x.nome || AREA_S[x.a])}</b>${tvAnel(pct(x.pres, e), corEf(pct(x.pres, e || 1)), x.pres, `de ${e} escalados`)}<span class="muted">${x.D || x.N ? `☀ ${x.D} · ☾ ${x.N}` : ''}${na ? ` · <i class="dotn"></i>${na} ausente${na > 1 ? 's' : ''}` : ''}</span></div>`; }).join('')}</div></div>`;
   }
   if (k === 'equip') {
-    const E = DB.cache.e; if (DB.eWatch) DB.eWatch([TODAY.slice(0, 7)]);
-    const ab = E.par.filter(p => !p.fim).sort((a, b) => ((a.data + (a.ini || '')) < (b.data + (b.ini || '')) ? -1 : 1));
-    const hoje = E.lanc.filter(l => l.data === TODAY); const parH = E.par.filter(p => p.data === TODAY);
+    const E = DB.cache.e; if (DB.eWatch) DB.eWatch([TODAY.slice(0, 7)]); const Q = tvEquipEscopo();
+    const ab = Q.par.filter(p => !p.fim).sort((a, b) => ((a.data + (a.ini || '')) < (b.data + (b.ini || '')) ? -1 : 1));
+    const hoje = Q.lanc.filter(l => l.data === TODAY); const parH = Q.par.filter(p => p.data === TODAY);
     const opHoje = new Set(hoje.map(l => l.op)).size, eqHoje = new Set(hoje.map(l => l.eq)).size;
-    const frota = (E.cad.frota || []).length; const parados = new Set(ab.map(p => p.eq)).size;
-    return `<div class="tvgrid tvequip"><div class="tvcard tvhero">${tvAnel(pct(Math.max(0, frota - parados), frota || 1), parados ? 'var(--st-atr)' : 'var(--st-real)', frota - parados, `de ${frota} equipamentos liberados`)}<div class="tvnums"><div><b class="num">${eqHoje}</b><span>em uso hoje</span></div><div><b class="num">${opHoje}</b><span>operadores hoje</span></div><div class="bad"><b class="num">${ab.length}</b><span>paradas sem liberação</span></div><div><b class="num">${parH.length}</b><span>paradas hoje</span></div></div></div>
+    const frota = Math.max(Q.frota, new Set(ab.map(p => p.eq)).size); const parados = new Set(ab.map(p => p.eq)).size;
+    return `<div class="tvgrid tvequip"><div class="tvcard tvhero">${tvAnel(pct(Math.max(0, frota - parados), frota || 1), parados ? 'var(--st-atr)' : 'var(--st-real)', frota - parados, `liberados de ${frota} ${Q.filtra ? 'usados na área' : 'equipamentos'}`)}<div class="tvnums"><div><b class="num">${eqHoje}</b><span>em uso hoje</span></div><div><b class="num">${opHoje}</b><span>operadores hoje</span></div><div class="bad"><b class="num">${ab.length}</b><span>paradas sem liberação</span></div><div><b class="num">${parH.length}</b><span>paradas hoje</span></div></div></div>
       <div class="tvcard tvlarga"><h3>Paradas sem liberação</h3>${ab.length ? `<div class="tvpar">${ab.slice(0, innerHeight < 900 ? 5 : 8).map(p => `<div class="tvparada"><b class="mono">${esc(p.eq)}</b><span>${esc(p.causa || 'sem causa')}<small>${esc(p.op ? title(p.op.split(' ')[0]) : '')} · desde ${p.data === TODAY ? '' : ddmm(p.data) + ' '}${esc(p.ini || '')}</small></span><em class="num" data-desde="${esc(p.data + 'T' + (p.ini || '00:00'))}">${tvDecorrido(p.data + 'T' + (p.ini || '00:00'))}</em></div>`).join('')}</div>${ab.length > (innerHeight < 900 ? 5 : 8) ? `<p class="muted">e mais ${ab.length - (innerHeight < 900 ? 5 : 8)}</p>` : ''}` : '<div class="tvvazio ok">Todos os equipamentos liberados.</div>'}</div></div>`;
   }
   if (k === 'atencao') {

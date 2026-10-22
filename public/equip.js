@@ -1,6 +1,6 @@
 // Dikma Gestão — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 // Telas: Painel, Lançamentos e paradas (uma aba só), Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
-import { add, pad, today, MESES_L, addMonth, DAYS } from './cal.js';
+import { add, pad, today, MESES_L, addMonth, DAYS, SETS, AREA_S } from './cal.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
 import { criarBusca, competenciaDe } from './planilhas-adm.js';
@@ -175,7 +175,7 @@ export function criarEquip(X) {
   /* ---------- lançamentos ---------- */
   const STATUS_CLS = { 'OPERAÇÃO FINALIZADA': 'ok', 'EM OPERAÇÃO': 'neu', 'HORA EXTRA': 'ext', 'HE NOTURNA': 'ext', 'FORA DE OPERAÇÃO': 'bad', 'EM MANUTENÇÃO': 'warn' };
   // Texto de busca de um lançamento: equipamento, tipo, operador, área, status e observação.
-  const kLanc = l => semAcento([l.eq, l.tipo, l.op, l.sub, l.area, l.status, l.obs, l.trocaPara, l.eqOrig, l.trocaPara || l.eqOrig ? 'substituicao troca reserva' : ''].filter(Boolean).join(' '));
+  const kLanc = l => semAcento([l.eq, l.tipo, l.op, l.sub, l.area, l.setor, l.status, l.obs, l.trocaPara, l.eqOrig, l.trocaPara || l.eqOrig ? 'substituicao troca reserva' : ''].filter(Boolean).join(' '));
   const trocaTxt = l => `${l.trocaPara ? `<div><span class="pill neu" title="Equipamento substituído">${I.swap} trocado por ${esc(l.trocaPara)} às ${esc(l.fim || '')}</span></div>` : ''}${l.eqOrig ? `<div><span class="pill ext" title="Equipamento reserva">${I.swap} reserva de ${esc(l.eqOrig)}</span></div>` : ''}${l.voltaDe ? `<div><span class="pill ok">${I.swap} voltou do ${esc(l.voltaDe)}</span></div>` : ''}`;
   const desdeH = p => { if (!p.ini) return 0; const t = new Date(`${p.data}T${p.ini}:00`).getTime(); return Math.max(0, (Date.now() - t) / 36e5); };
   const tempoTxt = h => (h >= 24 ? `${Math.floor(h / 24)} d ${Math.floor(h % 24)} h` : `${Math.floor(h)} h ${pad(Math.round((h % 1) * 60) % 60)} min`);
@@ -217,14 +217,14 @@ export function criarEquip(X) {
     const ajuda = '<p class="muted small m0 ajuda">Cada linha é um operador num equipamento no dia. <b>Janela</b> = horário do lançamento (vazio = turno da escala). <b>Operadas</b> = janela − paradas desse operador nesse equipamento. Ações: ${I.pend} registra uma parada · ${I.swap} troca o equipamento danificado por um reserva (o operador segue sem perder horas) · ✎ edita.</p>';
     if (matchMedia('(max-width:860px)').matches) {
       return h + busca + `<div class="mlist" id="eLList">${linhas.map(l => `<div class="mcard" data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'}><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span>${trocaTxt(l)}</div>${ed ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
-        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
+        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(l.setor ? AREA_S[l.setor] || l.setor : title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
         ${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(x => `<option ${x === l.status ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}
         <div class="row-between small"><span class="num">${l.ini || 'turno'} – ${l.fim || 'turno'} · janela ${h2(l.jan)} h</span><b class="num">${h2(l.hoper)} h operadas</b></div>
         ${parTxt(l)}${l.obs ? `<div class="muted small">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}
         ${ed && !l.trocaPara ? `<div class="row-gap">${l.aberta ? `<button class="btn pri grow" data-e="liberar" data-id="${l.aberta.id}">Liberar ${esc(l.eq)}</button>` : `<button class="btn grow" data-e="parDe" data-id="${l.id}">${I.pend} Parada</button>`}<button class="btn grow" data-e="trocar" data-id="${l.id}">${I.swap} Trocar equipamento</button></div>` : ''}</div>`).join('')}<p class="empty" data-vazio ${linhas.some(l => casa(kLanc(l), q)) ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div>${ajuda}`;
     }
     h += `<div class="card">${busca.replace('class="lbar"', 'class="lbar body"')}<div class="tw" id="eLList"><table class="lanc"><thead><tr><th>Equipamento</th><th>Operador</th><th>Área</th><th>Status</th><th class="c">Horário</th><th class="r">Janela</th><th class="r">Paradas</th><th class="r">Operadas</th><th class="r">Ações</th></tr></thead><tbody>
-      ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}</td>
+      ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}${l.setor ? ` · ${esc(AREA_S[l.setor] || l.setor)}` : ''}</td>
         <td>${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}</td>
         <td class="c num small">${l.ini || '—'} – ${l.fim || '—'}${l.he ? `<div class="pill ext" title="Hora extra${l.heOrigem ? ' a pedido da ' + (l.heOrigem === 'ARCELOR' ? 'ArcelorMittal' : 'Dikma') : ''}">HE ${hhmm(l.he)}${l.heOrigem ? ' · ' + (l.heOrigem === 'ARCELOR' ? 'Arcelor' : 'Dikma') : ''}</div>` : ''}</td><td class="r num">${h2(l.jan)}</td><td class="r num">${l.hpar ? h2(l.hpar) : ''}${l.aberta ? '<div><span class="pill bad">aberta</span></div>' : ''}</td><td class="r num"><b>${h2(l.hoper)}</b></td>
         <td class="nowrap r acts">${ed ? `${l.trocaPara ? '' : l.aberta ? `<button class="btn sm pri" data-e="liberar" data-id="${l.aberta.id}">Liberar</button>` : `<button class="btn sm ic" data-e="parDe" data-id="${l.id}" title="Registrar parada" aria-label="Registrar parada de ${esc(l.eq)}">${I.pend}</button>`}${l.trocaPara ? '' : `<button class="btn sm ic" data-e="trocar" data-id="${l.id}" title="Trocar equipamento (danificado → reserva)" aria-label="Trocar ${esc(l.eq)} por um reserva">${I.swap}</button>`}<button class="btn sm ic ghost" data-e="editLanc" data-id="${l.id}" title="Editar" aria-label="Editar">✎</button>` : ''}</td></tr>`).join('')}
@@ -251,6 +251,9 @@ export function criarEquip(X) {
         .sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
     };
   }
+  // Local da atividade: a área das Atividades onde o equipamento trabalhou (filtra o Modo TV de cada área).
+  const setDoEq = a => (/BATERIA|TRILHO|CDQ/i.test(a || '') ? 'bateria' : 'patio');
+  const opcoesSetor = (areaEq, atual) => `<option value="">Não informado</option>${SETS[setDoEq(areaEq)].areas.map(a => `<option value="${esc(a)}" ${a === atual ? 'selected' : ''}>${esc(AREA_S[a] || a)}</option>`).join('')}`;
   function lancForm(l, pre) {
     const novo = !l; l = l || { data: U.dia, eq: '', op: (pre && pre.op) || '', area: E().config.areas[0] || '', status: 'EM OPERAÇÃO', ini: '', fim: '', he: 0, sub: '', obs: '' };
     const dia = () => ($('flData') && $('flData').value) || l.data;
@@ -258,7 +261,7 @@ export function criarEquip(X) {
       <div class="row2"><label class="sel"><span>Data</span><input class="in" type="date" id="flData" value="${l.data}"></label><label class="sel"><span>Status</span><select class="in" id="flSt">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label></div>
       <div class="sel"><span>Equipamento (frota)</span>${campoBusca('flEq', l.eq, opcoesEq(dia, l.id), { livre: true, maiusculas: true, placeholder: 'Digite a identificação ou o tipo' })}</div>
       <div class="sel"><span>Operador</span>${campoBusca('flOp', l.op, opcoesOp(dia, l.id), { placeholder: 'Digite nome, função ou turma' })}</div>
-      <label class="sel"><span>Área</span><select class="in" id="flArea">${E().config.areas.map(a => `<option ${a === l.area ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label>
+      <div class="row2"><label class="sel"><span>Área</span><select class="in" id="flArea">${E().config.areas.map(a => `<option ${a === l.area ? 'selected' : ''}>${esc(a)}</option>`).join('')}</select></label><label class="sel"><span>Local da atividade (área)</span><select class="in" id="flSetor">${opcoesSetor(l.area, l.setor)}</select></label></div>
       <div class="row2"><label class="sel"><span>Início (vazio = turno)</span><input class="in" type="time" id="flIni" value="${l.ini || ''}"></label><label class="sel"><span>Fim (vazio = turno)</span><input class="in" type="time" id="flFim" value="${l.fim || ''}"></label></div>
       <div class="row2"><label class="sel"><span>Horas extras (h)</span><input class="in" type="number" min="0" step="0.25" id="flHe" value="${l.he || ''}"></label><label class="sel"><span>Hora extra a pedido de</span><select class="in" id="flHeO"><option value="">—</option><option value="DIKMA" ${l.heOrigem === 'DIKMA' ? 'selected' : ''}>Dikma</option><option value="ARCELOR" ${l.heOrigem === 'ARCELOR' ? 'selected' : ''}>ArcelorMittal</option></select></label></div>
       <div class="sel"><span>Substituiu (opcional)</span>${campoBusca('flSub', l.sub, opcoesOp(dia, l.id), { vazio: '—', placeholder: 'Ninguém' })}</div>
@@ -268,7 +271,7 @@ export function criarEquip(X) {
       const eq = $('flEq').value.trim().toUpperCase(); const data = $('flData').value; const op = $('flOp').value;
       if (!data || !eq) throw new Error('Informe a data e o equipamento.');
       if (!op) throw new Error('Escolha o operador da lista.');
-      const n = { data, mes: data.slice(0, 7), eq, tipo: (calc().frotaMap.get(eq) || {}).tipo || '', op, area: $('flArea').value, status: $('flSt').value, ini: $('flIni').value || null, fim: $('flFim').value || null, he: +$('flHe').value || 0, heOrigem: (+$('flHe').value || 0) ? $('flHeO').value : '', sub: $('flSub').value || '', obs: $('flObs').value.trim() };
+      const n = { data, mes: data.slice(0, 7), eq, tipo: (calc().frotaMap.get(eq) || {}).tipo || '', op, area: $('flArea').value, setor: $('flSetor').value || null, status: $('flSt').value, ini: $('flIni').value || null, fim: $('flFim').value || null, he: +$('flHe').value || 0, heOrigem: (+$('flHe').value || 0) ? $('flHeO').value : '', sub: $('flSub').value || '', obs: $('flObs').value.trim() };
       if (n.he && !n.heOrigem) throw new Error('Informe se a hora extra foi a pedido da Dikma ou da ArcelorMittal.');
       if (novo) { DB.eAdd('lanc', n); DB.log(`Operação: lançou ${eq} · ${short(n.op)} em ${dBR(data)}`); } else { DB.eUpd('lanc', l.id, n); }
       toast(novo ? 'Lançamento salvo' : 'Lançamento atualizado');
@@ -290,7 +293,8 @@ export function criarEquip(X) {
     ['flData', 'flEq', 'flOp', 'flSub'].forEach(id => { const el = $(id); if (el) el.addEventListener('change', avisar); });
     // Ao escolher o equipamento num lançamento novo, sugere o último operador e a área dele.
     const eqi = $('flEq');
-    if (novo && eqi) eqi.addEventListener('change', () => { if ($('flOp').value) return; const ult = E().lanc.filter(x => x.eq === eqi.value).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; if (ult) { definirValor('flOp', ult.op); $('flArea').value = ult.area; avisar(); } });
+    if (novo && eqi) eqi.addEventListener('change', () => { if ($('flOp').value) return; const ult = E().lanc.filter(x => x.eq === eqi.value).sort((a, b) => (a.data < b.data ? 1 : -1))[0]; if (ult) { definirValor('flOp', ult.op); $('flArea').value = ult.area; $('flSetor').innerHTML = opcoesSetor(ult.area, ult.setor); avisar(); } });
+    { const fa = $('flArea'); if (fa) fa.addEventListener('change', () => { $('flSetor').innerHTML = opcoesSetor(fa.value, $('flSetor').value); }); }
     avisar();
   }
   // Equipamento danificado: o operador passa para um reserva a partir da hora da troca.
@@ -313,7 +317,7 @@ export function criarEquip(X) {
       const causa = par ? par.causa : $('fsCausa').value; if (!causa) throw new Error('Escolha a causa da parada.');
       const fimOrig = L1 ? L1.fim : null;
       let id2 = null;
-      if (op) id2 = DB.eAdd('lanc', { data, mes: data.slice(0, 7), eq: B, tipo: (calc().frotaMap.get(B) || {}).tipo || '', op, area: L1 ? L1.area : (E().config.areas[0] || ''), status: 'EM OPERAÇÃO', ini: hora, fim: fimOrig || null, he: 0, sub: '', obs: `Reserva de ${A} (${String(causa).toLowerCase()})`, eqOrig: A });
+      if (op) id2 = DB.eAdd('lanc', { data, mes: data.slice(0, 7), eq: B, tipo: (calc().frotaMap.get(B) || {}).tipo || '', op, area: L1 ? L1.area : (E().config.areas[0] || ''), setor: L1 ? L1.setor || null : null, status: 'EM OPERAÇÃO', ini: hora, fim: fimOrig || null, he: 0, sub: '', obs: `Reserva de ${A} (${String(causa).toLowerCase()})`, eqOrig: A });
       if (L1) DB.eUpd('lanc', L1.id, { fim: hora, trocaPara: B });
       let pid = par ? par.id : null;
       if (par) DB.eUpd('par', par.id, { subst: B, lancSub: id2 });
