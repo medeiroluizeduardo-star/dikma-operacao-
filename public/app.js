@@ -2471,11 +2471,15 @@ const TV_CENAS = [
 const TVC = (() => {
   const q = new URLSearchParams(location.search); let s = {}; try { s = JSON.parse(localStorage.getItem('dikma-tv') || '{}'); } catch (e) { /* sem armazenamento */ }
   const cenas = (q.get('cenas') || (s.cenas || []).join(',') || 'hoje,rotas,semana,efetivo,equip,atencao,causas').split(',').filter(k => TV_CENAS.some(c => c[0] === k));
-  return { cenas: cenas.length ? cenas : TV_CENAS.map(c => c[0]), t: Math.min(120, Math.max(8, +(q.get('t') || s.t || 20))), conj: q.get('conj') || s.conj || 'alt', claro: q.has('claro') || !!s.claro };
+  return { cenas: cenas.length ? cenas : TV_CENAS.map(c => c[0]), t: Math.min(120, Math.max(8, +(q.get('t') || s.t || 20))), conj: q.get('conj') || s.conj || 'alt', claro: q.has('claro') || !!s.claro, area: q.get('area') || (q.has('cenas') ? '' : s.area || '') };
 })();
 if (TV && !TVC.claro) document.documentElement.setAttribute('data-theme', 'dark');
 let TVS = { i: 0, volta: 0, pausa: false, t0: Date.now() }, TV_TIMER = 0, TV_PREV = null;
-const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (DB.cache.e && DB.cache.e.loaded && DB.cache.e.config));
+// Áreas desta TV: a escolhida na configuração; senão, as áreas de quem entrou (líder, supervisor); senão, todas do conjunto.
+const tvAreas = () => { if (TVC.area && AREAS.includes(TVC.area)) return [TVC.area]; const m = myAreas().filter(a => AREAS.includes(a)); return m.length ? m : AREAS; };
+const tvMinhas = () => (ME && ['lider', 'supervisor'].includes(ME.papel) ? [ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS_ATIV.includes(a)) : []);
+const tvUma = () => (tvAreas().length === 1 ? tvAreas()[0] : null);
+const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (!tvUma() && !myAreas().length && DB.cache.e && DB.cache.e.loaded && DB.cache.e.config));
 function tvAgendar() {
   clearTimeout(TV_TIMER); if (TVS.pausa) return;
   TV_TIMER = setTimeout(() => tvIr(1), TVC.t * 1000);
@@ -2483,7 +2487,7 @@ function tvAgendar() {
 function tvIr(passo) {
   const l = tvCenasAtivas(); if (!l.length) return;
   let i = TVS.i + passo;
-  if (i >= l.length) { i = 0; TVS.volta++; const ss = setsDe(ME); if (TVC.conj === 'alt' && ss.length > 1) { UI.esSet = ss[TVS.volta % ss.length]; aplicarSet(); } }
+  if (i >= l.length) { i = 0; TVS.volta++; const mi = tvMinhas(); const ss = mi.length ? [...new Set(mi.map(a => setDaArea(a)))] : setsDe(ME); if (TVC.conj === 'alt' && !TVC.area && ss.length > 1) { UI.esSet = ss[TVS.volta % ss.length]; aplicarSet(); } }
   if (i < 0) i = l.length - 1;
   TVS.i = i; TVS.t0 = Date.now(); if (DB.marcarUso) DB.marcarUso();
   render(); tvAgendar();
@@ -2492,7 +2496,7 @@ const tvHojeK = () => DAYS.findIndex((_, k) => add(CUR_WEEK, k) === TODAY);
 // Situação de hoje: totais e por rota (docs da semana atual)
 function tvHoje() {
   const k = tvHojeK(); const t = { prog: 0, R: 0, N: 0, P: 0, E: 0, FP: 0 }; const porArea = {}; const rotas = [];
-  for (const a of AREAS) {
+  for (const a of tvAreas()) {
     const doc = DB.cache.semanas[a + '|' + CUR_WEEK]; const x = porArea[a] = { prog: 0, R: 0, N: 0, P: 0 };
     if (!doc || k < 0) continue;
     const pr = new Map();
@@ -2508,24 +2512,32 @@ function tvHoje() {
   return { t, porArea, rotas };
 }
 function tvEfetivo() {
-  const out = AREAS.map(a => {
+  const out = tvAreas().map(a => {
     const cs = colabsDa(a).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS'); const x = { a, quadro: cs.length, pres: 0, folga: 0, ferias: 0, aus: {}, D: 0, N: 0, atr: 0 };
     for (const c of cs) { const s = sitDia(c, TODAY); if (s.auto || s.v === 'F') x.folga++; else if (s.v === 'FE') x.ferias++; else if (AUSENCIA.has(s.v)) x.aus[s.v] = (x.aus[s.v] || 0) + 1; else { x.pres++; if (s.v === 'ATR') x.atr++; const p = periodoDe(c, TODAY); if (p) x[p]++; } }
     return x;
   });
   return out;
 }
+function tvEfetivoRotas(area) {
+  const por = new Map();
+  for (const c of colabsDa(area)) {
+    if (DB.sit(c.id + '|' + TODAY) === 'DS') continue; const x = por.get(c.rota) || { nome: c.rota, a: area, pres: 0, aus: {}, D: 0, N: 0 }; por.set(c.rota, x);
+    const s = sitDia(c, TODAY); if (s.auto || s.v === 'F' || s.v === 'FE') continue; if (AUSENCIA.has(s.v)) x.aus[s.v] = (x.aus[s.v] || 0) + 1; else { x.pres++; const p = periodoDe(c, TODAY); if (p) x[p]++; }
+  }
+  return [...por.values()].filter(x => x.pres || Object.keys(x.aus).length).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, innerHeight < 900 ? 6 : 8);
+}
 function tvAlertas(h) {
   const out = [];
-  const atr = atrasadasAll('TODAS').filter(x => x.dt >= add(TODAY, -7)).length; if (atr) out.push(['bad', `${n0(atr)} atividade${atr > 1 ? 's' : ''} atrasada${atr > 1 ? 's' : ''} nos últimos 7 dias`]);
+  const atr = tvAreas().flatMap(a => atrasadasAll(a)).filter(x => x.dt >= add(TODAY, -7)).length; if (atr) out.push(['bad', `${n0(atr)} atividade${atr > 1 ? 's' : ''} atrasada${atr > 1 ? 's' : ''} nos últimos 7 dias`]);
   const hora = new Date().getHours();
   const semAp = h.rotas.filter(r => r.prog && !r.R && !r.N);
   if (hora >= 10 && semAp.length) out.push(['warn', `${semAp.length} rota${semAp.length > 1 ? 's' : ''} sem nenhum apontamento hoje: ${semAp.slice(0, 4).map(r => r.rota).join(', ')}${semAp.length > 4 ? '…' : ''}`]);
-  const pa = listaAprov(AREAS).length; if (pa) out.push(['neu', `${n0(pa)} apontamento${pa > 1 ? 's' : ''} aguardando aprovação do supervisor`]);
-  const dv = listaAprov(AREAS, 'dev').length; if (dv) out.push(['warn', `${dv} apontamento${dv > 1 ? 's' : ''} devolvido${dv > 1 ? 's' : ''} ao líder para corrigir`]);
-  const ac = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta'); const venc = ac.filter(a => a.prazo && a.prazo < TODAY).length;
+  const pa = listaAprov(tvAreas()).length; if (pa) out.push(['neu', `${n0(pa)} apontamento${pa > 1 ? 's' : ''} aguardando aprovação do supervisor`]);
+  const dv = listaAprov(tvAreas(), 'dev').length; if (dv) out.push(['warn', `${dv} apontamento${dv > 1 ? 's' : ''} devolvido${dv > 1 ? 's' : ''} ao líder para corrigir`]);
+  const ac = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (a.area === 'TODAS' || tvAreas().includes(a.area))); const venc = ac.filter(a => a.prazo && a.prazo < TODAY).length;
   if (venc) out.push(['bad', `${venc} ação${venc > 1 ? 'ões' : ''} de causas com prazo vencido`]);
-  const E = DB.cache.e; const ab = E && E.loaded && E.config ? E.par.filter(p => !p.fim) : [];
+  const E = DB.cache.e; const ab = !tvUma() && !myAreas().length && E && E.loaded && E.config ? E.par.filter(p => !p.fim) : [];
   if (ab.length) out.push(['bad', `${ab.length} parada${ab.length > 1 ? 's' : ''} de equipamento sem liberação`]);
   const ft = tvEfetivo().reduce((n, x) => n + (x.aus.FT || 0), 0); if (ft) out.push(['warn', `${ft} falta${ft > 1 ? 's' : ''} no efetivo de hoje`]);
   const feitas = h.rotas.filter(r => r.prog && r.R + r.N === r.prog);
@@ -2539,28 +2551,28 @@ function tvCena(k, h) {
   if (k === 'hoje') {
     const t = h.t; const ap = t.R + t.N; const ef = pct(t.R, t.prog), apo = pct(ap, t.prog);
     return `<div class="tvgrid tvhoje"><div class="tvcard tvhero">${tvAnel(apo, 'var(--accent)', apo + '%', 'apontado hoje')}<div class="tvnums"><div><b class="num">${n0(t.prog)}</b><span>programadas hoje</span></div><div class="ok"><b class="num">${n0(t.R)}</b><span>realizadas</span></div><div class="bad"><b class="num">${n0(t.N)}</b><span>não realizadas</span></div><div><b class="num">${n0(t.P)}</b><span>a fazer</span></div>${t.FP ? `<div class="ext"><b class="num">${t.FP}</b><span>fora da programação</span></div>` : ''}<div class="ok"><b class="num">${ef}%</b><span>realizadas do programado</span></div></div></div>
-      <div class="tvareas">${AREAS.map(a => { const x = h.porArea[a]; const p = pct(x.R + x.N, x.prog); return `<div class="tvcard tvarea"><b>${AREA_S[a]}</b>${tvAnel(p, x.prog ? corEf(pct(x.R, x.R + x.N || 1)) : 'var(--line)', x.prog ? p + '%' : '—', x.prog ? `${x.R + x.N} de ${x.prog}` : 'nada hoje')}<span class="muted">${x.N ? `<i class="dotn"></i>${x.N} não realizada${x.N > 1 ? 's' : ''}` : x.prog && x.P === 0 ? 'tudo apontado' : `${x.P} a fazer`}</span></div>`; }).join('')}</div></div>`;
+      ${tvUma() ? `<div class="tvareas rotas">${h.rotas.filter(r => r.prog).sort((a, b) => a.rota.localeCompare(b.rota)).slice(0, innerHeight < 900 ? 6 : 8).map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvcard tvarea"><b>${esc(r.rota)}</b>${tvAnel(p, corEf(pct(r.R, r.R + r.N || 1)), p + '%', `${r.R + r.N} de ${r.prog}`)}<span class="muted">${r.N ? `<i class="dotn"></i>${r.N} não realizada${r.N > 1 ? 's' : ''}` : r.R + r.N === r.prog ? 'tudo apontado' : `${r.prog - r.R - r.N} a fazer`}</span></div>`; }).join('')}</div>` : `<div class="tvareas">${tvAreas().map(a => { const x = h.porArea[a]; const p = pct(x.R + x.N, x.prog); return `<div class="tvcard tvarea"><b>${AREA_S[a]}</b>${tvAnel(p, x.prog ? corEf(pct(x.R, x.R + x.N || 1)) : 'var(--line)', x.prog ? p + '%' : '—', x.prog ? `${x.R + x.N} de ${x.prog}` : 'nada hoje')}<span class="muted">${x.N ? `<i class="dotn"></i>${x.N} não realizada${x.N > 1 ? 's' : ''}` : x.prog && x.P === 0 ? 'tudo apontado' : `${x.P} a fazer`}</span></div>`; }).join('')}</div>`}</div></div>`;
   }
   if (k === 'rotas') {
     const est = r => (!r.prog ? 'vazia' : r.R + r.N === r.prog ? (r.N ? 'fechn' : 'fech') : r.R + r.N ? 'anda' : 'zero');
     const ord = { zero: 0, anda: 1, fechn: 2, fech: 3, vazia: 4 };
-    const rs = h.rotas.filter(r => r.prog).sort((a, b) => ord[est(a)] - ord[est(b)] || AREAS.indexOf(a.area) - AREAS.indexOf(b.area) || a.rota.localeCompare(b.rota));
+    const rs = h.rotas.filter(r => r.prog).sort((a, b) => ord[est(a)] - ord[est(b)] || tvAreas().indexOf(a.area) - tvAreas().indexOf(b.area) || a.rota.localeCompare(b.rota));
     const n = { zero: 0, anda: 0, fech: 0, fechn: 0 }; rs.forEach(r => n[est(r)]++);
     return `<div class="tvleg"><span class="zero"><i></i>Sem apontamento · <b>${n.zero}</b></span><span class="anda"><i></i>Em andamento · <b>${n.anda}</b></span><span class="fech"><i></i>Tudo feito · <b>${n.fech}</b></span><span class="fechn"><i></i>Apontada com não realizadas · <b>${n.fechn}</b></span></div>
       <div class="tvrotas${rs.length > (innerHeight < 900 ? 12 : 24) ? ' mini' : ''}${rs.length > (innerHeight < 760 ? 20 : innerHeight < 900 ? 30 : 48) ? ' micro' : ''}">${rs.map(r => { const p = pct(r.R + r.N, r.prog); return `<div class="tvrota ${est(r)}"><b>${esc(r.rota)}</b><small>${AREA_S[r.area]}${r.FP ? ` · ${r.FP} fora da prog.` : ''}</small><div class="tvbar"><i style="width:${p}%"></i></div><span class="num">${r.R + r.N}/${r.prog}${r.N ? ` · <em>${r.N} ✕</em>` : ''}</span></div>`; }).join('') || '<div class="tvcard tvvazio">Nenhuma rota com atividade programada hoje.</div>'}</div>`;
   }
   if (k === 'semana') {
-    const s = stats(docsFor({ ini: CUR_WEEK })); const ef = pct(s.Rhoje, s.progHoje); const mx = Math.max(1, ...s.day.map(d => d.R + d.N + d.P + d.A + d.E));
+    const docsTV = tvAreas().flatMap(a => docsFor({ ini: CUR_WEEK, area: a })); const s = stats(docsTV); const ef = pct(s.Rhoje, s.progHoje); const mx = Math.max(1, ...s.day.map(d => d.R + d.N + d.P + d.A + d.E));
     return `<div class="tvgrid tvsem"><div class="tvcard"><h3>Eficiência da semana</h3>${tvAnel(ef, corEf(ef), ef + '%', `${n0(s.Rhoje)} de ${n0(s.progHoje)} até hoje`)}<div class="tvnums col"><div class="ok"><b class="num">${n0(s.R)}</b><span>realizadas</span></div><div class="bad"><b class="num">${n0(s.N)}</b><span>não realizadas</span></div><div class="warn"><b class="num">${n0(s.A)}</b><span>atrasadas</span></div></div></div>
       <div class="tvcard"><h3>Dia a dia</h3><div class="tvcols">${s.day.map((d, j) => { const dt = add(CUR_WEEK, j); const t = d.R + d.N + d.P + d.A + d.E; return `<div class="tvcol${dt === TODAY ? ' hoje' : ''}"><span class="num">${t || ''}</span><div class="pilha" style="height:${t / mx * 100}%">${[['R', 'st-real'], ['N', 'st-nreal'], ['A', 'st-atr'], ['E', 'st-extra'], ['P', 'st-prog']].map(([c, v]) => d[c] ? `<i style="flex:${d[c]};background:var(--${v})${c === 'P' ? ';opacity:.4' : ''}"></i>` : '').join('')}</div><b>${DAYS[j]}</b><small>${ddmm(dt)}</small></div>`; }).join('')}</div></div>
-      <div class="tvcard tvlarga"><h3>Por área</h3>${AREAS.map(a => { const x = stats(docsFor({ ini: CUR_WEEK, area: a })); const p = pct(x.Rhoje, x.progHoje); const tt = x.prog || 1; return `<div class="tvlinha"><b>${AREA_S[a]}</b><div class="tvbar multi"><i style="width:${x.R / tt * 100}%;background:var(--st-real)"></i><i style="width:${x.N / tt * 100}%;background:var(--st-nreal)"></i><i style="width:${x.A / tt * 100}%;background:var(--st-atr)"></i></div><span class="num" style="color:${corEf(p)}">${p}%</span></div>`; }).join('')}</div></div>`;
+      <div class="tvcard tvlarga"><h3>${tvUma() ? 'Por rota' : 'Por área'}</h3>${(tvUma() ? rotasDa(tvUma()).filter(r => r.carga > 0).map(r => [r.rota, stats(docsTV, { rota: r.rota })]).filter(([, x]) => x.prog).slice(0, 10) : tvAreas().map(a => [AREA_S[a], stats(docsFor({ ini: CUR_WEEK, area: a }))])).map(([nome, x]) => { const p = pct(x.Rhoje, x.progHoje); const tt = x.prog || 1; return `<div class="tvlinha"><b>${esc(nome)}</b><div class="tvbar multi"><i style="width:${x.R / tt * 100}%;background:var(--st-real)"></i><i style="width:${x.N / tt * 100}%;background:var(--st-nreal)"></i><i style="width:${x.A / tt * 100}%;background:var(--st-atr)"></i></div><span class="num" style="color:${corEf(p)}">${p}%</span></div>`; }).join('')}</div></div>`;
   }
   if (k === 'efetivo') {
     const ef = tvEfetivo(); const T = ef.reduce((o, x) => { o.quadro += x.quadro; o.pres += x.pres; o.folga += x.folga; o.ferias += x.ferias; o.D += x.D; o.N += x.N; o.atr += x.atr; for (const [c, n] of Object.entries(x.aus)) o.aus[c] = (o.aus[c] || 0) + n; return o; }, { quadro: 0, pres: 0, folga: 0, ferias: 0, D: 0, N: 0, atr: 0, aus: {} });
     const nAus = Object.values(T.aus).reduce((a, b) => a + b, 0); const esc0 = T.pres + nAus;
     return `<div class="tvgrid tvefet"><div class="tvcard tvhero">${tvAnel(pct(T.pres, esc0), corEf(pct(T.pres, esc0)), n0(T.pres), `presentes de ${esc0} escalados`)}<div class="tvnums"><div><b class="num">${T.D}</b><span>turno dia</span></div><div><b class="num">${T.N}</b><span>turno noite</span></div><div><b class="num">${T.folga}</b><span>de folga</span></div><div class="ext"><b class="num">${T.ferias}</b><span>de férias</span></div><div class="bad"><b class="num">${nAus}</b><span>ausências</span></div>${T.atr ? `<div class="warn"><b class="num">${T.atr}</b><span>atrasados</span></div>` : ''}</div>
       ${nAus ? `<div class="tvchips">${Object.entries(T.aus).map(([c, n]) => `<span>${SIT_NOME[c] || c} · <b>${n}</b></span>`).join('')}</div>` : ''}</div>
-      <div class="tvareas">${ef.map(x => { const na = Object.values(x.aus).reduce((a, b) => a + b, 0); const e = x.pres + na; return `<div class="tvcard tvarea"><b>${AREA_S[x.a]}</b>${tvAnel(pct(x.pres, e), corEf(pct(x.pres, e || 1)), x.pres, `de ${e} escalados`)}<span class="muted">${x.D || x.N ? `☀ ${x.D} · ☾ ${x.N}` : ''}${na ? ` · <i class="dotn"></i>${na} ausente${na > 1 ? 's' : ''}` : ''}</span></div>`; }).join('')}</div></div>`;
+      <div class="tvareas${tvUma() ? ' rotas' : ''}">${(tvUma() ? tvEfetivoRotas(tvUma()) : ef).map(x => { const na = Object.values(x.aus).reduce((a, b) => a + b, 0); const e = x.pres + na; return `<div class="tvcard tvarea"><b>${esc(x.nome || AREA_S[x.a])}</b>${tvAnel(pct(x.pres, e), corEf(pct(x.pres, e || 1)), x.pres, `de ${e} escalados`)}<span class="muted">${x.D || x.N ? `☀ ${x.D} · ☾ ${x.N}` : ''}${na ? ` · <i class="dotn"></i>${na} ausente${na > 1 ? 's' : ''}` : ''}</span></div>`; }).join('')}</div></div>`;
   }
   if (k === 'equip') {
     const E = DB.cache.e; if (DB.eWatch) DB.eWatch([TODAY.slice(0, 7)]);
@@ -2576,7 +2588,7 @@ function tvCena(k, h) {
     return `<div class="tvalertas">${al.length ? al.map(([tom, t]) => `<div class="tvalerta ${tom}"><i></i><span>${esc(t)}</span></div>`).join('') : '<div class="tvcard tvvazio ok">Nada pendente agora. Bom trabalho!</div>'}</div>`;
   }
   if (k === 'causas') {
-    const { por, total } = contarCausas(docsFor({ ini: CUR_WEEK })); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 6); const mx = cs.length ? cs[0][1] : 1;
+    const { por, total } = contarCausas(tvAreas().flatMap(a => docsFor({ ini: CUR_WEEK, area: a }))); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 6); const mx = cs.length ? cs[0][1] : 1;
     return `<div class="tvcard tvlarga tvcausas"><h3>Principais causas das não realizadas · semana</h3>${cs.length ? cs.map(([c, n]) => `<div class="tvlinha"><b>${esc(c)}</b><div class="tvbar"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="num">${n} · ${pct(n, total)}%</span></div>`).join('') : '<div class="tvvazio ok">Nenhuma atividade não realizada nesta semana.</div>'}</div>`;
   }
   return '';
@@ -2592,7 +2604,7 @@ function vTV() {
   const al = tvAlertas(h); const agora = new Date();
   const ticker = al.length ? al.map(([tom, t]) => `<span class="${tom}">${esc(t)}</span>`).join('') : '<span class="ok">Tudo em dia</span>';
   return `<div class="tvx">
-    <header class="tvtopo"><img class="logo" src="img/dikma-logo-branco.png" alt="Dikma"><div class="tvtit"><b>${c[1]}</b><span>${SETS[SK].nome} · ${c[2]}</span></div>
+    <header class="tvtopo"><img class="logo" src="img/dikma-logo-branco.png" alt="Dikma"><div class="tvtit"><b>${c[1]}</b><span>${SETS[SK].nome}${tvUma() ? ' · ' + AREA_S[tvUma()] : tvAreas().length < AREAS.length ? ' · ' + tvAreas().map(a => AREA_S[a]).join(', ') : ''} · ${c[2]}</span></div>
       <div class="tvrel"><b id="tvRelogio" class="num">${agora.toTimeString().slice(0, 8)}</b><span>${agora.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div><div id="sync" class="syncwrap">${syncPill()}</div></header>
     <main class="tvcena" data-cena="${k}">${tvCena(k, h)}</main>
     <footer class="tvrodape"><div class="tvpontos">${l.map((x, j) => `<button data-tvgo="${j}" class="${j === TVS.i ? 'on' : ''}" aria-label="${TV_CENAS.find(y => y[0] === x)[1]}">${TV_CENAS.find(y => y[0] === x)[1]}</button>`).join('')}</div>
@@ -2610,13 +2622,15 @@ function tvConfig() {
   const ss = setsDe(ME);
   formSheet('Configurar o Modo TV', 'Fica salvo nesta TV. O link copiado já leva esta configuração.', `<div class="tvcfg"><b>Cenas</b>${TV_CENAS.map(([k, n, d]) => `<label class="tgl-row"><span>${n}<br><small class="muted">${d}</small></span><input type="checkbox" class="tgl" data-tvc="${k}" ${TVC.cenas.includes(k) ? 'checked' : ''}></label>`).join('')}</div>
     <label class="sel"><span>Tempo de cada cena</span><select class="in" id="tvT">${[10, 15, 20, 30, 45, 60].map(s => `<option value="${s}" ${TVC.t === s ? 'selected' : ''}>${s} segundos</option>`).join('')}</select></label>
-    ${ss.length > 1 ? `<label class="sel"><span>Conjunto</span><select class="in" id="tvConj"><option value="alt" ${TVC.conj === 'alt' ? 'selected' : ''}>Alternar Pátio e Bateria a cada volta</option>${ss.map(k => `<option value="${k}" ${TVC.conj === k ? 'selected' : ''}>Só ${SETS[k].nome}</option>`).join('')}</select></label>` : ''}
+    <label class="sel"><span>Área desta TV</span><select class="in" id="tvArea"><option value="">${tvMinhas().length ? 'As minhas áreas' : 'Todas as áreas'}</option>${ss.map(k => `<optgroup label="${SETS[k].nome}">${SETS[k].areas.filter(a => !tvMinhas().length || tvMinhas().includes(a)).map(a => `<option value="${a}" ${TVC.area === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select></label>
+    ${ss.length > 1 ? `<label class="sel"><span>Conjunto (quando a TV mostra mais de uma área)</span><select class="in" id="tvConj"><option value="alt" ${TVC.conj === 'alt' ? 'selected' : ''}>Alternar Pátio e Bateria a cada volta</option>${ss.map(k => `<option value="${k}" ${TVC.conj === k ? 'selected' : ''}>Só ${SETS[k].nome}</option>`).join('')}</select></label>` : ''}
     <label class="switch"><input type="checkbox" id="tvClaro" ${TVC.claro ? 'checked' : ''}><span>Tema claro (o padrão da TV é escuro)</span></label>`, 'Salvar e copiar o link', async () => {
     const cenas = [...document.querySelectorAll('[data-tvc]')].filter(i => i.checked).map(i => i.dataset.tvc); if (!cenas.length) throw new Error('Escolha pelo menos uma cena.');
-    Object.assign(TVC, { cenas, t: +$('tvT').value, conj: $('tvConj') ? $('tvConj').value : TVC.conj, claro: $('tvClaro').checked });
+    Object.assign(TVC, { cenas, t: +$('tvT').value, conj: $('tvConj') ? $('tvConj').value : TVC.conj, claro: $('tvClaro').checked, area: $('tvArea').value });
+    if (TVC.area) TVC.conj = setDaArea(TVC.area);
     try { localStorage.setItem('dikma-tv', JSON.stringify(TVC)); } catch (e) { /* sem armazenamento */ }
-    const url = `${location.origin}${location.pathname}?tv${DEMO ? '&demo' : ''}&cenas=${cenas.join(',')}&t=${TVC.t}&conj=${TVC.conj}${TVC.claro ? '&claro' : ''}`;
-    history.replaceState(history.state, '', url);
+    const url = `${location.origin}${location.pathname}?tv${DEMO ? '&demo' : ''}${TVC.area ? `&area=${encodeURIComponent(TVC.area)}` : ''}&cenas=${cenas.join(',')}&t=${TVC.t}&conj=${TVC.conj}${TVC.claro ? '&claro' : ''}`;
+    setTimeout(() => history.replaceState(history.state, '', url), 500); // depois que a janela fecha (o Voltar desfaz a entrada dela)
     if (TVC.claro) document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', 'dark');
     if (TVC.conj !== 'alt' && ss.includes(TVC.conj)) { UI.esSet = TVC.conj; aplicarSet(); }
     try { await navigator.clipboard.writeText(url); toast('Link do Modo TV copiado'); } catch (e) { toast('Configuração salva'); }
@@ -2624,6 +2638,7 @@ function tvConfig() {
   });
 }
 if (TV) {
+  if (TVC.area && setDaArea(TVC.area)) TVC.conj = setDaArea(TVC.area);
   if (TVC.conj !== 'alt') UI.esSet = TVC.conj;
   // relógio e tempo das paradas a cada segundo, sem redesenhar a tela
   setInterval(() => { const r = $('tvRelogio'); if (r) r.textContent = new Date().toTimeString().slice(0, 8); document.querySelectorAll('[data-desde]').forEach(e => { e.textContent = tvDecorrido(e.dataset.desde); }); }, 1000);
@@ -2647,6 +2662,7 @@ if (TV) {
 function tvCheia() { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) { /* sem tela cheia */ } }
 function renderTV() {
   if (!DB.cache.configLoaded) { pintar('view', M.ESQUELETO); return; }
+  { const mi = tvMinhas(); if (!TVC.area && mi.length && !mi.some(a => AREAS.includes(a))) { UI.esSet = setDaArea(mi[0]); aplicarSet(); } }
   UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; DB.watchMonths([CUR_MONTH, addMonth(CUR_MONTH, -1)]);
   if (!DB.cache.monthsLoaded.has(CUR_MONTH)) { pintar('view', M.ESQUELETO); return; }
   pintar('view', vTV());
