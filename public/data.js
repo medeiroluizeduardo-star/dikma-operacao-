@@ -90,6 +90,14 @@ const erroAuth = e => {
 export { erroAuth };
 
 async function loadConfig() {
+  // Abertura rápida: com a configuração já guardada neste aparelho, entra na hora e só confere a do servidor em segundo plano.
+  try {
+    const c = JSON.parse(localStorage.getItem('coqueria-fbcfg') || 'null');
+    if (c && c.apiKey) {
+      fetch('/__/firebase/init.json', { cache: 'no-store' }).then(r => (r.ok ? r.json() : null)).then(n => { if (n && n.apiKey) localStorage.setItem('coqueria-fbcfg', JSON.stringify(n)); }).catch(() => { /* sem sinal */ });
+      return c;
+    }
+  } catch (e) { /* ignora */ }
   // No Firebase Hosting a configuração vem pronta deste endereço reservado.
   try {
     const r = await fetch('/__/firebase/init.json', { cache: 'no-store' });

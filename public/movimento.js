@@ -26,17 +26,22 @@ function moverAgora() {
 }
 
 // ---------- entrada da tela (só quando a pessoa troca de tela, não quando os dados atualizam) ----------
+// prepararEntrada vem ANTES de desenhar: a classe e o conteúdo novo são calculados juntos, num passe só.
+export function prepararEntrada(view) {
+  if (reduzir()) return;
+  clearTimeout(view._entra); view.classList.add('entra', 'barras');
+}
 export function entrarTela(view) {
   if (reduzir()) return;
-  // tira e põe a classe no quadro seguinte (sem forçar o recálculo da página na hora do toque)
-  view.classList.remove('entra', 'barras'); cancelAnimationFrame(view._raf);
-  view._raf = requestAnimationFrame(() => { view.classList.add('entra', 'barras'); clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 1100); });
+  if (!view.classList.contains('entra')) view.classList.add('entra', 'barras');
+  clearTimeout(view._entra); view._entra = setTimeout(() => view.classList.remove('entra', 'barras'), 650);
   contarNumeros(view);
 }
+export function cancelarEntrada(view) { clearTimeout(view._entra); view.classList.remove('entra', 'barras'); }
 
 // Números dos indicadores sobem de zero até o valor (formato brasileiro: 1.182 · 94,3% · 1,63).
 function contarNumeros(root) {
-  const els = root.querySelectorAll('.kpi .v, .mini b, .kpi2 .v');
+  const els = [...root.querySelectorAll('.kpi .v, .mini b, .kpi2 .v')].slice(0, 10); // só os primeiros: cada número mexendo pede um novo cálculo da tela
   els.forEach(el => {
     if (el.children.length) return;
     const t = el.textContent.trim(); const m = t.match(/^([^\d-]*)(-?[\d.]*\d(?:,\d+)?)(.*)$/);
@@ -44,7 +49,7 @@ function contarNumeros(root) {
     const bruto = m[2]; const dec = (bruto.split(',')[1] || '').length; const alvo = parseFloat(bruto.replace(/\./g, '').replace(',', '.'));
     if (!isFinite(alvo) || alvo === 0) return;
     const fmt = v => m[1] + v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec }) + m[3];
-    const t0 = performance.now(), dur = 700;
+    const t0 = performance.now(), dur = 420;
     const passo = agora => {
       if (!el.isConnected) return;
       const p = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - p, 3);
