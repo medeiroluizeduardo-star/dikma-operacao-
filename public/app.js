@@ -457,9 +457,11 @@ function render() {
   const nav = k !== ULT || !!view.querySelector('.skel');
   const pos = nav ? null : M.guardarRolagem(view);
   VIEW_MUDOU = false;
+  if (nav && AUTH.status === 'ready') M.prepararEntrada(view);
   renderTela();
-  if (AUTH.status !== 'ready') { ULT = ''; return; }
+  if (AUTH.status !== 'ready') { ULT = ''; M.cancelarEntrada(view); return; }
   ULT = k;
+  if (nav && view.querySelector('.skel')) M.cancelarEntrada(view);
   if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); }
   M.moverIndicador();
   if (UI.flash && Date.now() - UI.flash.t > 500) UI.flash = null;
@@ -629,7 +631,7 @@ function abrirBusca() {
     if (sel >= res.length) sel = 0;
     $('bqRes').innerHTML = res.length ? res.map((x, i) => `<button class="opt" role="option" data-bq="${i}" aria-selected="${i === sel}"><span>${esc(x.t)}<br><small class="muted">${esc(x.d)}</small></span></button>`).join('') : '<p class="muted m0">Nada encontrado.</p>';
   };
-  const abrir = i => { const x = res[i]; if (!x) return; fechar(); UI.confirm = null; UI.modOpen = false; x.ir(); ensureModulo(); aplicarSet(); salvarUI(); render(); scrollTo(0, 0); };
+  const abrir = i => { const x = res[i]; if (!x) return; fechar(); UI.confirm = null; UI.modOpen = false; x.ir(); ensureModulo(); aplicarSet(); salvarUI(); trocarTela(UI.view); };
   $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim') return fechar(); const b = e.target.closest('[data-bq]'); if (b) abrir(+b.dataset.bq); };
   $('bqIn').oninput = () => { sel = 0; pintarRes(); };
   $('bqIn').onkeydown = e => {
@@ -813,41 +815,75 @@ const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.
 // Férias marcadas em Frequência e férias entram sozinhas como FE (o lançamento do dia ainda vale mais).
 let FERI = null, FERIv = null;
 const feriasDe = (c, dt) => { const l = DB.cache.feriasAtivas || (DB.cache.adm && DB.cache.adm.ferias) || []; if (FERIv !== l) { FERI = indiceFerias(l); FERIv = l; } return FERI({ mat: c.mat, nome: c.nome }, dt); };
+// Escala prevista da pessoa no dia (letra da turma × regime), guardada até os dados mudarem.
+let PVM = new Map(), PVv = -1, PVe = null;
+function previstoDe(c, dt) {
+  const e = escala(); if (PVv !== DATAV || PVe !== e) { PVM = new Map(); PVv = DATAV; PVe = e; }
+  const ch = (c.regime || '') + '|' + turmaDe(c) + '|' + dt;
+  if (PVM.has(ch)) return PVM.get(ch);
+  const p = e.previsto(regimeDe(c), turmaDe(c), dt); PVM.set(ch, p); return p;
+}
+// sitDia é chamado milhares de vezes por desenho (Painel, balanço, escala): guarda o resultado até os dados mudarem.
+let SDM = new Map(), SDv = -1;
 function sitDia(c, dt) {
+  if (SDv !== DATAV) { SDM = new Map(); SDv = DATAV; }
+  const ch = c.id + '|' + dt + '|' + (c.regime || '') + '|' + (c.turma || '') + '|' + (c.nome || '');
+  let r = SDM.get(ch); if (r) return r;
+  r = Object.freeze(sitDiaCalc(c, dt)); SDM.set(ch, r); return r;
+}
+function sitDiaCalc(c, dt) {
   const m = DB.sit(c.id + '|' + dt); if (m) return { v: m, auto: false };
   if (feriasDe(c, dt)) return { v: 'FE', auto: false, ferias: true }; // ausência (não é folga da escala: não vira hora extra)
-  const p = escala().previsto(regimeDe(c), turmaDe(c), dt);
+  const p = previstoDe(c, dt);
   if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
   return { v: 'P', auto: false, semTurma: !p };
 }
 // Turno do dia pela letra: 'D' diurno, 'N' noturno, '' administrativo / folga / sem turma (a noite conta no dia em que começa)
-const periodoDe = (c, dt) => { const p = escala().previsto(regimeDe(c), turmaDe(c), dt); return p && p.trab && p.periodo ? p.periodo : ''; };
+const periodoDe = (c, dt) => { const p = previstoDe(c, dt); return p && p.trab && p.periodo ? p.periodo : ''; };
 const marcaPer = per => (per ? `<i class="peri ${per}" aria-hidden="true">${per}</i>` : '');
-const folgaEscala = (c, dt) => { const p = escala().previsto(regimeDe(c), turmaDe(c), dt); return !!(p && !p.trab); };
+const folgaEscala = (c, dt) => { const p = previstoDe(c, dt); return !!(p && !p.trab); };
 // mesma regra para outros conjuntos (Meu dia): get(chave) devolve o lançado
 const sitDiaDe = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; if (feriasDe(c, dt)) return 'FE'; const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); return p && !p.trab ? 'F' : undefined; };
 const indisponivel = (c, dt) => { const v = sitDia(c, dt).v; return v !== 'DS' && AUSENTE.has(v); };
+let ERM = new Map(), ERv = -1;
 function escalaRota(r, ini) {
+  if (ERv !== DATAV) { ERM = new Map(); ERv = DATAV; }
+  const ch = r.area + '|' + r.rota + '|' + ini + '|' + r.carga + '|' + r.ef + '|' + COLABS.length;
+  if (!ERM.has(ch)) ERM.set(ch, escalaRotaCalc(r, ini));
+  return ERM.get(ch);
+}
+function escalaRotaCalc(r, ini) {
   const cs = COLABS.filter(c => c.area === r.area && c.rota === r.rota);
   const doc = DB.cache.semanas[r.area + '|' + ini];
   const fator = fatorRota(cs, escala().regimes); // rota de turno: só parte do quadro trabalha por dia
+  const ids = new Map(cs.map(c => [c.id, c]));
+  const todos = idsColabs();
+  // atividades programadas da rota em cada dia da semana (uma passada só)
+  const progK = [0, 0, 0, 0, 0, 0, 0];
+  if (doc) doc.ids.forEach((id, i) => { const p = PL.get(id); if (!p || p.rota !== r.rota) return; const d = doc.d[i]; for (let k = 0; k < 7; k++) if (d[k] !== '_') progK[k]++; });
   const out = [];
   for (let k = 0; k < 7; k++) {
     const dt = add(ini, k);
-    const aloc = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS').length;
-    const aus = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS' && indisponivel(c, dt)).length;
-    const escd = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS' && !sitDia(c, dt).auto).length;
+    let aloc = 0, aus = 0, escd = 0; const per = { D: 0, N: 0 };
+    for (const c of cs) {
+      if (DB.sit(c.id + '|' + dt) === 'DS') continue;
+      aloc++;
+      const sd = sitDia(c, dt); const ind = sd.v !== 'DS' && AUSENTE.has(sd.v);
+      if (ind) aus++;
+      if (!sd.auto) escd++;
+      if (!ind) { const p = periodoDe(c, dt); if (p) per[p]++; } // quem está disponível de dia e de noite (turno pela letra)
+    }
     // substituições: quem cobre uma ausência desta rota soma aqui; quem sai desta rota para cobrir outra, sai daqui
-    let mov = 0; const ids = new Set(cs.map(c => c.id));
-    for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && COLABS.some(c => c.id === x.sub)) mov++; if (ids.has(x.sub)) { const sc = cs.find(c => c.id === x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; } }
-    let prog = 0; if (doc) doc.ids.forEach((id, i) => { if (PL.get(id) && PL.get(id).rota === r.rota && doc.d[i][k] !== '_') prog++; });
+    let mov = 0;
+    for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && todos.has(x.sub)) mov++; const sc = ids.get(x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; }
+    const prog = progK[k];
     const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * fator) : (r.rota === 'GESTÃO' ? Math.min(r.ef, escd) : 0);
-    // quem está disponível de dia e de noite (turno pela letra)
-    const per = { D: 0, N: 0 }; cs.forEach(c => { if (DB.sit(c.id + '|' + dt) === 'DS' || indisponivel(c, dt)) return; const p = periodoDe(c, dt); if (p) per[p]++; });
     out.push({ disp: aloc - aus + mov, nec, prog, aloc, mov, dispD: per.D, dispN: per.N });
   }
   return { cs, days: out };
 }
+let IDC = null, IDCv = null;
+const idsColabs = () => { if (IDCv !== COLABS) { IDC = new Set(COLABS.map(c => c.id)); IDCv = COLABS; } return IDC; };
 /* ---------------- EFETIVO NO PAINEL ---------------- */
 const SIT_NOME = Object.fromEntries(SITS);
 const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad' };
@@ -911,7 +947,9 @@ const HE_ORIG = { DIKMA: 'Dikma', ARCELOR: 'ArcelorMittal' };
 const HE_SIG = { DIKMA: 'D', ARCELOR: 'A' };
 const AUS_COBRIVEL = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT']);
 // coberturas de um dia: [{ aus: id de quem faltou, sub: id de quem cobre }]
-function cobDoDia(dt) { const x = (DB.sitExtraMes(dt.slice(0, 7)).cob) || {}; const out = []; for (const [k, sid] of Object.entries(x)) { const i = k.lastIndexOf('|'); if (k.slice(i + 1) === dt && sid) out.push({ aus: k.slice(0, i), sub: sid }); } return out; }
+let CDM = new Map(), CDv = -1;
+function cobDoDia(dt) { if (CDv !== DATAV) { CDM = new Map(); CDv = DATAV; } let r = CDM.get(dt); if (!r) { r = cobDoDiaCalc(dt); CDM.set(dt, r); } return r; }
+function cobDoDiaCalc(dt) { const x = (DB.sitExtraMes(dt.slice(0, 7)).cob) || {}; const out = []; for (const [k, sid] of Object.entries(x)) { const i = k.lastIndexOf('|'); if (k.slice(i + 1) === dt && sid) out.push({ aus: k.slice(0, i), sub: sid }); } return out; }
 const cobertoPor = (id, dt) => DB.sitInfo(id + '|' + dt).cob;
 const cobrindo = (id, dt) => { const x = cobDoDia(dt).find(y => y.sub === id); return x ? x.aus : ''; };
 const nomeDe = id => { const c = COLABS.find(x => x.id === id); return c ? title(c.nome) : '—'; };
@@ -1294,7 +1332,7 @@ function irEscala(rota) {
   if (!setsDe(ME).length) return;
   if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || UI.modulo === 'paineis') UI.esSet = SK;
   UI.modulo = 'gestao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
-  salvarUI(); render(); scrollTo(0, 0);
+  salvarUI(); trocarTela(UI.view);
 }
 function vEsDim() {
   const area = areaScope(); const { rows } = dimRotas(area);
@@ -1958,7 +1996,7 @@ function irParaModuloDa(id) {
   if (alvo === 'gestao' || alvo === 'paineis') UI.esSet = set;
   UI.modulo = alvo; UI.modOpen = false; aplicarSet();
 }
-function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if ((m === 'gestao' || m === 'paineis') && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; if (m === 'gestao') UI.eRota = '*'; } if ((m === 'operacao' || m === 'bateria') && UI.modulo === 'paineis') { /* volta para o conjunto que estava no painel só se for o mesmo módulo */ } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); }
+function trocarModulo(m) { if (!modsDe(ME).includes(m)) return; if ((m === 'gestao' || m === 'paineis') && (UI.modulo === 'operacao' || UI.modulo === 'bateria')) { UI.esSet = SK; if (m === 'gestao') UI.eRota = '*'; } if ((m === 'operacao' || m === 'bateria') && UI.modulo === 'paineis') { /* volta para o conjunto que estava no painel só se for o mesmo módulo */ } UI.modulo = m; UI.view = MODS[m].inicio; UI.confirm = null; salvarUI(); trocarTela(UI.view); }
 function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
@@ -2018,8 +2056,11 @@ function apply(doc, i, k, v, motivo) {
   if (v === 'N' && !motivo) return pedirJustificativa(doc, i, k, m => apply(doc, i, k, 'N', m));
   setSt(doc, i, k, v, motivo);
   toast({ R: 'Marcada como realizada', N: 'Marcada como não realizada', P: 'Apontamento desfeito', E: 'Extra registrada', _: 'Extra removida' }[v] || 'Atualizado');
-  render();
+  desenharLogo();
 }
+// Redesenha no quadro seguinte (o toque é respondido antes); vários toques seguidos viram um desenho só.
+let logoRaf = 0;
+function desenharLogo() { if (logoRaf) return; logoRaf = requestAnimationFrame(() => { logoRaf = requestAnimationFrame(() => { logoRaf = 0; render(); }); }); }
 // Efetivo diário da semana (área escolhida no topo, todas as rotas) para o Excel: o mesmo código que aparece na tela.
 function exportEsdia() {
   const area = areaScope(); const dias = DAYS.map((_, k) => add(UI.ini, k));
@@ -2040,9 +2081,10 @@ function exportCSV() {
 addEventListener('scroll', () => { const r = scrollY > 40; if (document.body.classList.contains('rolou') !== r) { document.body.classList.toggle('rolou', r); medirTopo(); } }, { passive: true });
 // Mede o cabeçalho sem forçar o navegador a recalcular a página a cada desenho (era o passo mais lento de cada toque).
 let topoRO = null;
+let topoV = '';
 function medirTopo() {
   const t = document.querySelector('.top'); if (!t) return;
-  const pos = h => document.documentElement.style.setProperty('--topo', Math.round(h) + 'px');
+  const pos = h => { const v = Math.round(h) + 'px'; if (v === topoV) return; topoV = v; document.documentElement.style.setProperty('--topo', v); }; // mudar a variável refaz o estilo da página inteira: só quando muda
   if (!('ResizeObserver' in window)) return pos(t.offsetHeight);
   if (topoRO && topoRO._t === t) return;
   if (topoRO) topoRO.disconnect();
@@ -2081,6 +2123,16 @@ function afterRender() {
   });
 }
 
+// Troca de tela em dois tempos: o toque responde na hora (item do menu marcado, tela atual esmaece)
+// e a tela nova é desenhada no quadro seguinte. Assim o celular não parece travado enquanto monta a tela.
+let trocaRaf = 0;
+function trocarTela(id = UI.view) {
+  document.querySelectorAll('#nav [data-go], #tabbar [data-go]').forEach(b => { if (b.dataset.go === id) b.setAttribute('aria-current', 'page'); else if (b.dataset.go !== '__more') b.removeAttribute('aria-current'); });
+  M.moverIndicador();
+  const v = $('view'); if (v) v.classList.add('saindo');
+  cancelAnimationFrame(trocaRaf);
+  trocaRaf = requestAnimationFrame(() => { trocaRaf = requestAnimationFrame(() => { trocaRaf = 0; if (v) v.classList.remove('saindo'); render(); scrollTo(0, 0); }); });
+}
 // Menu de módulos: fecha ao clicar fora ou com Esc; setas sobem e descem.
 document.addEventListener('pointerdown', e => { if (UI.modOpen && !e.target.closest('.modpick')) menuModulos(false); });
 document.addEventListener('keydown', e => {
@@ -2100,13 +2152,13 @@ document.addEventListener('click', async e => {
       const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
       const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
       const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), ...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; render(); scrollTo(0, 0); });
+      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     irParaModuloDa(d.go);
-    UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); render(); scrollTo(0, 0); return;
+    UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); trocarTela(d.go); return;
   }
-  if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); render(); scrollTo(0, 0); return; }
+  if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); trocarTela(view); return; }
   if (d.cfset) { UI.cfSet = d.cfset; salvarUI(); render(); return; }
   // Escalas e turnos (rascunho até salvar)
   if (d.escdel) { const [k, l] = d.escdel.split('|'); delete rascEsc().regimes[k].turmas[l]; render(); return; }
@@ -2123,7 +2175,7 @@ document.addEventListener('click', async e => {
     UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = { gcomigo: 'gcolab', gnovaoc: 'gcolab' }[view] || view; UI.confirm = null;
     if (area && (mod === 'operacao' || mod === 'bateria')) { UI.area = area; UI.aRota = null; UI.eRota = null; }
     if (view === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
-    salvarUI(); render(); scrollTo(0, 0);
+    salvarUI(); trocarTela(UI.view);
     if (novaOc) { const b = document.querySelector('[data-g="novaOc"]'); if (b) b.click(); }
     return;
   }
@@ -2142,6 +2194,8 @@ document.addEventListener('click', async e => {
   if (d.ap) {
     const [i, k, v] = d.ap.split('|'); const doc = DB.cache.semanas[apArea() + '|' + UI.ini];
     if (v === 'rmE') return apply(doc, +i, +k, '_');
+    // resposta na hora: o botão já aparece marcado; a tela é refeita no quadro seguinte
+    if (v === 'R' && doc) { const novo = doc.d[+i][+k] === 'R' ? 'P' : 'R'; const bt = t.closest('.bt'); if (bt) bt.querySelectorAll('[data-ap]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ap.endsWith('|' + novo)))); }
     return apply(doc, +i, +k, doc.d[+i][+k] === v ? 'P' : v);
   }
   if (d.pend) { const parts = d.pend.split('|'); const id = parts[0] + '|' + parts[1]; return apply(DB.cache.semanas[id], +parts[2], +parts[3], parts[4]); }
@@ -2735,7 +2789,7 @@ document.addEventListener('click', e => {
   const tr = e.target.closest && e.target.closest('[data-progrota]'); if (!tr || !ME) return;
   const [area, rota] = tr.dataset.progrota.split('|');
   irParaModuloDa('prog'); UI.area = area; UI.rota = rota; UI.q = ''; UI.soPend = false; UI.tipo = 'TODOS'; UI.view = 'prog'; UI.confirm = null;
-  ensureModulo(); aplicarSet(); UI.area = myArea() || area; UI.rota = rota; salvarUI(); render(); scrollTo(0, 0);
+  ensureModulo(); aplicarSet(); UI.area = myArea() || area; UI.rota = rota; salvarUI(); trocarTela(UI.view);
 });
 // Fechar a aba com apontamento ainda não enviado (sem sinal): o navegador pergunta antes de sair.
 addEventListener('beforeunload', e => { if (!DEMO && DB.pendingWrites() > 0) { e.preventDefault(); e.returnValue = ''; } });

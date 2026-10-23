@@ -794,24 +794,23 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 @media (prefers-reduced-motion:no-preference){
   /* Sistema animado: ao trocar de tela, os blocos sobem em cascata, os indicadores aparecem um a um,
      as barras crescem e as listas entram em sequência. Só na navegação; atualização de dados não repete. */
-  #view.entra>*{animation:entra .42s var(--ease) both}
-  #view.entra>:nth-child(2){animation-delay:.05s}#view.entra>:nth-child(3){animation-delay:.1s}#view.entra>:nth-child(4){animation-delay:.15s}
-  #view.entra>:nth-child(5){animation-delay:.2s}#view.entra>:nth-child(n+6){animation-delay:.25s}
-  #view.entra .grid2>*,#view.entra .g2>*{animation:entra .45s var(--ease) both}
-  #view.entra .grid2>:nth-child(2),#view.entra .g2>:nth-child(2){animation-delay:.09s}
-  #view.entra .kpis>*,#view.entra .kpis5>*{animation:kpiIn .45s var(--ease) both}
-  #view.entra .kpis>:nth-child(2),#view.entra .kpis5>:nth-child(2){animation-delay:.04s}#view.entra .kpis>:nth-child(3),#view.entra .kpis5>:nth-child(3){animation-delay:.08s}
-  #view.entra .kpis>:nth-child(4),#view.entra .kpis5>:nth-child(4){animation-delay:.12s}#view.entra .kpis>:nth-child(5),#view.entra .kpis5>:nth-child(5){animation-delay:.16s}
-  #view.entra .kpis>:nth-child(n+6),#view.entra .kpis5>:nth-child(n+6){animation-delay:.2s}
-  #view.entra :is(.act,tbody tr,.barrow):nth-child(-n+24){animation:linhaIn .36s var(--ease) both}
-  #view.entra :is(.act,tbody tr,.barrow):nth-child(2){animation-delay:.03s}#view.entra :is(.act,tbody tr,.barrow):nth-child(3){animation-delay:.06s}
-  #view.entra :is(.act,tbody tr,.barrow):nth-child(4){animation-delay:.09s}#view.entra :is(.act,tbody tr,.barrow):nth-child(5){animation-delay:.12s}
-  #view.entra :is(.act,tbody tr,.barrow):nth-child(6){animation-delay:.15s}#view.entra :is(.act,tbody tr,.barrow):nth-child(7){animation-delay:.18s}
-  #view.entra :is(.act,tbody tr,.barrow):nth-child(n+8){animation-delay:.21s}
-  #view.barras .stack i,#view.barras .meter i,#view.barras .ef i,#view.barras .md-bar i{animation:cresceX .7s cubic-bezier(.2,.8,.2,1) .12s both;transform-origin:left center}
-  #view.barras .col i{animation:cresceY .7s cubic-bezier(.2,.9,.3,1.15) both;transform-origin:center bottom}
-  #view.barras .col:nth-child(2) i{animation-delay:.05s}#view.barras .col:nth-child(3) i{animation-delay:.1s}#view.barras .col:nth-child(4) i{animation-delay:.15s}
-  #view.barras .col:nth-child(5) i{animation-delay:.2s}#view.barras .col:nth-child(6) i{animation-delay:.25s}#view.barras .col:nth-child(n+7) i{animation-delay:.3s}
+  #view.entra>*{animation:entra .26s var(--ease) both}
+  #view.entra>:nth-child(2){animation-delay:.03s}#view.entra>:nth-child(3){animation-delay:.06s}#view.entra>:nth-child(n+4){animation-delay:.09s}
+  #view.entra .grid2>*,#view.entra .g2>*{animation:entra .28s var(--ease) both}
+  #view.entra .grid2>:nth-child(2),#view.entra .g2>:nth-child(2){animation-delay:.05s}
+  #view.entra .kpis>*,#view.entra .kpis5>*{animation:kpiIn .28s var(--ease) both}
+  #view.entra .kpis>:nth-child(2),#view.entra .kpis5>:nth-child(2){animation-delay:.03s}#view.entra .kpis>:nth-child(3),#view.entra .kpis5>:nth-child(3){animation-delay:.06s}
+  #view.entra .kpis>:nth-child(n+4),#view.entra .kpis5>:nth-child(n+4){animation-delay:.09s}
+  #view.entra :is(.act,tbody tr,.barrow):nth-child(-n+12){animation:linhaIn .22s var(--ease) both}
+  #view.entra :is(.act,tbody tr,.barrow):nth-child(2){animation-delay:.02s}#view.entra :is(.act,tbody tr,.barrow):nth-child(3){animation-delay:.04s}
+  #view.entra :is(.act,tbody tr,.barrow):nth-child(4){animation-delay:.06s}#view.entra :is(.act,tbody tr,.barrow):nth-child(5){animation-delay:.08s}
+  #view.entra :is(.act,tbody tr,.barrow):nth-child(n+6){animation-delay:.1s}
+  #view.barras .stack i,#view.barras .meter i,#view.barras .ef i,#view.barras .md-bar i{animation:cresceX .45s cubic-bezier(.2,.8,.2,1) .05s both;transform-origin:left center}
+  #view.barras .col i{animation:cresceY .45s cubic-bezier(.2,.9,.3,1.1) both;transform-origin:center bottom}
+  #view.barras .col:nth-child(2) i{animation-delay:.03s}#view.barras .col:nth-child(3) i{animation-delay:.06s}#view.barras .col:nth-child(4) i{animation-delay:.09s}
+  #view.barras .col:nth-child(n+5) i{animation-delay:.12s}
+  /* troca de tela: a atual esmaece no mesmo quadro do toque */
+  #view.saindo{opacity:.55;transition:opacity .12s linear}
   /* toque e passagem do mouse */
   .btn{transition:transform var(--t1) var(--ease),background-color var(--t1) linear,border-color var(--t1) linear,box-shadow var(--t2) var(--ease)}
   .btn:active:not(:disabled){transform:scale(.97)}
@@ -828,6 +827,19 @@ select.in:focus,input.in:focus,textarea.in:focus{outline:none;border-color:var(-
 @keyframes entra{from{opacity:0;transform:translateY(12px)}}
 @keyframes kpiIn{from{opacity:0;transform:translateY(10px) scale(.97)}}
 @keyframes linhaIn{from{opacity:0;transform:translateX(-8px)}}
+/* leveza: blocos fora da tela não são desenhados até a pessoa rolar até eles */
+#view>.card:nth-child(n+3):not(.imp-lista){content-visibility:auto;contain-intrinsic-size:auto 420px}
+#view.saindo{pointer-events:none}
+/* celular: o desfoque atrás das barras pesa na rolagem; fica uma cor quase sólida */
+@media (max-width:860px),(pointer:coarse){
+  .top{backdrop-filter:none;background:color-mix(in srgb,var(--bg) 97%,transparent)}
+  .tabbar{backdrop-filter:none!important;background:color-mix(in srgb,var(--surface) 98%,transparent)!important}
+  .scrim{backdrop-filter:none!important}
+  @media (prefers-reduced-motion:no-preference){.scrim{animation-name:scrimInL!important}.scrim.sai{animation-name:scrimOutL!important}}
+}
+@keyframes scrimInL{from{background:rgba(14,15,40,0)}}
+@keyframes scrimOutL{to{background:rgba(14,15,40,0)}}
+
 @keyframes selo{from{transform:scale(0)}}
 @keyframes cresceX{from{transform:scaleX(0)}}
 @keyframes cresceY{from{transform:scaleY(0)}}
