@@ -413,6 +413,24 @@ export function criarAdministrativo(X) {
     };
   }
 
+  // Resumo de um dia: presença por grupo, quem faltou ou está fora e quem fez hora extra.
+  function resumoDia(dt, conj) {
+    const lev = levantar(conj, [dt]); if (lev.carregando && !lev.pessoas.length) return null;
+    const k = indicadores(lev, [dt]); const fe = A().ferias || [];
+    const cod = x => x.c[dt] && x.c[dt].v;
+    const oc = lev.pessoas.filter(x => ['FT', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(cod(x))).sort((a, b) => cod(a).localeCompare(cod(b)) || a.nome.localeCompare(b.nome));
+    const he = lev.pessoas.filter(x => cod(x) === 'HE').sort((a, b) => a.nome.localeCompare(b.nome));
+    const sai = fe.filter(f => f.inicio === dt), volta = fe.filter(f => f.retorno === dt);
+    const fut = dt > TODAY;
+    return {
+      kpis: [[fut || !k.Q ? '—' : pc(k.pres), 'Presença do dia'], [fut ? '—' : `${k.P}/${k.Q}`, 'Presentes / escalados'], [k.t.FT, 'Faltas'], [k.t.AT, 'Atestados'], [k.t.HE, 'Hora extra'], [k.t.FE, 'Férias']],
+      corpo: `${fut ? '<p class="muted">Dia ainda não chegou: aparecem só férias e lançamentos já feitos.</p>' : ''}<h4>Presença por grupo</h4><table><thead><tr><th>Grupo</th><th class="r">Pessoas</th><th class="r">Presentes / escalados</th><th class="r">Presença</th><th class="r">Faltas</th><th class="r">Atestados</th></tr></thead><tbody>${k.grupos.sort((a, b) => (a.q ? a.p / a.q : 1) - (b.q ? b.p / b.q : 1)).map(g => `<tr><td>${esc(title(g.nome))}</td><td class="r">${g.n}</td><td class="r">${g.q ? `${g.p}/${g.q}` : '—'}</td><td class="r"><b>${g.q ? pc(g.p / g.q) : '—'}</b></td><td class="r">${g.FT || ''}</td><td class="r">${g.AT || ''}</td></tr>`).join('')}</tbody></table>
+        <div class="rcols"><div><h4>Ocorrências do dia</h4>${oc.length ? `<table><tbody>${oc.map(x => `<tr><td>${esc(title(x.nome))}<div class="muted small">${esc(title(x.grupo || ''))}</div></td><td>${esc(NOMES_CODIGO[cod(x)] || cod(x))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma falta, atestado ou afastamento.</p>'}</div>
+        <div><h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(x => `<tr><td>${esc(title(x.nome))}</td><td class="muted small">${esc(title(x.grupo || ''))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
+        <h4>Férias</h4>${sai.length || volta.length ? `<table><tbody>${sai.map(f => `<tr><td>${esc(title(f.nome))}</td><td>sai hoje</td></tr>`).join('')}${volta.map(f => `<tr><td>${esc(title(f.nome))}</td><td>volta hoje</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${k.t.FE} pessoa(s) em férias · ninguém sai ou volta neste dia.</p>`}</div></div>`
+    };
+  }
+
   /* ---------- eventos ---------- */
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || (UI.modulo !== 'frequencia' && !(UI.modulo === 'paineis' && ['conj', 'comp'].includes(t.dataset.a)))) return;
@@ -475,5 +493,5 @@ export function criarAdministrativo(X) {
     if (view === 'aimport') return vImport();
     return vFreq();
   }
-  return { render: renderView, topo, painel: vPainelFreq, resumoSemana, badge: () => 0 };
+  return { render: renderView, topo, painel: vPainelFreq, resumoSemana, resumoDia, badge: () => 0 };
 }

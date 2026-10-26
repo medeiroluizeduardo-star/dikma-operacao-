@@ -172,6 +172,26 @@ export function criarEquip(X) {
     };
   }
 
+  // Resumo de um dia (folha de impressão): cada equipamento lançado, horas e paradas do dia.
+  function resumoDia(d) {
+    if (!E().loaded || !E().config) return null;
+    DB.eWatch([d.slice(0, 7)]);
+    const C = calc(); const sum = (a, f) => a.reduce((s, x) => s + (f(x) || 0), 0);
+    const L = E().lanc.filter(l => l.data === d), P = E().par.filter(p => p.data === d);
+    const linhas = L.map(l => { const jan = C.janela(l); const ps = P.filter(p => p.eq === l.eq && p.op === l.op && !p.subst); const hp = Math.min(jan, sum(ps, p => C.duracao(p))); return { ...l, jan, hpar: hp, hoper: Math.max(0, jan - hp) }; });
+    const pars = P.map(p => ({ ...p, dur: C.duracao(p), resp: C.resp(p) }));
+    const hprev = sum(linhas, l => l.jan), hoper = sum(linhas, l => l.hoper), parEq = pars.filter(p => p.resp === 'EQUIPAMENTO'), hParEq = sum(parEq, p => p.dur);
+    const he = linhas.filter(l => STATUS_HE.includes(l.status));
+    const abertas = pars.filter(p => !p.fim);
+    return {
+      kpis: [[L.length, 'Alocações'], [h1(hoper) + ' h', 'Horas operadas'], [pc(hprev ? hoper / hprev : 0), 'Aproveitamento'], [pc(hprev ? Math.max(0, 1 - hParEq / hprev) : 0), 'Disponibilidade física'], [P.length, 'Paradas'], [he.length, 'Alocações em HE']],
+      corpo: `<h4>Equipamentos no dia</h4>${linhas.length ? `<table><thead><tr><th>Equipamento</th><th>Operador</th><th>Situação</th><th class="r">Operou</th><th class="r">Parado</th></tr></thead><tbody>${linhas.sort((a, b) => String(a.eq).localeCompare(String(b.eq))).map(l => `<tr><td><b>${esc(l.eq)}</b><div class="muted small">${esc(l.tipo || '')}</div></td><td>${esc(short(l.op))}</td><td>${esc(title(l.status || ''))}</td><td class="r">${h1(l.hoper)} h</td><td class="r">${l.hpar ? h1(l.hpar) + ' h' : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhum equipamento lançado neste dia.</p>'}
+        <h4>Paradas do dia</h4>${pars.length ? `<table><thead><tr><th>Equipamento</th><th>Causa</th><th>Horário</th><th class="r">Duração</th></tr></thead><tbody>${pars.sort((a, b) => b.dur - a.dur).map(p => `<tr><td><b>${esc(p.eq)}</b></td><td>${esc(p.causa || 'Sem causa')}<div class="muted small">${esc((p.resp || '').toLowerCase())}</div></td><td class="nowrap">${esc(p.ini || '')}${p.fim ? ' às ' + esc(p.fim) : ' · <b>em aberto</b>'}</td><td class="r">${h1(p.dur)} h</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma parada neste dia.</p>'}
+        <div class="rcols"><div><h4>Pontos de atenção</h4><table><tbody><tr><td>Paradas por falha de equipamento</td><td class="r">${parEq.length} · ${h1(hParEq)} h</td></tr><tr><td>Paradas por causa do operador</td><td class="r">${pars.filter(p => p.resp === 'OPERADOR').length}</td></tr><tr><td>Paradas ainda sem fim</td><td class="r">${abertas.length}</td></tr></tbody></table></div>
+        <div><h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(l => `<tr><td>${esc(short(l.op))}</td><td>${esc(l.eq)}</td><td class="r">${h1(l.hoper)} h</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma alocação em hora extra.</p>'}</div></div>`
+    };
+  }
+
   /* ---------- lançamentos ---------- */
   const STATUS_CLS = { 'OPERAÇÃO FINALIZADA': 'ok', 'EM OPERAÇÃO': 'neu', 'HORA EXTRA': 'ext', 'HE NOTURNA': 'ext', 'FORA DE OPERAÇÃO': 'bad', 'EM MANUTENÇÃO': 'warn' };
   // Texto de busca de um lançamento: equipamento, tipo, operador, área, status e observação.
@@ -727,7 +747,7 @@ export function criarEquip(X) {
       DB.eWatch([U.mes, addMonth(U.mes, -1), U.dia.slice(0, 7), addMonth(U.dia.slice(0, 7), -1), U.avMes, U.inMes, TODAY.slice(0, 7)]);
       return ({ epainel: vPainel, elanc: vLancPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
     },
-    resumoSemana, frotaArea: f => frotaArea(f), setDoEq: a => setDoEq(a),
+    resumoSemana, resumoDia, frotaArea: f => frotaArea(f), setDoEq: a => setDoEq(a),
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
 }

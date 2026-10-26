@@ -4,6 +4,7 @@
 import { pd, add, pad, today, MESES_L, AREA_S, SETS, setDaArea } from './cal.js';
 import { AREA_GERAL, AREA_OP, REGIMES, ehAreaAtiv, veTodasFichas, areasFichaDe } from './pessoas.js';
 import { criarImportador } from './importar.js';
+import { REGIMES_PADRAO, normRegime } from './escala.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
@@ -348,6 +349,14 @@ export function criarGestao(X) {
     if (tp) tp.onchange = () => { const t = tipos().find(x => x.tipo === tp.value); if (t && (!ds.value || tipos().some(x => x.texto === ds.value))) ds.value = t.texto || ''; };
   }
   // pre: dados para já vir preenchido (ex.: pessoa que está no Pátio, na Bateria ou na Operação e ainda não tem ficha)
+  // Regimes do cadastro: administrativo + todos os turnos em ciclo da Escala (4x4, 3x3 e os criados em Escalas e turnos).
+  function regimeOpts(atual) {
+    const cfg = (DB.cache.escalas && DB.cache.escalas.regimes) || {};
+    const ks = [...new Set([...Object.keys(REGIMES_PADRAO), ...Object.keys(cfg)])].filter(k => ((cfg[k] || {}).tipo || (REGIMES_PADRAO[k] || {}).tipo) === 'ciclo');
+    const lista = ['ADMINISTRATIVO', ...ks.map(k => 'TURNO ' + k.toUpperCase())];
+    const cur = normRegime(atual);
+    return lista.map(x => `<option value="${esc(x)}" ${normRegime(x) === cur ? 'selected' : ''}>${esc(title(x))}</option>`).join('');
+  }
   function colabForm(mat, pre) {
     const c = mat ? indice().get(mat).c : { mat: '', nome: '', funcao: '', turma: '', lider: '', adm: TODAY, dem: '', intAnt: false, area: AREA_GERAL, ...(pre ? { nome: pre.nome, funcao: pre.funcao || '', area: pre.area || AREA_GERAL } : {}) };
     const L = mat ? PES.lotacao(c) : pre ? { area: pre.area || AREA_GERAL, patio: pre.rota ? { area: pre.area, rota: pre.rota, regime: pre.regime, funcao: pre.funcao } : null, op: pre.op ? { escala: pre.escala, turma: pre.turma, funcao: pre.funcao } : null } : { patio: null, op: null, area: AREA_GERAL };
@@ -360,7 +369,7 @@ export function criarGestao(X) {
       <label class="sel"><span>Setor (RH)</span><input class="in" id="ncSub" list="dlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento"><datalist id="dlSub">${[...new Set(G().colabs.map(x => x.subsetor).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label></div>
       <div class="fsec"><b>Área de atuação e função</b><small>Vale para todos os módulos: Efetivo, Atividades Pátio, Atividades Bateria e Operação.</small></div>
       <label class="sel"><span>Área de atuação</span><select class="in" id="ncArea">${PES.gruposArea().map(([g, l]) => `<optgroup label="${esc(g)}">${opt(l, L.area, PES.areaNome)}</optgroup>`).join('')}</select></label>
-      <div class="row2" id="ncPatioBox"><label class="sel"><span id="ncRotaLbl">Rota</span><select class="in" id="ncRota"></select></label><label class="sel"><span>Regime</span><select class="in" id="ncReg">${opt(REGIMES, (L.patio && L.patio.regime) || 'ADMINISTRATIVO', title)}</select></label></div>
+      <div class="row2" id="ncPatioBox"><label class="sel"><span id="ncRotaLbl">Rota</span><select class="in" id="ncRota"></select></label><label class="sel"><span>Regime</span><select class="in" id="ncReg">${regimeOpts((L.patio && L.patio.regime) || 'ADMINISTRATIVO')}</select></label></div>
       ${PES.temOp() ? `<label class="switch" id="ncOpLbl"><input type="checkbox" id="ncOp" ${L.op ? 'checked' : ''}><span>Opera equipamentos (equipe do módulo Operação)</span></label>
       <div class="row2" id="ncOpBox"><label class="sel"><span>Escala (Operação)</span><select class="in" id="ncEsc">${opt(['ADM', '4x4'], (L.op && L.op.escala) || 'ADM')}</select></label><label class="sel"><span>Turma 4x4</span><select class="in" id="ncTurOp"><option value="">—</option>${opt(Object.keys(eqc.turmas || {}), (L.op && L.op.turma) || '')}</select></label></div>` : ''}
       <label class="sel"><span>Função</span><input class="in" id="ncFun" list="dlFun" autocomplete="off" value="${esc(c.funcao || (L.patio && L.patio.funcao) || (L.op && L.op.funcao) || '')}" placeholder="Escolha da lista ou digite"><datalist id="dlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>
