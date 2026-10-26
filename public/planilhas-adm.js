@@ -20,7 +20,7 @@ export const CODIGOS_PLANILHA = {
   P: 'P', HE: 'HE', AT: 'AT', F: 'FT', AB: 'AB', SP: 'SP', T: 'TR', INSS: 'AF', N: 'P',
   S: 'F', FO: 'F', FG: 'F', FE: 'F'
 };
-export const NOMES_CODIGO = { P: 'Presente', F: 'Folga', FE: 'Férias', AT: 'Atestado', AF: 'Afastado', TR: 'Treinamento', FT: 'Falta', DS: 'Desligado', HE: 'Hora extra', ATR: 'Atrasado', AB: 'Abono', SP: 'Suspensão' };
+export const NOMES_CODIGO = { P: 'Presente', F: 'Folga', FE: 'Férias', AT: 'Atestado', AF: 'Afastado', TR: 'Treinamento', FT: 'Falta', DS: 'Desligado', HE: 'Hora extra', ATR: 'Atrasado', SA: 'Saída antecipada', AB: 'Abono', SP: 'Suspensão' };
 
 function celula(v) {
   if (v == null) return null;

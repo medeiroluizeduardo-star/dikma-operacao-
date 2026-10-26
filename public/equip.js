@@ -68,7 +68,7 @@ export function criarEquip(X) {
       if (p.ativ) cod = ((F.sit[conj] || {})[data.slice(0, 7)] || {})[p.ativ + '|' + data];
       else { const d = F.comps[conj + '|' + competenciaDe(data)]; cod = d && d.d && d.d[p.k] && d.d[p.k][data]; }
       if (!cod) return undefined;
-      if (cod === 'P' || cod === 'HE' || cod === 'ATR') return null;
+      if (cod === 'P' || cod === 'HE' || cod === 'ATR' || cod === 'SA') return null;
       return SIT_EXT[cod] || 'OUTRO';
     };
     EXT.achou = o => { let m = porOp.get(o.nome); if (m === undefined) { const r = busca(o.nome); m = r ? r.item : null; porOp.set(o.nome, m); } return m; };
