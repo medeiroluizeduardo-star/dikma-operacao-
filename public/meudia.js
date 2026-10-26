@@ -1,5 +1,5 @@
 // Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
-import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, addMonth, ddmm } from './cal.js';
+import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, ddmm } from './cal.js';
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './hoje.js';
 import { aprovaPapel, contarPendentes } from './aprovacao.js';
 
@@ -145,6 +145,7 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
+    if (X.jusPend) { const n = X.jusPend(); if (n) tiles.push({ n, t: n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa', s: 'últimos 7 dias · toque no dia, no Efetivo, para justificar', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Justificar' }); }
     if (X.checkinPend) { const n = X.checkinPend(); if (n) tiles.push({ n, t: n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar', s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Fazer' }); }
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';

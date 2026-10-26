@@ -155,8 +155,8 @@ export async function setForaProg(docId, pid, k, str, info) {
   const w = cache.semanas[docId]; w.s[pid] = str; w.fp = w.fp || {}; const key = pid + '|' + k; if (info) w.fp[key] = info; else delete w.fp[key];
   Object.assign(w, toLocal(docId, w)); changed();
 }
-export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null }; };
-export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {} };
+export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
+export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {}, jus: {} };
 export async function setSitExtra(campo, key, val) { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x[campo] ||= {}); if (val) o[key] = val; else delete o[key]; changed(); }
 export async function salvarAcao(id, dados) {
   const i = id || 'ac' + Date.now().toString(36); const x = id ? { ...dados, atualizadoEm: new Date().toISOString() } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome };
@@ -276,11 +276,13 @@ cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio
 cache.feriasAtivas = []; cache.uso = null;
 let admPronto = false;
 const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
+const jusProxy = k => new Proxy({}, { get: (_, m) => ((S[k].sitExtra || {})[m] || {}).jus || {} });
 function admPersist() { try { localStorage.setItem(LSA, JSON.stringify({ ferias: cache.adm.ferias, comps: cache.adm.comps })); } catch (e) { /* sem espaço */ } }
 const admCh = () => { cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino })); admPersist(); changed(); };
 async function iniciarAdm() {
   for (const k of SET_KEYS) cache.adm.colabs[k] = Object.values(S[k].colabs).flat();
   cache.adm.sit = { patio: sitProxy('patio'), bateria: sitProxy('bateria') };
+  cache.adm.jus = { patio: jusProxy('patio'), bateria: jusProxy('bateria') };
   cache.adm.rh = cache.g.colabs || [];
   if (admPronto) return;
   admPronto = true;
@@ -303,6 +305,10 @@ export function admWatch(conj, comp) { const k = conj + '|' + comp; if (!(k in c
 export async function admSetCodigo(conj, comp, p, data, cod) {
   if (p.ativ) { const m = data.slice(0, 7); const o = (S[conj].sitByMonth[m] ||= {}); const key = p.ativ + '|' + data; if (cod) o[key] = cod; else delete o[key]; return changed(); }
   const doc = cache.adm.comps[conj + '|' + comp]; const d = (doc.d[p.k] ||= {}); if (cod) d[data] = cod; else delete d[data]; admCh();
+}
+export async function admSetJus(conj, comp, p, data, val) {
+  if (p.ativ) { const m = data.slice(0, 7); const x = (S[conj].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x.jus ||= {}); const key = p.ativ + '|' + data; if (val) o[key] = val; else delete o[key]; return changed(); }
+  const doc = cache.adm.comps[conj + '|' + comp]; const j = ((doc.jus ||= {})[p.k] ||= {}); if (val) j[data] = val; else delete j[data]; admCh();
 }
 export async function admSalvarComp(conj, comp, dados) { cache.adm.comps[conj + '|' + comp] = { ...(cache.adm.comps[conj + '|' + comp] || {}), ...dados, conj, competencia: comp }; admCh(); }
 export async function admSalvarGrupos(conj, comp, grupos) { cache.adm.comps[conj + '|' + comp].grupos = grupos; admCh(); }
