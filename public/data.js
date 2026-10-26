@@ -348,13 +348,14 @@ export function salvarAcao(id, dados) {
   st0().acoes[ref.id] = { ...(st0().acoes[ref.id] || {}), id: ref.id, ...x };
   return track(setDoc(ref, x, { merge: true }));
 }
-export function setSit(key, code) {
+// k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Usado para lançar a hora extra de quem cobre em outro conjunto.
+export function setSit(key, code, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao'), m), { v: { [key]: code || deleteField() } }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { v: { [key]: code || deleteField() } }, { merge: true }));
 }
-export function setSitExtra(campo, key, val) {
+export function setSitExtra(campo, key, val, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao'), m), { [campo]: { [key]: val || deleteField() } }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { [campo]: { [key]: val || deleteField() } }, { merge: true }));
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, C('plano'), area), { itens }));
 // k = conjunto (patio | bateria); o cadastro do Efetivo grava nos dois, seja qual for o módulo aberto.

@@ -55,10 +55,11 @@ document.addEventListener('focusout', e => {
   setTimeout(() => { const c = document.querySelector(`[data-cbx="${id}"]`); if (c && !c.contains(document.activeElement)) { confirmarTexto(id); fechar(id); } }, 150);
 });
 document.addEventListener('mousedown', e => { if (e.target.closest && e.target.closest('.cbx-o')) e.preventDefault(); });
+// Na fase de captura: as janelas (folhas) param a propagação do clique, e a escolha na lista se perdia.
 document.addEventListener('click', e => {
   const o = e.target.closest && e.target.closest('.cbx-o'); if (o) { escolher(idDe(o), o.dataset.cbxV); return; }
   const x = e.target.closest && e.target.closest('[data-cbx-limpar]'); if (x) { const id = x.dataset.cbxLimpar; escolher(id, ''); const q = document.getElementById(id + '_q'); if (q) q.focus(); }
-});
+}, true);
 document.addEventListener('keydown', e => {
   if (!(e.target.matches && e.target.matches('.cbx input[role=combobox]'))) return;
   const id = idDe(e.target); const l = document.getElementById(id + '_l');
