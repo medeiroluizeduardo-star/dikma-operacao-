@@ -874,7 +874,7 @@ function escalaRotaCalc(r, ini) {
     }
     // substituições: quem cobre uma ausência desta rota soma aqui; quem sai desta rota para cobrir outra, sai daqui
     let mov = 0;
-    for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && todos.has(x.sub)) mov++; const sc = ids.get(x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; }
+    for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && (todos.has(x.sub) || refSub(x.sub).outro)) mov++; const sc = ids.get(x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; }
     const prog = progK[k];
     const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * fator) : (r.rota === 'GESTÃO' ? Math.min(r.ef, escd) : 0);
     out.push({ disp: aloc - aus + mov, nec, prog, aloc, mov, dispD: per.D, dispN: per.N });
@@ -952,23 +952,48 @@ function cobDoDia(dt) { if (CDv !== DATAV) { CDM = new Map(); CDv = DATAV; } let
 function cobDoDiaCalc(dt) { const x = (DB.sitExtraMes(dt.slice(0, 7)).cob) || {}; const out = []; for (const [k, sid] of Object.entries(x)) { const i = k.lastIndexOf('|'); if (k.slice(i + 1) === dt && sid) out.push({ aus: k.slice(0, i), sub: sid }); } return out; }
 const cobertoPor = (id, dt) => DB.sitInfo(id + '|' + dt).cob;
 const cobrindo = (id, dt) => { const x = cobDoDia(dt).find(y => y.sub === id); return x ? x.aus : ''; };
-const nomeDe = id => { const c = COLABS.find(x => x.id === id); return c ? title(c.nome) : '—'; };
+// Substituto pode ser de outro conjunto (ex.: falta na Bateria coberta por alguém do Pátio): guardado como "conjunto:id".
+const refSub = v => { const s = String(v || ''); const i = s.indexOf(':'); const k = i > 0 && SETS[s.slice(0, i)] ? s.slice(0, i) : SK; const id = i > 0 && SETS[s.slice(0, i)] ? s.slice(i + 1) : s;
+  const c = k === SK ? COLABS.find(x => x.id === id) : Object.values((DB.dados(k) || {}).colabs || {}).flat().find(x => x.id === id); return { k, id, c: c || null, outro: k !== SK }; };
+// Situação de quem está em outro conjunto: o lançado lá, as férias e a folga pela escala.
+function sitOutro(k, c, dt) {
+  const st = DB.dados(k) || {}; const m = ((st.sitByMonth || {})[dt.slice(0, 7)] || {})[c.id + '|' + dt]; if (m) return { v: m, auto: false };
+  if (feriasDe(c, dt)) return { v: 'FE', auto: false, ferias: true };
+  const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
+  return { v: 'P', auto: false };
+}
+const sitDoSub = (r, dt) => (r.outro ? sitOutro(r.k, r.c, dt) : sitDia(r.c, dt));
+// De folga no dia (pela escala ou lançada): cobrir vira hora extra.
+const folgaNoDia = x => x.auto || x.v === 'F';
+const nomeDe = id => { const r = refSub(id); return r.c ? title(r.c.nome) + (r.outro ? ` (${SETS[r.k].curto})` : '') : '—'; };
 const curto = n => { const p = String(n || '').split(' '); return p.length > 1 ? p[0] + ' ' + p[p.length - 1] : p[0]; };
 // Tira a cobertura e desfaz a hora extra que ela tinha criado (quando o substituto estava de folga pela escala).
 function removerCobertura(ausId, dt) {
   const sid = cobertoPor(ausId, dt); if (!sid) return;
   DB.setSitExtra('cob', ausId + '|' + dt, null);
-  const s = COLABS.find(x => x.id === sid);
-  if (s && DB.sit(sid + '|' + dt) === 'HE' && folgaEscala(s, dt)) { DB.setSit(sid + '|' + dt, null); (DB.setSitExtra('he', sid + '|' + dt, null), DB.setSitExtra('hed', sid + '|' + dt, null)); }
+  const r = refSub(sid); if (!r.c) return; const key = r.id + '|' + dt;
+  const cod = r.outro ? (((DB.dados(r.k) || {}).sitByMonth || {})[dt.slice(0, 7)] || {})[key] : DB.sit(key);
+  const prev = escala().previsto(normRegime(r.c.regime, escala().regimes), turmaDe(r.c), dt);
+  if (cod === 'HE' && prev && !prev.trab) { DB.setSit(key, null, r.k); DB.setSitExtra('he', key, null, r.k); DB.setSitExtra('hed', key, null, r.k); }
 }
 function opcoesSubst(c, dt) {
-  return () => COLABS.filter(x => x.id !== c.id).map(x => {
-    const s = sitDia(x, dt); const cob = cobrindo(x.id, dt);
-    if (s.v === 'DS' || (!s.auto && AUSENTE.has(s.v))) return null;
-    const tag = cob ? `<span class="pill neu">já cobre ${esc(curto(nomeDe(cob)))}</span>` : s.auto ? '<span class="pill ext">de folga · vira hora extra</span>' : '<span class="pill ok">trabalhando</span>';
-    const ord = cob ? 4 : (x.area === c.area && x.rota === c.rota) ? 0 : s.auto ? 1 : x.area === c.area ? 2 : 3;
-    return { v: x.id, t: title(x.nome), d: `${x.rota} · ${AREA_S[x.area]}${s.auto ? ' · ' + s.motivo : ''}`, tag, ord, k: x.funcao };
-  }).filter(Boolean).sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
+  return () => {
+    const out = [];
+    for (const k of setsDe(ME)) {
+      const lista = k === SK ? COLABS : Object.values((DB.dados(k) || {}).colabs || {}).flat();
+      for (const x of lista) {
+        if (k === SK && x.id === c.id) continue;
+        const r = { k, id: x.id, c: x, outro: k !== SK }; const s0 = sitDoSub(r, dt);
+        if (s0.v === 'DS') continue; // desligado não cobre
+        const cob = k === SK ? cobrindo(x.id, dt) : '';
+        const fora = !folgaNoDia(s0) && AUSENTE.has(s0.v);
+        const tag = cob ? `<span class="pill neu">já cobre ${esc(curto(nomeDe(cob)))}</span>` : fora ? `<span class="pill warn">${esc(SIT_NOME[s0.v] || s0.v)}</span>` : folgaNoDia(s0) ? '<span class="pill ext">de folga · vira hora extra</span>' : s0.v === 'HE' ? '<span class="pill ext">já em hora extra</span>' : '<span class="pill ok">trabalhando</span>';
+        const ord = fora ? 5 : cob ? 4 : (k === SK && x.area === c.area && x.rota === c.rota) ? 0 : folgaNoDia(s0) ? 1 : (k === SK && x.area === c.area) ? 2 : 3;
+        out.push({ v: k === SK ? x.id : k + ':' + x.id, t: title(x.nome), d: `${x.rota} · ${AREA_S[x.area] || x.area}${k !== SK ? ' · ' + SETS[k].curto : ''}${s0.auto && s0.motivo ? ' · ' + s0.motivo : ''}`, tag, ord, k: [x.funcao, x.mat, SETS[k].curto].filter(Boolean).join(' ') });
+      }
+    }
+    return out.sort((a, b) => a.ord - b.ord || a.t.localeCompare(b.t));
+  };
 }
 function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
 function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSitPop(); } }
@@ -1087,14 +1112,14 @@ function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
      <div id="spSubHe" hidden><p class="small m0">Está de folga pela escala: vira <b>hora extra</b>. A pedido de:</p><div class="mchips">${Object.entries(HE_ORIG).map(([k, n], i) => `<label class="mchip"><input type="radio" name="spHeo" value="${k}" ${i === 0 ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></div>`,
     'Confirmar substituto', async () => {
       const sid = $('spSub').value; if (!sid) { if (desfazerBase) toast('Lançado sem substituto', { desfazer: desfazerBase }); return; }
-      const s = COLABS.find(x => x.id === sid); const heOrig = (document.querySelector('input[name="spHeo"]:checked') || {}).value || 'DIKMA'; const feitos = [];
-      for (const d of dias) { removerCobertura(id, d); DB.setSitExtra('cob', id + '|' + d, sid); if (sitDia(s, d).auto) { DB.setSit(sid + '|' + d, 'HE'); DB.setSitExtra('he', sid + '|' + d, heOrig); feitos.push(d); } }
-      DB.log(`${title(s.nome)} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
+      const r = refSub(sid); const s = r.c; if (!s) throw new Error('Escolha o substituto da lista.'); const heOrig = (document.querySelector('input[name="spHeo"]:checked') || {}).value || 'DIKMA'; const feitos = [];
+      for (const d of dias) { removerCobertura(id, d); DB.setSitExtra('cob', id + '|' + d, sid); if (folgaNoDia(sitDoSub(r, d))) { DB.setSit(r.id + '|' + d, 'HE', r.k); DB.setSitExtra('he', r.id + '|' + d, heOrig, r.k); feitos.push(d); } }
+      DB.log(`${title(s.nome)}${r.outro ? ' (' + SETS[r.k].curto + ')' : ''} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
       fimToque();
       toast(`${curto(title(s.nome))} cobre ${curto(title(c.nome))}${feitos.length ? ' · hora extra ' + HE_ORIG[heOrig] : ''}`, { desfazer: () => { dias.forEach(d => removerCobertura(id, d)); if (desfazerBase) desfazerBase(); render(); } });
     });
   const cancelar = document.querySelector('#fSheet [data-close]'); if (cancelar) cancelar.textContent = 'Sem substituto';
-  const mostrarHe = () => { const s = COLABS.find(x => x.id === $('spSub').value); $('spSubHe').hidden = !(s && dias.some(d => sitDia(s, d).auto)); };
+  const mostrarHe = () => { const r = refSub($('spSub').value); $('spSubHe').hidden = !(r.c && dias.some(d => folgaNoDia(sitDoSub(r, d)))); };
   $('spSub').addEventListener('change', mostrarHe);
   setTimeout(() => { const q = $('spSub_q'); if (q) q.focus(); }, 60);
 }
