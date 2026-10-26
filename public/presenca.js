@@ -29,6 +29,7 @@ export function pedirJus(o) {
   const html = `<label class="sel"><span>Motivo</span><select class="in" id="jsMot">${ms.map(m => `<option ${m === at.mot ? 'selected' : ''}>${escH(m)}</option>`).join('')}</select></label>
     ${o.cod === 'ATR' ? `<div class="g2eq"><label class="sel"><span>Chegou às</span><input class="in" type="time" id="jsCheg" value="${escH(at.chegada || '')}"></label><label class="sel"><span>Minutos de atraso</span><input class="in" type="number" id="jsMin" min="1" max="720" inputmode="numeric" value="${at.min || ''}" placeholder="Ex.: 30"></label></div>` : ''}
     <label class="sel"><span>Observação ${o.cod === 'AT' ? '(dias, CID ou o que constar)' : '(opcional)'}</span><textarea class="in" id="jsObs" rows="3" maxlength="300" placeholder="${o.cod === 'ATR' ? 'Ex.: ônibus da linha 12 quebrou' : 'Detalhe se precisar'}">${escH(at.obs || '')}</textarea></label>
+    ${o.ocorr ? `<label class="switch"><input type="checkbox" id="jsOc"><span>Registrar também como ocorrência na ficha do colaborador</span></label><label class="sel" id="jsOcBox" hidden><span>Tipo de ocorrência</span><select class="in" id="jsOcTipo">${o.ocorr.tipos.map(t => `<option>${escH(t)}</option>`).join('')}</select></label>` : ''}
     <p class="muted small m0">Fica junto do lançamento e aparece no Efetivo, na Frequência e nos resumos.</p>`;
   let salvo = false;
   o.formSheet(`Justificativa · ${NOMES_CODIGO[o.cod] || o.cod}`, `${escH(o.nome)} · ${diaSem(o.dt)}, ${dBR(o.dt)}`, html, 'Salvar justificativa', async () => {
@@ -36,8 +37,10 @@ export function pedirJus(o) {
     const j = { cod: o.cod, mot: g('jsMot').value, obs: (g('jsObs').value || '').replace(/\s+/g, ' ').trim().slice(0, 300) };
     if (o.cod === 'ATR') { const ch = g('jsCheg').value, mi = Math.round(+g('jsMin').value || 0); if (ch) j.chegada = ch; if (mi > 0) j.min = mi; }
     if (j.mot === 'Outro' && !j.obs) throw new Error('Em "Outro", escreva o motivo na observação.');
+    if (g('jsOc') && g('jsOc').checked) j.ocorr = g('jsOcTipo').value;
     await o.salvar(j); salvo = true; if (o.depois) setTimeout(o.depois, 30);
   }, { cancelarTxt: 'Agora não', aoCancelar: () => { if (!salvo && o.depois) setTimeout(o.depois, 30); } });
+  const oc = document.getElementById('jsOc'); if (oc) oc.addEventListener('change', () => { document.getElementById('jsOcBox').hidden = !oc.checked; });
   const m = document.getElementById('jsMot'); if (m) m.focus();
 }
 // Chip colorido da situação (o mesmo da grade)

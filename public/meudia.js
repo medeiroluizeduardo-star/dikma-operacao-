@@ -58,6 +58,7 @@ export function criarMeuDia(X) {
       (temMod('operacao') || temMod('bateria')) && ME().papel === 'lider' && ['aprovacao', 'Atividade devolvida pelo supervisor (na hora)'],
       (temMod('operacao') || temMod('bateria')) && aprovaPapel(ME().papel) && ['aprovacao', 'Apontamentos esperando sua aprovação há mais de 1 dia (às 8h)'],
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)'],
+      (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(ME().papel) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
       ['admin', 'gestor', 'coordenador'].includes(ME().papel) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       ME().papel === 'admin' && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
     ].filter(Boolean);
@@ -145,7 +146,7 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
-    if (X.jusPend) { const n = X.jusPend(); if (n) tiles.push({ n, t: n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa', s: 'últimos 7 dias · toque no dia, no Efetivo, para justificar', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Justificar' }); }
+    if (X.jusPend) { const n = X.jusPend(); if (n) tiles.push({ n, t: n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa', s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', ''], acao: 'Justificar' }); }
     if (X.checkinPend) { const n = X.checkinPend(); if (n) tiles.push({ n, t: n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar', s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Fazer' }); }
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';

@@ -156,3 +156,20 @@ test('Painel Coqueria: dia útil, 7h tarefas do dia e atrasadas; 16h abertas e M
   assert.equal(de(rodar(9, { painel, hoje: '2026-10-17', agora: new Date('2026-10-17T09:30:00') }), 'admin', 'painel').length, 0, 'sábado: sem aviso do painel');
   assert.equal(de(rodar(7, { painel, avisos: { ...avisos, admin: { tokens: ['t'], prefs: { painel: false } } } }), 'admin', 'painel').length, 0, 'preferência desligada');
 });
+
+test('justificativas: às 16h o supervisor recebe a contagem das faltas e atrasos sem justificativa da área, sem nomes', () => {
+  const us = { ...usuarios, sup: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], nome: 'Sup' } };
+  const av = { ...avisos, sup: tok };
+  const S = setPatio();
+  S.colabs = [{ id: 'C1', area: 'RECEBIMENTO', nome: 'FULANO DA SILVA' }, { id: 'C2', area: 'RECEBIMENTO', nome: 'CICLANO SOUZA' }, { id: 'C3', area: 'PREPARAÇÃO', nome: 'BELTRANO LIMA' }];
+  S.sit = { [`C1|${HOJE}`]: 'FT', [`C2|${HOJE}`]: 'ATR', [`C3|${HOJE}`]: 'FT' };
+  S.jus = { [`C2|${HOJE}`]: { cod: 'ATR', mot: 'Trânsito' } };
+  const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${HOJE}T16:10:00`), hoje: HOJE });
+  const m = r.msgs.filter(x => x.uid === 'sup' && x.tag === 'justificativas');
+  assert.equal(m.length, 1);
+  assert.equal(m[0].titulo, '1 falta ou atraso sem justificativa hoje'); // C2 justificado; C3 é de outra área
+  assert.ok(!/FULANO|Fulano/.test(m[0].titulo + m[0].corpo));
+  assert.equal(r.msgs.filter(x => x.uid === 'liderRec' && x.tag === 'justificativas').length, 0, 'líder não recebe');
+  const cedo = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${HOJE}T15:10:00`), hoje: HOJE });
+  assert.equal(cedo.msgs.filter(x => x.tag === 'justificativas').length, 0, 'antes das 16h não avisa');
+});

@@ -274,6 +274,7 @@ const VIEWS = [
   { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
+  { id: 'esjus', nome: 'Justificativas', ic: 'pend', grp: 'Escala e presença', mod: 'ge', reqU: u => setsDe(u).length > 0 },
   ...VIEWS_E,
   ...VIEWS_G,
   ...VIEWS_A,
@@ -469,7 +470,7 @@ function render() {
     const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
   }
 }
-const ES_VIEWS = ['esdia', 'esdim', 'esbal', 'eshe'];
+const ES_VIEWS = ['esdia', 'esdim', 'esbal', 'eshe', 'esjus'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
@@ -486,9 +487,9 @@ function renderTela() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = MODS[UI.modulo].inicio;
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe', 'esjus'].includes(UI.view);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
   pintar('view', fn());
   afterRender();
 }
@@ -572,13 +573,13 @@ function mudarFiltro(id, v) {
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
 function filtroCompacto(comSet) {
   const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
-  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'etiquetas' ? '' : ['causas', 'eshe'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
+  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'etiquetas' ? '' : ['causas', 'eshe', 'esjus'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 function filtroSheet() {
   const L = $('layer');
   const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
-  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
+  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -657,13 +658,13 @@ function renderTop() {
   if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if (v.id === 'resumo' && resTipo() !== 'ativ') { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
-  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe'].includes(UI.view);
+  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
   const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
   else {
-    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe'].includes(UI.view), mes: UI.view !== 'etiquetas' });
+    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   }
   pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
@@ -1001,7 +1002,7 @@ function lancarEfetivo(key) {
       if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
       if (v === 'heo') return passoHE(c, [dt], null, fimToque);
       if (v === 'heh') return horarioHE(c, [dt], fimToque);
-      if (v === 'jus') return pedirJus({ formSheet, nome: title(c.nome), dt, cod: sx.v, atual: info.jus, salvar: j => salvarJus(c, [dt], j), depois: fimToque });
+      if (v === 'jus') return pedirJus({ formSheet, nome: title(c.nome), dt, cod: sx.v, atual: info.jus, ocorr: info.jus && info.jus.ocorr ? null : ocorrOpc(c, sx.v), salvar: j => salvarJus(c, [dt], j), depois: fimToque });
     },
     aoEscolher: (v, dias) => {
       const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
@@ -1014,7 +1015,7 @@ function lancarEfetivo(key) {
       fimToque();
       const segue = () => { if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque); if (v === 'HE') return passoHE(c, dias, desfazer, fimToque); toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer }); };
       // falta, atraso, atestado…: pede a justificativa (pode deixar para depois) e segue para o substituto
-      if (JUS_CODS.includes(v) && gravar(dt)) return pedirJus({ formSheet, nome: title(c.nome), dt, cod: v, atual: antes[0][2].jus, salvar: j => salvarJus(c, dias, j), depois: segue });
+      if (JUS_CODS.includes(v) && gravar(dt)) return pedirJus({ formSheet, nome: title(c.nome), dt, cod: v, atual: antes[0][2].jus, ocorr: ocorrOpc(c, v), salvar: j => salvarJus(c, dias, j), depois: segue });
       if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque);
       if (v === 'HE') return passoHE(c, dias, desfazer, fimToque);
       toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer });
@@ -1029,9 +1030,51 @@ function jusPendentes() {
   for (const c of COLABS) { if (!canEditSit(c.area)) continue; for (const d of ds) { const v = DB.sit(c.id + '|' + d); if (!v || !JUS_CODS.includes(v)) continue; const j = DB.sitInfo(c.id + '|' + d).jus; if (!(j && j.cod === v)) n++; } }
   return n;
 }
+// Justificativas do mês: lista de faltas, atrasos, atestados… com o que falta justificar primeiro.
+function regsJus(area, m) {
+  const out = [];
+  for (let d = m + '-01'; d.slice(0, 7) === m && d <= TODAY; d = add(d, 1)) for (const c of colabsDa(area)) {
+    const x = sitDia(c, d); if (x.auto || !JUS_CODS.includes(x.v)) continue;
+    const j = DB.sitInfo(c.id + '|' + d).jus; out.push({ c, d, v: x.v, j: j && j.cod === x.v ? j : null });
+  }
+  return out.sort((a, b) => (!!a.j - !!b.j) || (a.d < b.d ? 1 : a.d > b.d ? -1 : a.c.nome.localeCompare(b.c.nome)));
+}
+function vEsJus() {
+  const area = areaScope(); const m = UI.mes; const todos = regsJus(area, m);
+  const rotasL = [...new Set(todos.map(x => x.c.rota))].sort();
+  if (UI.jusRota && !rotasL.includes(UI.jusRota)) UI.jusRota = '';
+  const f = UI.jusF || 'pend';
+  const base = todos.filter(x => !UI.jusRota || x.c.rota === UI.jusRota);
+  const lista = base.filter(x => f === 'todas' || (f === 'pend' ? !x.j : !!x.j));
+  const n = v => base.filter(x => x.v === v).length; const pend = base.filter(x => !x.j).length;
+  const LIM = UI.more || 80;
+  const linha = x => { const ed = canEditSit(x.c.area); const bt = ed ? `<button class="btn sm ${x.j ? 'ghost' : 'pri'}" data-jusk="${esc(x.c.id + '|' + x.d)}">${x.j ? 'Editar' : 'Justificar'}</button>` : '';
+    return `<tr><td class="nowrap mono">${ddmm(x.d)}</td><td><b>${esc(title(x.c.nome))}</b><div class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</div></td><td class="nowrap"><span class="sit ${x.v}">${x.v}</span> ${SIT_NOME[x.v]}</td><td>${x.j ? `${esc(textoJus(x.j))}<div class="muted small">${esc(x.j.nomePor || '')}${x.j.em ? ' · ' + ddmm(x.j.em.slice(0, 10)) : ''}${x.j.ocorr ? ' · registrada na ficha' : ''}</div>` : '<span class="pill warn">sem justificativa</span>'}</td><td class="r">${bt}</td></tr>`; };
+  return `<div class="mini"><div><b class="num" style="color:${pend ? 'var(--st-atr)' : 'inherit'}">${pend}</b><span>Sem justificativa</span></div><div><b class="num">${base.length - pend}</b><span>Justificadas</span></div><div><b class="num">${n('FT')}</b><span>Faltas</span></div><div><b class="num">${n('ATR')}</b><span>Atrasos</span></div><div><b class="num">${n('AT')}</b><span>Atestados</span></div></div>
+  <div class="card"><header><h2>Justificativas</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · também dá para justificar tocando no dia no Efetivo diário</p></header>
+  <div class="body lbar"><div class="rchips">${[['pend', 'Sem justificativa', pend], ['ok', 'Justificadas', base.length - pend], ['todas', 'Todas', base.length]].map(([k, l, q]) => `<button class="rchip" data-jusf="${k}" aria-pressed="${f === k}">${l} <span class="c">${q}</span></button>`).join('')}</div>
+  <label class="sel"><span>Rota</span><select class="in" id="fJusRota"><option value="">Todas as rotas</option>${rotasL.map(r => `<option ${r === UI.jusRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>${!framed && !isMobile() ? `<button class="btn" data-act="expJus">${I.dl} Exportar</button>` : ''}</div>
+  ${lista.length ? `<div class="tw"><table class="jtab"><thead><tr><th>Dia</th><th>Colaborador</th><th>Situação</th><th>Justificativa</th><th></th></tr></thead><tbody>${lista.slice(0, LIM).map(linha).join('')}</tbody></table></div>${lista.length > LIM ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${LIM + 200}">Mostrar mais ${Math.min(200, lista.length - LIM)}</button></div>` : ''}` : `<div class="empty">${f === 'pend' ? 'Tudo justificado neste mês.' : 'Nada para mostrar com esse filtro.'}</div>`}</div>`;
+}
+function exportJus() {
+  const area = areaScope(); const rs = regsJus(area, UI.mes);
+  const linhas = [['Data', 'Nome', 'Área', 'Rota', 'Situação', 'Motivo', 'Chegada', 'Minutos de atraso', 'Observação', 'Registrado por']];
+  rs.slice().sort((a, b) => (a.d < b.d ? -1 : 1)).forEach(x => linhas.push([dataBR(x.d), title(x.c.nome), AREA_S[x.c.area] || x.c.area, x.c.rota, SIT_NOME[x.v], x.j ? x.j.mot : 'Sem justificativa', x.j ? x.j.chegada || '' : '', x.j ? x.j.min || '' : '', x.j ? x.j.obs || '' : '', x.j ? x.j.nomePor || '' : '']));
+  baixarExcel(`justificativas-${UI.mes}`, [{ nome: 'Justificativas', linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+}
+// Ficha do colaborador (módulo Efetivo) para registrar a falta ou o atraso como ocorrência, quando a pessoa pode.
+function fichaDe(c) {
+  const G = DB.cache.g; if (!G || !G.loaded || !ME || !modsDe(ME).includes('gestao')) return null;
+  if (!(isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'].includes(ME.papel) && podeItem('i_fichas')))) return null;
+  const nk = x => semAcento(String(x || '')).toUpperCase().replace(/\s+/g, ' ').trim();
+  return (G.colabs || []).find(x => (c.mat && String(x.mat) === String(c.mat)) || nk(x.nome) === nk(c.nome)) || null;
+}
+const ocorrOpc = (c, cod) => { if (!['FT', 'ATR'].includes(cod)) return null; const f = fichaDe(c); if (!f) return null; const tipos = ((DB.cache.g.config && DB.cache.g.config.tipos) || []).map(t => t.tipo); return { tipos: [...new Set([cod === 'FT' ? 'Falta' : 'Atraso', ...tipos])] }; };
 // Grava a justificativa nos dias lançados (mesmo campo que a Frequência lê).
 function salvarJus(c, dias, j) {
+  const oc = j.ocorr; delete j.ocorr;
   const v = { ...j, por: ME.uid, nomePor: ME.nome || ME.login || '', em: new Date().toISOString() };
+  if (oc) { const f = fichaDe(c); if (f) { const o = DB.gNovaOcorrencia({ data: dias[0], mat: f.mat, nome: f.nome, tipo: oc, desc: `${SIT_NOME[j.cod]}${dias.length > 1 ? ` de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : ` em ${ddmm(dias[0])}`}: ${textoJus(j)}`, lider: String(ME.nome || '').toUpperCase(), recolhe: String(f.lider || ME.nome || '').toUpperCase(), status: 'pendente' }); v.ocorr = (o && o.id) || true; DB.log(`Efetivo: ocorrência "${oc}" para ${title(f.nome)} a partir da justificativa`); } }
   dias.forEach(d => DB.setSitExtra('jus', c.id + '|' + d, v));
   DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus(j)}`);
   toast('Justificativa salva');
@@ -1790,8 +1833,8 @@ function vPlano() {
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
-  ${ps.map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" aria-label="Rota de ${p.id}">${[...new Set([p.rota, ...rts])].map(r => `<option ${r === p.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" aria-label="Tipo de ${p.id}">${[...new Set([p.tipo, ...tipos()])].map(t => `<option ${t === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
-  </tbody></table></div></div>`;
+  ${ps.slice(0, UI.more || 120).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" aria-label="Rota de ${p.id}">${[...new Set([p.rota, ...rts])].map(r => `<option ${r === p.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" aria-label="Tipo de ${p.id}">${[...new Set([p.tipo, ...tipos()])].map(t => `<option ${t === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
+  </tbody></table></div>${ps.length > (UI.more || 120) ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${(UI.more || 120) + 300}">Mostrar mais ${Math.min(300, ps.length - (UI.more || 120))} de ${ps.length - (UI.more || 120)} · a tela fica mais leve mostrando por partes</button></div>` : ''}</div>`;
 }
 
 /* ---------------- GERADOR ---------------- */
@@ -2087,7 +2130,8 @@ function afterRender() {
   on('fEAgr', 'change', e => { UI.eAgr = e.target.value; UI.efAbertas = []; render(); });
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; document.querySelectorAll('.liderTxt').forEach(t => { t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); }); });
-  on('fPArea', 'change', e => { UI.pArea = e.target.value; render(); });
+  on('fJusRota', 'change', e => { UI.jusRota = e.target.value; UI.more = 0; render(); });
+  on('fPArea', 'change', e => { UI.pArea = e.target.value; UI.more = 0; render(); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
   on('fNova', 'submit', e => {
@@ -2182,6 +2226,8 @@ document.addEventListener('click', async e => {
   if (d.heh) { const [id, dt] = d.heh.split('|'); const c = COLABS.find(x => x.id === id); if (c && canEditSit(c.area)) horarioHE(c, [dt]); return; }
   if (d.tirafp) { const [i, k] = d.tirafp.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc) tirarFora(doc, i, k); return; }
   if (d.rtipo) { UI.resTipo = d.rtipo; render(); return; }
+  if (d.jusf) { UI.jusF = d.jusf; UI.more = 0; render(); return; }
+  if (d.jusk) { const [id, dt] = d.jusk.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const x = sitDia(c, dt); const inf = DB.sitInfo(d.jusk); pedirJus({ formSheet, nome: title(c.nome), dt, cod: x.v, atual: inf.jus, ocorr: inf.jus && inf.jus.ocorr ? null : ocorrOpc(c, x.v), salvar: j => salvarJus(c, [dt], j), depois: () => render() }); return; }
   if (d.rper) { UI.rPer = d.rper; try { localStorage.setItem('dikma-rper', d.rper); } catch (x) { /* ignora */ } render(); return; }
   if (d.rdia) { UI.rDia = d.rdia; render(); return; }
   if (d.rdiao) { const n = add(UI.rDiaO || TODAY, +d.rdiao); UI.rDiaO = n > TODAY ? TODAY : n; render(); return; }
@@ -2257,6 +2303,7 @@ document.addEventListener('click', async e => {
     case 'filtros': filtroSheet(); break;
     case 'busca': abrirBusca(); break;
     case 'more': UI.more = +d.n; render(); break;
+    case 'expJus': exportJus(); break;
     case 'cancel': UI.confirm = null; render(); break;
     case 'askAll': UI.confirm = 'all'; render(); break;
     case 'expHe': exportHe(); break;
