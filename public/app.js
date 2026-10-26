@@ -480,7 +480,7 @@ function renderTela() {
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' || (UI.modulo === 'gestao' && UI.view !== 'epainel') ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
-  if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && resTipo() !== 'ativ'))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? AD.painel() : vResumoOutro()); afterRender(); return; }
+  if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && !['ativ', 'he'].includes(resTipo())))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? AD.painel() : vResumoOutro()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
   ensurePeriod();
@@ -656,7 +656,7 @@ function renderTop() {
   }
   if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  if (v.id === 'resumo' && resTipo() !== 'ativ') { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
+  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
@@ -1627,7 +1627,7 @@ function vProg() {
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
 // Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
-const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['oper', 'Operação', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['he', 'Horas extras', u => setsDe(u).length > 0], ['oper', 'Operação', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
 const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME));
 const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
 const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
@@ -1694,7 +1694,41 @@ function vResumoDia() {
   <h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(({ c, inf }) => `<tr><td>${esc(title(c.nome))}<div class="muted small">${esc(c.rota)}</div></td><td>${inf.he === 'DIKMA' ? 'A pedido da Dikma' : inf.he === 'ARCELOR' ? 'A pedido da ArcelorMittal' : 'Origem não informada'}</td><td class="small">${esc(textoHE(inf.hed) || 'sem horário')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
+// Resumo das horas extras (dia ou semana): horas com horário informado e estimadas, por pessoa, por motivo e a pedido de quem.
+function vResumoHE() {
+  const area = areaScope(); const semana = DAYS.map((_, k) => add(UI.ini, k));
+  if (!UI.rDia || !semana.includes(UI.rDia)) UI.rDia = semana.includes(TODAY) ? TODAY : semana[0];
+  const dias = rDia() ? [UI.rDia] : semana; const cfg = heCfg();
+  const regs = [];
+  for (const c of colabsDa(area)) {
+    const r = escala().regimes[regimeDe(c)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm;
+    for (const d of dias) {
+      const key = c.id + '|' + d; if (DB.sit(key) !== 'HE') continue;
+      const inf = DB.sitInfo(key); const h = horasHE(inf.hed); const cob = cobDoDia(d).find(x => x.sub === c.id);
+      regs.push({ c, d, orig: inf.he || '', det: inf.hed, horas: h, conta: h == null ? est : h, cobre: cob ? nomeDe(cob.aus) : '' });
+    }
+  }
+  regs.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.c.nome.localeCompare(b.c.nome)));
+  const soma = l => l.reduce((n, x) => n + x.conta, 0);
+  const tot = soma(regs), inf = regs.filter(x => x.horas != null), sem = regs.filter(x => x.horas == null);
+  const porO = o => soma(regs.filter(x => x.orig === o));
+  const pess = new Map(); regs.forEach(x => { const p = pess.get(x.c.id) || { c: x.c, dias: 0, h: 0, D: 0, A: 0 }; p.dias++; p.h += x.conta; if (x.orig === 'DIKMA') p.D += x.conta; if (x.orig === 'ARCELOR') p.A += x.conta; pess.set(x.c.id, p); });
+  const mot = {}; regs.forEach(x => { const k = x.det && x.det.mot ? (MOTIVOS_HE.includes(x.det.mot) ? x.det.mot : 'Outro') : 'Sem horário informado'; mot[k] = (mot[k] || 0) + x.conta; });
+  const chipsDia = rDia() ? `<div class="dayscroll noprint" role="group" aria-label="Dia">${semana.map((x, j) => `<button class="dbtn ${x === TODAY ? 'hoje' : ''}" data-rdia="${x}" aria-pressed="${x === UI.rDia}"><small>${DAYS[j]}</small><b>${x.slice(8)}</b></button>`).join('')}</div>` : '';
+  const periodo = rDia() ? dataLonga(UI.rDia) : weekLabel(UI.ini);
+  return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
+  ${chipsDia}<p class="muted m0 noprint">${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]} · troque a semana e a área no topo. Sem horário informado, conta a estimativa de ${cfg.ciclo} h (turno) ou ${cfg.adm} h (administrativo).</p>
+  <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO ${rDia() ? 'DO DIA' : 'DA SEMANA'} · HORAS EXTRAS</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>${rDia() ? 'Dia' : 'Semana'}:</b> ${periodo}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis"><div><b>${fmtH(tot)}</b><span>Horas extras</span></div><div><b>${pess.size}</b><span>Pessoas</span></div><div><b>${regs.length}</b><span>Lançamentos</span></div><div><b>${fmtH(soma(inf))}</b><span>Com horário informado</span></div><div><b>${fmtH(porO('DIKMA'))}</b><span>A pedido da Dikma</span></div><div><b>${fmtH(porO('ARCELOR'))}</b><span>A pedido da ArcelorMittal</span></div></div>
+  ${!rDia() ? `<h4>Por dia</h4><table><thead><tr><th></th>${semana.map((d, k) => `<th class="r">${DAYS[k]} ${ddmm(d)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody><tr><td>Horas</td>${semana.map(d => { const v = soma(regs.filter(x => x.d === d)); return `<td class="r">${v ? fmtH(v) : ''}</td>`; }).join('')}<td class="r"><b>${fmtH(tot)}</b></td></tr><tr><td>Pessoas</td>${semana.map(d => { const v = regs.filter(x => x.d === d).length; return `<td class="r">${v || ''}</td>`; }).join('')}<td class="r"></td></tr></tbody></table>` : ''}
+  <div class="rcols"><div><h4>Por pessoa</h4>${pess.size ? `<table><thead><tr><th>Colaborador</th><th class="r">Dias</th><th class="r">Horas</th><th class="r">Dikma</th><th class="r">Arcelor</th></tr></thead><tbody>${[...pess.values()].sort((a, b) => b.h - a.h).map(p => `<tr><td>${esc(title(p.c.nome))}<div class="muted small">${esc(p.c.rota)}</div></td><td class="r">${p.dias}</td><td class="r"><b>${fmtH(p.h)}</b></td><td class="r">${p.D ? fmtH(p.D) : ''}</td><td class="r">${p.A ? fmtH(p.A) : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma hora extra no período.</p>'}</div>
+  <div><h4>Por motivo</h4>${Object.keys(mot).length ? `<table><tbody>${Object.entries(mot).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${fmtH(v)}</td><td class="r">${pct(v, tot)}%</td></tr>`).join('')}</tbody></table>` : '<p class="muted">—</p>'}
+  <h4>Atenção</h4><table><tbody><tr><td>Sem horário informado</td><td class="r">${sem.length}</td></tr><tr><td>Sem “a pedido de”</td><td class="r">${regs.filter(x => !x.orig).length}</td></tr><tr><td>Cobrindo ausência</td><td class="r">${regs.filter(x => x.cobre).length}</td></tr></tbody></table></div></div>
+  ${regs.length ? `<h4>Lançamentos</h4><table><thead><tr><th>Dia</th><th>Colaborador</th><th>Horário</th><th class="r">Horas</th><th>Motivo</th><th>A pedido de</th></tr></thead><tbody>${regs.slice(0, 80).map(x => `<tr><td class="nowrap">${ddmm(x.d)}</td><td>${esc(title(x.c.nome))}<div class="muted small">${esc(x.c.rota)}${x.cobre ? ' · cobrindo ' + esc(x.cobre) : ''}</div></td><td class="nowrap">${x.det && x.det.ini ? `${esc(x.det.ini)} às ${esc(x.det.fim)}` : '<span class="muted">sem horário</span>'}</td><td class="r">${fmtH(x.conta)}${x.horas == null ? '*' : ''}</td><td>${esc((x.det && (x.det.mot || '')) || '')}${x.det && x.det.obs ? `<div class="muted small">${esc(x.det.obs)}</div>` : ''}</td><td>${x.orig ? HE_ORIG[x.orig] : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table>${regs.length > 80 ? `<p class="muted small">e mais ${regs.length - 80} lançamentos (veja o Banco de horas extras).</p>` : ''}${sem.length ? '<p class="muted small">* estimativa: sem horário informado.</p>' : ''}` : ''}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+}
 function vResumo() {
+  if (resTipo() === 'he') return vResumoHE();
   if (rDia()) return vResumoDia();
   const area = areaScope(); const docs = docsFor({ ini: UI.ini, area }); const s = stats(docs);
   const ef = pct(s.Rhoje, s.progHoje);
