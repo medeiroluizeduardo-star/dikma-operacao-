@@ -349,12 +349,14 @@ export function criarAdministrativo(X) {
   /* ---------- Painel de frequência e resumo da semana (módulo Painel) ---------- */
   // Códigos de cada pessoa em cada data, pela mesma regra da folha (escala, férias, desligamento e lançamentos).
   // Uma semana pode cruzar duas folhas (16 a 15): cada data usa a folha da sua competência.
-  function levantar(conj, datas) {
+  // soArea: só quem está nas áreas do conjunto (ligado às Atividades do Pátio de Carvão ou da Bateria) — usado nos resumos.
+  function levantar(conj, datas, soArea = false) {
     const cmap = colabPorId(conj); const pessoas = new Map(); let carregando = false;
     for (const dt of datas) {
       const comp = competenciaDe(dt); const doc = compDoc(conj, comp);
       if (doc === undefined) { carregando = true; continue; } if (!doc) continue;
       for (const g of doc.grupos || []) for (const p of g.pessoas || []) {
+        if (soArea && !(p.ativ && cmap.get(p.ativ))) continue;
         const key = p.mat ? 'm' + p.mat : 'n' + normNome(p.nome);
         let x = pessoas.get(key); if (!x) { x = { nome: p.nome, grupo: g.nome, c: {} }; pessoas.set(key, x); }
         x.c[dt] = codigo(conj, comp, doc, g, p, dt, cmap);
@@ -418,7 +420,7 @@ export function criarAdministrativo(X) {
   }
   // Resumo da semana (folha de impressão): presença, ocorrências e férias da semana.
   function resumoSemana(ini, conj) {
-    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = levantar(conj, datas);
+    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = levantar(conj, datas, true);
     if (lev.carregando && !lev.pessoas.length) return null;
     const k = indicadores(lev, datas); const fe = A().ferias || [];
     const DL7 = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -435,7 +437,7 @@ export function criarAdministrativo(X) {
 
   // Resumo de um dia: presença por grupo, quem faltou ou está fora e quem fez hora extra.
   function resumoDia(dt, conj) {
-    const lev = levantar(conj, [dt]); if (lev.carregando && !lev.pessoas.length) return null;
+    const lev = levantar(conj, [dt], true); if (lev.carregando && !lev.pessoas.length) return null;
     const k = indicadores(lev, [dt]); const fe = A().ferias || [];
     const cod = x => x.c[dt] && x.c[dt].v;
     const oc = lev.pessoas.filter(x => ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(cod(x))).sort((a, b) => cod(a).localeCompare(cod(b)) || a.nome.localeCompare(b.nome));
