@@ -885,7 +885,9 @@ let IDC = null, IDCv = null;
 const idsColabs = () => { if (IDCv !== COLABS) { IDC = new Set(COLABS.map(c => c.id)); IDCv = COLABS; } return IDC; };
 /* ---------------- EFETIVO NO PAINEL ---------------- */
 const SIT_NOME = Object.fromEntries(SITS);
-const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad', ATR: 'warn' };
+// Presente, mas com ocorrência no dia (chegou depois ou saiu antes): conta como presente e pede justificativa.
+const PARCIAL = new Set(['ATR', 'SA']);
+const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad', ATR: 'warn', SA: 'warn' };
 const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area);
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 function cardAusencias(area) {
@@ -893,15 +895,15 @@ function cardAusencias(area) {
   const sh = new Map(cs.map(c => [c.id, sitDia(c, TODAY)]));
   const folgaHoje = cs.filter(c => { const x = sh.get(c.id); return x.auto || x.v === 'F'; }).length;
   const ferias = cs.filter(c => sh.get(c.id).v === 'FE').length;
-  const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && (AUSENCIA.has(x.v) || x.v === 'ATR')).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
-  const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length;
-  const ausR = aus.filter(x => x.v !== 'ATR'); // atrasado está presente: aparece na lista, mas não conta como ausência
+  const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && (AUSENCIA.has(x.v) || PARCIAL.has(x.v))).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
+  const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length; const sai = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'SA').length;
+  const ausR = aus.filter(x => !PARCIAL.has(x.v)); // atrasado e saída antecipada estão presentes: aparece na lista, mas não conta como ausência
   const por = {}; ausR.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
   const pres = cs.length - ausR.length - folgaHoje - ferias;
   const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}${AUS_COBRIVEL.has(x.v) ? (cobertoPor(x.c.id, TODAY) ? ` · coberto por ${esc(curto(nomeDe(cobertoPor(x.c.id, TODAY))))}` : ' · <em class="semt">sem substituto</em>') : ''}${(j => (j && j.cod === x.v ? ` · ${esc(textoJus(j))}` : JUS_CODS.includes(x.v) ? ' · <em class="semt">sem justificativa</em>' : ''))(DB.sitInfo(x.c.id + '|' + TODAY).jus)}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente ou atrasado hoje.</div>';
   return `<div class="card"><header><h2>Ausências e atrasos de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
     <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga</span></div>${ferias ? `<div><b class="num">${ferias}</b><span>Férias</span></div>` : ''}<div><b class="num" style="color:${ausR.length ? 'var(--st-nreal)' : 'inherit'}">${ausR.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje - ferias)}%</b><span>Presença dos escalados</span></div></div>
-    ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}</div>` : ''}
+    ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}${sai ? `<span class="rchip">Saída antecipada · <b class="num">${sai}</b></span>` : ''}</div>` : ''}
     ${lista}</div></div>`;
 }
 // Balanço da semana: quadro, ausências por motivo, disponíveis × necessários e rotas em déficit, dia a dia.
@@ -1075,7 +1077,7 @@ function vEsJus() {
   const LIM = UI.more || 80;
   const linha = x => { const ed = canEditSit(x.c.area); const bt = ed ? `<button class="btn sm ${x.j ? 'ghost' : 'pri'}" data-jusk="${esc(x.c.id + '|' + x.d)}">${x.j ? 'Editar' : 'Justificar'}</button>` : '';
     return `<tr><td class="nowrap mono">${ddmm(x.d)}</td><td><b>${esc(title(x.c.nome))}</b><div class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</div></td><td class="nowrap"><span class="sit ${x.v}">${x.v}</span> ${SIT_NOME[x.v]}</td><td>${x.j ? `${esc(textoJus(x.j))}<div class="muted small">${esc(x.j.nomePor || '')}${x.j.em ? ' · ' + ddmm(x.j.em.slice(0, 10)) : ''}${x.j.ocorr ? ' · registrada na ficha' : ''}</div>` : '<span class="pill warn">sem justificativa</span>'}</td><td class="r">${bt}</td></tr>`; };
-  return `<div class="mini"><div><b class="num" style="color:${pend ? 'var(--st-atr)' : 'inherit'}">${pend}</b><span>Sem justificativa</span></div><div><b class="num">${base.length - pend}</b><span>Justificadas</span></div><div><b class="num">${n('FT')}</b><span>Faltas</span></div><div><b class="num">${n('ATR')}</b><span>Atrasos</span></div><div><b class="num">${n('AT')}</b><span>Atestados</span></div></div>
+  return `<div class="mini"><div><b class="num" style="color:${pend ? 'var(--st-atr)' : 'inherit'}">${pend}</b><span>Sem justificativa</span></div><div><b class="num">${base.length - pend}</b><span>Justificadas</span></div><div><b class="num">${n('FT')}</b><span>Faltas</span></div><div><b class="num">${n('ATR')}</b><span>Atrasos</span></div><div><b class="num">${n('SA')}</b><span>Saídas antecipadas</span></div><div><b class="num">${n('AT')}</b><span>Atestados</span></div></div>
   <div class="card"><header><h2>Justificativas</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · também dá para justificar tocando no dia no Efetivo diário</p></header>
   <div class="body lbar"><div class="rchips">${[['pend', 'Sem justificativa', pend], ['ok', 'Justificadas', base.length - pend], ['todas', 'Todas', base.length]].map(([k, l, q]) => `<button class="rchip" data-jusf="${k}" aria-pressed="${f === k}">${l} <span class="c">${q}</span></button>`).join('')}</div>
   <label class="sel"><span>Rota</span><select class="in" id="fJusRota"><option value="">Todas as rotas</option>${rotasL.map(r => `<option ${r === UI.jusRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>${!framed && !isMobile() ? `<button class="btn" data-act="expJus">${I.dl} Exportar</button>` : ''}</div>
@@ -1094,7 +1096,7 @@ function fichaDe(c) {
   const nk = x => semAcento(String(x || '')).toUpperCase().replace(/\s+/g, ' ').trim();
   return (G.colabs || []).find(x => (c.mat && String(x.mat) === String(c.mat)) || nk(x.nome) === nk(c.nome)) || null;
 }
-const ocorrOpc = (c, cod) => { if (!['FT', 'ATR'].includes(cod)) return null; const f = fichaDe(c); if (!f) return null; const tipos = ((DB.cache.g.config && DB.cache.g.config.tipos) || []).map(t => t.tipo); return { tipos: [...new Set([cod === 'FT' ? 'Falta' : 'Atraso', ...tipos])] }; };
+const ocorrOpc = (c, cod) => { if (!['FT', 'ATR', 'SA'].includes(cod)) return null; const f = fichaDe(c); if (!f) return null; const tipos = ((DB.cache.g.config && DB.cache.g.config.tipos) || []).map(t => t.tipo); return { tipos: [...new Set([cod === 'FT' ? 'Falta' : cod === 'SA' ? 'Saída antecipada' : 'Atraso', ...tipos])] }; };
 // Grava a justificativa nos dias lançados (mesmo campo que a Frequência lê).
 function salvarJus(c, dias, j) {
   const oc = j.ocorr; delete j.ocorr;
@@ -1368,11 +1370,11 @@ function equipeCheckin() {
 }
 function cardCheckin() {
   const gs = equipeCheckin(); if (!gs.length) return '';
-  const tom = v => (v === 'FT' ? 'bad' : v === 'ATR' ? 'warn' : AUSENCIA.has(v) ? 'neu' : 'ok');
+  const tom = v => (v === 'FT' ? 'bad' : PARCIAL.has(v) ? 'warn' : AUSENCIA.has(v) ? 'neu' : 'ok');
   return `<div class="card checkin"><header><h2>Check-in do turno</h2><p>${ddmm(TODAY)} · confirme quem está na equipe: presente, falta ou atraso</p></header><div class="body stackcol">${gs.map(g => {
     const [por, nome, hora, conta] = g.ck.split('|');
     if (g.ck) return `<div class="ckok"><span class="pill ok">✓</span> <b>${PER_NOME[g.per]}</b> · ${AREA_S[g.a]} · check-in às ${esc(hora || '')} por ${esc(nome || '')}${conta ? ` · ${esc(conta)} presentes` : ''} <button class="btn ghost link" data-ckre="${esc(g.a)}|${g.per}">refazer</button></div>`;
-    const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length;
+    const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && !PARCIAL.has(x.v)).length;
     return `<div class="ckg"><div class="row-between"><b>${PER_NOME[g.per]} · ${AREA_S[g.a]}</b><span class="row-gap"><span class="muted small">${pres} de ${g.ps.length} presentes</span><button class="btn sm pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar</button></span></div><div class="plist">${g.ps.map(x => `<div class="pitem"><div class="minw"><div class="t">${esc(title(x.c.nome))}</div><div class="l">${esc(x.c.rota)}${turmaDe(x.c) ? ' · turma ' + esc(turmaDe(x.c)) : ''}</div></div><div class="bt ckbt"><button class="btn sm ${x.v === 'P' || x.v === 'HE' ? 'on ok' : ''}" data-ck="${esc(x.c.id)}|P" aria-pressed="${x.v === 'P' || x.v === 'HE'}">Presente</button><button class="btn sm ${x.v === 'ATR' ? 'on warn' : ''}" data-ck="${esc(x.c.id)}|ATR" aria-pressed="${x.v === 'ATR'}">Atraso</button><button class="btn sm ${x.v === 'FT' ? 'on bad' : ''}" data-ck="${esc(x.c.id)}|FT" aria-pressed="${x.v === 'FT'}">Falta</button>${!['P', 'HE', 'ATR', 'FT'].includes(x.v) ? `<span class="pill ${tom(x.v)}">${SIT_NOME[x.v] || x.v}</span>` : ''}</div></div>`).join('')}</div><button class="btn pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar check-in · ${pres} de ${g.ps.length} presentes</button></div>`;
   }).join('')}</div></div>`;
 }
@@ -1402,7 +1404,7 @@ function vEsDia() {
   const celula = (c, k) => {
     const dt = add(UI.ini, k); const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
-    const per = ['P', 'ATR', 'HE'].includes(v) ? periodoDe(c, dt) : '';
+    const per = ['P', 'ATR', 'SA', 'HE'].includes(v) ? periodoDe(c, dt) : '';
     const jus = !x.auto && JUS_CODS.includes(v) ? inf.jus : null; const semJus = !x.auto && JUS_CODS.includes(v) && !(jus && jus.cod === v) && dt <= TODAY;
     const tt = (x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v) + (jus && jus.cod === v ? ` · ${textoJus(jus)}` : semJus ? ' · sem justificativa' : '') + (per ? ` · turno ${PERIODO[per].toLowerCase()}` : '') + (v === 'HE' && inf.he ? ` a pedido da ${HE_ORIG[inf.he]}` : '') + (v === 'HE' && inf.hed ? ' · ' + textoHE(inf.hed) : '') + (cob ? ` · coberto por ${nomeDe(cob)}` : (!x.auto && AUS_COBRIVEL.has(v) ? ' · sem substituto' : '')) + (cobre ? ` · cobrindo ${nomeDe(cobre)}` : '');
     return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${x.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${cob || cobre ? ' cobm' : ''}${semJus ? ' semjus' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${esc(tt)}" title="${esc(tt)}">${v === 'P' ? I.ok : v}${v === 'HE' && inf.he ? `<sup>${HE_SIG[inf.he]}</sup>` : ''}${cob || cobre ? '<i class="cobi" aria-hidden="true">⇄</i>' : ''}${marcaPer(per)}</button></td>`;
@@ -1673,9 +1675,9 @@ function vResumoDia() {
   const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(x => x.id));
   const pa = listaAprov(as).filter(x => ids.has(x.doc.id) && x.k === k).length;
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + d) !== 'DS');
-  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && (AUSENCIA.has(o.x.v) || o.x.v === 'ATR')).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
+  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && (AUSENCIA.has(o.x.v) || PARCIAL.has(o.x.v))).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
   const folga = cs.filter(c => { const x = sitDia(c, d); return x.auto || x.v === 'F' || x.v === 'FE'; }).length;
-  const pres = cs.length - aus.filter(o => o.x.v !== 'ATR').length - folga;
+  const pres = cs.length - aus.filter(o => !PARCIAL.has(o.x.v)).length - folga;
   const he = cs.filter(c => DB.sit(c.id + '|' + d) === 'HE').map(c => ({ c, inf: DB.sitInfo(c.id + '|' + d) }));
   const cob = cobDoDia(d).filter(x => COLABS.some(c => c.id === x.aus && (area === 'TODAS' || c.area === area)));
   const linhas = [...rot.values()].filter(g => g.prog || g.E).sort((a, b) => (b.N + b.P) - (a.N + a.P) || a.rota.localeCompare(b.rota));
@@ -1687,8 +1689,8 @@ function vResumoDia() {
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência do dia</span></div><div><b>${n0(tot.prog)}</b><span>Programadas</span></div><div><b>${n0(tot.R)}</b><span>Realizadas</span></div><div><b>${n0(tot.N)}</b><span>Não realizadas</span></div><div><b>${n0(passou ? tot.A : tot.P)}</b><span>${passou ? 'Sem apontamento' : 'A fazer'}</span></div><div><b>${n0(tot.E)}</b><span>Extras</span></div></div>
   <h4>Por rota</h4>${linhas.length ? `<table><thead><tr><th>Rota</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">${passou ? 'Sem apont.' : 'A fazer'}</th><th class="r">Extras</th><th class="r">Eficiência</th></tr></thead><tbody>${linhas.map(g => `<tr><td>${esc(g.rota)}${area === 'TODAS' ? `<div class="muted small">${AREA_S[g.area]}</div>` : ''}</td><td class="r">${g.prog}</td><td class="r">${g.R}</td><td class="r">${g.N || ''}</td><td class="r">${g.P || ''}</td><td class="r">${g.E || ''}</td><td class="r"><b>${pct(g.R, g.prog)}%</b></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nada programado neste dia.</p>'}
   <h4>Não realizadas e o motivo</h4>${nao.length ? `<table><tbody>${nao.slice(0, 30).map(x => `<tr><td>${esc(x.p.ativ)}<div class="muted small">${esc(x.p.local)} · ${esc(x.p.rota)}</div></td><td>${esc(x.m)}</td></tr>`).join('')}</tbody></table>${nao.length > 30 ? `<p class="muted small">e mais ${nao.length - 30}.</p>` : ''}` : '<p class="muted">Nenhuma não realizada.</p>'}
-  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.filter(o => o.x.v !== 'ATR').length}</td></tr><tr><td>Atrasos</td><td class="r">${aus.filter(o => o.x.v === 'ATR').length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
-  <div><h4>Ausências e atrasos</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => { const j = DB.sitInfo(o.c.id + '|' + d).jus; return `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}<div class="muted small">${j && j.cod === o.x.v ? esc(textoJus(j)) : 'sem justificativa'}</div></td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`; }).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
+  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.filter(o => o.x.v !== 'ATR').length}</td></tr><tr><td>Atrasos</td><td class="r">${aus.filter(o => o.x.v === 'ATR').length}</td></tr><tr><td>Saídas antecipadas</td><td class="r">${aus.filter(o => o.x.v === 'SA').length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
+  <div><h4>Ausências, atrasos e saídas</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => { const j = DB.sitInfo(o.c.id + '|' + d).jus; return `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}<div class="muted small">${j && j.cod === o.x.v ? esc(textoJus(j)) : 'sem justificativa'}</div></td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`; }).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
   <h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(({ c, inf }) => `<tr><td>${esc(title(c.nome))}<div class="muted small">${esc(c.rota)}</div></td><td>${inf.he === 'DIKMA' ? 'A pedido da Dikma' : inf.he === 'ARCELOR' ? 'A pedido da ArcelorMittal' : 'Origem não informada'}</td><td class="small">${esc(textoHE(inf.hed) || 'sem horário')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
@@ -1703,7 +1705,7 @@ function vResumo() {
   const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
   const cs = colabsDa(area); const dias = DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
   cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
-  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && (AUSENCIA.has(x.v) || x.v === 'ATR')) aus[x.v] = (aus[x.v] || 0) + 1; }));
+  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && (AUSENCIA.has(x.v) || PARCIAL.has(x.v))) aus[x.v] = (aus[x.v] || 0) + 1; }));
   const semJ = cs.reduce((n, c) => n + dias.filter(d => d <= TODAY && (() => { const x = sitDia(c, d); if (x.auto || !JUS_CODS.includes(x.v)) return false; const j = DB.sitInfo(c.id + '|' + d).jus; return !(j && j.cod === x.v); })()).length, 0);
   return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div></div><div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
   <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Semana:</b> ${weekLabel(UI.ini)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>

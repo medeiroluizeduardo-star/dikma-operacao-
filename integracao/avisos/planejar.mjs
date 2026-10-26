@@ -7,7 +7,7 @@ import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true };
-const JUS_CODS = ['FT', 'ATR', 'AT', 'AF', 'AB', 'SP', 'TR'];
+const JUS_CODS = ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'];
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
