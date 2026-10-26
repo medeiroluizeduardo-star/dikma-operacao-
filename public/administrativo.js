@@ -370,10 +370,10 @@ export function criarAdministrativo(X) {
     const t = { FT: 0, ATR: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0, AF: 0, TR: 0 }; const dia = ate.map(() => ({ p: 0, q: 0 })); const grupos = new Map();
     for (const x of lev.pessoas) {
       const g = grupos.get(x.grupo) || { nome: x.grupo, p: 0, q: 0, FT: 0, AT: 0, n: 0 }; g.n++; grupos.set(x.grupo, g);
-      x.t = { FT: 0, AT: 0, AB: 0, SP: 0 };
+      x.t = { FT: 0, ATR: 0, AT: 0, AB: 0, SP: 0, semJ: 0 };
       ate.forEach((dt, i) => {
         const c = x.c[dt]; if (!c) return;
-        if (c.v in t) t[c.v]++; if (c.v in x.t) x.t[c.v]++; if (c.v === 'FT') g.FT++; if (c.v === 'AT') g.AT++;
+        if (c.v in t) t[c.v]++; if (c.v in x.t) x.t[c.v]++; if (!c.auto && JUS_CODS.includes(c.v) && !((x.j || {})[dt] && x.j[dt].cod === c.v)) x.t.semJ++; if (c.v === 'FT') g.FT++; if (c.v === 'AT') g.AT++;
         if (NAOCONTA(c)) return; dia[i].q++; g.q++; if (presente(c.v)) { dia[i].p++; g.p++; }
       });
     }
@@ -395,7 +395,7 @@ export function criarAdministrativo(X) {
       ${kp('Presença no período', pc(k.pres), `${k.P} presenças de ${k.Q} dias previstos · até ${dBR(k.ate[k.ate.length - 1] || datas[0])}`, 'var(--st-real)')}
       ${kp('Presentes hoje', hj ? hj.p : '–', hj ? `de ${hj.q} escalados hoje` : 'hoje fora desta folha')}
       ${kp('Pessoas na folha', lev.pessoas.length, `${SETS[conj].curto} · ${periodoComp(comp)}`)}
-      ${kp('Faltas', k.t.FT, 'dias de falta no período', 'var(--st-nreal)')}
+      ${kp('Faltas e atrasos', k.t.FT + k.t.ATR, `${k.t.FT} faltas · ${k.t.ATR} atrasos`, 'var(--st-nreal)')}
       ${kp('Atestados', k.t.AT, `${k.t.AF} dias de afastamento`, 'var(--st-atr)')}
       ${kp('Abonos e suspensões', k.t.AB + k.t.SP, `${k.t.AB} abonos · ${k.t.SP} suspensões`)}
       ${kp('Horas extras', k.t.HE, 'dias com hora extra', 'var(--st-extra)')}
@@ -406,8 +406,9 @@ export function criarAdministrativo(X) {
       <div class="colx cmes">${datas.map((dt, i) => `<div class="${dt === TODAY ? 'today' : ''}">${i % 5 === 0 || dt === TODAY ? `<b>${dt.slice(8)}</b>` : ''}</div>`).join('')}</div>
       <div class="legend"><span><i style="background:var(--st-real)"></i>95% ou mais</span><span><i style="background:var(--st-atr)"></i>85 a 95%</span><span><i style="background:var(--st-nreal)"></i>abaixo de 85%</span></div></div></div>
       <div class="card"><header><h2>Presença por grupo</h2><p>Do menor para o maior</p></header><div class="body"><div class="bars">${k.grupos.filter(g => g.q).sort((a, b) => a.p / a.q - b.p / b.q).slice(0, 12).map(g => `<div class="barrow"><span class="n">${esc(title(g.nome))}<small>${g.n} pessoas${g.FT ? ` · ${g.FT} falta${g.FT > 1 ? 's' : ''}` : ''}${g.AT ? ` · ${g.AT} atestado${g.AT > 1 ? 's' : ''}` : ''}</small></span><div class="stack"><i style="width:${g.p / g.q * 100}%;background:var(--st-real)"></i></div><span class="p num">${pc(g.p / g.q)}</span></div>`).join('') || '<div class="empty">Sem dias previstos ainda.</div>'}</div></div></div></div>`;
-    const oc = lev.pessoas.filter(x => x.t.FT + x.t.AT + x.t.SP > 0).sort((a, b) => (b.t.FT * 2 + b.t.AT + b.t.SP * 2) - (a.t.FT * 2 + a.t.AT + a.t.SP * 2)).slice(0, 10);
-    h += `<div class="grid2"><div class="card"><header><h2>Mais ocorrências</h2><p>Faltas, atestados e suspensões no período</p></header><div class="tw"><table><thead><tr><th>Colaborador</th><th>Grupo</th><th class="r">Faltas</th><th class="r">Atestados</th><th class="r">Abonos</th><th class="r">Suspensões</th></tr></thead><tbody>${oc.map(x => `<tr><td><b>${esc(title(x.nome))}</b></td><td class="muted">${esc(title(x.grupo))}</td><td class="r num">${x.t.FT || ''}</td><td class="r num">${x.t.AT || ''}</td><td class="r num">${x.t.AB || ''}</td><td class="r num">${x.t.SP || ''}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nenhuma ocorrência no período.</td></tr>'}</tbody></table></div></div>
+    const peso = x => x.t.FT * 3 + x.t.ATR * 2 + x.t.SP * 3 + x.t.AT; // falta e suspensão pesam mais; atraso repetido aparece
+    const oc = lev.pessoas.filter(x => x.t.FT + x.t.ATR + x.t.AT + x.t.SP > 0).sort((a, b) => peso(b) - peso(a) || a.nome.localeCompare(b.nome)).slice(0, 12);
+    h += `<div class="grid2"><div class="card"><header><h2>Quem mais falta e atrasa</h2><p>Faltas, atrasos, atestados e suspensões no período · os que repetem aparecem primeiro</p></header><div class="tw"><table><thead><tr><th>Colaborador</th><th>Grupo</th><th class="r">Faltas</th><th class="r">Atrasos</th><th class="r">Atestados</th><th class="r">Suspensões</th><th class="r">Sem justificativa</th></tr></thead><tbody>${oc.map(x => `<tr><td><b>${esc(title(x.nome))}</b></td><td class="muted">${esc(title(x.grupo))}</td><td class="r num">${x.t.FT || ''}</td><td class="r num">${x.t.ATR ? `<b${x.t.ATR >= 3 ? ' style="color:var(--st-nreal)"' : ''}>${x.t.ATR}</b>` : ''}</td><td class="r num">${x.t.AT || ''}</td><td class="r num">${x.t.SP || ''}</td><td class="r num">${x.t.semJ ? `<span class="pill warn">${x.t.semJ}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Nenhuma ocorrência no período.</td></tr>'}</tbody></table></div></div>
       <div class="card"><header><h2>Férias</h2><p>Hoje e nos próximos dias · todos os conjuntos</p></header><div class="tw"><table><tbody>
         ${fe.saem.slice(0, 8).map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>sai ${dBR(f.inicio)}</td><td class="r num">${f.dias || ''} dias</td></tr>`).join('')}
         ${fe.voltam.map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>volta ${dBR(f.retorno)}</td><td></td></tr>`).join('')}

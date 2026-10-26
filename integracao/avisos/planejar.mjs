@@ -6,7 +6,8 @@ import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true };
+const JUS_CODS = ['FT', 'ATR', 'AT', 'AF', 'AB', 'SP', 'TR'];
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -83,6 +84,26 @@ export function planejar(d) {
     }
   }
 
+  // 8) Faltas, atrasos e atestados de hoje ainda sem justificativa (às 16h, uma vez por dia),
+  //    para supervisor, coordenador e gestor, só nas áreas deles. Mostra contagens por área, nunca nomes.
+  if (hora >= 16) {
+    for (const x of alvo) {
+      const chave = `jus|${x.uid}|${hoje}`;
+      if (!x.prefs.justificativas || d.enviados[chave] || !['supervisor', 'coordenador', 'gestor'].includes(x.u.papel)) continue;
+      const por = {}; let total = 0;
+      for (const k of SET_KEYS) {
+        const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue;
+        for (const c of S.colabs || []) {
+          if (!areas.includes(c.area)) continue;
+          const key = c.id + '|' + hoje; const v = (S.sit || {})[key]; if (!JUS_CODS.includes(v)) continue;
+          const j = (S.jus || {})[key]; if (j && j.cod === v) continue;
+          total++; por[c.area] = (por[c.area] || 0) + 1;
+        }
+      }
+      if (total) msgs.push({ uid: x.uid, titulo: total === 1 ? '1 falta ou atraso sem justificativa hoje' : `${total} faltas e atrasos sem justificativa hoje`, corpo: Object.entries(por).map(([a, n]) => `${AREA_S[a] || a} ${n}`).join(' · ') + '\nToque para justificar.', tag: 'justificativas', url: '/?m=gestao&v=esjus' });
+      marcar.add(chave);
+    }
+  }
   // 3) Déficit de efetivo amanhã (uma vez por dia por pessoa, a partir das 17h), só nas áreas da pessoa
   if (hora >= 17) {
     for (const x of alvo) {

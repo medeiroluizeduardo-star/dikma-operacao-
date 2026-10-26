@@ -47,7 +47,7 @@ const sets = {};
 for (const k of SET_KEYS) {
   const C = n => SETS[k].pre + n;
   const cfg = await db.doc(`${C('config')}/sistema`).get(); if (!cfg.exists) continue;
-  const plano = [], colabs = [], semanas = {}, sit = {};
+  const plano = [], colabs = [], semanas = {}, sit = {}, jus = {};
   (await db.collection(C('plano')).get()).forEach(x => plano.push(...(x.data().itens || [])));
   (await db.collection(C('colaboradores')).get()).forEach(x => colabs.push(...(x.data().itens || [])));
   // segunda-feira: também a semana que passou (resumo semanal)
@@ -58,8 +58,8 @@ for (const k of SET_KEYS) {
     const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data();
     const ap = await db.doc(`${C('aprov')}/${a}|${ini}`).get(); if (ap.exists) aprov[ap.id] = ap.data().v || {};
   }
-  for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) Object.assign(sit, s.data().v || {}); }
-  sets[k] = { plano, colabs, semanas, sit, aprov, rotas: cfg.data().rotas || [] };
+  for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) { Object.assign(sit, s.data().v || {}); Object.assign(jus, s.data().jus || {}); } }
+  sets[k] = { plano, colabs, semanas, sit, jus, aprov, rotas: cfg.data().rotas || [] };
 }
 
 // Escala de turno: quem está de folga pela letra da turma não conta como disponível amanhã.
