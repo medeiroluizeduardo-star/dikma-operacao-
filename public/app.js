@@ -1645,7 +1645,7 @@ function vResumoOutro() {
     const r = tipo === 'oper' ? EQ.resumoDia(d) : AD.resumoDia(d, conj);
     const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
     if (!r) return nav + M.ESQUELETO;
-    const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b></span>`;
+    const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
     return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
@@ -1654,7 +1654,7 @@ function vResumoOutro() {
   const r = tipo === 'oper' ? EQ.resumoSemana(ini) : AD.resumoSemana(ini, conj);
   const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
   if (!r) return nav + M.ESQUELETO;
-  const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b></span>`;
+  const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
   return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
