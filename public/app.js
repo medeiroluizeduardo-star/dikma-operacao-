@@ -2,7 +2,7 @@
 // Os dados vêm de data.js (Firebase) ou data-mock.js (abrir com ?demo).
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, AUSENCIA, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 import { competenciaDe, diasDaCompetencia, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
-import { abrirLancamento } from './presenca.js';
+import { abrirLancamento, JUS_CODS, pedirJus, textoJus, CODIGOS_LANC } from './presenca.js';
 import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov } from './aprovacao.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
@@ -20,7 +20,7 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas, chaveFicha } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
-import { ACESSOS, ACESSO, acessosDe, podeAcesso, indiceFerias, modulosDe } from './acessos.js';
+import { ACESSO, acessosDe, indiceFerias, modulosDe } from './acessos.js';
 import { criarAdministrativo, VIEWS_A, SUB_A } from './administrativo.js';
 import { semAcento, casa, caixaBusca, filtrarLista, campoBusca } from './busca.js';
 import { criarEscala, normRegime, letra, fatorRota, PERIODO, periodosDe } from './escala.js';
@@ -313,7 +313,6 @@ const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel', 'fpainel'];
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
 const MODS = { paineis: { nome: 'Painel', curto: 'Painel', sub: 'Indicadores de todos os módulos', key: 'pn', inicio: 'painel' }, operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'apontar' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'apontar' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'elanc' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
-const TODOS_MODS = Object.keys(MODS);
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
   operacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 19h18M5 19l4.5-8 3 4.5L15 12l4 7"/><circle cx="16.5" cy="6.5" r="1.8"/></svg>',
@@ -405,7 +404,6 @@ function aplicarTema(t) {
   const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', escuro ? '#14132e' : '#1C1B4A');
   const w = $('who'); if (w) { const b = w.querySelector('[data-act="tema"]'); if (b) b.remove(); } render();
 }
-const proxTema = () => ({ auto: 'light', light: 'dark', dark: 'auto' })[temaAtual()];
 function temaSheet() { const t = temaAtual(); sheet('Tema da tela', 'Vale só neste aparelho', Object.entries(TEMAS).map(([k, n]) => ({ t: n, d: k === 'auto' ? 'Segue o claro ou escuro do aparelho' : '', k, cur: k === t, ic: `<span class="opt-ic">${IC_TEMA[k]}</span>` })), o => { aplicarTema(o.k); toast(`Tema ${o.t.toLowerCase()}`); }); }
 // Troca entre a Operação e a Administração do sistema (só o administrador): recarrega para buscar os dados certos.
 function irAcesso(k) {
@@ -886,7 +884,7 @@ let IDC = null, IDCv = null;
 const idsColabs = () => { if (IDCv !== COLABS) { IDC = new Set(COLABS.map(c => c.id)); IDCv = COLABS; } return IDC; };
 /* ---------------- EFETIVO NO PAINEL ---------------- */
 const SIT_NOME = Object.fromEntries(SITS);
-const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad' };
+const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad', ATR: 'warn' };
 const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area);
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 function cardAusencias(area) {
@@ -894,13 +892,14 @@ function cardAusencias(area) {
   const sh = new Map(cs.map(c => [c.id, sitDia(c, TODAY)]));
   const folgaHoje = cs.filter(c => { const x = sh.get(c.id); return x.auto || x.v === 'F'; }).length;
   const ferias = cs.filter(c => sh.get(c.id).v === 'FE').length;
-  const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && AUSENCIA.has(x.v)).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
+  const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && (AUSENCIA.has(x.v) || x.v === 'ATR')).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
   const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length;
-  const por = {}; aus.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
-  const pres = cs.length - aus.length - folgaHoje - ferias;
-  const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}${AUS_COBRIVEL.has(x.v) ? (cobertoPor(x.c.id, TODAY) ? ` · coberto por ${esc(curto(nomeDe(cobertoPor(x.c.id, TODAY))))}` : ' · <em class="semt">sem substituto</em>') : ''}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente hoje.</div>';
-  return `<div class="card"><header><h2>Ausências de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
-    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga</span></div>${ferias ? `<div><b class="num">${ferias}</b><span>Férias</span></div>` : ''}<div><b class="num" style="color:${aus.length ? 'var(--st-nreal)' : 'inherit'}">${aus.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje - ferias)}%</b><span>Presença dos escalados</span></div></div>
+  const ausR = aus.filter(x => x.v !== 'ATR'); // atrasado está presente: aparece na lista, mas não conta como ausência
+  const por = {}; ausR.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
+  const pres = cs.length - ausR.length - folgaHoje - ferias;
+  const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}${AUS_COBRIVEL.has(x.v) ? (cobertoPor(x.c.id, TODAY) ? ` · coberto por ${esc(curto(nomeDe(cobertoPor(x.c.id, TODAY))))}` : ' · <em class="semt">sem substituto</em>') : ''}${(j => (j && j.cod === x.v ? ` · ${esc(textoJus(j))}` : JUS_CODS.includes(x.v) ? ' · <em class="semt">sem justificativa</em>' : ''))(DB.sitInfo(x.c.id + '|' + TODAY).jus)}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente ou atrasado hoje.</div>';
+  return `<div class="card"><header><h2>Ausências e atrasos de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
+    <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga</span></div>${ferias ? `<div><b class="num">${ferias}</b><span>Férias</span></div>` : ''}<div><b class="num" style="color:${ausR.length ? 'var(--st-nreal)' : 'inherit'}">${ausR.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje - ferias)}%</b><span>Presença dos escalados</span></div></div>
     ${aus.length ? `<div class="rchips">${Object.entries(por).map(([k, n]) => `<span class="rchip">${SIT_NOME[k]} · <b class="num">${n}</b></span>`).join('')}${atr ? `<span class="rchip">Atrasados · <b class="num">${atr}</b></span>` : ''}</div>` : ''}
     ${lista}</div></div>`;
 }
@@ -972,16 +971,9 @@ function opcoesSubst(c, dt) {
 }
 function fecharSitPop() { const p = document.querySelector('.sitpop'); if (p) p.remove(); document.removeEventListener('keydown', sitPopEsc, true); }
 function sitPopEsc(e) { if (e.key === 'Escape') { e.stopPropagation(); fecharSitPop(); } }
-function posicionar(pop, btn) {
-  const r = btn.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
-  const x = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
-  let y = r.bottom + 6; if (y + hgt > innerHeight - 8) y = Math.max(8, r.top - hgt - 6);
-  pop.style.left = x + 'px'; pop.style.top = y + 'px';
-}
-const botoesHE = (atual, extra = '') => `<div class="sp-heo" role="group" aria-label="Hora extra a pedido de">${Object.entries(HE_ORIG).map(([k, n]) => `<button type="button" class="btn ${atual === k ? 'pri' : ''}" data-heo="${k}"${extra}>${n}</button>`).join('')}</div>`;
 // Efetivo diário: o mesmo lançamento da Frequência (janela com as situações → até quando),
 // e depois, quando é ausência num dia de trabalho, quem cobre; quando é hora extra, a pedido de quem.
-const CODS_EF = ['P', 'F', 'FT', 'AT', 'AB', 'HE', 'FE', 'AF', 'TR', 'SP', 'ATR', 'DS'];
+const CODS_EF = CODIGOS_LANC;
 function lancarEfetivo(key) {
   fecharSitPop();
   const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
@@ -994,6 +986,7 @@ function lancarEfetivo(key) {
     else extras.push({ t: 'Definir substituto', d: 'Ninguém cobrindo', v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
   }
   if (cobre) extras.push({ t: `Deixar de cobrir ${nomeDe(cobre)}`, v: 'sairCob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
+  if (!sx.auto && JUS_CODS.includes(sx.v)) { const j = info.jus && info.jus.cod === sx.v ? info.jus : null; extras.unshift({ t: j ? 'Editar a justificativa' : `Justificar ${(SIT_NOME[sx.v] || '').toLowerCase()}`, d: j ? textoJus(j) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: `<span class="opt-ic">${I.edit || '✎'}</span>` }); }
   if (sx.v === 'HE') extras.push({ t: 'Hora extra a pedido de…', d: info.he ? `Agora: ${HE_ORIG[info.he]}` : 'Não informado', v: 'heo', extra: true, ic: '<span class="sit HE">HE</span>' }, { t: 'Horário da hora extra', d: textoHE(info.hed) || 'Informar início e fim', v: 'heh', extra: true, ic: `<span class="opt-ic">${I.relogio}</span>` });
   const k = (pd(dt).getDay() + 6) % 7; const domingo = add(dt, 6 - k);
   const depois = []; for (let i = 1; i <= 30; i++) depois.push(add(dt, i));
@@ -1008,21 +1001,40 @@ function lancarEfetivo(key) {
       if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
       if (v === 'heo') return passoHE(c, [dt], null, fimToque);
       if (v === 'heh') return horarioHE(c, [dt], fimToque);
+      if (v === 'jus') return pedirJus({ formSheet, nome: title(c.nome), dt, cod: sx.v, atual: info.jus, salvar: j => salvarJus(c, [dt], j), depois: fimToque });
     },
     aoEscolher: (v, dias) => {
       const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
       // grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não
       const gravar = d => { if (!v) return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
-      dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); });
+      dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); const ju = DB.sitInfo(id + '|' + d).jus; if (ju && ju.cod !== v) DB.setSitExtra('jus', id + '|' + d, null); });
       const nome = !v ? 'automático' : SIT_NOME[v];
       DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
-      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
+      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null), DB.setSitExtra('jus', id + '|' + d, inf.jus || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
       fimToque();
+      const segue = () => { if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque); if (v === 'HE') return passoHE(c, dias, desfazer, fimToque); toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer }); };
+      // falta, atraso, atestado…: pede a justificativa (pode deixar para depois) e segue para o substituto
+      if (JUS_CODS.includes(v) && gravar(dt)) return pedirJus({ formSheet, nome: title(c.nome), dt, cod: v, atual: antes[0][2].jus, salvar: j => salvarJus(c, dias, j), depois: segue });
       if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque);
       if (v === 'HE') return passoHE(c, dias, desfazer, fimToque);
       toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer });
     }
   });
+}
+// Faltas, atrasos e atestados dos últimos 7 dias ainda sem justificativa (só de quem a pessoa pode lançar).
+function jusPendentes() {
+  if (!ME || !COLABS.length) return 0;
+  const ds = []; for (let i = 0; i < 7; i++) ds.push(add(TODAY, -i));
+  let n = 0;
+  for (const c of COLABS) { if (!canEditSit(c.area)) continue; for (const d of ds) { const v = DB.sit(c.id + '|' + d); if (!v || !JUS_CODS.includes(v)) continue; const j = DB.sitInfo(c.id + '|' + d).jus; if (!(j && j.cod === v)) n++; } }
+  return n;
+}
+// Grava a justificativa nos dias lançados (mesmo campo que a Frequência lê).
+function salvarJus(c, dias, j) {
+  const v = { ...j, por: ME.uid, nomePor: ME.nome || ME.login || '', em: new Date().toISOString() };
+  dias.forEach(d => DB.setSitExtra('jus', c.id + '|' + d, v));
+  DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus(j)}`);
+  toast('Justificativa salva');
 }
 // Depois de uma ausência: quem cobre (opcional). Se quem cobre está de folga pela escala, vira hora extra.
 function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
@@ -1050,101 +1062,10 @@ function passoHE(c, dias, desfazer, fimToque) {
     dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined); horarioHE(c, dias, fimToque);
   });
 }
-function sitPop(btn) {
-  fecharSitPop();
-  const key = btn.dataset.sit; const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
-  const sx = sitDia(c, dt); const cur = sx.v; const k = (pd(dt).getDay() + 6) % 7; const fim = add(dt, 6 - k);
-  const prev = escala().previsto(regimeDe(c), turmaDe(c), dt); const manual = !!DB.sit(key); const info = DB.sitInfo(key); const cobre = cobrindo(id, dt);
-  const pop = document.createElement('div'); pop.className = 'sitpop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Situação de ' + title(c.nome));
-  const cab = `<div class="sp-h"><b>${esc(title(c.nome))}</b><small>${DAYS[k]} ${ddmm(dt)}</small></div>`;
-  const extras = [
-    !sx.auto && AUS_COBRIVEL.has(cur) ? (info.cob ? `<div class="sp-cob">${I.swap} Coberto por <b>${esc(nomeDe(info.cob))}</b> <button type="button" class="btn ghost link" data-spx="cob">trocar</button> · <button type="button" class="btn ghost link" data-spx="semcob">remover</button></div>` : `<div class="sp-cob none">Ninguém cobrindo · <button type="button" class="btn ghost link" data-spx="cob">definir substituto</button></div>`) : '',
-    cobre ? `<div class="sp-cob">${I.swap} Cobrindo <b>${esc(nomeDe(cobre))}</b> <button type="button" class="btn ghost link" data-spx="sairCob">remover</button></div>` : '',
-    cur === 'HE' ? `<div class="sp-cob"><span>Hora extra a pedido de:</span>${botoesHE(info.he)}<button type="button" class="btn sm ghost" data-spx="heh">${I.relogio} ${textoHE(info.hed) || 'Informar início e fim'}</button></div>` : ''
-  ].join('');
-  pop.innerHTML = `${cab}
-    <div class="sp-esc">${prev ? (prev.trab ? `Pela escala: <b>trabalha</b>${turmaDe(c) ? ` (turma ${esc(turmaDe(c))})` : ''}` : `Pela escala: <b>folga</b> · ${esc(prev.motivo)}`) : `Sem turma definida: a escala não marca folga sozinha`}${manual ? ' · <button type="button" class="btn ghost link" data-sp="__esc">voltar ao da escala</button>' : ''}</div>
-    ${extras}
-    <div class="sp-g">${SITS.map(([v, n]) => `<button type="button" class="sp-o" data-sp="${v}" ${v === cur ? 'aria-current="true"' : ''}><span class="sit ${v}">${v === 'P' ? I.ok : v}</span><span>${n}</span></button>`).join('')}</div>
-    ${k < 6 ? `<label class="sp-rep"><input type="checkbox" id="spRep"> Repetir até ${DAYS[6].toLowerCase()} ${ddmm(fim)}</label>` : ''}`;
-  document.body.appendChild(pop); posicionar(pop, btn);
-  const at = pop.querySelector('[aria-current="true"]') || pop.querySelector('.sp-o'); at.focus();
-  const fimToque = () => { render(); const nb = document.querySelector(`[data-sit="${CSS.escape(key)}"]`); if (nb) { nb.focus({ preventScroll: true }); M.pulsar(nb); } };
-
-  // Passo 2a: quem cobre a ausência (opcional)
-  const passoCobertura = (dias, desfazerBase) => {
-    btn = document.querySelector(`[data-sit="${CSS.escape(key)}"]`) || btn;
-    pop.innerHTML = `${cab}<div class="sp-ok">${I.ok} Lançado: ${esc(SIT_NOME[DB.sit(key)] || 'ausência')}${dias.length > 1 ? ` em ${dias.length} dias` : ''}</div>
-      <div class="sel"><span>Quem vai cobrir? (opcional)</span>${campoBusca('spSub', cobertoPor(id, dt), opcoesSubst(c, dt), { placeholder: 'Digite o nome de quem substitui', vazio: '—' })}</div>
-      <div id="spSubHe" hidden><p class="small m0">Está de folga: vira <b>hora extra</b>. A pedido de:</p>${botoesHE('DIKMA', ' data-sel="1"')}</div>
-      <div class="row-gap"><button type="button" class="btn pri" data-spx="okCob">Confirmar substituto</button><button type="button" class="btn" data-spx="fechar">Sem substituto</button></div>`;
-    posicionar(pop, btn);
-    let heOrig = 'DIKMA';
-    const mostrarHe = () => { const sid = $('spSub').value; const s = COLABS.find(x => x.id === sid); $('spSubHe').hidden = !(s && dias.some(d => sitDia(s, d).auto)); posicionar(pop, btn); };
-    $('spSub').addEventListener('change', mostrarHe);
-    pop.querySelectorAll('[data-sel]').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); heOrig = b.dataset.heo; pop.querySelectorAll('[data-sel]').forEach(x => x.classList.toggle('pri', x === b)); }));
-    setTimeout(() => { const q = $('spSub_q'); if (q) q.focus(); }, 30);
-    pop._cob = () => {
-      const sid = $('spSub').value; if (!sid) { fecharSitPop(); fimToque(); return; }
-      const s = COLABS.find(x => x.id === sid); const feitos = [];
-      for (const d of dias) {
-        removerCobertura(id, d);
-        DB.setSitExtra('cob', id + '|' + d, sid);
-        if (sitDia(s, d).auto) { DB.setSit(sid + '|' + d, 'HE'); DB.setSitExtra('he', sid + '|' + d, heOrig); feitos.push(d); }
-      }
-      DB.log(`${title(s.nome)} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
-      fecharSitPop(); fimToque();
-      toast(`${curto(title(s.nome))} cobre ${curto(title(c.nome))}${feitos.length ? ' · hora extra ' + HE_ORIG[heOrig] : ''}`, { desfazer: () => { dias.forEach(d => removerCobertura(id, d)); if (desfazerBase) desfazerBase(); render(); } });
-    };
-  };
-  // Passo 2b: hora extra a pedido de quem
-  const passoHE = (dias, desfazer) => {
-    btn = document.querySelector(`[data-sit="${CSS.escape(key)}"]`) || btn;
-    pop.innerHTML = `${cab}<div class="sp-ok">${I.ok} Lançado: hora extra${dias.length > 1 ? ` em ${dias.length} dias` : ''}</div><p class="small m0">A pedido de:</p>${botoesHE(DB.sitInfo(key).he)}<button type="button" class="btn ghost" data-spx="fechar">Não informar agora</button>`;
-    posicionar(pop, btn);
-    pop._he = o => { dias.forEach(d => DB.setSitExtra('he', id + '|' + d, o)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dt)} a pedido da ${HE_ORIG[o]}`); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[o]}`, { desfazer }); horarioHE(c, dias, fimToque); };
-    const b = pop.querySelector('[data-heo]'); if (b) b.focus();
-  };
-
-  pop.addEventListener('click', e => {
-    const heo = e.target.closest('[data-heo]');
-    if (heo && !heo.dataset.sel) { if (pop._he) return pop._he(heo.dataset.heo); DB.setSitExtra('he', key, heo.dataset.heo); fecharSitPop(); fimToque(); toast(`Hora extra · ${HE_ORIG[heo.dataset.heo]}`); horarioHE(c, [dt], fimToque); return; }
-    const x = e.target.closest('[data-spx]');
-    if (x) {
-      const a = x.dataset.spx;
-      if (a === 'fechar') { fecharSitPop(); fimToque(); return; }
-      if (a === 'heh') { fecharSitPop(); horarioHE(c, [dt], fimToque); return; }
-      if (a === 'okCob') { pop._cob(); return; }
-      if (a === 'cob') { passoCobertura([dt]); return; }
-      if (a === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`); fecharSitPop(); fimToque(); toast('Substituto removido'); return; }
-      if (a === 'sairCob') { removerCobertura(cobre, dt); fecharSitPop(); fimToque(); toast('Cobertura removida'); return; }
-      return;
-    }
-    const o = e.target.closest('[data-sp]'); if (!o) return;
-    const v = o.dataset.sp; const rep = pop.querySelector('#spRep'); const dias = [dt]; if (rep && rep.checked) for (let d = add(dt, 1); d <= fim; d = add(d, 1)) dias.push(d);
-    const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
-    // Grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não.
-    const gravar = d => { if (v === '__esc') return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
-    dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); });
-    const nome = v === '__esc' ? 'como na escala' : SIT_NOME[v];
-    DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
-    const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
-    // ausência num dia de trabalho: pergunta quem cobre · hora extra: pergunta a pedido de quem
-    if (AUS_COBRIVEL.has(v) && gravar(dt)) { render(); passoCobertura(dias, desfazer); return; }
-    if (v === 'HE') { render(); passoHE(dias, desfazer); return; }
-    fecharSitPop(); fimToque();
-    toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer });
-  });
-  // setas movem entre as opções
-  pop.addEventListener('keydown', e => { const os = [...pop.querySelectorAll('.sp-o')]; const i = os.indexOf(document.activeElement); if (i < 0) return; const col = 2; const m = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: col, ArrowUp: -col }[e.key]; if (m) { e.preventDefault(); const n = os[Math.min(os.length - 1, Math.max(0, i + m))]; n.focus(); } });
-  document.addEventListener('keydown', sitPopEsc, true);
-  setTimeout(() => { const fora = e => { if (!pop.isConnected) { document.removeEventListener('pointerdown', fora, true); return; } if (!pop.contains(e.target)) { fecharSitPop(); document.removeEventListener('pointerdown', fora, true); } }; document.addEventListener('pointerdown', fora, true); const rol = () => { if (!pop.isConnected) { removeEventListener('scroll', rol); return; } if (!pop.contains(document.activeElement)) { fecharSitPop(); removeEventListener('scroll', rol); } }; addEventListener('scroll', rol, { passive: true }); }, 0);
-}
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
 // vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação, Efetivo e Meu dia.
 const ehGestor = () => !!ME && ME.papel === 'gestor';
-const temMod = m => modsDe(ME).includes(m);
 function vCfGeral() {
   const E = escala(); const card = (ic, t, sub, corpo, botoes) => `<div class="card cfc"><header><span class="cfi">${ic}</span><div class="minw"><h2>${t}</h2><p>${sub}</p></div></header><div class="body">${corpo}<div class="row-gap cfb">${botoes}</div></div></div>`;
   const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
@@ -1414,8 +1335,9 @@ function vEsDia() {
     const dt = add(UI.ini, k); const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
     const per = ['P', 'ATR', 'HE'].includes(v) ? periodoDe(c, dt) : '';
-    const tt = (x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v) + (per ? ` · turno ${PERIODO[per].toLowerCase()}` : '') + (v === 'HE' && inf.he ? ` a pedido da ${HE_ORIG[inf.he]}` : '') + (v === 'HE' && inf.hed ? ' · ' + textoHE(inf.hed) : '') + (cob ? ` · coberto por ${nomeDe(cob)}` : (!x.auto && AUS_COBRIVEL.has(v) ? ' · sem substituto' : '')) + (cobre ? ` · cobrindo ${nomeDe(cobre)}` : '');
-    return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${x.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${cob || cobre ? ' cobm' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${esc(tt)}" title="${esc(tt)}">${v === 'P' ? I.ok : v}${v === 'HE' && inf.he ? `<sup>${HE_SIG[inf.he]}</sup>` : ''}${cob || cobre ? '<i class="cobi" aria-hidden="true">⇄</i>' : ''}${marcaPer(per)}</button></td>`;
+    const jus = !x.auto && JUS_CODS.includes(v) ? inf.jus : null; const semJus = !x.auto && JUS_CODS.includes(v) && !(jus && jus.cod === v) && dt <= TODAY;
+    const tt = (x.auto ? `Folga pela escala (${x.motivo})` : SIT_NOME[v] || v) + (jus && jus.cod === v ? ` · ${textoJus(jus)}` : semJus ? ' · sem justificativa' : '') + (per ? ` · turno ${PERIODO[per].toLowerCase()}` : '') + (v === 'HE' && inf.he ? ` a pedido da ${HE_ORIG[inf.he]}` : '') + (v === 'HE' && inf.hed ? ' · ' + textoHE(inf.hed) : '') + (cob ? ` · coberto por ${nomeDe(cob)}` : (!x.auto && AUS_COBRIVEL.has(v) ? ' · sem substituto' : '')) + (cobre ? ` · cobrindo ${nomeDe(cobre)}` : '');
+    return `<td class="c ${tk[k] ? 'today' : ''}"><button class="sit ${v}${x.auto ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${cob || cobre ? ' cobm' : ''}${semJus ? ' semjus' : ''}" ${ed ? `data-sit="${c.id}|${dt}"` : 'disabled'} aria-label="${esc(title(c.nome))}, ${DAYS[k]} ${ddmm(dt)}: ${esc(tt)}" title="${esc(tt)}">${v === 'P' ? I.ok : v}${v === 'HE' && inf.he ? `<sup>${HE_SIG[inf.he]}</sup>` : ''}${cob || cobre ? '<i class="cobi" aria-hidden="true">⇄</i>' : ''}${marcaPer(per)}</button></td>`;
   };
   // agrupa por rota quando mostra várias rotas; com muitas rotas, os grupos começam fechados (toque para abrir)
   let ant = '';
@@ -1438,7 +1360,7 @@ function vEsDia() {
   return miniEscala(area) + (tk.includes(true) ? cardCheckin() : '') + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
   <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo ? 'selected' : ''}>Rota</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}</div>
   ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
-  <details class="legdet body pb0 pt0"${isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}</div></details>
+  <details class="legdet body pb0 pt0"${isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
   <div class="tw"><table class="efd${isMobile() ? ' efmob' : ''}"><thead><tr><th>Colaborador</th>${isMobile() ? '' : '<th>Função</th>'}${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="${isMobile() ? 8 : 9}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
   </tbody>${cs.length ? `<tfoot><tr><th colspan="${isMobile() ? 1 : 2}">Presentes</th>${DAYS.map((_, k) => `<td class="c num ${tk[k] ? 'today' : ''}"><b class="${pres[k] < quadro[k] ? 'menos' : ''}">${pres[k]}</b><span class="muted">/${quadro[k]}</span></td>`).join('')}</tr></tfoot>` : ''}</table></div></div>`;
@@ -1683,9 +1605,9 @@ function vResumoDia() {
   const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(x => x.id));
   const pa = listaAprov(as).filter(x => ids.has(x.doc.id) && x.k === k).length;
   const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + d) !== 'DS');
-  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && AUSENCIA.has(o.x.v)).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
+  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && (AUSENCIA.has(o.x.v) || o.x.v === 'ATR')).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
   const folga = cs.filter(c => { const x = sitDia(c, d); return x.auto || x.v === 'F' || x.v === 'FE'; }).length;
-  const pres = cs.length - aus.length - folga;
+  const pres = cs.length - aus.filter(o => o.x.v !== 'ATR').length - folga;
   const he = cs.filter(c => DB.sit(c.id + '|' + d) === 'HE').map(c => ({ c, inf: DB.sitInfo(c.id + '|' + d) }));
   const cob = cobDoDia(d).filter(x => COLABS.some(c => c.id === x.aus && (area === 'TODAS' || c.area === area)));
   const linhas = [...rot.values()].filter(g => g.prog || g.E).sort((a, b) => (b.N + b.P) - (a.N + a.P) || a.rota.localeCompare(b.rota));
@@ -1697,8 +1619,8 @@ function vResumoDia() {
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência do dia</span></div><div><b>${n0(tot.prog)}</b><span>Programadas</span></div><div><b>${n0(tot.R)}</b><span>Realizadas</span></div><div><b>${n0(tot.N)}</b><span>Não realizadas</span></div><div><b>${n0(passou ? tot.A : tot.P)}</b><span>${passou ? 'Sem apontamento' : 'A fazer'}</span></div><div><b>${n0(tot.E)}</b><span>Extras</span></div></div>
   <h4>Por rota</h4>${linhas.length ? `<table><thead><tr><th>Rota</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">${passou ? 'Sem apont.' : 'A fazer'}</th><th class="r">Extras</th><th class="r">Eficiência</th></tr></thead><tbody>${linhas.map(g => `<tr><td>${esc(g.rota)}${area === 'TODAS' ? `<div class="muted small">${AREA_S[g.area]}</div>` : ''}</td><td class="r">${g.prog}</td><td class="r">${g.R}</td><td class="r">${g.N || ''}</td><td class="r">${g.P || ''}</td><td class="r">${g.E || ''}</td><td class="r"><b>${pct(g.R, g.prog)}%</b></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nada programado neste dia.</p>'}
   <h4>Não realizadas e o motivo</h4>${nao.length ? `<table><tbody>${nao.slice(0, 30).map(x => `<tr><td>${esc(x.p.ativ)}<div class="muted small">${esc(x.p.local)} · ${esc(x.p.rota)}</div></td><td>${esc(x.m)}</td></tr>`).join('')}</tbody></table>${nao.length > 30 ? `<p class="muted small">e mais ${nao.length - 30}.</p>` : ''}` : '<p class="muted">Nenhuma não realizada.</p>'}
-  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
-  <div><h4>Ausências</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}</td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
+  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.filter(o => o.x.v !== 'ATR').length}</td></tr><tr><td>Atrasos</td><td class="r">${aus.filter(o => o.x.v === 'ATR').length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
+  <div><h4>Ausências e atrasos</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => { const j = DB.sitInfo(o.c.id + '|' + d).jus; return `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}<div class="muted small">${j && j.cod === o.x.v ? esc(textoJus(j)) : 'sem justificativa'}</div></td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`; }).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
   <h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(({ c, inf }) => `<tr><td>${esc(title(c.nome))}<div class="muted small">${esc(c.rota)}</div></td><td>${inf.he === 'DIKMA' ? 'A pedido da Dikma' : inf.he === 'ARCELOR' ? 'A pedido da ArcelorMittal' : 'Origem não informada'}</td><td class="small">${esc(textoHE(inf.hed) || 'sem horário')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
@@ -1713,14 +1635,15 @@ function vResumo() {
   const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
   const cs = colabsDa(area); const dias = DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
   cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
-  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && AUSENCIA.has(x.v)) aus[x.v] = (aus[x.v] || 0) + 1; }));
+  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && (AUSENCIA.has(x.v) || x.v === 'ATR')) aus[x.v] = (aus[x.v] || 0) + 1; }));
+  const semJ = cs.reduce((n, c) => n + dias.filter(d => d <= TODAY && (() => { const x = sitDia(c, d); if (x.auto || !JUS_CODS.includes(x.v)) return false; const j = DB.sitInfo(c.id + '|' + d).jus; return !(j && j.cod === x.v); })()).length, 0);
   return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div></div><div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
   <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Semana:</b> ${weekLabel(UI.ini)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência até ${ddmm(TODAY < add(UI.ini, 6) ? TODAY : add(UI.ini, 6))}</span></div><div><b>${n0(s.prog)}</b><span>Programadas</span></div><div><b>${n0(s.R)}</b><span>Realizadas</span></div><div><b>${n0(s.N)}</b><span>Não realizadas</span></div><div><b>${n0(s.A)}</b><span>Atrasadas</span></div><div><b>${n0(s.E)}</b><span>Extras</span></div></div>
   <h4>Por área</h4><table><thead><tr><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">Atrasadas</th><th class="r">Eficiência</th></tr></thead><tbody>${porArea.map(({ a, x }) => `<tr><td>${AREA_S[a]}</td><td class="r">${x.prog}</td><td class="r">${x.R}</td><td class="r">${x.N}</td><td class="r">${x.A}</td><td class="r"><b>${pct(x.Rhoje, x.progHoje)}%</b></td></tr>`).join('')}</tbody></table>
   <div class="rcols"><div><h4>Principais causas das não realizadas</h4>${causas.length ? `<table><tbody>${causas.map(([c, n]) => `<tr><td>${esc(c)}</td><td class="r">${n}</td><td class="r">${pct(n, total)}%</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma não realizada.</p>'}</div>
   <div><h4>Aprovação e plano de ação</h4><table><tbody><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr><tr><td>Devolvidas ao líder</td><td class="r">${dv}</td></tr><tr><td>Ações abertas</td><td class="r">${acoes.length}</td></tr><tr><td>Ações com prazo vencido</td><td class="r">${acoes.filter(a => a.prazo && a.prazo < TODAY).length}</td></tr></tbody></table></div></div>
-  <div class="rcols"><div><h4>Ausências (pessoas × dias)</h4>${Object.keys(aus).length ? `<table><tbody>${Object.entries(aus).map(([k, n]) => `<tr><td>${SIT_NOME[k]}</td><td class="r">${n}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma ausência.</p>'}</div>
+  <div class="rcols"><div><h4>Ausências e atrasos (pessoas × dias)</h4>${Object.keys(aus).length ? `<table><tbody>${Object.entries(aus).map(([k, n]) => `<tr><td>${SIT_NOME[k]}</td><td class="r">${n}</td></tr>`).join('')}${semJ ? `<tr><td><b>Ainda sem justificativa</b></td><td class="r"><b>${semJ}</b></td></tr>` : ''}</tbody></table>` : '<p class="muted">Nenhuma ausência.</p>'}</div>
   <div><h4>Horas extras (dias)</h4><table><tbody><tr><td>A pedido da Dikma</td><td class="r">${he.DIKMA}</td></tr><tr><td>A pedido da ArcelorMittal</td><td class="r">${he.ARCELOR}</td></tr>${he[''] ? `<tr><td>Sem origem informada</td><td class="r">${he['']}</td></tr>` : ''}</tbody></table></div></div>
   ${acoes.length ? `<h4>Ações em andamento</h4><table><thead><tr><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th></tr></thead><tbody>${acoes.slice(0, 10).map(a => `<tr><td>${esc(a.causa)}</td><td>${esc(a.acao)}</td><td>${esc(a.resp || '')}</td><td>${a.prazo ? ddmm(a.prazo) : ''}</td></tr>`).join('')}</tbody></table>` : ''}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
@@ -2005,13 +1928,15 @@ function sheet(titleTxt, sub, opts, onPick, cfg = {}) {
   $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim') return close(); const b = e.target.closest('[data-o]'); if (!b) return; const v = b.dataset.o; close(); if (v !== 'x') onPick(opts[+v]); };
   L.querySelector('[data-o]').focus();
 }
-function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit) {
+function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit, opts = {}) {
   const L = $('layer');
   L.innerHTML = `<div class="scrim" id="scrim"><form class="sheet" id="fSheet" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}" novalidate><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}${fieldsHtml}<p class="err" id="shErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri" type="submit">${esc(submitTxt)}</button><button class="btn" type="button" data-close>Cancelar</button></div></form></div>`;
-  const kd = e => { if (e.key === 'Escape') close(); };
+  const kd = e => { if (e.key === 'Escape') cancelar(); };
   const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
+  const cancelar = () => { close(); if (opts.aoCancelar) opts.aoCancelar(); };
+  if (opts.cancelarTxt) { const b = L.querySelector('#fSheet [data-close]'); if (b) b.textContent = opts.cancelarTxt; }
   document.addEventListener('keydown', kd);
-  $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim' || e.target.closest('[data-close]')) close(); const eye = e.target.closest('[data-eye]'); if (eye) toggleEye(eye); };
+  $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim' || e.target.closest('[data-close]')) cancelar(); const eye = e.target.closest('[data-eye]'); if (eye) toggleEye(eye); };
   $('fSheet').onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); close(); } catch (err) { showErr('shErr', err); b.disabled = false; } };
   const f = L.querySelector('input'); if (f) f.focus();
 }
@@ -2121,7 +2046,9 @@ function exportEsdia() {
   const linhas = [['Nome', 'Função', 'Área', 'Rota', 'Regime', 'Turma', ...dias.map((d, k) => `${DAYS[k]} ${dataBR(d).slice(0, 5)}`), 'Ausências na semana']];
   for (const c of cs) { const v = dias.map(d => sitDia(c, d).v); linhas.push([title(c.nome), c.funcao || '', AREA_S[c.area] || c.area, c.rota, regimeNome(c), turmaDe(c) || '', ...v, v.filter(x => AUSENCIA.has(x)).length]); }
   const leg = [['Código', 'Significado'], ...SITS];
-  baixarExcel(`efetivo-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${UI.ini}`, [{ nome: 'Efetivo ' + dataBR(UI.ini).slice(0, 5).replace('/', '-'), linhas }, { nome: 'Legenda', linhas: leg }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+  const jl = [['Nome', 'Rota', 'Data', 'Situação', 'Motivo', 'Chegada', 'Minutos de atraso', 'Observação', 'Registrado por']];
+  for (const c of cs) for (const d of dias) { const x = sitDia(c, d); if (x.auto || !JUS_CODS.includes(x.v)) continue; const j = DB.sitInfo(c.id + '|' + d).jus; const ok = j && j.cod === x.v; jl.push([title(c.nome), c.rota, dataBR(d), SIT_NOME[x.v], ok ? j.mot : 'Sem justificativa', ok ? j.chegada || '' : '', ok ? j.min || '' : '', ok ? j.obs || '' : '', ok ? j.nomePor || '' : '']); }
+  baixarExcel(`efetivo-${SETS[SK].curto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()}-${UI.ini}`, [{ nome: 'Efetivo ' + dataBR(UI.ini).slice(0, 5).replace('/', '-'), linhas }, { nome: 'Justificativas', linhas: jl }, { nome: 'Legenda', linhas: leg }]).catch(e => toast('Não foi possível exportar: ' + e.message));
 }
 function exportCSV() {
   const area = areaScope(); const rows = [['ÁREA', 'SEMANA', 'ID', 'ROTA', 'LOCAL', 'ATIVIDADE', 'TIPO', ...DAYS, 'JUSTIFICATIVAS']];
@@ -2512,7 +2439,7 @@ if (DB.definirChaveArea) DB.definirChaveArea(c => {
   const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
   return ok ? chaveFicha(PES.lotacao(c).area) : null;
 });
-const MD = criarMeuDia({ checkinPend: () => checkinPendentes(), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+const MD = criarMeuDia({ checkinPend: () => checkinPendentes(), jusPend: () => jusPendentes(), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
 // Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).

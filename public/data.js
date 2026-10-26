@@ -229,7 +229,7 @@ function startData() {
   if (acessoAtual === 'operacao' && temFreq(me)) startAdm(on);
   // Administração do sistema: a conferência do cadastro olha também férias e a folha da competência atual.
   if (acessoAtual === 'sistema' && me.papel === 'admin') {
-    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
     on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
     const comp = competenciaDe(today());
     for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
@@ -293,7 +293,7 @@ function watchSet(k, meses) {
       qs.docChanges().forEach(c => { if (c.type === 'removed') delete st.semanas[c.doc.id]; else st.semanas[c.doc.id] = toLocal(c.doc.id, c.doc.data()); });
       st.monthsLoaded.add(m); changed();
     }, e => cb.onError && cb.onError(e));
-    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, hed: (s.exists() && s.data().hed) || {}, ck: (s.exists() && s.data().ck) || {} }; changed(); });
+    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, hed: (s.exists() && s.data().hed) || {}, jus: (s.exists() && s.data().jus) || {}, ck: (s.exists() && s.data().ck) || {} }; changed(); });
     // aprovação dos apontamentos pelo supervisor (aprov/{área|semana}: { area, mes, v: { 'pid|dia': { s, c, por, nome, em, mot } } })
     const c = onSnapshot(query(collection(db, C('aprov', k)), where('mes', '==', m)), qs => {
       qs.docChanges().forEach(x => { if (x.type === 'removed') delete st.aprov[x.doc.id]; else st.aprov[x.doc.id] = x.doc.data().v || {}; });
@@ -313,8 +313,8 @@ function watchSet(k, meses) {
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
-export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null }; };
-export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {} };
+export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
+export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {}, jus: {} };
 
 
 // ---------- gravações ----------
@@ -484,10 +484,10 @@ export async function importar(seed, meses, aPartirDe) {
 //   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
 // ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
 // adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
 const admSubs = new Map();
 function startAdm(on) {
-  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
   on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
@@ -503,13 +503,18 @@ export function admWatch(conj, comp) {
   const [a, m] = comp.split('-').map(Number); const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
   for (const mes of [ant, comp]) {
     const k = 's|' + conj + '|' + mes; if (admSubs.has(k)) continue;
-    admSubs.set(k, onSnapshot(doc(db, C('situacao', conj), mes), s => { cache.adm.sit[conj][mes] = (s.exists() && s.data().v) || {}; changed(); }, e => cb.onError && cb.onError(e)));
+    admSubs.set(k, onSnapshot(doc(db, C('situacao', conj), mes), s => { cache.adm.sit[conj][mes] = (s.exists() && s.data().v) || {}; (cache.adm.jus[conj] ||= {})[mes] = (s.exists() && s.data().jus) || {}; changed(); }, e => cb.onError && cb.onError(e)));
   }
 }
 // Grava o código de uma pessoa num dia. Quem está nas Atividades grava na presença do dia (situacao) — a mesma do Efetivo diário.
 export function admSetCodigo(conj, comp, p, data, cod) {
   if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() } }, { merge: true }));
   return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('d', p.k, data), cod || deleteField(), 'atualizadoEm', serverTimestamp()));
+}
+// Justificativa na Frequência: quem está nas Atividades grava junto da presença (situacao); os demais, na folha.
+export function admSetJus(conj, comp, p, data, val) {
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { jus: { [p.ativ + '|' + data]: val || deleteField() } }, { merge: true }));
+  return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('jus', p.k, data), val || deleteField(), 'atualizadoEm', serverTimestamp()));
 }
 export const admSalvarComp = (conj, comp, dados) => track(setDoc(doc(db, 'freqcomp', conj + '|' + comp), { ...dados, conj, competencia: comp, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
 export const admSalvarGrupos = (conj, comp, grupos) => track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), { grupos, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));

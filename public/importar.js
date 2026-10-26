@@ -3,7 +3,7 @@
 // se houver), mostra o que vai mudar e só grava depois da confirmação. A área de atuação e a função
 // importadas vão também para Atividades Pátio, Atividades Bateria e Operação (pessoas.js).
 import { pad, today, AREA_S, AREAS_ATIV, SETS, setDaArea } from './cal.js';
-import { AREA_GERAL, AREA_OP, REGIMES, norm } from './pessoas.js';
+import { AREA_GERAL, AREA_OP, norm } from './pessoas.js';
 
 // Nomes de coluna aceitos (comparados sem acento, em maiúsculas).
 const CAMPOS = {
