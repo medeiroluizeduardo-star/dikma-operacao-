@@ -86,7 +86,7 @@ function acharTabelas(abas) {
 
 const AREA_ALIAS = new Map([[norm(AREA_GERAL), AREA_GERAL], ['GERAL', AREA_GERAL], [norm(AREA_OP), AREA_OP], ['OPERACAO', AREA_OP], ['EQUIPAMENTOS', AREA_OP], ['OPERACAO DE EQUIPAMENTO', AREA_OP], ...AREAS_ATIV.flatMap(a => [[norm(a), a], [norm(AREA_S[a]), a]])]);
 const areaDe = v => (v ? AREA_ALIAS.get(norm(v)) || null : null);
-const regimeDe = v => { const s = norm(v); return !s ? null : /4X4|TURNO/.test(s) ? 'TURNO 4X4' : /^ADM/.test(s) ? 'ADMINISTRATIVO' : null; };
+const regimeDe = v => { const s = norm(v); if (!s) return null; const m = s.match(/(\d+)\s*X\s*(\d+)/); return m ? `TURNO ${m[1]}X${m[2]}` : /TURNO/.test(s) ? 'TURNO 4X4' : /^ADM/.test(s) ? 'ADMINISTRATIVO' : null; };
 const escalaDe = v => { const s = norm(v); return /4X4/.test(s) ? '4x4' : /^ADM/.test(s) ? 'ADM' : null; };
 
 // Lê a ÁREA/ROTA da planilha. Dois formatos:

@@ -259,7 +259,7 @@ const I = {
 const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
   { id: 'painel', nome: 'Atividades', ic: 'painel', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 },
-  { id: 'resumo', nome: 'Resumo da semana', ic: 'print', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 || modsReais(u).includes('equipamentos') || modsReais(u).includes('frequencia') },
+  { id: 'resumo', nome: 'Resumos', ic: 'print', grp: 'Painéis', mod: 'pn', reqU: u => setsDe(u).length > 0 || modsReais(u).includes('equipamentos') || modsReais(u).includes('frequencia') },
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Acompanhar', mod: 'op' },
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Acompanhar', mod: 'op' },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Acompanhar', mod: 'op', req: () => acompanha() },
@@ -659,7 +659,7 @@ function renderTop() {
   if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if (v.id === 'resumo' && resTipo() !== 'ativ') { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'A semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  const sub = { painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe'].includes(UI.view);
   const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
@@ -1640,18 +1640,70 @@ const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME));
 const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
 const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
 const abasResumo = () => { const l = tiposRes(); return l.length > 1 ? `<div class="seg resabas noprint" role="tablist" aria-label="Tipo de resumo">${l.map(([k, n]) => `<button type="button" role="tab" data-rtipo="${k}" aria-selected="${resTipo() === k}">${n}</button>`).join('')}</div>` : ''; };
+// Resumo do dia ou da semana (vale para os três tipos).
+if (UI.rPer == null) { try { UI.rPer = localStorage.getItem('dikma-rper') || 'sem'; } catch (e) { UI.rPer = 'sem'; } }
+const rDia = () => UI.rPer === 'dia';
+const perResumo = () => `<div class="seg resabas noprint" role="tablist" aria-label="Período do resumo"><button type="button" role="tab" data-rper="dia" aria-selected="${rDia()}">Do dia</button><button type="button" role="tab" data-rper="sem" aria-selected="${!rDia()}">Da semana</button></div>`;
+const dataLonga = d => { const x = pd(d); return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][x.getDay()]}, ${ddmm(d)}/${d.slice(0, 4)}`; };
 function vResumoOutro() {
-  const tipo = resTipo(); const ini = UI.rIni || UI.ini || CUR_WEEK; UI.rIni = ini; const fim = add(ini, 6);
+  const tipo = resTipo();
   const conj = rConj();
+  if (rDia()) {
+    const d = UI.rDiaO && UI.rDiaO <= TODAY ? UI.rDiaO : TODAY; UI.rDiaO = d;
+    const r = tipo === 'oper' ? EQ.resumoDia(d) : AD.resumoDia(d, conj);
+    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+    if (!r) return nav + M.ESQUELETO;
+    const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b></span>`;
+    return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+  }
+  const ini = UI.rIni || UI.ini || CUR_WEEK; UI.rIni = ini; const fim = add(ini, 6);
   const r = tipo === 'oper' ? EQ.resumoSemana(ini) : AD.resumoSemana(ini, conj);
-  const nav = `<div class="row-between noprint">${abasResumo()}<div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+  const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
   if (!r) return nav + M.ESQUELETO;
   const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b></span>`;
   return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
+function vResumoDia() {
+  const area = areaScope(); const dias = DAYS.map((_, k) => add(UI.ini, k));
+  if (!UI.rDia || !dias.includes(UI.rDia)) UI.rDia = dias.includes(TODAY) ? TODAY : dias[0];
+  const d = UI.rDia, k = dias.indexOf(d); const passou = d < TODAY;
+  const docs = docsFor({ ini: UI.ini, area });
+  const rot = new Map(); const nao = []; const tot = { prog: 0, R: 0, N: 0, P: 0, A: 0, E: 0 };
+  for (const doc of docs) for (let i = 0; i < doc.ids.length; i++) {
+    const p = PL.get(doc.ids[i]); if (!p) continue; const c = doc.d[i][k]; if (c === '_') continue;
+    const key = doc.area + '|' + p.rota; const g = rot.get(key) || { area: doc.area, rota: p.rota, prog: 0, R: 0, N: 0, P: 0, E: 0 }; rot.set(key, g);
+    if (c === 'E') { tot.E++; g.E++; continue; }
+    tot.prog++; g.prog++;
+    if (c === 'R') { tot.R++; g.R++; } else if (c === 'N') { tot.N++; g.N++; nao.push({ p, area: doc.area, m: doc.m[doc.ids[i] + '|' + k] || 'Sem justificativa' }); } else { g.P++; if (passou) tot.A++; else tot.P++; }
+  }
+  const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(x => x.id));
+  const pa = listaAprov(as).filter(x => ids.has(x.doc.id) && x.k === k).length;
+  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + d) !== 'DS');
+  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && AUSENCIA.has(o.x.v)).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
+  const folga = cs.filter(c => { const x = sitDia(c, d); return x.auto || x.v === 'F' || x.v === 'FE'; }).length;
+  const pres = cs.length - aus.length - folga;
+  const he = cs.filter(c => DB.sit(c.id + '|' + d) === 'HE').map(c => ({ c, inf: DB.sitInfo(c.id + '|' + d) }));
+  const cob = cobDoDia(d).filter(x => COLABS.some(c => c.id === x.aus && (area === 'TODAS' || c.area === area)));
+  const linhas = [...rot.values()].filter(g => g.prog || g.E).sort((a, b) => (b.N + b.P) - (a.N + a.P) || a.rota.localeCompare(b.rota));
+  const ef = pct(tot.R, tot.prog);
+  const chipsDia = `<div class="dayscroll noprint" role="group" aria-label="Dia">${dias.map((x, j) => `<button class="dbtn ${x === TODAY ? 'hoje' : ''}" data-rdia="${x}" aria-pressed="${x === d}"><small>${DAYS[j]}</small><b>${x.slice(8)}</b></button>`).join('')}</div>`;
+  return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
+  ${chipsDia}<p class="muted m0 noprint">${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>
+  <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis"><div><b>${ef}%</b><span>Eficiência do dia</span></div><div><b>${n0(tot.prog)}</b><span>Programadas</span></div><div><b>${n0(tot.R)}</b><span>Realizadas</span></div><div><b>${n0(tot.N)}</b><span>Não realizadas</span></div><div><b>${n0(passou ? tot.A : tot.P)}</b><span>${passou ? 'Sem apontamento' : 'A fazer'}</span></div><div><b>${n0(tot.E)}</b><span>Extras</span></div></div>
+  <h4>Por rota</h4>${linhas.length ? `<table><thead><tr><th>Rota</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">${passou ? 'Sem apont.' : 'A fazer'}</th><th class="r">Extras</th><th class="r">Eficiência</th></tr></thead><tbody>${linhas.map(g => `<tr><td>${esc(g.rota)}${area === 'TODAS' ? `<div class="muted small">${AREA_S[g.area]}</div>` : ''}</td><td class="r">${g.prog}</td><td class="r">${g.R}</td><td class="r">${g.N || ''}</td><td class="r">${g.P || ''}</td><td class="r">${g.E || ''}</td><td class="r"><b>${pct(g.R, g.prog)}%</b></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nada programado neste dia.</p>'}
+  <h4>Não realizadas e o motivo</h4>${nao.length ? `<table><tbody>${nao.slice(0, 30).map(x => `<tr><td>${esc(x.p.ativ)}<div class="muted small">${esc(x.p.local)} · ${esc(x.p.rota)}</div></td><td>${esc(x.m)}</td></tr>`).join('')}</tbody></table>${nao.length > 30 ? `<p class="muted small">e mais ${nao.length - 30}.</p>` : ''}` : '<p class="muted">Nenhuma não realizada.</p>'}
+  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
+  <div><h4>Ausências</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}</td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
+  <h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(({ c, inf }) => `<tr><td>${esc(title(c.nome))}<div class="muted small">${esc(c.rota)}</div></td><td>${inf.he === 'DIKMA' ? 'A pedido da Dikma' : inf.he === 'ARCELOR' ? 'A pedido da ArcelorMittal' : 'Origem não informada'}</td><td class="small">${esc(textoHE(inf.hed) || 'sem horário')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+}
 function vResumo() {
+  if (rDia()) return vResumoDia();
   const area = areaScope(); const docs = docsFor({ ini: UI.ini, area }); const s = stats(docs);
   const ef = pct(s.Rhoje, s.progHoje);
   const porArea = (area === 'TODAS' ? AREAS : [area]).map(a => ({ a, x: stats(docsFor({ ini: UI.ini, area: a })) }));
@@ -1662,7 +1714,7 @@ function vResumo() {
   const cs = colabsDa(area); const dias = DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
   cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
   const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && AUSENCIA.has(x.v)) aus[x.v] = (aus[x.v] || 0) + 1; }));
-  return `${abasResumo()}<div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
+  return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div></div><div class="row-between noprint"><p class="muted m0">${weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque a semana e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
   <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>Semana:</b> ${weekLabel(UI.ini)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência até ${ddmm(TODAY < add(UI.ini, 6) ? TODAY : add(UI.ini, 6))}</span></div><div><b>${n0(s.prog)}</b><span>Programadas</span></div><div><b>${n0(s.R)}</b><span>Realizadas</span></div><div><b>${n0(s.N)}</b><span>Não realizadas</span></div><div><b>${n0(s.A)}</b><span>Atrasadas</span></div><div><b>${n0(s.E)}</b><span>Extras</span></div></div>
   <h4>Por área</h4><table><thead><tr><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">Atrasadas</th><th class="r">Eficiência</th></tr></thead><tbody>${porArea.map(({ a, x }) => `<tr><td>${AREA_S[a]}</td><td class="r">${x.prog}</td><td class="r">${x.R}</td><td class="r">${x.N}</td><td class="r">${x.A}</td><td class="r"><b>${pct(x.Rhoje, x.progHoje)}%</b></td></tr>`).join('')}</tbody></table>
@@ -2203,6 +2255,9 @@ document.addEventListener('click', async e => {
   if (d.heh) { const [id, dt] = d.heh.split('|'); const c = COLABS.find(x => x.id === id); if (c && canEditSit(c.area)) horarioHE(c, [dt]); return; }
   if (d.tirafp) { const [i, k] = d.tirafp.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc) tirarFora(doc, i, k); return; }
   if (d.rtipo) { UI.resTipo = d.rtipo; render(); return; }
+  if (d.rper) { UI.rPer = d.rper; try { localStorage.setItem('dikma-rper', d.rper); } catch (x) { /* ignora */ } render(); return; }
+  if (d.rdia) { UI.rDia = d.rdia; render(); return; }
+  if (d.rdiao) { const n = add(UI.rDiaO || TODAY, +d.rdiao); UI.rDiaO = n > TODAY ? TODAY : n; render(); return; }
   if (d.rsem) { UI.rIni = add(UI.rIni || UI.ini || CUR_WEEK, 7 * +d.rsem); if (UI.rIni > CUR_WEEK) UI.rIni = CUR_WEEK; render(); return; }
   if (d.rconj) { UI.rConj = d.rconj; render(); return; }
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
