@@ -173,8 +173,10 @@ export function planejar(d) {
     const curto = t => String(t.title || '').replace(/\s·\s\d{2}\/\d{2}$/, '');
     for (const x of alvo) {
       const P = d.painel[x.uid]; if (!P || !x.prefs.painel) continue;
-      const abertas = (P.tasks || []).filter(t => t && !t.deleted && t.due && t.status !== 'done');
-      const doDia = abertas.filter(t => t.due === hoje), atr = abertas.filter(t => t.due < hoje);
+      // 'nfeita' = rotina diária de dia passado marcada como não feita: já está resolvida, não cobra mais.
+      const abertas = (P.tasks || []).filter(t => t && !t.deleted && t.due && t.status !== 'done' && t.status !== 'nfeita');
+      // rotina diária de dia que já passou não é "atrasada" (no painel ela aparece como "não marcada")
+      const doDia = abertas.filter(t => t.due === hoje), atr = abertas.filter(t => t.due < hoje && !(t.routine && PAINEL_DIARIOS.has(t.pid)));
       const cm = `pnl-m|${x.uid}|${hoje}`;
       if (hora >= 7 && !d.enviados[cm]) {
         const amanha = abertas.filter(t => t.due === add(hoje, 1) && !PAINEL_DIARIOS.has(t.pid));
@@ -190,7 +192,7 @@ export function planejar(d) {
       const ct = `pnl-t|${x.uid}|${hoje}`;
       if (hora >= 16 && !d.enviados[ct]) {
         const regs = (P.regs || []).filter(r => r && r.data && r.data.slice(0, 7) === hoje.slice(0, 7));
-        const sem = tp => regs.filter(r => r.tipo === tp && !r.lancado).length;
+        const sem = tp => regs.filter(r => r.tipo === tp && !r.lancado && !r.oculto).length; // registro ocultado no painel não cobra
         const f = sem('falta'), he = sem('he'), hp = sem('hp'), ind = regs.filter(r => r.tipo === 'ind' && r.status !== 'corrigido').length;
         const aberto = doDia.length + atr.length, med = f + he + hp;
         if (aberto || med || ind) {
