@@ -189,17 +189,20 @@ const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe
 // A lista é usada no menu, no Painel, no Apontar e no Meu dia a cada desenho: guarda até os dados mudarem.
 let DATAV = 0; const APROV_MEMO = new Map();
 function listaAprov(areas, est = 'pend') {
-  const mk = `${DATAV}|${SK}|${TODAY}|${est}|${areas.join(',')}`;
-  if (APROV_MEMO.has(mk)) return APROV_MEMO.get(mk);
-  if (APROV_MEMO.size > 40) APROV_MEMO.clear();
-  const out = [];
-  for (const doc of Object.values(DB.cache.semanas)) {
-    if (!areas.includes(doc.area)) continue;
-    const ds = diasDe(doc); if (ds[6] < APROV_DESDE || ds[0] > TODAY) continue;
-    for (let i = 0; i < doc.ids.length; i++) { if (!PL.get(doc.ids[i])) continue; for (let k = 0; k < 7; k++) if (estAprov(doc, i, k) === est) out.push({ doc, i, k, dt: ds[k], p: PL.get(doc.ids[i]) }); }
+  // uma passada só separa aguardando e devolvidas (as telas pedem as duas)
+  const mk = `${DATAV}|${SK}|${TODAY}|${areas.join(',')}`;
+  if (!APROV_MEMO.has(mk)) {
+    if (APROV_MEMO.size > 20) APROV_MEMO.clear();
+    const res = { pend: [], dev: [] };
+    for (const doc of Object.values(DB.cache.semanas)) {
+      if (!areas.includes(doc.area)) continue;
+      const ds = diasDe(doc); if (ds[6] < APROV_DESDE || ds[0] > TODAY) continue;
+      for (let i = 0; i < doc.ids.length; i++) { const p = PL.get(doc.ids[i]); if (!p) continue; for (let k = 0; k < 7; k++) { const e = estAprov(doc, i, k); if (e === 'pend' || e === 'dev') res[e].push({ doc, i, k, dt: ds[k], p }); } }
+    }
+    const ord = (a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id));
+    res.pend.sort(ord); res.dev.sort(ord); APROV_MEMO.set(mk, res);
   }
-  out.sort((a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id)));
-  APROV_MEMO.set(mk, out); return out;
+  return APROV_MEMO.get(mk)[est] || [];
 }
 // Grava o apontamento; quando quem aponta é supervisor para cima, já fica aprovado.
 function gravarApont(doc, ch) {
@@ -302,7 +305,7 @@ const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel', 'fpainel'];
   const gestorDe = m => () => isAdmin() || (!!ME && ME.papel === 'gestor' && modsReais(ME).includes(m));
   const gestorAtiv = () => isAdmin() || (!!ME && ME.papel === 'gestor' && setsDe(ME).length > 0);
   const CFV = {
-    cfgeral: { ord: 1 }, cfconf: { ord: 1.2, req: () => isAdmin() }, cfuso: { ord: 1.4, req: () => isAdmin() }, cfescala: { ord: 2 },
+    cfgeral: { ord: 1, req: () => isAdmin() }, cfconf: { ord: 1.2, req: () => isAdmin() }, cfuso: { ord: 1.4, req: () => isAdmin() }, cfescala: { ord: 2 },
     config: { ord: 3, grp: 'Atividades', req: gestorAtiv }, plano: { ord: 4, grp: 'Atividades', req: gestorAtiv }, gerador: { ord: 5, grp: 'Atividades', req: gestorAtiv },
     econfig: { ord: 6, grp: 'Operação', nome: 'Operação (equipamentos)', req: gestorDe('equipamentos') },
     gtipos: { ord: 7, grp: 'Efetivo', req: gestorDe('gestao') }, gimport: { ord: 8, grp: 'Efetivo', req: () => isAdmin() },
@@ -313,7 +316,7 @@ const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel', 'fpainel'];
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
-const MODS = { paineis: { nome: 'Painel', curto: 'Painel', sub: 'Indicadores de todos os módulos', key: 'pn', inicio: 'painel' }, operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'apontar' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'apontar' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'elanc' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Administração do sistema', curto: 'Sistema', sub: 'Ajustes de todo o sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
+const MODS = { paineis: { nome: 'Painel', curto: 'Painel', sub: 'Indicadores de todos os módulos', key: 'pn', inicio: 'painel' }, operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'apontar' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'apontar' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'elanc' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Configurações', curto: 'Configurações', sub: 'Ajustes do sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
 const MOD_IC = {
   operacao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 19h18M5 19l4.5-8 3 4.5L15 12l4 7"/><circle cx="16.5" cy="6.5" r="1.8"/></svg>',
@@ -349,7 +352,9 @@ const modsDe = u => {
   if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
   const b = modsReais(u); const ms = MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
   // Painel: aparece para quem tem algum módulo com painel (atividades, equipamentos, fichas ou frequência).
-  return (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao') || b.includes('frequencia')) ? ['paineis', ...ms] : ms;
+  const l = (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao') || b.includes('frequencia')) ? ['paineis', ...ms] : ms;
+  // Gestor: Configurações dos módulos dele (plano, gerador, rotas, operação, tipos de ocorrência, escalas) no mesmo acesso
+  return u.papel === 'gestor' ? [...l, 'config'] : l;
 };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
@@ -957,6 +962,19 @@ const cobrindo = (id, dt) => { const x = cobDoDia(dt).find(y => y.sub === id); r
 // Substituto pode ser de outro conjunto (ex.: falta na Bateria coberta por alguém do Pátio): guardado como "conjunto:id".
 const refSub = v => { const s = String(v || ''); const i = s.indexOf(':'); const k = i > 0 && SETS[s.slice(0, i)] ? s.slice(0, i) : SK; const id = i > 0 && SETS[s.slice(0, i)] ? s.slice(i + 1) : s;
   const c = k === SK ? COLABS.find(x => x.id === id) : Object.values((DB.dados(k) || {}).colabs || {}).flat().find(x => x.id === id); return { k, id, c: c || null, outro: k !== SK }; };
+// Lançamento feito fora do Efetivo diário (Frequência, check-in): a mesma limpeza do Efetivo.
+// Sai da ausência → tira o substituto (e a HE dele, se só existia pela cobertura); deixa de ser HE → tira a origem e o horário.
+function limparPresenca(conj, id, dt, cod) {
+  const key = id + '|' + dt; const inf = DB.sitInfo(key, conj);
+  if (cod !== 'HE' && (inf.he || inf.hed)) { DB.setSitExtra('he', key, null, conj); DB.setSitExtra('hed', key, null, conj); }
+  if (AUS_COBRIVEL.has(cod) || !inf.cob) return;
+  DB.setSitExtra('cob', key, null, conj);
+  const v = String(inf.cob); const i = v.indexOf(':'); const sk = i > 0 && SETS[v.slice(0, i)] ? v.slice(0, i) : conj; const sid = i > 0 && SETS[v.slice(0, i)] ? v.slice(i + 1) : v;
+  const sc = Object.values((DB.dados(sk) || {}).colabs || {}).flat().find(x => x.id === sid); if (!sc) return;
+  const skey = sid + '|' + dt; const scod = (((DB.dados(sk) || {}).sitByMonth || {})[dt.slice(0, 7)] || {})[skey];
+  const prev = escala().previsto(normRegime(sc.regime, escala().regimes), turmaDe(sc), dt);
+  if (scod === 'HE' && prev && !prev.trab) { DB.setSit(skey, null, sk); DB.setSitExtra('he', skey, null, sk); DB.setSitExtra('hed', skey, null, sk); }
+}
 // Situação de quem está em outro conjunto: o lançado lá, as férias e a folga pela escala.
 function sitOutro(k, c, dt) {
   const st = DB.dados(k) || {}; const m = ((st.sitByMonth || {})[dt.slice(0, 7)] || {})[c.id + '|' + dt]; if (m) return { v: m, auto: false };
@@ -1106,9 +1124,9 @@ const ocorrOpc = (c, cod) => { if (!['FT', 'ATR', 'SA'].includes(cod)) return nu
 function salvarJus(c, dias, j) {
   const oc = j.ocorr; delete j.ocorr;
   const v = { ...j, por: ME.uid, nomePor: ME.nome || ME.login || '', em: new Date().toISOString() };
-  if (oc) { const f = fichaDe(c); if (f) { const o = DB.gNovaOcorrencia({ data: dias[0], mat: f.mat, nome: f.nome, tipo: oc, desc: `${SIT_NOME[j.cod]}${dias.length > 1 ? ` de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : ` em ${ddmm(dias[0])}`}: ${textoJus(j)}`, lider: String(ME.nome || '').toUpperCase(), recolhe: String(f.lider || ME.nome || '').toUpperCase(), status: 'pendente' }); v.ocorr = (o && o.id) || true; DB.log(`Efetivo: ocorrência "${oc}" para ${title(f.nome)} a partir da justificativa`); } }
+  if (oc) { const f = fichaDe(c); if (f) { const o = DB.gNovaOcorrencia({ data: dias[0], mat: f.mat, nome: f.nome, tipo: oc, desc: `${SIT_NOME[j.cod]}${dias.length > 1 ? ` de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : ` em ${ddmm(dias[0])}`}: ${textoJus({ ...j, obs: '' })}`, lider: String(ME.nome || '').toUpperCase(), recolhe: String(f.lider || ME.nome || '').toUpperCase(), status: 'pendente' }); v.ocorr = (o && o.id) || true; DB.log(`Efetivo: ocorrência "${oc}" para ${title(f.nome)} a partir da justificativa`); } }
   dias.forEach(d => DB.setSitExtra('jus', c.id + '|' + d, v));
-  DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus(j)}`);
+  DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus({ ...j, obs: '' })}`); // a observação não vai para o histórico (que todos leem)
   toast('Justificativa salva');
 }
 // Depois de uma ausência: quem cobre (opcional). Se quem cobre está de folga pela escala, vira hora extra.
@@ -1124,6 +1142,8 @@ function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
       DB.log(`${title(s.nome)}${r.outro ? ' (' + SETS[r.k].curto + ')' : ''} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
       fimToque();
       toast(`${curto(title(s.nome))} cobre ${curto(title(c.nome))}${feitos.length ? ' · hora extra ' + HE_ORIG[heOrig] : ''}`, { desfazer: () => { dias.forEach(d => removerCobertura(id, d)); if (desfazerBase) desfazerBase(); render(); } });
+      // Virou hora extra: já pede o horário (senão cai em "Sem horário" no Banco de horas extras)
+      if (feitos.length) setTimeout(() => horarioHE({ ...s, id: r.id }, feitos, fimToque, r.k), 350);
     });
   const cancelar = document.querySelector('#fSheet [data-close]'); if (cancelar) cancelar.textContent = 'Sem substituto';
   const mostrarHe = () => { const r = refSub($('spSub').value); $('spSubHe').hidden = !(r.c && dias.some(d => folgaNoDia(sitDoSub(r, d)))); };
@@ -1442,7 +1462,7 @@ function vEsDia() {
   return miniEscala(area) + (tk.includes(true) ? cardCheckin() : '') + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
   <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}</div>
   ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
-  <details class="legdet body pb0 pt0"${isMobile() ? '' : ' open'}><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
+  <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
   <div class="tw"><table class="efd${isMobile() ? ' efmob' : ''}"><thead><tr><th>Colaborador</th>${isMobile() ? '' : '<th>Função</th>'}${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="${isMobile() ? 8 : 9}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
   </tbody>${cs.length ? `<tfoot><tr><th colspan="${isMobile() ? 1 : 2}">Presentes</th>${DAYS.map((_, k) => `<td class="c num ${tk[k] ? 'today' : ''}"><b class="${pres[k] < quadro[k] ? 'menos' : ''}">${pres[k]}</b><span class="muted">/${quadro[k]}</span></td>`).join('')}</tr></tfoot>` : ''}</table></div></div>`;
@@ -1605,7 +1625,7 @@ function vProg() {
   const tudoAberto = !!q || UI.rota !== 'TODAS' || grupos.size === 1;
   const abertas = new Set(UI.progAbertas || []);
   const aberto = key => tudoAberto || abertas.has(key);
-  const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.rows.length} atividades</small></span><span class="pres num">${x.R} de ${x.tot} feitas${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
+  const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.rows.length} ${x.rows.length === 1 ? 'atividade' : 'atividades'}</small></span><span class="pres num">${x.R} de ${x.tot} feitas${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
   if (!tudoAberto) h += `<div class="row-gap pgtool"><button class="btn sm" data-act="progTodas">${abertas.size ? 'Recolher todas' : 'Abrir todas'}</button><span class="muted small">${grupos.size} rotas · toque numa rota para ver as atividades</span></div>`;
   rows.length = 0; for (const [key, x] of grupos) { if (aberto(key)) rows.push(...x.rows); else rows.push({ fechado: key }); }
   const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const fp = doc.fp && doc.fp[doc.ids[i] + '|' + k]; return `<button class="chip ${c}${fp ? ' fp' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${fp ? ' · fora da programação' : ''}">${CHIP[c]}</button>`; };
@@ -1773,9 +1793,9 @@ const minDe = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +
 const horasHE = d => { if (!d) return null; const a = minDe(d.ini), b = minDe(d.fim); if (a == null || b == null) return null; const t = ((b - a + 1440) % 1440 || 1440) - (+d.int || 0); return t > 0 ? Math.round(t / 6) / 10 : null; };
 const fmtH = h => (h == null ? '—' : `${Math.floor(h)}h${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
 const textoHE = d => (d && d.ini && d.fim ? `${d.ini} às ${d.fim}${+d.int ? ` (−${d.int} min)` : ''} · ${fmtH(horasHE(d))}` : '');
-function horarioHE(c, dias, fim) {
+function horarioHE(c, dias, fim, k) {
   if (!dias.length) return;
-  const k0 = c.id + '|' + dias[0]; const d0 = DB.sitInfo(k0).hed || {};
+  const k0 = c.id + '|' + dias[0]; const d0 = DB.sitInfo(k0, k).hed || {};
   const ehOutro = d0.mot && !MOTIVOS_HE.includes(d0.mot);
   formSheet('Horário da hora extra', `${esc(title(c.nome))} · ${dias.length > 1 ? `${dias.length} dias (${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}) · o mesmo horário em todos` : ddmm(dias[0])}`,
     `<div class="g2eq"><label class="sel"><span>Início</span><input class="in" type="time" id="heIni" required value="${esc(d0.ini || '')}"></label><label class="sel"><span>Fim</span><input class="in" type="time" id="heFim" required value="${esc(d0.fim || '')}"></label></div>
@@ -1787,7 +1807,7 @@ function horarioHE(c, dias, fim) {
       const x = { ini: $('heIni').value, fim: $('heFim').value, int: Math.max(0, +$('heInt').value || 0), mot: $('heMot').value, obs: ($('heObs').value || '').trim().slice(0, 200) };
       const h = horasHE(x); if (h == null) throw new Error('Informe o início e o fim.'); if (h > 16) throw new Error('Mais de 16 horas de hora extra num dia: confira o horário.');
       const v = { ...x, por: ME.uid, nome: ME.nome || ME.login || '', em: new Date().toISOString() };
-      dias.forEach(d => DB.setSitExtra('hed', c.id + '|' + d, v));
+      dias.forEach(d => DB.setSitExtra('hed', c.id + '|' + d, v, k));
       DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} das ${x.ini} às ${x.fim} (${fmtH(h)})`);
       toast(`Hora extra · ${x.ini} às ${x.fim} · ${fmtH(h)}`); if (fim) fim(); else render();
     });
@@ -2177,9 +2197,10 @@ addEventListener('scroll', () => { const r = scrollY > 40; if (document.body.cla
 // Mede o cabeçalho sem forçar o navegador a recalcular a página a cada desenho (era o passo mais lento de cada toque).
 let topoRO = null;
 let topoV = '';
+const topoCss = document.head.appendChild(document.createElement('style'));
 function medirTopo() {
   const t = document.querySelector('.top'); if (!t) return;
-  const pos = h => { const v = Math.round(h) + 'px'; if (v === topoV) return; topoV = v; document.documentElement.style.setProperty('--topo', v); }; // mudar a variável refaz o estilo da página inteira: só quando muda
+  const pos = h => { const v = Math.round(h) + 'px'; if (v === topoV) return; topoV = v; topoCss.textContent = `.apbar{top:${v}}`; }; // regra só da .apbar: não refaz o estilo da página inteira
   if (!('ResizeObserver' in window)) return pos(t.offsetHeight);
   if (topoRO && topoRO._t === t) return;
   if (topoRO) topoRO.disconnect();
@@ -2316,7 +2337,7 @@ document.addEventListener('click', async e => {
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
   }
   if (d.eye) { toggleEye(t); return; }
-  if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`); render(); return; }
+  if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); if (novo !== 'HE') { DB.setSitExtra('he', key, null); DB.setSitExtra('hed', key, null); } DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`); render(); return; }
   if (d.ckok) { const [a, per] = d.ckok.split('|'); const g = equipeCheckin().find(x => x.a === a && x.per === per); if (!g) return; const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, `${ME.uid}|${curto(title(ME.nome || ME.login || ''))}|${new Date().toTimeString().slice(0, 5)}|${pres}/${g.ps.length}`); DB.log(`Check-in ${PER_NOME[per].toLowerCase()} · ${AREA_S[a]}: ${pres} de ${g.ps.length} presentes`); toast('Check-in confirmado'); render(); return; }
   if (d.ckre) { const [a, per] = d.ckre.split('|'); if (!myAreas().includes(a)) return; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, null); render(); return; }
   if (d.just) { const [i, k] = d.just.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc && canEdit(doc.area)) pedirJustificativa(doc, i, k, m => { setSt(doc, i, k, 'N', m); toast('Justificativa atualizada'); render(); }); return; }
@@ -2588,13 +2609,14 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   aplicarSet(); render(); scrollTo(0, 0);
 });
 const EQ = criarEquip({ podeItem, escala: () => escala(), PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
-const AD = criarAdministrativo({ podeItem, pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
+const AD = criarAdministrativo({ podeItem, limparPresenca, pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ podeItem, PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
 DB.start({
   onAuth: a => { AUTH = a; ME = a.user || null; if (a.acesso && ACESSO[a.acesso] && a.acesso !== UI.acesso) { UI.acesso = a.acesso; salvarAcesso(); if (UI.acesso === 'operacao' && UI.modulo === 'config') { UI.modulo = 'operacao'; UI.view = 'meudia'; } } if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { DATAV++; if (AUTH.status === 'ready') schedule(); },
+  onSync: () => { const e = $('sync'); if (e && AUTH.status === 'ready') e.innerHTML = syncPill(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });
 

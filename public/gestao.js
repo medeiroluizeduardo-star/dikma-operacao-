@@ -98,8 +98,8 @@ export function criarGestao(X) {
     const out = [];
     for (const x of indice().values()) {
       if (!x.ativo) continue;
-      if (x.dc != null && x.dc >= 38 && x.dc <= 45) out.push({ t: 'warn', mat: x.c.mat, txt: `${title(x.c.nome)} completa 45 dias de experiência ${x.dc === 45 ? 'hoje' : 'em ' + (45 - x.dc) + ' dia(s)'}` });
-      if (x.dc != null && x.dc >= 83 && x.dc <= 90) out.push({ t: 'bad', mat: x.c.mat, txt: `${title(x.c.nome)}: fim da experiência (90 dias) ${x.dc === 90 ? 'hoje' : 'em ' + (90 - x.dc) + ' dia(s)'}` });
+      if (x.dc != null && x.dc >= 38 && x.dc <= 45) out.push({ t: 'warn', mat: x.c.mat, txt: `${title(x.c.nome)} completa 45 dias de experiência ${x.dc === 45 ? 'hoje' : 'em ' + (45 - x.dc) + (45 - x.dc === 1 ? ' dia' : ' dias')}` });
+      if (x.dc != null && x.dc >= 83 && x.dc <= 90) out.push({ t: 'bad', mat: x.c.mat, txt: `${title(x.c.nome)}: fim da experiência (90 dias) ${x.dc === 90 ? 'hoje' : 'em ' + (90 - x.dc) + (90 - x.dc === 1 ? ' dia' : ' dias')}` });
       if (!x.intOk && !x.c.intAnt) out.push({ t: 'warn', mat: x.c.mat, txt: `${title(x.c.nome)}: integração ${x.nInt} de ${tiposF1().length}` });
       const velha = x.pend.find(o => dias(o.data, TODAY) > 7);
       if (velha) out.push({ t: 'bad', mat: x.c.mat, txt: `${title(x.c.nome)}: assinatura pendente há ${dias(velha.data, TODAY)} dias` });

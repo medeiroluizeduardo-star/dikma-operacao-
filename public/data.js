@@ -68,9 +68,11 @@ let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs 
 
 export const pendingWrites = () => pending;
 const changed = () => cb.onData && cb.onData();
+// Só o selo de sincronização muda aqui: o dado em si já chega pelo onSnapshot (sem redesenhar a tela inteira de novo).
+const syncMudou = () => (cb.onSync ? cb.onSync() : changed());
 function track(p) {
-  pending++; changed();
-  return p.catch(e => { cb.onError && cb.onError(e); }).finally(() => { pending--; changed(); });
+  pending++; syncMudou();
+  return p.catch(e => { cb.onError && cb.onError(e); }).finally(() => { pending--; syncMudou(); });
 }
 
 // ---------- login ----------
@@ -313,7 +315,7 @@ function watchSet(k, meses) {
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
-export const sitInfo = key => { const m = key.split('|')[1].slice(0, 7); const x = (S[cur].sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
+export const sitInfo = (key, k = cur) => { const m = key.split('|')[1].slice(0, 7); const x = ((S[k] || S[cur]).sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
 export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {}, jus: {} };
 
 
