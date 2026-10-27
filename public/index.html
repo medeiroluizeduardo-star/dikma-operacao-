@@ -1430,6 +1430,42 @@ body.tv:not(.tvmexe){cursor:none}
 .colx em{display:block;font-style:normal;font-weight:700;font-size:13px;margin-bottom:2px}
 .kpi .v .dif{font-family:var(--f-body);font-size:14px;font-weight:600;margin-left:10px;vertical-align:middle}.kpi .v .dif.up{color:var(--st-real)}.kpi .v .dif.down{color:var(--st-nreal)}
 tr.clicavel{cursor:pointer}tr.clicavel:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+
+/* ================= Visual 2026 — telas principais (mesma linguagem do Meu painel) ================= */
+/* Meu dia: faixa de abertura */
+.md-hero{position:relative;overflow:hidden;isolation:isolate;border-radius:16px;padding:22px 24px;margin-bottom:16px;color:#fff;background:radial-gradient(120% 140% at 0% 0%,#2E2C78 0%,#1C1B4A 60%,#14133A 100%)}
+.md-hero::before{content:"";position:absolute;inset:-40%;z-index:-1;background:radial-gradient(30% 40% at 85% 30%,rgba(240,90,38,.45),transparent 70%),radial-gradient(30% 40% at 60% 110%,rgba(96,92,230,.45),transparent 70%);filter:blur(10px)}
+.md-hero::after{content:"";position:absolute;inset:0;z-index:-1;opacity:.5;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='104' viewBox='0 0 120 104'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.07' stroke-width='1.2'%3E%3Cpath d='M30 2h30l15 26-15 26H30L15 28z'/%3E%3Cpath d='M90 52h30l15 26-15 26H90L75 78z'/%3E%3C/g%3E%3C/svg%3E");background-size:120px 104px}
+.md-hero h2{color:#fff;text-transform:uppercase}
+.md-hero p{color:#D8D8EE}
+.md-hero.skel-hero{background:var(--surface);color:inherit}.md-hero.skel-hero::before,.md-hero.skel-hero::after{display:none}
+/* indicadores pequenos com cara de cartão */
+@media (min-width:861px){
+  .mini div{border-radius:12px;padding:10px 14px;box-shadow:var(--e1);border-color:var(--line-2);position:relative;overflow:hidden}
+  .mini b{font-size:26px}
+  .mini span{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);font-weight:600}
+}
+/* títulos dos cartões */
+.card>header h2{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.02em;font-size:18px}
+/* celular: menos texto no topo, controles lado a lado */
+@media (max-width:860px){
+  .top h1 small{display:none}
+  .efbar{display:grid!important;grid-template-columns:1fr 1fr;gap:8px}
+  .efbar>.cxb,.efbar>.cbusca,.efbar>label.busca,.efbar>:first-child:not(label){grid-column:1/-1}
+  .efbar .sel{min-width:0}
+}
+/* Justificativas: no celular cada linha vira um cartão */
+@media (max-width:860px){
+  .jtab{display:block;min-width:0}.jtab thead{display:none}.jtab tbody{display:flex;flex-direction:column;gap:8px;padding:10px}
+  .jtab tr{display:grid;grid-template-columns:1fr auto;gap:4px 10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+  .jtab td{border:0!important;padding:0!important;background:none!important}
+  .jtab td[data-l="Dia"]{grid-column:1;order:2;font-size:12px;color:var(--ink-3)}
+  .jtab td[data-l="Colaborador"]{grid-column:1;order:1}
+  .jtab td[data-l="Situação"]{grid-column:2;order:1;justify-self:end}
+  .jtab td[data-l="Justificativa"]{grid-column:1/-1;order:3}
+  .jtab td.r{grid-column:1/-1;order:4;justify-self:start}
+  .card .tw:has(.jtab){overflow:visible}
+}
 </style>
 </head>
 <body>
