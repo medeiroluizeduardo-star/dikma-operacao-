@@ -8,7 +8,7 @@ import { sitDia, desligadoNoDia, periodoDe, SIT_NOME, colabsDa } from './calc/pr
 import { formSheet, toast } from './ui/janelas.js';
 import { pintar, render, syncPill } from './ui/shell.js';
 import { contarCausas } from './telas/atividades.js';
-import { EQ } from './nucleo/modulos.js';
+import { EQ, carregarModulo } from './nucleo/modulos.js';
 
 
 /* ---------------- MODO TV ---------------- */
@@ -36,6 +36,7 @@ const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (DB.cache.e &
 function tvEquipEscopo() {
   // Equipamentos destinados a esta TV pela área da frota (Equipe e frota): o conjunto aberto (Pátio ou Bateria);
   // com área escolhida, os do local daquela área. Lançamentos e paradas contam só desses equipamentos.
+  if (!EQ) { carregarModulo('EQ'); return { lanc: [], par: [], frota: 0, filtra: true, eqs: new Set() }; } // equip.js ainda chegando
   const E = DB.cache.e; const uma = tvUma() || (tvMinhas().length ? tvAreas() : null); const as = new Set(tvAreas());
   const eqs = new Set(E.cad.frota.filter(f => { const x = EQ.frotaArea(f); return uma ? as.has(x.setor) : x.area && EQ.setDoEq(x.area) === SK; }).map(f => f.id));
   return { lanc: E.lanc.filter(l => eqs.has(l.eq)), par: E.par.filter(p => eqs.has(p.eq)), frota: eqs.size, filtra: true, eqs };
@@ -212,6 +213,7 @@ export function renderTV() {
 // Liga o Modo TV (só com ?tv): relógio, escala da tela, teclado, cliques e a tela sempre acesa.
 export function iniciarTV() {
   if (TV) {
+    carregarModulo('EQ'); // cena de equipamentos
     if (TVC.area && setDaArea(TVC.area)) TVC.conj = setDaArea(TVC.area);
     if (TVC.conj !== 'alt') UI.esSet = TVC.conj;
     // relógio e tempo das paradas a cada segundo, sem redesenhar a tela

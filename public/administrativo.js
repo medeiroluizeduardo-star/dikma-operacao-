@@ -24,7 +24,7 @@ export function criarAdministrativo(X) {
   const $ = id => document.getElementById(id);
   const TODAY = today();
   const A = () => DB.cache.adm || { ferias: [], comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-  const U = UI.a || (UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' });
+  const U = UI.a; // valores iniciais em nucleo/estado.js
   const pode = () => editaAdm(ME()) && (!X.podeItem || X.podeItem('i_freq'));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
   const nomeComp = c => { const [a, m] = c.split('-').map(Number); return `${MESES_L[m - 1]} ${a}`; };

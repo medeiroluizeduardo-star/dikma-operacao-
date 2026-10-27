@@ -19,7 +19,7 @@ export function criarGestao(X) {
   const podeEditar = () => isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'].includes(ME().papel) && (!X.podeItem || X.podeItem('i_fichas')));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const dias = (a, b) => Math.round((pd(b) - pd(a)) / 864e5);
-  const U = UI.g || (UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' });
+  const U = UI.g; // valores iniciais em nucleo/estado.js
   const SEL = new Set(); // matrículas marcadas na lista (exclusão em lote)
 
   /* ---------- cálculos ---------- */

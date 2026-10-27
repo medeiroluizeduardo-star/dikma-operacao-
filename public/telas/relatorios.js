@@ -10,7 +10,7 @@ import { docsFor, stats, listaAprov } from '../calc/atividades.js';
 import { sitDia, desligadoNoDia, SIT_NOME, colabsDa, HE_ORIG, cobDoDia, cobertoPor, nomeDe } from '../calc/presenca.js';
 import { contarCausas } from './atividades.js';
 import { MOTIVOS_HE, fmtH, textoHE, heCfg, registrosHE } from './horas-justificativas.js';
-import { EQ, AD } from '../nucleo/modulos.js';
+import { modulo } from '../nucleo/modulos.js';
 
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
@@ -30,7 +30,8 @@ export function vResumoOutro() {
   const conj = rConj();
   if (rDia()) {
     const d = UI.rDiaO && UI.rDiaO <= TODAY ? UI.rDiaO : TODAY; UI.rDiaO = d;
-    const r = tipo === 'oper' ? EQ.resumoDia(d) : AD.resumoDia(d, conj);
+    const md = modulo(tipo === 'oper' ? 'EQ' : 'AD'); // sem o arquivo ainda: esqueleto até chegar
+    const r = !md ? null : tipo === 'oper' ? md.resumoDia(d) : md.resumoDia(d, conj);
     const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
     if (!r) return nav + M.ESQUELETO;
     const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
@@ -39,7 +40,8 @@ export function vResumoOutro() {
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
   }
   const ini = UI.rIni || UI.ini || CUR_WEEK; UI.rIni = ini; const fim = add(ini, 6);
-  const r = tipo === 'oper' ? EQ.resumoSemana(ini) : AD.resumoSemana(ini, conj);
+  const md = modulo(tipo === 'oper' ? 'EQ' : 'AD');
+  const r = !md ? null : tipo === 'oper' ? md.resumoSemana(ini) : md.resumoSemana(ini, conj);
   const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
   if (!r) return nav + M.ESQUELETO;
   const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;

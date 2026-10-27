@@ -4,7 +4,8 @@
 import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../cal.js';
 import { ACESSO, modulosDe } from '../acessos.js';
 import { podeItemU } from '../permissoes.js';
-import { TV, DB, CUR_WEEK, CUR_MONTH } from './base.js';
+import { competenciaDe } from '../planilhas-adm.js';
+import { TV, DB, TODAY, CUR_WEEK, CUR_MONTH } from './base.js';
 
 
 /* ---------------- estado ---------------- */
@@ -24,6 +25,11 @@ try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.v
 try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
 if (!UI.acesso) UI.acesso = 'operacao';
 if (TV) { document.body.classList.add('tv'); UI.acesso = 'operacao'; UI.view = 'painel'; if (UI.modulo === 'bateria') UI.esSet = 'bateria'; UI.modulo = 'paineis'; }
+// Memória das telas de Operação (UI.e), fichas do Efetivo (UI.g) e Frequência (UI.a). Fica aqui, e não nos arquivos
+// dessas telas, porque eles chegam depois (sob demanda) e a busca e o Meu dia já mexem nela antes (ex.: abrir uma ficha).
+UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null };
+UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' };
+UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' };
 export const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 export const salvarAcesso = () => { try { localStorage.setItem('dikma-acesso', UI.acesso); } catch (e) { /* ignora */ } };
 export const salvarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } marcarHistorico(); };

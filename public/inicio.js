@@ -8,7 +8,7 @@ import { MODS, ensureModulo } from './navegacao.js';
 import { toast } from './ui/janelas.js';
 import { render, schedule, syncPill } from './ui/shell.js';
 import { iniciarTV } from './tv.js';
-import { criarModulos, criarTelasDosModulos } from './nucleo/modulos.js';
+import { criarModulos, precarregarModulos } from './nucleo/modulos.js';
 
 criarModulos();
 
@@ -39,11 +39,10 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   if (typeof ensureModulo === 'function') ensureModulo();
   aplicarSet(); render(); scrollTo(0, 0);
 });
-criarTelasDosModulos();
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
 DB.start({
-  onAuth: a => { definirAuth(a); if (a.acesso && ACESSO[a.acesso] && a.acesso !== UI.acesso) { UI.acesso = a.acesso; salvarAcesso(); if (UI.acesso === 'operacao' && UI.modulo === 'config') { UI.modulo = 'operacao'; UI.view = 'meudia'; } } if (ME && myArea()) UI.area = myArea(); render(); },
+  onAuth: a => { definirAuth(a); if (ME && a.status === 'ready') precarregarModulos(ME); if (a.acesso && ACESSO[a.acesso] && a.acesso !== UI.acesso) { UI.acesso = a.acesso; salvarAcesso(); if (UI.acesso === 'operacao' && UI.modulo === 'config') { UI.modulo = 'operacao'; UI.view = 'meudia'; } } if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { mudouDados(); if (AUTH.status === 'ready') schedule(); },
   onSync: () => { const e = $('sync'); if (e && AUTH.status === 'ready') e.innerHTML = syncPill(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }

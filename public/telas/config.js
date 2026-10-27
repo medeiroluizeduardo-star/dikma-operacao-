@@ -14,7 +14,7 @@ import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
 import { VIEWS, MODS } from '../navegacao.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
-import { EQ, GE } from '../nucleo/modulos.js';
+import { comModulo } from '../nucleo/modulos.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
@@ -159,8 +159,8 @@ export function vConfigModulo(view) {
   if (view === 'cfescala') return vCfEscala();
   if (view === 'usuarios') return vUsuarios();
   if (view === 'perfis') return vPerfis();
-  if (view === 'econfig') return EQ.render('econfig');
-  if (view === 'gtipos' || view === 'gimport') return GE.render(view);
+  if (view === 'econfig') return comModulo('EQ', m => m.render('econfig'));
+  if (view === 'gtipos' || view === 'gimport') return comModulo('GE', m => m.render(view));
   return vCfGeral();
 }
 
