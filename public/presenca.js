@@ -1,7 +1,7 @@
 // Dikma Gestão — lançar a presença de uma pessoa num dia. O MESMO jeito na Frequência (Administrativo)
 // e no Efetivo diário (Operação): toque no dia → escolha a situação → escolha até quando vale.
 // Quem chama decide onde grava (situacao, folha) e o que vem depois (substituto, hora extra).
-import { NOMES_CODIGO } from './planilhas-adm.js';
+import { NOMES_CODIGO, CODIGOS_LANC, JUS_CODS } from './situacao.js';
 
 const DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const dBR = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
@@ -9,9 +9,8 @@ const ddmm = s => `${s.slice(8, 10)}/${s.slice(5, 7)}`;
 const diaSem = s => DIA[new Date(s + 'T12:00:00').getDay()];
 const escH = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Justificativa de ausências e atrasos: o mesmo jeito no Efetivo diário e na Frequência.
-// Situações que podem ser lançadas (a mesma lista no Efetivo diário e na Frequência).
-export const CODIGOS_LANC = ['P', 'F', 'FT', 'ATR', 'SA', 'AT', 'AB', 'HE', 'FE', 'AF', 'TR', 'SP', 'DS'];
-export const JUS_CODS = ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'];
+// Situações que podem ser lançadas e as que pedem justificativa: saem da tabela única (situacao.js).
+export { CODIGOS_LANC, JUS_CODS };
 export const MOTIVOS_JUS = {
   FT: ['Sem justificativa', 'Problema de saúde', 'Problema familiar', 'Transporte', 'Compromisso pessoal', 'Outro'],
   SA: ['Problema de saúde', 'Consulta ou exame médico', 'Problema familiar', 'Liberado pela liderança', 'Compromisso pessoal', 'Sem justificativa', 'Outro'],

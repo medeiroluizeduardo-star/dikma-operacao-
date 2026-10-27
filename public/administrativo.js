@@ -9,6 +9,7 @@ import { baixarExcel, dataBR } from './exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from './planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from './presenca.js';
 import { caixaBusca } from './busca.js';
+import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from './situacao.js';
 
 export const VIEWS_A = [
   { id: 'afreq', nome: 'Frequência', ic: 'prog', grp: 'Frequência e férias', mod: 'ad' },
@@ -22,7 +23,7 @@ export const SUB_A = {
 };
 // Códigos que dá para lançar na folha (os mesmos do Efetivo diário, mais abono e suspensão).
 const CODS = CODIGOS_LANC;
-const CONTA = ['FT', 'ATR', 'SA', 'AT', 'AB', 'SP', 'HE'];
+// CONTA (colunas de total da folha) vem da tabela única de códigos (situacao.js).
 const DIA_L = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
 export function criarAdministrativo(X) {
@@ -49,18 +50,22 @@ export function criarAdministrativo(X) {
     const regime = c ? c.regime : g.turno ? (/3\s*X\s*3/i.test(g.nome) ? '3X3' : '4X4') : 'ADMINISTRATIVO';
     return { regime, turma: (c && letra(c.turma)) || letra(p.turma) || '' };
   }
-  // { v: código, auto: veio da escala/férias/padrão, por: 'ferias' | 'escala' | 'padrao' }
+  // { v: código, auto: veio da escala/férias/padrão, por: 'lancado' | 'desligado' | 'ferias' | 'escala' | 'padrao' }
   // per: turno do dia pela letra ('D' diurno, 'N' noturno; a noite conta no dia em que começa)
+  // A conta é a mesma do Efetivo diário (situacao.js): lançado, depois desligamento (da folha ou da demissão na ficha),
+  // férias, folga da escala (com feriados e turma pela ficha quando falta a letra) e presente.
+  const lancadoDe = (conj, doc, p, dt) => (p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : ((doc.d || {})[p.k] || {})[dt]);
+  const desligadoEm = p => { const a = p.desligado || '', b = X.desligadoDe ? X.desligadoDe(p) : ''; return a && b ? (a < b ? a : b) : a || b; };
   function codigo(conj, comp, doc, g, p, dt, cmap) {
-    const m = p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : ((doc.d || {})[p.k] || {})[dt];
-    if (m) { if (!['P', 'HE', 'ATR', 'SA'].includes(m)) return { v: m, auto: false }; const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap); const pr = E.previsto(normRegime(rt.regime, E.regimes), rt.turma, dt); return { v: m, auto: false, per: pr && pr.trab ? pr.periodo || '' : '' }; }
-    if (p.desligado && dt >= p.desligado) return { v: 'DS', auto: true, por: 'padrao' };
-    if (ferIdx()({ mat: p.mat, nome: p.nome }, dt)) return { v: 'FE', auto: true, por: 'ferias' };
     const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap);
-    const pr = E.previsto(normRegime(rt.regime, E.regimes), rt.turma, dt);
-    if (pr && !pr.trab) return { v: 'F', auto: true, por: 'escala', motivo: pr.motivo };
-    const per = pr && pr.trab ? pr.periodo || '' : '';
-    return dt <= TODAY ? { v: 'P', auto: true, por: 'padrao', per } : { v: '', auto: true, por: 'padrao', per };
+    const s = situacaoDoDia(p, dt, {
+      lancado: () => lancadoDe(conj, doc, p, dt), desligadoEm, ferias: (x, d) => ferIdx()({ mat: x.mat, nome: x.nome }, d),
+      escala: E, regime: () => normRegime(rt.regime, E.regimes), turma: () => rt.turma, turmaFicha: X.turmaFicha, hoje: TODAY
+    });
+    if (s.por === 'lancado') return ['P', 'HE', 'ATR', 'SA'].includes(s.v) ? { v: s.v, auto: false, per: s.periodo } : { v: s.v, auto: false };
+    if (s.por === 'escala') return { v: 'F', auto: true, por: 'escala', motivo: s.motivo };
+    if (s.por === 'padrao') return { v: s.v, auto: true, por: 'padrao', per: s.periodo };
+    return { v: s.v, auto: true, por: s.por === 'desligado' ? 'padrao' : s.por };
   }
   // Grupos do mesmo líder escritos de jeitos diferentes (KAUAN, KAUAN SOUZA, KAUAN SUZA) viram um grupo só;
   // quem edita grava a folha já arrumada.
@@ -90,7 +95,9 @@ export function criarAdministrativo(X) {
   // Frequência com o mesmo visual e funcionamento do Efetivo diário: grupos que recolhem, busca, filtro de grupo,
   // legenda das siglas, ✓ = presente, rodapé com presentes do dia. A folha vai de 16 a 15.
   const funcaoRH = () => { const m = new Map(); for (const c of A().rh || []) if (c.mat) m.set(String(c.mat), c.funcao || ''); return m; };
-  const presente = v => v && v !== 'DS' && !['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'AB', 'SP'].includes(v);
+  const presente = presenteSit; // tabela única (situacao.js)
+  // contagem do dia a partir dos códigos já calculados: a mesma do Efetivo diário (escalados = sem folga, férias e desligado)
+  const contar = lista => contagemDia(lista, '', { sitDe: c => c });
   // Justificativa do dia: quem está nas Atividades usa a mesma do Efetivo diário (situacao); os demais, a da folha.
   const jusDe = (conj, doc, p, dt) => { const j = p.ativ ? (((A().jus || {})[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : (((doc && doc.jus) || {})[p.k] || {})[dt]; return j || null; };
   function vFreq() {
@@ -121,9 +128,10 @@ export function criarAdministrativo(X) {
       const cods = ps.map(p => datas.map(dt => codigo(conj, comp, doc, g, p, dt, cmap)));
       const tot = cods.map(l => { const t = { FT: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0 }; l.forEach(c => { if (c.v in t) t[c.v]++; }); return t; });
       tot.forEach(t => { for (const k of Object.keys(resumo)) if (k in t) resumo[k] += t[k]; }); resumo.pessoas += ps.length;
-      cods.forEach(l => l.forEach((c, i) => { if (c.v !== 'DS' && !(c.auto && c.por === 'escala')) quadro[i]++; if (presente(c.v)) pres[i]++; }));
+      datas.forEach((_, i) => { const ct = contar(cods.map(l => l[i])); quadro[i] += ct.escalados; pres[i] += ct.presentes; });
       const iH = datas.indexOf(TODAY);
-      const ph = hojeNa ? cods.filter(l => presente(l[iH].v)).length : null, eh = hojeNa ? cods.filter(l => l[iH].v !== 'DS' && !(l[iH].auto && l[iH].por === 'escala')).length : null;
+      const ctH = hojeNa ? contar(cods.map(l => l[iH])) : null;
+      const ph = ctH ? ctH.presentes : null, eh = ctH ? ctH.escalados : null;
       const aberto = !recolhe || ab.has(String(gi));
       if (todos) corpo += `<tr class="grp-row"><th colspan="${ncol}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${(() => { const pp = { D: 0, N: 0 }; cods.forEach(l => { const c = l[iH]; if (presente(c.v) && c.per) pp[c.per]++; }); return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
       if (!aberto) continue;

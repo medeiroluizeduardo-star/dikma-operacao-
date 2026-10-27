@@ -17,17 +17,36 @@ export function estadoAprov(c, dt, a, hoje, m) {
   if (c === 'R' || c === 'N' || c === 'E') return a && a.s === 'A' && a.c === c && (c !== 'N' || a.m == null || m == null || a.m === m) ? 'ok' : 'pend';
   return a && a.s === 'D' && (c === 'P' || (c === '_' && a.ant === 'E')) ? 'dev' : null;
 }
-// Quantos apontamentos esperam aprovação (ou foram devolvidos, est = 'dev') nas áreas, olhando as semanas carregadas de um conjunto (Pátio ou Bateria).
-export function contarPendentes(semanas, aprov, areas, hoje, est = 'pend') {
-  let n = 0;
+// Apontamentos que esperam aprovação ('pend') e os devolvidos ao líder ('dev') nas áreas, olhando as semanas carregadas
+// de um conjunto (Pátio ou Bateria). A mesma lista no menu, na Aprovação, no Painel e no Meu dia.
+// noPlano(pid) opcional: só conta atividade que ainda está no plano (a que saiu do plano não aparece na Aprovação).
+// Devolve { pend: [{ doc, i, k, dt, pid }], dev: [...] }
+export function listarAprov(semanas, aprov, areas, hoje, noPlano) {
+  const res = { pend: [], dev: [] };
   for (const doc of Object.values(semanas || {})) {
     if (!areas.includes(doc.area)) continue;
-    const a = (aprov || {})[doc.id] || {};
-    for (let k = 0; k < 7; k++) {
-      const dt = somaDias(doc.ini, k); if (dt < APROV_DESDE || dt > hoje) continue;
-      for (let i = 0; i < doc.ids.length; i++) if (estadoAprov(doc.d[i][k], dt, a[doc.ids[i] + '|' + k], hoje, (doc.m || {})[doc.ids[i] + '|' + k]) === est) n++;
+    if (somaDias(doc.ini, 6) < APROV_DESDE || doc.ini > hoje) continue;
+    const a = (aprov || {})[doc.id] || {}; const m = doc.m || {};
+    for (let i = 0; i < doc.ids.length; i++) {
+      const pid = doc.ids[i]; if (noPlano && !noPlano(pid)) continue;
+      for (let k = 0; k < 7; k++) {
+        const dt = somaDias(doc.ini, k); if (dt < APROV_DESDE || dt > hoje) continue;
+        const e = estadoAprov(doc.d[i][k], dt, a[pid + '|' + k], hoje, m[pid + '|' + k]);
+        if (e === 'pend' || e === 'dev') res[e].push({ doc, i, k, dt, pid });
+      }
     }
   }
-  return n;
+  return res;
 }
-function somaDias(s, n) { const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+// Quantos apontamentos esperam aprovação (ou foram devolvidos, est = 'dev'): a contagem de listarAprov.
+export function contarPendentes(semanas, aprov, areas, hoje, est = 'pend', noPlano) {
+  return listarAprov(semanas, aprov, areas, hoje, noPlano)[est].length;
+}
+// Datas somadas pelo calendário local (as semanas guardam AAAA-MM-DD da segunda-feira)
+const SOMA = new Map();
+function somaDias(s, n) {
+  const ch = s + '|' + n; let r = SOMA.get(ch); if (r) return r;
+  const d = new Date(s + 'T12:00:00'); d.setDate(d.getDate() + n);
+  r = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  if (SOMA.size > 5000) SOMA.clear(); SOMA.set(ch, r); return r;
+}

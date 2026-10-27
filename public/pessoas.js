@@ -81,8 +81,12 @@ export function criarPessoas(DB) {
     return [...s].sort((a, b) => a.localeCompare(b));
   }
 
+  // Número novo: depois do maior já usado no conjunto, mesmo que essa pessoa tenha saído (DB.maiorIdUsado guarda o maior
+  // de sempre). Assim um número liberado nunca vai para outra pessoa, que herdaria faltas, coberturas e horas extras dela.
   function proximoId(k) {
-    let m = 0; for (const a of SETS[k].areas) for (const x of st(k).colabs[a] || []) { const n = parseInt(String(x.id).replace(/\D/g, ''), 10); if (n > m) m = n; }
+    let m = DB.maiorIdUsado ? DB.maiorIdUsado(k) : 0;
+    for (const a of SETS[k].areas) for (const x of st(k).colabs[a] || []) { const n = parseInt(String(x.id).replace(/\D/g, ''), 10); if (n > m) m = n; }
+    st(k).maiorId = Math.max(st(k).maiorId || 0, m + 1); // reserva o número já na memória (vários cadastros seguidos)
     return SETS[k].idp + String(m + 1).padStart(3, '0');
   }
 

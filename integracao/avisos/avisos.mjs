@@ -1,7 +1,9 @@
 // Dikma Gestão — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
 // Lê o Firestore com a chave de serviço, decide os avisos (planejar.mjs) e envia pelo Firebase Cloud Messaging.
 // Cada aviso vai uma vez só: o que já foi enviado fica marcado em avisos_enviados/estado.
-// AVISOS_SO_TESTAR=1 mostra o que seria enviado, sem enviar nem marcar.
+// Também refaz, uma vez por dia, os resumos que todos leem: adm/feriasAtivas (férias de 2 meses antes a 6 meses depois)
+// e adm/desligados (demissão das fichas), para não ficarem velhos quando ninguém edita férias ou fichas.
+// AVISOS_SO_TESTAR=1 mostra o que seria enviado, sem enviar nem marcar (os resumos também não são gravados).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,13 +13,15 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao']) {
-  const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
+for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm']) {
+  const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
 }
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
-const { criarEscala, normRegime, letra, fatorRota } = await import('./lib/escala.mjs');
+const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
+const { situacaoDoDia, criarTurmaFicha, feriadosOperacao } = await import('./lib/situacao.mjs');
+const { indiceFerias, indiceDesligados, resumoFerias, resumoDesligados } = await import('./lib/acessos.mjs');
 
 const soTestar = process.env.AVISOS_SO_TESTAR === '1' || process.argv.includes('--testar');
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -30,12 +34,29 @@ initializeApp({ credential: cert(JSON.parse(sa)) });
 const db = getFirestore();
 
 const porId = qs => Object.fromEntries(qs.docs.map(x => [x.id, x.data()]));
+const hoje = today(), amanha = add(hoje, 1), mes = hoje.slice(0, 7);
+
+// Resumos do dia (uma vez por dia; antes de olhar se alguém ligou os avisos, para valer mesmo sem avisos)
+let fichas = null;
+{
+  const fa = (await db.doc('adm/feriasAtivas').get()).data() || {};
+  if (fa.dia !== hoje) {
+    const lista = (await db.collection('ferias').get()).docs.map(x => x.data());
+    fichas = (await db.collection('gcolab').get()).docs.flatMap(x => x.data().itens || []);
+    const fer = resumoFerias(lista, hoje), des = resumoDesligados(fichas);
+    console.log(`Resumos do dia: ${fer.length} período(s) de férias, ${des.length} desligamento(s).`);
+    if (!soTestar) {
+      await db.doc('adm/feriasAtivas').set({ itens: fer, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() }, { merge: true });
+      await db.doc('adm/desligados').set({ itens: des, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() });
+    }
+  }
+}
+
 const avisos = porId(await db.collection('avisos').get());
 const comToken = Object.keys(avisos).filter(uid => (avisos[uid].tokens || []).length);
 if (!comToken.length) { await db.doc('avisos_enviados/estado').set({ ultimaExecucao: FieldValue.serverTimestamp(), ultimoResultado: { avisos: 0, entregues: 0, falhas: 0 }, aparelhos: 0, pessoas: 0 }, { merge: true }); console.log('::notice::Ninguém ligou os avisos ainda. Nada a enviar.'); process.exit(0); }
 
 const usuarios = porId(await db.collection('usuarios').get());
-const hoje = today(), amanha = add(hoje, 1), mes = hoje.slice(0, 7);
 
 // Paradas sem liberação (mês atual e anterior) e ocorrências pendentes
 const paradas = [];
@@ -47,7 +68,7 @@ const sets = {};
 for (const k of SET_KEYS) {
   const C = n => SETS[k].pre + n;
   const cfg = await db.doc(`${C('config')}/sistema`).get(); if (!cfg.exists) continue;
-  const plano = [], colabs = [], semanas = {}, sit = {}, jus = {};
+  const plano = [], colabs = [], semanas = {}, sit = {}, jus = {}, cob = {};
   (await db.collection(C('plano')).get()).forEach(x => plano.push(...(x.data().itens || [])));
   (await db.collection(C('colaboradores')).get()).forEach(x => colabs.push(...(x.data().itens || [])));
   // segunda-feira: também a semana que passou (resumo semanal)
@@ -58,19 +79,21 @@ for (const k of SET_KEYS) {
     const s = await db.doc(`${C('semanas')}/${a}|${ini}`).get(); if (s.exists) semanas[s.id] = s.data();
     const ap = await db.doc(`${C('aprov')}/${a}|${ini}`).get(); if (ap.exists) aprov[ap.id] = ap.data().v || {};
   }
-  for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) { Object.assign(sit, s.data().v || {}); Object.assign(jus, s.data().jus || {}); } }
-  sets[k] = { plano, colabs, semanas, sit, jus, aprov, rotas: cfg.data().rotas || [] };
+  for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) { Object.assign(sit, s.data().v || {}); Object.assign(jus, s.data().jus || {}); Object.assign(cob, s.data().cob || {}); } }
+  sets[k] = { plano, colabs, semanas, sit, jus, cob, aprov, rotas: cfg.data().rotas || [] };
 }
 
-// Escala de turno: quem está de folga pela letra da turma não conta como disponível amanhã.
+// A situação do dia é a mesma conta do site (public/situacao.js): lançado, demissão na ficha, férias, folga da escala
+// (com os feriados "sem operação" da Operação e a turma pela ficha quando falta a letra).
 const cfgEsc = (await db.doc('config/escalas').get()).data() || {};
 const eqCfg = (await db.doc('eq/config').get()).data() || {};
-const ESC = criarEscala(cfgEsc, eqCfg.turmas, []);
-// Férias marcadas no Administrativo (resumo adm/feriasAtivas): quem está de férias não conta como disponível.
-const semAc = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
-const ferias = ((await db.doc('adm/feriasAtivas').get()).data() || {}).itens || [];
-const emFerias = (c, dt) => ferias.some(f => f.inicio <= dt && dt <= f.termino && ((f.mat && c.mat && String(f.mat) === String(c.mat)) || semAc(f.nome) === semAc(c.nome)));
-const sitEscala = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; if (emFerias(c, dt)) return 'FE'; const p = ESC.previsto(normRegime(c.regime, ESC.regimes), letra(c.turma), dt); return p && !p.trab ? 'F' : undefined; };
+const ESC = criarEscala(cfgEsc, eqCfg.turmas, feriadosOperacao(eqCfg));
+if (!fichas) fichas = (await db.collection('gcolab').get()).docs.flatMap(x => x.data().itens || []);
+const operadores = ((await db.doc('eq/cadastro').get()).data() || {}).operadores || [];
+const turmaFicha = criarTurmaFicha(fichas, operadores);
+const ferias = indiceFerias(((await db.doc('adm/feriasAtivas').get()).data() || {}).itens || []);
+const desligadoEm = indiceDesligados(fichas);
+const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: (x, d) => get(x.id + '|' + d), desligadoEm, ferias, escala: ESC, turmaFicha }); return s.por === 'padrao' ? undefined : s.v; };
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};

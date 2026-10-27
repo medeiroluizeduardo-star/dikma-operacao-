@@ -6,6 +6,7 @@ import { baixarExcel, dataBR } from './exportar.js';
 import { criarBusca, competenciaDe } from './planilhas-adm.js';
 import { indiceFerias } from './acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
+import { situacaoDoDia, textoOperacao, feriadosOperacao } from './situacao.js';
 
 export const VIEWS_E = [
   { id: 'epainel', nome: 'Painel', ic: 'painel', grp: 'Equipamentos', mod: 'eq' },
@@ -45,31 +46,34 @@ export function criarEquip(X) {
   // Turmas 4x4 e feriados vêm da escala central (Configurações › Escalas e turnos) quando preenchidos — mesma conta em todos os módulos.
   let CALCesc;
   const cfgOp = () => { const c = E().config; const esc = DB.cache.escalas; const t4 = esc && esc.regimes && esc.regimes['4x4'] && esc.regimes['4x4'].turmas; const tem = t4 && Object.values(t4).some(Boolean);
-    return { ...c, turmas: tem ? { ...Object.fromEntries(Object.entries(c.turmas || {}).filter(([k]) => /^[A-Z]{1,2}$/.test(k))), ...Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) } : c.turmas, feriados: [...(c.feriados || []), ...((esc && esc.feriados) || [])] }; };
+    // feriados de Escalas e turnos tiram o dia a não ser que digam semOp: false (a mesma regra da escala central)
+    return { ...c, turmas: tem ? { ...Object.fromEntries(Object.entries(c.turmas || {}).filter(([k]) => /^[A-Z]{1,2}$/.test(k))), ...Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) } : c.turmas, feriados: [...feriadosOperacao(c), ...((esc && esc.feriados) || []).map(f => ({ ...f, semOp: f.semOp !== false }))] }; };
   // Situação dos operadores em sincronia com a Frequência (Administrativo), o Efetivo diário e as Férias:
   // o que está lançado lá vale aqui. Sem lançamento, vale a situação do cadastro da Equipe.
-  const SIT_EXT = { FE: 'FÉRIAS', AT: 'ATESTADO MÉDICO', AF: 'AFASTAMENTO (INSS)', FT: 'FALTA', DS: 'DESLIGADO', TR: 'TREINAMENTO', F: 'FOLGA', SP: 'SUSPENSÃO', AB: 'ABONO' };
-  let EXT = null, EXTv = -1, EXTf = null;
+  // A conta do dia é a mesma dos outros módulos (situacao.js): o lançado vale mais; depois o desligamento (na folha ou
+  // a demissão na ficha), as férias e, sem nada disso, a situação do cadastro da Equipe. Os nomes vêm da tabela única.
+  let EXT = null, EXTv = -1, EXTf = null, EXTd = null;
   function extFreq() {
-    const F = DB.cache.eqFreq; const fer = DB.cache.feriasAtivas || [];
-    if (EXT && EXTv === (F ? F.v : -2) && EXTf === fer) return EXT;
-    EXTv = F ? F.v : -2; EXTf = fer;
+    const F = DB.cache.eqFreq; const fer = (DB.cache.adm && DB.cache.adm.fLoaded && DB.cache.adm.ferias) || DB.cache.feriasAtivas || []; const dsl = [DB.cache.desligados, DB.cache.g && DB.cache.g.colabs, DB.cache.adm && DB.cache.adm.rh];
+    if (EXT && EXTv === (F ? F.v : -2) && EXTf === fer && EXTd && dsl.every((x, i) => x === EXTd[i])) return EXT;
+    EXTv = F ? F.v : -2; EXTf = fer; EXTd = dsl;
     const pessoas = [];
     if (F) for (const [id, d] of Object.entries(F.comps || {})) if (d) for (const g of d.grupos || []) for (const p of g.pessoas || []) pessoas.push({ conj: id.split('|')[0], p, nome: p.nome, mat: p.mat });
     const busca = pessoas.length ? criarBusca(pessoas) : () => null;
     const ferias = indiceFerias(fer); const porOp = new Map();
+    const lancado = (m, data) => {
+      if (!m) return '';
+      const { p, conj } = m;
+      if (p.ativ) return ((F.sit[conj] || {})[data.slice(0, 7)] || {})[p.ativ + '|' + data] || '';
+      const d = F.comps[conj + '|' + competenciaDe(data)]; return (d && d.d && d.d[p.k] && d.d[p.k][data]) || '';
+    };
+    const deslig = (m, pes) => { const a = (m && m.p.desligado) || '', b = X.desligadoDe ? X.desligadoDe(pes) : ''; return a && b ? (a < b ? a : b) : a || b; };
     EXT = (o, data) => {
       let m = porOp.get(o.nome); if (m === undefined) { const r = busca(o.nome); m = r ? r.item : null; porOp.set(o.nome, m); }
-      if (ferias({ nome: o.nome, mat: m && m.mat }, data)) return 'FÉRIAS';
-      if (!m) return undefined;
-      const { p, conj } = m;
-      if (p.desligado && data >= p.desligado) return 'DESLIGADO';
-      let cod;
-      if (p.ativ) cod = ((F.sit[conj] || {})[data.slice(0, 7)] || {})[p.ativ + '|' + data];
-      else { const d = F.comps[conj + '|' + competenciaDe(data)]; cod = d && d.d && d.d[p.k] && d.d[p.k][data]; }
-      if (!cod) return undefined;
-      if (cod === 'P' || cod === 'HE' || cod === 'ATR' || cod === 'SA') return null;
-      return SIT_EXT[cod] || 'OUTRO';
+      const pes = { nome: o.nome, mat: (m && m.mat) || o.mat };
+      const s = situacaoDoDia(pes, data, { lancado: () => lancado(m, data), desligadoEm: () => deslig(m, pes), ferias: (x, d) => ferias(x, d) });
+      if (s.por === 'padrao') return undefined; // nada lançado: vale a situação do cadastro da Equipe
+      return textoOperacao(s.v); // null = trabalhando (presente, hora extra, atraso, saída antecipada)
     };
     EXT.achou = o => { let m = porOp.get(o.nome); if (m === undefined) { const r = busca(o.nome); m = r ? r.item : null; porOp.set(o.nome, m); } return m; };
     return EXT;
@@ -77,7 +81,10 @@ export function criarEquip(X) {
   const calc = () => {
     if (DB.eqFreqWatch) { DB.eqFreqWatch(U.mes); DB.eqFreqWatch(TODAY.slice(0, 7)); }
     const ext = extFreq();
-    if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas || CALC._ext !== ext) { CALC = criarCalc(cfgOp(), E().cad, ext); CALC._ext = ext; CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; }
+    // "escalado" vem da escala central (Configurações › Escalas e turnos): 4x4 pela letra e administrativo pelos dias e feriados
+    const ES = X.escala ? X.escala() : null;
+    const prev = ES ? (o, d) => ES.previsto(o.escala === '4x4' ? '4x4' : 'ADM', o.turma, d) : null;
+    if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas || CALC._ext !== ext || CALC._es !== ES) { CALC = criarCalc(cfgOp(), E().cad, ext, prev); CALC._ext = ext; CALC._es = ES; CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; }
     return CALC;
   };
   const mesesCarregados = () => E().meses || new Set();
