@@ -48,6 +48,13 @@ export function criarAdministrativo(X) {
   // férias, folga da escala (com feriados e turma pela ficha quando falta a letra) e presente.
   const lancadoDe = (conj, doc, p, dt) => (p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : ((doc.d || {})[p.k] || {})[dt]);
   const desligadoEm = p => { const a = p.desligado || '', b = X.desligadoDe ? X.desligadoDe(p) : ''; return a && b ? (a < b ? a : b) : a || b; };
+  // Hora extra lançada na Operação (lançamento de equipamento com status de hora extra): entra na folha pelo nome do operador.
+  let HEOP = null, HEOPv = -1;
+  const heOperacao = (nome, dt) => {
+    if (DB.heOpWatch) DB.heOpWatch(dt.slice(0, 7));
+    if (!HEOP || HEOPv !== (DB.cache.heOpV || 0)) { HEOPv = DB.cache.heOpV || 0; HEOP = new Map(); for (const l of Object.values(DB.cache.heOp || {}).flat()) HEOP.set(normNome(l.op) + '|' + l.data, l); }
+    return HEOP.get(normNome(nome) + '|' + dt) || null;
+  };
   function codigo(conj, comp, doc, g, p, dt, cmap) {
     const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap);
     const s = situacaoDoDia(p, dt, {
@@ -55,6 +62,8 @@ export function criarAdministrativo(X) {
       escala: E, regime: () => normRegime(rt.regime, E.regimes), turma: () => rt.turma, turmaFicha: X.turmaFicha, hoje: TODAY
     });
     if (s.por === 'lancado') return ['P', 'HE', 'ATR', 'SA'].includes(s.v) ? { v: s.v, auto: false, per: s.periodo } : { v: s.v, auto: false };
+    // nada lançado na folha, mas a Operação lançou hora extra para essa pessoa nesse dia
+    if ((s.por === 'escala' || s.por === 'padrao') && dt <= TODAY) { const h = heOperacao(p.nome, dt); if (h) return { v: 'HE', auto: true, por: 'operacao', motivo: `lançada na Operação · ${h.eq}${h.he ? ' · ' + String(h.he).replace('.', ',') + ' h' : ''}` }; }
     if (s.por === 'escala') return { v: 'F', auto: true, por: 'escala', motivo: s.motivo };
     if (s.por === 'padrao') return { v: s.v, auto: true, por: 'padrao', per: s.periodo };
     return { v: s.v, auto: true, por: s.por === 'desligado' ? 'padrao' : s.por };
@@ -132,7 +141,7 @@ export function criarAdministrativo(X) {
         corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.ativ ? 'Atividades' : 'só na folha'}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
           const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const ju = !c.auto && JUS_CODS.includes(c.v) ? jusDe(conj, doc, p, dt) : null; const semJus = !c.auto && JUS_CODS.includes(c.v) && !(ju && ju.cod === c.v) && dt <= TODAY;
-          const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
+          const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : c.por === 'operacao' ? ` (${c.motivo})` : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
           return `<td class="c${dt === TODAY ? ' today' : ''}"><button class="sit ${c.v}${c.auto && c.v !== 'P' ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${semJus ? ' semjus' : ''}" ${ed ? `data-a="cel" data-g="${gi}" data-p="${esc(p.k)}" data-dt="${dt}"` : 'disabled'} aria-label="${esc(title(p.nome))}, ${esc(tt)}" title="${esc(tt)}">${c.v === 'P' ? I.ok : c.v}${c.per ? `<i class="peri ${c.per}" aria-hidden="true">${c.per}</i>` : ''}</button></td>`;
         }).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot${t[k] ? ' on' : ''}">${t[k] || ''}</td>`).join('')}</tr>`;
       });

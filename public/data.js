@@ -271,7 +271,7 @@ function stopData() {
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
-  eqFreqSubs.clear(); cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
+  eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
@@ -749,6 +749,18 @@ export function eWatch(meses) {
 // e a presença do dia (situacao/b_situacao) do mês. Só leitura; quem lança é o Efetivo diário ou o Administrativo.
 cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 };
 const eqFreqSubs = new Set();
+// Hora extra lançada na Operação (status HORA EXTRA / HE NOTURNA dos lançamentos de equipamento), por mês.
+// Lida também por quem tem a Frequência ou as Atividades: entra na folha e no Banco de horas extras.
+const heOpSubs = new Set();
+export function heOpWatch(ym) {
+  if (!db || !me || !ym || heOpSubs.has(ym)) return; heOpSubs.add(ym);
+  cache.heOp = cache.heOp || {};
+  dataSubs.push(onSnapshot(query(collection(db, 'eqlanc'), where('mes', '==', ym)), qs => {
+    cache.heOp[ym] = qs.docs.map(d => d.data()).filter(l => ['HORA EXTRA', 'HE NOTURNA'].includes(l.status) && l.op && l.data)
+      .map(l => ({ data: l.data, op: l.op, eq: l.eq || '', status: l.status, he: +l.he || 0, ini: l.ini || '', fim: l.fim || '' }));
+    cache.heOpV = (cache.heOpV || 0) + 1; changed();
+  }, () => { cache.heOp[ym] = []; })); // sem permissão: nada da Operação
+}
 export function eqFreqWatch(ym) {
   if (!db || !me || !eqOn || !ym) return;
   const [a, m] = ym.split('-').map(Number); const prox = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`;
