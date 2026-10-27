@@ -14,13 +14,14 @@ criarModulos();
 
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
-// Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).
+// Os avisos levam ao dia a dia: se o sistema estava aberto na Administração do sistema, sai dela (devolve true quando trocou).
 let trocouAcessoPorLink = false;
 function abrirLink(busca) {
   const p = new URLSearchParams(busca); const m = p.get('m'), v = p.get('v');
-  const daOperacao = (m && MODS_MARCAVEIS.includes(m)) || (!m && v === 'meudia');
+  // m pode ser um módulo antigo (escala, adm): ensureModulo leva para a área onde a tela está agora.
+  const daOperacao = (m && (MODS_MARCAVEIS.includes(m) || ['paineis', 'escala', 'adm'].includes(m))) || (!m && v === 'meudia');
   if (daOperacao && UI.acesso !== 'operacao') { UI.acesso = 'operacao'; salvarAcesso(); trocouAcessoPorLink = true; }
-  if (m && MODS[m]) UI.modulo = m;
+  if (m && (MODS[m] || m === 'escala' || m === 'adm')) UI.modulo = m;
   if (v) UI.view = v;
   // QR Code da rota: ?r=ÁREA|ROTA abre o Apontar de hoje já nessa rota
   const sem = p.get('s'); if (sem && /^\d{4}-\d{2}-\d{2}$/.test(sem)) { UI.ini = weekOf(sem); UI.mes = monthOfWeek(UI.ini); }

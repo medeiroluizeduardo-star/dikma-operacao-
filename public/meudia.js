@@ -127,7 +127,7 @@ export function criarMeuDia(X) {
         const ab = paradasAbertas(E.par || [], agora); const longas = ab.filter(p => p.horas >= 2);
         const fora = operadoresFora((E.cad && E.cad.operadores) || [], hoje);
         if (ab.length) tiles.push({ n: ab.length, t: 'paradas sem liberação', s: longas.length ? `${longas.length} há mais de 2 h` : 'todas com menos de 2 h', tom: longas.length ? 'bad' : 'warn', go: ['equipamentos', 'epar', ''] });
-        blocos.push(`<div class="card md-card"><header><h2>Operação</h2><p>Equipamentos e operadores</p><span class="r">${ir('equipamentos', 'elanc', '', `${I.apontar} Lançar`, true)}</span></header><div class="body stackcol" style="gap:14px">
+        blocos.push(`<div class="card md-card"><header><h2>Equipamentos</h2><p>Lançamentos, frota e operadores</p><span class="r">${ir('equipamentos', 'elanc', '', `${I.apontar} Lançar`, true)}</span></header><div class="body stackcol" style="gap:14px">
           ${ab.length ? `<div><div class="md-sub ${longas.length ? 'bad' : ''}">Paradas sem liberação (${ab.length})</div><div class="plist">${ab.slice(0, 6).map(p => `<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')}</div><div class="l">desde ${ddmm(p.data)} às ${p.ini}${p.op ? ' · ' + esc(title(p.op)) : ''}</div></div><span class="pill ${p.horas >= 2 ? 'bad' : 'warn'}">há ${p.horas >= 24 ? Math.floor(p.horas / 24) + ' d' : h1(p.horas) + ' h'}</span></div>`).join('')}</div>${ab.length > 6 ? `<p class="muted small m0">+ ${ab.length - 6}</p>` : ''}<div class="row-gap" style="margin-top:8px">${ir('equipamentos', 'epar', '', 'Abrir paradas')}</div></div>` : vazio('Nenhuma parada sem liberação.')}
           ${fora.length ? `<div><div class="md-sub">Operadores fora hoje (${fora.length})</div><div class="md-pessoas">${fora.map(f => `<span class="md-pessoa"><b>${esc(title(f.nome))}</b><small>${esc(title(f.cod))}</small></span>`).join('')}</div></div>` : ''}
         </div></div>`);
@@ -141,10 +141,10 @@ export function criarMeuDia(X) {
         const exp = (G.colabs || []).filter(c => (!c.dem || c.dem > hoje) && c.adm).map(c => ({ c, d: Math.round((new Date(hoje) - new Date(c.adm)) / 864e5) })).filter(x => (x.d >= 38 && x.d <= 45) || (x.d >= 83 && x.d <= 90));
         const nk = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
         const comigo = (G.ocorr || []).filter(o => o.status === 'pendente' && o.recolhe && nk(o.recolhe) === nk(ME().nome));
-        if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: comigo.some(o => o.data <= add(hoje, -7)) ? 'bad' : 'warn', go: ['gestao', 'gcomigo', ''], acao: 'Recolher' });
-        if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['gestao', 'gocorr', ''] });
-        if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['gestao', 'gpainel', ''] });
-        blocos.push(`<div class="card md-card"><header><h2>Efetivo</h2><p>Fichas de acompanhamento</p><span class="r">${ir('gestao', 'gnovaoc', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
+        if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: comigo.some(o => o.data <= add(hoje, -7)) ? 'bad' : 'warn', go: ['frequencia', 'gcomigo', ''], acao: 'Recolher' });
+        if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['frequencia', 'gocorr', ''] });
+        if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['paineis', 'gpainel', ''] });
+        blocos.push(`<div class="card md-card"><header><h2>Fichas (RH)</h2><p>Fichas de acompanhamento</p><span class="r">${ir('frequencia', 'gnovaoc', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
           ${a.total ? `<div><div class="md-sub ${a.velhas.length ? 'bad' : ''}">Aguardando assinatura (${a.total})</div><div class="plist">${(a.velhas.length ? a.velhas : (G.ocorr || []).filter(o => o.status === 'pendente')).slice(0, 5).map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${ddmm(o.data)} · ${esc(o.tipo)}</div></div><span class="pill ${o.data <= add(hoje, -7) ? 'bad' : 'warn'}">${Math.round((new Date(hoje) - new Date(o.data)) / 864e5)} dias</span></div>`).join('')}</div></div>` : vazio('Nenhuma assinatura pendente.')}
           ${exp.length ? `<div><div class="md-sub">Experiência vencendo</div><div class="md-pessoas">${exp.slice(0, 12).map(x => `<span class="md-pessoa"><b>${esc(title(x.c.nome))}</b><small>${x.d} dias de casa · fecha ${x.d <= 45 ? '45' : '90'} em ${(x.d <= 45 ? 45 : 90) - x.d} dia(s)</small></span>`).join('')}</div></div>` : ''}
         </div></div>`);
@@ -159,7 +159,7 @@ export function criarMeuDia(X) {
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };
     tiles.sort((a, b) => ordem[a.tom] - ordem[b.tom] || b.n - a.n);
-    const ACAO = { apontar: 'Apontar', pend: 'Apontar', escala: 'Ver escala', epar: 'Abrir', gocorr: 'Ver', gcomigo: 'Recolher', gpainel: 'Ver fichas' };
+    const ACAO = { apontar: 'Apontar', pend: 'Apontar', escala: 'Ver presença', epar: 'Abrir', gocorr: 'Ver', gcomigo: 'Recolher', gpainel: 'Ver fichas' };
     const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn sm" data-md="${t.go.join('|')}">${soLer() ? 'Ver' : t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
     const urgentes = tiles.filter(t => t.tom === 'bad' || t.tom === 'warn');
     const chips = tiles.filter(t => t.tom === 'neu');

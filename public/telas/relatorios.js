@@ -15,7 +15,7 @@ import { modulo } from '../nucleo/modulos.js';
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
 // Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
-const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['he', 'Horas extras', u => setsDe(u).length > 0], ['oper', 'Operação', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['he', 'Horas extras', u => setsDe(u).length > 0], ['oper', 'Equipamentos', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
 const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME));
 export const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
 export const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
@@ -34,7 +34,7 @@ export function vResumoOutro() {
     const r = !md ? null : tipo === 'oper' ? md.resumoDia(d) : md.resumoDia(d, conj);
     const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
     if (!r) return nav + M.ESQUELETO;
-    const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
+    const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
     return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
@@ -44,7 +44,7 @@ export function vResumoOutro() {
   const r = !md ? null : tipo === 'oper' ? md.resumoSemana(ini) : md.resumoSemana(ini, conj);
   const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
   if (!r) return nav + M.ESQUELETO;
-  const meta = tipo === 'oper' ? '<span><b>Operação de equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
+  const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
   return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
