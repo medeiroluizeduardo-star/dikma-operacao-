@@ -11,16 +11,8 @@ import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from './p
 import { caixaBusca } from './busca.js';
 import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from './situacao.js';
 
-export const VIEWS_A = [
-  { id: 'afreq', nome: 'Frequência', ic: 'prog', grp: 'Frequência e férias', mod: 'ad' },
-  { id: 'aferias', nome: 'Férias', ic: 'sol', grp: 'Frequência e férias', mod: 'ad' },
-  { id: 'aimport', nome: 'Importar planilhas', ic: 'dl', grp: 'Administração', mod: 'ad', admin: true }
-];
-export const SUB_A = {
-  afreq: 'Folha de frequência de 16 a 15, por grupo',
-  aferias: 'Planejamento, quem está de férias e data limite',
-  aimport: 'Planilhas de frequência e de férias'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
+
 // Códigos que dá para lançar na folha (os mesmos do Efetivo diário, mais abono e suspensão).
 const CODS = CODIGOS_LANC;
 // CONTA (colunas de total da folha) vem da tabela única de códigos (situacao.js).

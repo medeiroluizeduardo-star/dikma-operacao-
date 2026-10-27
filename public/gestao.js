@@ -8,20 +8,7 @@ import { REGIMES_PADRAO, normRegime } from './escala.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
-export const VIEWS_G = [
-  { id: 'gpainel', nome: 'Painel', ic: 'painel', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gcolab', nome: 'Colaboradores', ic: 'users', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gimpr', nome: 'Impressão', ic: 'print', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gimport', nome: 'Importar dados', ic: 'dl', grp: 'Administração', mod: 'ge', admin: true },
-  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'config', grp: 'Administração', mod: 'ge', admin: true }
-];
-export const SUB_G = {
-  gpainel: 'Indicadores das fichas de acompanhamento',
-  gcolab: 'Cadastro, controle da ficha e assinaturas de cada colaborador',
-  gimpr: 'Ficha (Folhas 1 e 2) e via de assinatura',
-  gimport: 'Colaboradores e ocorrências a partir de uma planilha',
-  gtipos: 'Tipos, texto padrão e o que vai para a Folha 1'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
 export function criarGestao(X) {
   const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, prepararFoto, framed, UI, PES } = X;

@@ -8,20 +8,7 @@ import { indiceFerias } from './acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 import { situacaoDoDia, textoOperacao, feriadosOperacao } from './situacao.js';
 
-export const VIEWS_E = [
-  { id: 'epainel', nome: 'Painel', ic: 'painel', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'apontar', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'plano', grp: 'Avaliação', mod: 'eq' },
-  { id: 'eaval', nome: 'Avaliação mensal', ic: 'users', grp: 'Avaliação', mod: 'eq' },
-  { id: 'eanal', nome: 'Análises', ic: 'prog', grp: 'Avaliação', mod: 'eq' },
-  { id: 'econfig', nome: 'Configurações', ic: 'config', grp: 'Administração', mod: 'eq', admin: true }
-];
-export const SUB_E = {
-  epainel: 'Produtividade da operação de equipamentos', elanc: 'Alocações do dia e paradas dos equipamentos',
-  eequipe: 'Operadores, situação, frota e escala do mês', einsp: 'Checklist de 5S no equipamento e segurança', eaval: 'Notas do mês por operador',
-  eanal: 'Evolução mensal e qualidade dos lançamentos', econfig: 'Turnos, metas, pesos, causas e feriados'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
 export function criarEquip(X) {
   const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, UI, PES } = X;
