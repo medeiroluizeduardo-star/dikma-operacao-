@@ -390,7 +390,7 @@ test('módulo Frequência e férias (dentro da Operação): lê e grava folha e 
 });
 
 // ---------------- aprovação dos apontamentos ----------------
-test('aprovação: só o supervisor aprova ou devolve, e só nas áreas dele; líder, coordenador, gestor e administrador não aprovam', async () => {
+test('aprovação: o supervisor aprova ou devolve nas áreas dele e o administrador é a reserva; líder, coordenador e gestor não aprovam', async () => {
   const ap = (area, v = { 'REC-001|1': { s: 'A', c: 'R' } }) => ({ area, mes: '2026-10', v });
   await assertSucceeds(setDoc(doc(db('sup'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
   await assertSucceeds(setDoc(doc(db('sup'), 'aprov', SEM), ap('RECEBIMENTO', { 'REC-002|1': { s: 'D', c: 'P', mot: 'Não foi feita' } }), { merge: true }));
@@ -398,7 +398,7 @@ test('aprovação: só o supervisor aprova ou devolve, e só nas áreas dele; l�
   await assertFails(setDoc(doc(db('sup'), 'aprov', SEM), ap('PREPARAÇÃO'), { merge: true }), 'não troca a área de um registro');
   await assertFails(setDoc(doc(db('coord'), 'aprov', SEM_PREP), ap('PREPARAÇÃO')), 'coordenador não aprova');
   await assertFails(setDoc(doc(db('gestorP'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'gestor não aprova');
-  await assertFails(setDoc(doc(db('admin'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'administrador não aprova');
+  await assertSucceeds(setDoc(doc(db('admin'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'administrador aprova como reserva');
   await assertFails(setDoc(doc(db('liderRec'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o líder não aprova o próprio apontamento');
   await assertFails(setDoc(doc(db('freqLeitor'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
   await assertFails(setDoc(doc(db('admv'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o Administrativo não aprova apontamento');

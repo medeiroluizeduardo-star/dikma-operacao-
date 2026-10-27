@@ -169,7 +169,10 @@ export async function setAprov(docId, area, mes, itens) {
 }
 export async function setSit(key, code, k = cur) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (code) o[key] = code; else delete o[key]; changed(); }
 export async function savePlano(area, itens) { cache.plano[area] = itens; changed(); }
-export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].colabs[area] = itens; changed(); }
+// Número do colaborador: o maior já usado só cresce (o mesmo de data.js)
+const numId = id => parseInt(String(id || '').replace(/\D/g, ''), 10) || 0;
+export function maiorIdUsado(k) { const st = S[k]; let m = st.maiorId || 0; for (const l of Object.values(st.colabs || {})) for (const x of l) m = Math.max(m, numId(x.id)); return m; }
+export async function salvarColabsArea(area, itens, k = setDaArea(area) || cur) { S[k].maiorId = Math.max(maiorIdUsado(k), ...itens.map(x => numId(x.id))); S[k].colabs[area] = itens; changed(); }
 export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); }
 // Avisos na demonstração: não há servidor de mensagens; mostra um aviso local para testar.
 cache.avisosCfg = { vapid: 'demonstracao' }; cache.meusAvisos = null; cache.permissoes = {};
@@ -273,7 +276,7 @@ export async function eImportar() { /* a demonstração já começa com a planil
 // ---------- Administrativo (demonstração): folhas e férias de exemplo, ligadas às Atividades da demonstração ----------
 const LSA = 'coqueria-demo-adm-v1';
 cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-cache.feriasAtivas = []; cache.uso = null;
+cache.feriasAtivas = []; cache.desligados = []; cache.uso = null;
 let admPronto = false;
 const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
 const jusProxy = k => new Proxy({}, { get: (_, m) => ((S[k].sitExtra || {})[m] || {}).jus || {} });

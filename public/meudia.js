@@ -38,14 +38,17 @@ export function criarMeuDia(X) {
   function dadosDoSet(k) {
     const st = DB.dados(k); if (!st || !st.config) return null;
     const sit = {}; for (const v of Object.values(st.sitByMonth || {})) Object.assign(sit, v);
-    return resumoAtividades({
+    const cob = {}; for (const v of Object.values(st.sitExtra || {})) Object.assign(cob, (v && v.cob) || {});
+    return resumoAtividades({ cob,
       areas: areasDe(k), plano: SETS[k].areas.flatMap(a => st.plano[a] || []), semanas: st.semanas,
       colabs: SETS[k].areas.flatMap(a => st.colabs[a] || []), sit, rotas: st.config.rotas || [], hoje: today(),
       sitDe: X.sitEscala ? X.sitEscala(key => sit[key]) : undefined, fator: X.fatorRota
     });
   }
 
-  const ir = (mod, view, area, txt, pri) => `<button class="btn ${pri ? 'pri' : ''} sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`;
+  // Quem só consulta (visitante) não vê botão de ação: só "Ver". O laranja fica para a ação principal da faixa de abertura.
+  const soLer = () => ME().papel === 'leitor';
+  const ir = (mod, view, area, txt) => (soLer() ? (view === 'gnovaoc' ? '' : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">Ver</button>`) : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`);
   const vazio = t => `<p class="muted small m0">${t}</p>`;
 
   function cardAvisos() {
@@ -103,10 +106,11 @@ export function criarMeuDia(X) {
       if (!areas.length) continue;
       const nomeAreas = areas.length === SETS[k].areas.length ? 'todas as áreas' : areas.map(a => AREA_S[a]).join(' e ');
       if (r.hoje.total) progresso.push({ nome: `${SETS[k].curto} · hoje`, sub: nomeAreas, feitas: r.hoje.R + r.hoje.E + r.hoje.N, total: r.hoje.total, go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
-      if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
+      if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar (últimos 60 dias)', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
       { const st = DB.dados(k); // aprovação dos apontamentos: o supervisor vê o que falta aprovar; o líder, o que voltou para corrigir
-        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
-        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev'); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
+        const noPlano = (ids => pid => ids.has(pid))(new Set(SETS[k].areas.flatMap(a => (st.plano[a] || []).map(p => p.id)))); // o mesmo filtro da Aprovação
+        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'pend', noPlano); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
+        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev', noPlano); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
       if (r.deficit.length) tiles.push({ n: r.deficit.length, t: `${r.deficit.length === 1 ? 'rota' : 'rotas'} com déficit amanhã · ${SETS[k].curto}`, s: `${ddmm(r.amanha)}`, tom: 'bad', go: [mod, 'escala', r.deficit[0].area] });
       const pend = r.rotas.filter(x => x.total);
       blocos.push(`<div class="card md-card"><header><h2>${SETS[k].nome}</h2><p>Hoje · ${esc(nomeAreas)}</p><span class="r">${ir(mod, 'apontar', areas.length === 1 ? areas[0] : '', `${I.apontar} Apontar`, true)}</span></header><div class="body stackcol" style="gap:14px">
@@ -146,17 +150,31 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
-    if (X.jusPend) { const n = X.jusPend(); if (n) tiles.push({ n, t: n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa', s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', ''], acao: 'Justificar' }); }
-    if (X.checkinPend) { const n = X.checkinPend(); if (n) tiles.push({ n, t: n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar', s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Fazer' }); }
+    // Justificativas e check-in: contados por conjunto (Pátio e Bateria), não pelo módulo aberto antes
+    for (const k of SET_KEYS) {
+      if (X.jusPend) { const n = X.jusPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa'} · ${SETS[k].curto}`, s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', '', k], acao: 'Justificar' }); }
+      if (X.checkinPend) { const n = X.checkinPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar'} · ${SETS[k].curto}`, s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', '', k], acao: 'Fazer' }); }
+    }
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };
     tiles.sort((a, b) => ordem[a.tom] - ordem[b.tom] || b.n - a.n);
     const ACAO = { apontar: 'Apontar', pend: 'Apontar', escala: 'Ver escala', epar: 'Abrir', gocorr: 'Ver', gcomigo: 'Recolher', gpainel: 'Ver fichas' };
-    const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn ${t.tom === 'bad' ? 'pri' : ''} sm" data-md="${t.go.join('|')}">${t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
+    const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn sm" data-md="${t.go.join('|')}">${soLer() ? 'Ver' : t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
     const urgentes = tiles.filter(t => t.tom === 'bad' || t.tom === 'warn');
     const chips = tiles.filter(t => t.tom === 'neu');
-    let h = `<div class="md-hero"><div><h2>${saud}, ${esc(nome)}.</h2><p>${(DIAS_L[d.getDay()][0].toUpperCase() + DIAS_L[d.getDay()].slice(1))}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}</p></div></div>`;
+    // Faixa de abertura (como no Meu painel): saudação e data numa linha pequena, manchete com o número do que pede ação hoje,
+    // resumo com o mais crítico em destaque e até 2 botões.
+    const nU = urgentes.length;
+    const dataTx = `${DIAS_L[d.getDay()]}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}`;
+    const manchete = !nU ? 'Tudo em dia' : soLer() ? `<span class="num">${nU}</span> ${nU === 1 ? 'ponto de atenção' : 'pontos de atenção'} hoje` : `<span class="num">${nU}</span> ${nU === 1 ? 'coisa pede' : 'coisas pedem'} ação hoje`;
+    const resumo = nU ? urgentes.slice(0, 2).map(t => `<span class="${t.tom === 'bad' ? 'crit' : ''}"><b class="num">${t.n.toLocaleString('pt-BR')}</b> ${esc(t.t)}</span>`).join(' · ') : 'Nada pendente nos seus módulos agora.';
+    // botões: o mais urgente (laranja) e o próximo de outro tipo; quando o nome repete, leva junto o lugar (ex.: "Apontar · Bateria")
+    const rotA = t => t.acao || ACAO[t.go[1]] || 'Abrir';
+    const segundo = urgentes.slice(1).find(t => t.go.join('|') !== (urgentes[0] && urgentes[0].go.join('|')) && t.go[1] !== urgentes[0].go[1]) || urgentes[1];
+    const doBotao = (t, i) => { const r0 = rotA(t); const r = ['Abrir', 'Ver'].includes(r0) ? `${r0} ${esc(t.t.split(' · ')[0])}` : r0; const rep = urgentes[0] && segundo && rotA(urgentes[0]) === rotA(segundo); return `<button class="btn${i ? '' : ' pri'}" data-md="${t.go.join('|')}">${rep && t.t.includes(' · ') ? `${r} · ${esc(t.t.split(' · ').pop())}` : r}</button>`; };
+    const acoes = soLer() ? (urgentes[0] ? `<button class="btn" data-md="${urgentes[0].go.join('|')}">Ver</button>` : '') : [urgentes[0], segundo].filter(Boolean).map(doBotao).join('');
+    let h = `<div class="md-hero"><div class="md-ht"><p class="md-sd">${saud}, ${esc(nome)} · ${dataTx}</p><h2${nU ? '' : ' class="ok"'}>${manchete}</h2><p class="md-rs">${resumo}</p></div>${acoes ? `<div class="md-ac">${acoes}</div>` : ''}</div>`;
     h += `<div class="md-top"><div class="card md-agora"><header><h2>Agora</h2><p>${urgentes.length ? 'Do mais urgente para o menos' : 'Nada pedindo ação'}</p></header><div class="body">${urgentes.length
       ? urgentes.slice(0, 3).map(linha).join('') + (urgentes.length > 3 ? `<details class="md-mais"><summary>Mais ${urgentes.length - 3}</summary>${urgentes.slice(3).map(linha).join('')}</details>` : '')
       : '<p class="md-ok m0"><b>Tudo em dia.</b> Nada pendente nos seus módulos agora.</p>'}</div></div>`;

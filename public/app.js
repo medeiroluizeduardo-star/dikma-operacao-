@@ -3,7 +3,9 @@
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S, DAYS, DL, MOTIVOS, SITS, AUSENTE, AUSENCIA, PAPEIS, pad, pd, add, ddmm, today, weeksOfMonth, weekOf, monthOfWeek, weekLabel, monthLabel, addMonth } from './cal.js';
 import { competenciaDe, diasDaCompetencia, canonLideres, criarBusca as buscaNomes } from './planilhas-adm.js';
 import { abrirLancamento, JUS_CODS, pedirJus, textoJus, CODIGOS_LANC } from './presenca.js';
-import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov } from './aprovacao.js';
+import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov, listarAprov } from './aprovacao.js';
+import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, PARCIAL, AUS_COBRIVEL } from './situacao.js';
+import { listaAtrasadas, efetivoRota, coberturasDoDia, subDeOutroConjunto } from './hoje.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
 // Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).
@@ -20,7 +22,7 @@ import { criarEquip, VIEWS_E, SUB_E } from './equip.js';
 import { criarPessoas, chaveFicha } from './pessoas.js';
 import * as M from './movimento.js';
 import { criarMeuDia } from './meudia.js';
-import { ACESSO, acessosDe, indiceFerias, modulosDe } from './acessos.js';
+import { ACESSO, acessosDe, indiceFerias, indiceDesligados, modulosDe } from './acessos.js';
 import { criarAdministrativo, VIEWS_A, SUB_A } from './administrativo.js';
 import { semAcento, casa, caixaBusca, filtrarLista, campoBusca } from './busca.js';
 import { criarEscala, normRegime, letra, fatorRota, PERIODO, periodosDe } from './escala.js';
@@ -123,14 +125,13 @@ function stats(docs, { rota = 'TODAS', tipo = 'TODOS' } = {}) {
 }
 const rotasDa = area => rotas().filter(r => area === 'TODAS' || r.area === area);
 const ATR_MEMO = new Map();
+// Atrasadas dos últimos 60 dias (janela fixa, a mesma do Meu dia e de Pendências: hoje.js)
 function atrasadasAll(area) {
   const mk = `${typeof DATAV === 'undefined' ? 0 : DATAV}|${SK}|${TODAY}|${area}`; // o menu pede isto a cada desenho
   if (ATR_MEMO.has(mk)) return ATR_MEMO.get(mk);
   if (ATR_MEMO.size > 20) ATR_MEMO.clear();
-  const out = [];
-  for (const doc of docsFor({ area })) for (let i = 0; i < doc.ids.length; i++) for (let k = 0; k < 7; k++)
-    if (doc.d[i][k] === 'P' && diasDe(doc)[k] < TODAY) out.push({ doc, i, k, dt: diasDe(doc)[k] });
-  out.sort((a, b) => (a.dt < b.dt ? -1 : 1)); ATR_MEMO.set(mk, out); return out;
+  const out = listaAtrasadas(DB.cache.semanas, { areas: area && area !== 'TODAS' ? [area] : null, hoje: TODAY });
+  ATR_MEMO.set(mk, out); return out;
 }
 
 /* ---------------- gravações ---------------- */
@@ -179,10 +180,12 @@ function escolherFora(doc, k, rota) {
 /* ---------------- aprovação dos apontamentos ---------------- */
 // O líder aponta; o supervisor (ou coordenador, gestor, administrador) aprova ou devolve com o motivo.
 // O que ainda espera aprovação já conta nos números, com o selo "aguardando". Vale dos apontamentos a partir de APROV_DESDE.
-const aprovador = () => !!ME && aprovaPapel(ME.papel) && podeItem('i_aprovar'); // só o supervisor aprova
+const aprovador = () => !!ME && (aprovaPapel(ME.papel) || ME.papel === 'admin') && podeItem('i_aprovar'); // supervisor; administrador como reserva
+// Áreas sem supervisor ativo neste conjunto: o administrador aprova no lugar dele (aprovador reserva).
+const areasSemSupervisor = () => AREAS.filter(a => !(DB.cache.usuarios || []).some(u => u.papel === 'supervisor' && !u.bloqueado && (u.area === a || u.area2 === a) && modulosDe(u).includes(SETS[SK].mod)));
 const acompanha = () => !!ME && acompanhaPapel(ME.papel); // vê a Aprovação e cria ações (supervisor para cima)
-const areasAprov = () => (aprovador() ? myAreas() : []);
-const areasVerAprov = () => (aprovador() ? myAreas() : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
+const areasAprov = () => (!aprovador() ? [] : ME.papel === 'admin' ? areasSemSupervisor() : myAreas());
+const areasVerAprov = () => (aprovador() && ME.papel !== 'admin' ? myAreas() : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
 const aprovDe = (doc, pid, k) => ((DB.cache.aprov || {})[doc.id] || {})[pid + '|' + k];
 // 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
 const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY, doc.m[doc.ids[i] + '|' + k]);
@@ -193,12 +196,9 @@ function listaAprov(areas, est = 'pend') {
   const mk = `${DATAV}|${SK}|${TODAY}|${areas.join(',')}`;
   if (!APROV_MEMO.has(mk)) {
     if (APROV_MEMO.size > 20) APROV_MEMO.clear();
-    const res = { pend: [], dev: [] };
-    for (const doc of Object.values(DB.cache.semanas)) {
-      if (!areas.includes(doc.area)) continue;
-      const ds = diasDe(doc); if (ds[6] < APROV_DESDE || ds[0] > TODAY) continue;
-      for (let i = 0; i < doc.ids.length; i++) { const p = PL.get(doc.ids[i]); if (!p) continue; for (let k = 0; k < 7; k++) { const e = estAprov(doc, i, k); if (e === 'pend' || e === 'dev') res[e].push({ doc, i, k, dt: ds[k], p }); } }
-    }
+    // a mesma conta do Meu dia (aprovacao.js): só atividade que ainda está no plano
+    const l = listarAprov(DB.cache.semanas, DB.cache.aprov, areas, TODAY, pid => PL.has(pid));
+    const res = { pend: l.pend.map(x => ({ ...x, p: PL.get(x.pid) })), dev: l.dev.map(x => ({ ...x, p: PL.get(x.pid) })) };
     const ord = (a, b) => (a.dt < b.dt ? 1 : a.dt > b.dt ? -1 : a.p.rota.localeCompare(b.p.rota) || a.p.id.localeCompare(b.p.id));
     res.pend.sort(ord); res.dev.sort(ord); APROV_MEMO.set(mk, res);
   }
@@ -209,7 +209,7 @@ function gravarApont(doc, ch) {
   DATAV++;
   if (!ch.length) return;
   DB.setStatusMany(doc.id, ch);
-  if (!aprovador() || !canEdit(doc.area)) return;
+  if (!areasAprov().includes(doc.area) || !canEdit(doc.area)) return; // quem aprova a área (supervisor, ou o administrador como reserva)
   const it = {};
   for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = c === 'N' ? { s: 'A', c, m: x.motivo || '' } : { s: 'A', c }; }
   if (Object.keys(it).length) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível registrar a aprovação'));
@@ -315,6 +315,9 @@ const PN_VIEWS = ['painel', 'resumo', 'epainel', 'gpainel', 'fpainel'];
   // fichas de acompanhamento: só quem tem o Efetivo marcado no usuário (os dados das fichas só chegam para essas pessoas)
   for (const v of VIEWS) if (v.mod === 'ge' && !v.reqU) v.reqU = u => temFichas(u);
 }
+// Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
+const CURTO = { esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', gpainel: 'Fichas', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar dados', econfig: 'Operação', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses' };
+const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·' };
 const MODS = { paineis: { nome: 'Painel', curto: 'Painel', sub: 'Indicadores de todos os módulos', key: 'pn', inicio: 'painel' }, operacao: { nome: 'Atividades Pátio', curto: 'Pátio', sub: 'Pátio de Carvão', key: 'op', inicio: 'apontar' }, bateria: { nome: 'Atividades Bateria', curto: 'Bateria', sub: 'Bateria, Trilho e CDQ', key: 'op', inicio: 'apontar' }, equipamentos: { nome: 'Operação', curto: 'Operação', sub: 'Equipamentos e operadores', key: 'eq', inicio: 'elanc' }, gestao: { nome: 'Efetivo', curto: 'Efetivo', sub: 'Escala, presença e fichas', key: 'ge', inicio: 'esdia' } , config: { nome: 'Configurações', curto: 'Configurações', sub: 'Ajustes do sistema', key: 'cf', inicio: 'cfgeral' }, frequencia: { nome: 'Frequência e férias', curto: 'Frequência', sub: 'Folha de 16 a 15 e férias', key: 'ad', inicio: 'afreq' } };
 // Ícones dos módulos: pilha de carvão (Pátio), fornos lado a lado (Bateria), engrenagem de equipamento (Operação), pessoas (Efetivo).
@@ -358,7 +361,7 @@ const modsDe = u => {
 };
 const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));
 const permCfg = () => DB.cache.permissoes || {};
-const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || (v.mod === 'all' && ((UI.acesso === 'operacao' && UI.modulo !== 'frequencia') || v.id !== 'meudia'))) && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
+const viewsDoModulo = () => { const l = VIEWS.filter(v => (v.mod === MODS[UI.modulo].key || (v.mod === 'all' && (UI.acesso === 'operacao' || v.id !== 'meudia'))) && (!v.admin || (v.mod === 'all' ? isAdmin() : admMod())) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg())); return UI.modulo === 'config' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l; };
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 function aplicarSet() {
   let k = UI.modulo === 'bateria' ? 'bateria' : 'patio';
@@ -396,7 +399,7 @@ let VIEW_MUDOU = false;
 function pintar(id, html) { const el = document.getElementById(id); if (!el || el._h === html) return false; el.innerHTML = html; el._h = html; if (id === 'view') VIEW_MUDOU = true; return true; }
 /* ---------------- telas de acesso ---------------- */
 const $ = id => document.getElementById(id);
-function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; { const g = $('gate'); const novo = g.hidden || !g.querySelector('.brand'); g.hidden = false; const h = new Date().getHours(); const saud = h < 5 ? 'Boa noite' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }); g.innerHTML = `<div class="gatecard${novo ? ' anim' : ''}"><div class="gsimb" aria-hidden="true"><img src="img/dikma-simbolo.png" alt=""></div><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div><p class="gsaud">${saud} · ${hoje}</p>${html}</div>`; } }
+function gate(html) { const ly = document.getElementById('layer'); if (ly && ly.innerHTML) ly.innerHTML = ''; fecharSitPop(); ['view', 'top', 'fbarra', 'nav', 'who', 'tabbar'].forEach(id => { const e = document.getElementById(id); if (e) e._h = null; }); $('shell').hidden = true; { const g = $('gate'); const novo = g.hidden || !g.querySelector('.brand'); g.hidden = false; const h = new Date().getHours(); const saud = h < 5 ? 'Boa noite' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; const hoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }); g.innerHTML = `<div class="gatecard${novo ? ' anim' : ''}"><div class="gsimb" aria-hidden="true"><img src="img/dikma-simbolo.png" alt=""></div><div class="brand big"><img class="logo on-light" src="img/dikma-logo.png" alt="Dikma"><img class="logo on-dark" src="img/dikma-logo-branco.png" alt="Dikma"><div class="prod"><b>GESTÃO</b></div></div><p class="gsaud">${saud} · ${hoje}</p>${html}</div>`; } }
 
 const senhaField = (id, label, ac) => `<label class="sel"><span>${label}</span><div class="pwd"><input class="in" id="${id}" type="password" autocomplete="${ac}" required minlength="8"><button type="button" class="btn ghost eye" data-eye="${id}" aria-label="Mostrar senha">${I.eye}</button></div></label>`;
 // Tema da tela neste aparelho: automático (segue o aparelho), claro ou escuro.
@@ -481,13 +484,13 @@ function renderTela() {
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
   if (TV) { renderTV(); return; }
-  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', AD.render(UI.view)); afterRender(); return; }
+  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : AD.render(UI.view)); afterRender(); return; }
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
   if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' || (UI.modulo === 'gestao' && UI.view !== 'epainel') ? GE.render(UI.view) : EQ.render(UI.view)); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && !['ativ', 'he'].includes(resTipo())))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? AD.painel() : vResumoOutro()); afterRender(); return; }
-  if (!DB.cache.configLoaded) { pintar('top', '<h1>Carregando…</h1>'); pintar('view', M.ESQUELETO); renderNav(); return; }
-  if (!DB.cache.config) { renderNav(); pintar('top', `<h1>Primeiro acesso<small>Importar os dados da planilha</small></h1>`); pintar('view', vImportar()); return; }
+  if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
+  if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', vImportar()); return; }
   ensurePeriod();
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (v.admin && !admMod()) UI.view = MODS[UI.modulo].inicio;
@@ -504,8 +507,8 @@ const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimatio
 
 function renderNav() {
   const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
-  // Selo de Pendências: só os atrasos dos últimos 7 dias, na área da pessoa (um número que dá para resolver).
-  const atr = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').filter(x => x.dt >= add(TODAY, -7)).length : 0;
+  // Selo de Pendências: atrasadas dos últimos 60 dias na área da pessoa (a mesma janela de Pendências e do Meu dia).
+  const atr = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
   const gb = ge ? (temFichas(ME) ? GE.badge() : 0) : eqm ? EQ.badge() : 0;
   const apv = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
   const ms = modsDe(ME);
@@ -518,7 +521,7 @@ function renderNav() {
   for (const v of viewsDoModulo()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
     const badge = v.id === 'pend' && atr ? atr : v.id === 'aprovar' && apv ? apv : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
-    h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}>${I[v.ic]}<span>${v.nome}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
+    h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}${nomeCurto(v) !== v.nome ? ` title="${esc(v.nome)}"` : ''}>${I[v.ic]}<span>${nomeCurto(v)}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
   }
   pintar('nav', h);
   pintar('who', DEMO
@@ -538,9 +541,9 @@ function barraDe() {
   const tb = ge ? [['meudia', 'Hoje', 'sol'], ['esdia', 'Escala', 'escala'], ['gcolab', 'Pessoas', 'users'], ['esbal', 'Balanço', 'prog'], ['__more', 'Mais', 'more']]
     : eqm ? [['meudia', 'Hoje', 'sol'], ['elanc', 'Lançar', 'apontar'], ['eequipe', 'Equipe', 'users'], ['einsp', 'Inspeções', 'plano'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
-    : UI.modulo === 'paineis' ? [['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['fpainel', 'Frequência', 'prog'], ['gpainel', 'Fichas', 'users'], ['meudia', 'Hoje', 'sol'], ['__more', 'Mais', 'more']]
-    : aprovador() ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'frequencia' ? [['meudia', 'Hoje', 'sol'], ['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'escala'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
+    : UI.modulo === 'paineis' ? [['meudia', 'Hoje', 'sol'], ['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['fpainel', 'Frequência', 'prog'], ['gpainel', 'Fichas', 'users'], ['__more', 'Mais', 'more']]
+    : aprovador() && ME.papel !== 'admin' ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['causas', 'Causas', 'causas'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
@@ -548,7 +551,8 @@ function barraDe() {
 function pintarBarra(tb, atr, gb, apv = 0) {
   const inMore = !tb.some(x => x[0] === UI.view);
   const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${id === 'apontar' || id === 'elanc' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${n}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
+  const rot = (id, n) => (id === '__more' ? n : nomeCurto(VIEWS.find(v => v.id === id)) || n);
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && ME.papel !== 'leitor' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
 }
 function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -652,18 +656,34 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'k' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); abrirBusca(); }
 });
 const BUSCA_BTN = '<button type="button" class="btn ghost buscabtn" data-act="busca" aria-label="Buscar pessoa, equipamento, rota ou tela (Ctrl+K)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Buscar</span><kbd>Ctrl K</kbd></button>';
+// Etiqueta do módulo no topo do celular: mostra em que módulo a pessoa está e abre a troca de módulo.
+function modTag() {
+  const cur = MODS[UI.modulo]; if (!cur || !ME) return '';
+  const pode = modsDe(ME).length > 1;
+  return `<button type="button" class="modtag" ${pode ? 'data-act="modsheet" aria-haspopup="dialog"' : 'aria-disabled="true" tabindex="-1"'} aria-label="Módulo: ${esc(cur.nome)}${pode ? '. Tocar para trocar de módulo' : ''}"><span class="mi">${MOD_IC[UI.modulo] || ''}</span><b>${esc(cur.curto)}</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+}
+function modSheet() {
+  const ms = modsDe(ME);
+  const ok = '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  sheet('Trocar de módulo', '', ms.map(m => ({ t: MODS[m].nome, d: MODS[m].sub, m, cur: m === UI.modulo, cls: 'mod', ic: `<span class="mi">${MOD_IC[m] || ''}</span>`, fim: m === UI.modulo ? ok : '' })), o => { if (o.m !== UI.modulo) trocarModulo(o.m); });
+}
+// Topo: só título (1 linha), subtítulo (1 linha), Buscar e conexão. Os filtros vão para a barra logo abaixo (#fbarra).
+function pintarTopo(titulo, sub, filtros = '') {
+  pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
+  pintar('fbarra', filtros);
+}
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view);
   if (UI.modulo === 'config' && v.mod === 'cf') {
     const sub = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, usuarios: 'Quem acessa o sistema e o que pode fazer', perfis: 'Quais abas cada perfil vê e o que pode fazer em cada uma' }[v.id] || '';
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
-    pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${sw}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return;
+    pintarTopo(v.nome, sub, sw); return;
   }
-  if (UI.modulo === 'frequencia') { pintar('top', `<h1>${v.nome}<small>${SUB_A[v.id] || ''}</small></h1>${AD.topo(v.id)}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  if (v.id === 'fpainel') { pintar('top', `<h1>${v.nome}<small>Presença, ocorrências e férias da folha de 16 a 15</small></h1>${AD.topo('fpainel')}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintar('top', `<h1>${v.nome}<small>${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir</small></h1>${resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintar('top', `<h1>${v.nome}<small>${v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'}</small></h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`); return; }
-  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Registros com início, fim e horas, por pessoa e por motivo · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  if (UI.modulo === 'frequencia') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_A[v.id] || '', v.id === 'meudia' ? '' : AD.topo(v.id)); return; }
+  if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD.topo('fpainel')); return; }
+  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
+  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'); return; }
+  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
   const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
@@ -672,7 +692,7 @@ function renderTop() {
     if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   }
-  pintar('top', `<h1>${v.nome}<small>${sub}</small></h1>${ctr}${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
+  pintarTopo(v.nome, sub, ctr);
 }
 
 /* ---------------- PAINEL ---------------- */
@@ -738,7 +758,7 @@ function vPainel() {
 }
 function logHtml(n) {
   const L = DB.cache.log;
-  if (!L.length) return '<div class="empty">Nenhum registro ainda. Os apontamentos feitos no Apontar aparecem aqui.</div>';
+  if (!L.length) return '<div class="empty"><b>Nenhum registro ainda</b><span>Os apontamentos feitos no Apontar aparecem aqui.</span></div>';
   return `<div class="log">${L.slice(0, n).map(l => `<div><time>${fmtAt(l.at)}</time><span><b>${esc(title(l.nome))}</b> · ${esc(l.t)}</span></div>`).join('')}</div>`;
 }
 
@@ -778,7 +798,7 @@ function vApontar() {
   const apAqui = areasAprov().includes(area) ? items.filter(x => estAprov(doc, x.i, k) === 'pend').length : 0;
   let h = chipsArea + `<div class="dayscroll" role="group" aria-label="Dia">${DAYS.map((d, j) => { const dt = add(UI.ini, j); return `<button class="dbtn ${dt === TODAY ? 'hoje' : ''}" data-dia="${j}" aria-pressed="${j === k}"><small>${d}</small><b>${dt.slice(8)}</b></button>`; }).join('')}</div>
   <div class="rchips linha" role="group" aria-label="Rota">${rts.map(r => { const c = cnt(r), p = pendR(r); return `<button class="rchip" data-arota="${esc(r)}" aria-pressed="${r === UI.aRota}">${esc(r)}<span class="c num">${p ? p : c ? '✓' : '—'}</span></button>`; }).join('')}</div>
-  <div class="apbar"><div class="row-between"><b>${esc(UI.aRota)} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}</b><span class="muted num">${done} de ${items.length} feitas</span></div>
+  <div class="apbar"><div class="row-between"><b>${esc(UI.aRota)}${varias ? ` · ${AREA_S[area]}` : ''} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}</b><span class="muted num">${done} de ${items.length} feitas</span></div>
   <div class="stack"><i style="width:${R / t * 100}%;background:var(--st-real)"></i><i style="width:${N / t * 100}%;background:var(--st-nreal)"></i><i style="width:${E / t * 100}%;background:var(--st-extra)"></i></div>
   ${edit || podeForaProg(area) ? `<div class="row-gap">${edit && items.length - done > 0 ? (UI.confirm === 'all' ? `<span class="confirm">Marcar as ${items.length - done} restantes como realizadas? <button class="btn pri sm" data-act="allok">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : '<button class="btn sm" data-act="askAll">✓ Marcar restantes</button>') : ''}${podeForaProg(area) ? `<button class="btn sm" data-act="foraProg">${I.plus} Fora da programação</button>` : ''}${apAqui ? `<button class="btn sm" data-act="aprvGrupo" data-k="${esc(add(UI.ini, k) + '|' + area + '|' + UI.aRota)}">${I.ok} Aprovar ${apAqui}</button>` : ''}</div>` : '<p class="muted small m0">Somente leitura nesta área.</p>'}</div>`;
   if (items.length && done === items.length) h += `<div class="card fimrota"><div class="body row-between"><span><b>Rota concluída.</b>${proxima ? ` Próxima com pendência: ${esc(proxima)} (${pendR(proxima)}).` : ' Nenhuma outra rota pendente neste dia.'}</span>${proxima ? `<button class="btn pri sm" data-arota="${esc(proxima)}">Ir para ${esc(proxima)}</button>` : ''}</div></div>`;
@@ -800,17 +820,25 @@ function vApontar() {
 /* ---------------- ESCALA ---------------- */
 /* ---------------- ESCALA DE TURNO ---------------- */
 // Fonte única (config/escalas, com as turmas da Operação como reserva). Sem lançamento no dia, a situação vem da escala:
-// administrativo folga no fim de semana e feriado; turno folga nos dias de folga da letra da turma.
+// administrativo folga no fim de semana e feriado (de Escalas e turnos e os "sem operação" da Operação);
+// turno folga nos dias de folga da letra da turma. A conta do dia fica em situacao.js (a mesma de todos os módulos).
 let ESC = null, ESCc = undefined, ESCe = undefined;
-function escala() { const c = DB.cache.escalas || null; const e = (DB.cache.e && DB.cache.e.config) || null; if (!ESC || ESCc !== c || ESCe !== e) { ESC = criarEscala(c || {}, e && e.turmas, []); ESCc = c; ESCe = e; } return ESC; }
-const nk = s => semAcento(s).replace(/\s+/g, ' ').trim();
-let TURk = '', TUR = new Map();
+function escala() { const c = DB.cache.escalas || null; const e = (DB.cache.e && DB.cache.e.config) || null; if (!ESC || ESCc !== c || ESCe !== e) { ESC = criarEscala(c || {}, e && e.turmas, feriadosOperacao(e)); ESCc = c; ESCe = e; } return ESC; }
+let TURk = '', TUR = () => '';
 // Turma pela ficha do Efetivo ou pelo cadastro da Operação (mesmo nome), quando a pessoa não tem letra nas Atividades.
 function turmaFicha(nome) {
   const g = (DB.cache.g && DB.cache.g.colabs) || []; const ops = (DB.cache.e && DB.cache.e.cad && DB.cache.e.cad.operadores) || [];
   const k = `${g.length}|${ops.length}|${DB.cache.gVersao || 0}|${DB.cache.eVersao || 0}`;
-  if (TURk !== k) { TUR = new Map(); ops.forEach(o => { const l = letra(o.turma); if (l && o.escala === '4x4') TUR.set(nk(o.nome), l); }); g.forEach(c => { const l = letra(c.turma); if (l) TUR.set(nk(c.nome), l); }); TURk = k; }
-  return TUR.get(nk(nome)) || '';
+  if (TURk !== k) { TUR = criarTurmaFicha(g, ops); TURk = k; }
+  return TUR(nome);
+}
+// Data de demissão da ficha (Efetivo): vale como DS automático a partir dela. Vem das fichas quando a pessoa as lê
+// (Efetivo ou Frequência) e, para os demais, do resumo adm/desligados que a rotina diária grava.
+let DEMi = null, DEMk = null;
+function desligadoDe(p) {
+  const g = (DB.cache.g && DB.cache.g.colabs) || [], rh = (DB.cache.adm && DB.cache.adm.rh) || [], res = DB.cache.desligados || [];
+  if (!DEMi || DEMk[0] !== g || DEMk[1] !== rh || DEMk[2] !== res) { DEMi = indiceDesligados([...res, ...rh, ...g]); DEMk = [g, rh, res]; }
+  return DEMi(p);
 }
 const turmaDe = c => letra(c.turma) || turmaFicha(c.nome);
 const regimeDe = c => normRegime(c.regime, escala().regimes);
@@ -818,7 +846,8 @@ const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.
 // { v: código, auto: veio da escala, motivo, semTurma }
 // Férias marcadas em Frequência e férias entram sozinhas como FE (o lançamento do dia ainda vale mais).
 let FERI = null, FERIv = null;
-const feriasDe = (c, dt) => { const l = DB.cache.feriasAtivas || (DB.cache.adm && DB.cache.adm.ferias) || []; if (FERIv !== l) { FERI = indiceFerias(l); FERIv = l; } return FERI({ mat: c.mat, nome: c.nome }, dt); };
+// A lista completa (Frequência e férias) vale mais quando está carregada; senão, o resumo adm/feriasAtivas.
+const feriasDe = (c, dt) => { const l = (DB.cache.adm && DB.cache.adm.fLoaded && DB.cache.adm.ferias) || DB.cache.feriasAtivas || []; if (FERIv !== l) { FERI = indiceFerias(l); FERIv = l; } return FERI({ mat: c.mat, nome: c.nome }, dt); };
 // Escala prevista da pessoa no dia (letra da turma × regime), guardada até os dados mudarem.
 let PVM = new Map(), PVv = -1, PVe = null;
 function previstoDe(c, dt) {
@@ -835,19 +864,25 @@ function sitDia(c, dt) {
   let r = SDM.get(ch); if (r) return r;
   r = Object.freeze(sitDiaCalc(c, dt)); SDM.set(ch, r); return r;
 }
-function sitDiaCalc(c, dt) {
-  const m = DB.sit(c.id + '|' + dt); if (m) return { v: m, auto: false };
-  if (feriasDe(c, dt)) return { v: 'FE', auto: false, ferias: true }; // ausência (não é folga da escala: não vira hora extra)
-  const p = previstoDe(c, dt);
-  if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
-  return { v: 'P', auto: false, semTurma: !p };
-}
+// Fontes da conta do dia (situacao.js): o lançado (get), demissão da ficha, férias, escala e turma pela ficha.
+const fontesSit = get => ({ lancado: (c, dt) => get(c.id + '|' + dt), desligadoEm: desligadoDe, ferias: feriasDe, escala: escala(), turmaFicha });
+// Formato usado pelas telas: auto = folga pela escala (vira hora extra se trabalhar); férias e desligamento da ficha
+// não são "auto" (são ausências), mas vêm marcados (ferias, desligado) para a tela dizer de onde vieram.
+const sitTela = s => (s.por === 'escala' ? { v: 'F', auto: true, motivo: s.motivo, por: s.por, periodo: '' }
+  : s.por === 'ferias' ? { v: 'FE', auto: false, ferias: true, por: s.por, periodo: '' }
+    : s.por === 'desligado' ? { v: 'DS', auto: false, desligado: true, por: s.por, periodo: '' }
+      : s.por === 'padrao' ? { v: 'P', auto: false, semTurma: s.semTurma, por: s.por, periodo: s.periodo }
+        : { v: s.v, auto: false, por: s.por, periodo: s.periodo });
+function sitDiaCalc(c, dt) { return sitTela(situacaoDoDia(c, dt, fontesSit(DB.sit))); }
+const desligadoNoDia = (c, dt) => sitDia(c, dt).v === 'DS';
+// Contagem do dia (quadro, folga, férias, escalados, ausentes, presentes): a mesma no topo, no rodapé e nos grupos.
+const contarDia = (cs, dt) => contagemDia(cs, dt, { sitDe: sitDia });
 // Turno do dia pela letra: 'D' diurno, 'N' noturno, '' administrativo / folga / sem turma (a noite conta no dia em que começa)
 const periodoDe = (c, dt) => { const p = previstoDe(c, dt); return p && p.trab && p.periodo ? p.periodo : ''; };
 const marcaPer = per => (per ? `<i class="peri ${per}" aria-hidden="true">${per}</i>` : '');
 const folgaEscala = (c, dt) => { const p = previstoDe(c, dt); return !!(p && !p.trab); };
-// mesma regra para outros conjuntos (Meu dia): get(chave) devolve o lançado
-const sitDiaDe = get => (c, dt) => { const m = get(c.id + '|' + dt); if (m) return m; if (feriasDe(c, dt)) return 'FE'; const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); return p && !p.trab ? 'F' : undefined; };
+// mesma regra para outros conjuntos (Meu dia): get(chave) devolve o lançado; presente sem nada lançado = undefined
+const sitDiaDe = get => (c, dt) => { const s = situacaoDoDia(c, dt, fontesSit(get)); return s.por === 'padrao' ? undefined : s.v; };
 const indisponivel = (c, dt) => { const v = sitDia(c, dt).v; return v !== 'DS' && AUSENTE.has(v); };
 let ERM = new Map(), ERv = -1;
 function escalaRota(r, ini) {
@@ -860,7 +895,6 @@ function escalaRotaCalc(r, ini) {
   const cs = COLABS.filter(c => c.area === r.area && c.rota === r.rota);
   const doc = DB.cache.semanas[r.area + '|' + ini];
   const fator = fatorRota(cs, escala().regimes); // rota de turno: só parte do quadro trabalha por dia
-  const ids = new Map(cs.map(c => [c.id, c]));
   const todos = idsColabs();
   // atividades programadas da rota em cada dia da semana (uma passada só)
   const progK = [0, 0, 0, 0, 0, 0, 0];
@@ -868,21 +902,11 @@ function escalaRotaCalc(r, ini) {
   const out = [];
   for (let k = 0; k < 7; k++) {
     const dt = add(ini, k);
-    let aloc = 0, aus = 0, escd = 0; const per = { D: 0, N: 0 };
-    for (const c of cs) {
-      if (DB.sit(c.id + '|' + dt) === 'DS') continue;
-      aloc++;
-      const sd = sitDia(c, dt); const ind = sd.v !== 'DS' && AUSENTE.has(sd.v);
-      if (ind) aus++;
-      if (!sd.auto) escd++;
-      if (!ind) { const p = periodoDe(c, dt); if (p) per[p]++; } // quem está disponível de dia e de noite (turno pela letra)
-    }
-    // substituições: quem cobre uma ausência desta rota soma aqui; quem sai desta rota para cobrir outra, sai daqui
-    let mov = 0;
-    for (const x of cobDoDia(dt)) { if (ids.has(x.aus) && (todos.has(x.sub) || refSub(x.sub).outro)) mov++; const sc = ids.get(x.sub); if (sc && DB.sit(sc.id + '|' + dt) !== 'DS' && !indisponivel(sc, dt)) mov--; }
-    const prog = progK[k];
-    const nec = r.carga > 0 ? Math.ceil(r.ef * prog / r.carga * fator) : (r.rota === 'GESTÃO' ? Math.min(r.ef, escd) : 0);
-    out.push({ disp: aloc - aus + mov, nec, prog, aloc, mov, dispD: per.D, dispN: per.N });
+    // disponíveis × necessários com as coberturas: a mesma conta do Meu dia e do aviso das 17h (hoje.js)
+    const e = efetivoRota(r, { cs, prog: progK[k], sitDe: c => sitDia(c, dt), cob: cobDoDia(dt), subOk: x => todos.has(x) || subDeOutroConjunto(x), fator });
+    const per = { D: 0, N: 0 };
+    for (const c of cs) { if (!indisponivel(c, dt) && !desligadoNoDia(c, dt)) { const p = periodoDe(c, dt); if (p) per[p]++; } } // quem está disponível de dia e de noite (turno pela letra)
+    out.push({ disp: e.disp, nec: e.nec, prog: e.prog, aloc: e.aloc, mov: e.mov, dispD: per.D, dispN: per.N });
   }
   return { cs, days: out };
 }
@@ -890,21 +914,19 @@ let IDC = null, IDCv = null;
 const idsColabs = () => { if (IDCv !== COLABS) { IDC = new Set(COLABS.map(c => c.id)); IDCv = COLABS; } return IDC; };
 /* ---------------- EFETIVO NO PAINEL ---------------- */
 const SIT_NOME = Object.fromEntries(SITS);
-// Presente, mas com ocorrência no dia (chegou depois ou saiu antes): conta como presente e pede justificativa.
-const PARCIAL = new Set(['ATR', 'SA']);
+// PARCIAL (situacao.js): presente, mas chegou depois ou saiu antes; conta como presente e pede justificativa.
 const SIT_TOM = { F: 'neu', FE: 'ext', AT: 'warn', AF: 'warn', TR: 'neu', FT: 'bad', ATR: 'warn', SA: 'warn' };
 const colabsDa = area => COLABS.filter(c => area === 'TODAS' || c.area === area);
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 function cardAusencias(area) {
-  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
+  const cs = colabsDa(area).filter(c => !desligadoNoDia(c, TODAY));
   const sh = new Map(cs.map(c => [c.id, sitDia(c, TODAY)]));
-  const folgaHoje = cs.filter(c => { const x = sh.get(c.id); return x.auto || x.v === 'F'; }).length;
-  const ferias = cs.filter(c => sh.get(c.id).v === 'FE').length;
+  const ct = contarDia(cs, TODAY); const folgaHoje = ct.folga, ferias = ct.ferias;
   const aus = cs.map(c => ({ c, v: sh.get(c.id).v, auto: sh.get(c.id).auto })).filter(x => !x.auto && (AUSENCIA.has(x.v) || PARCIAL.has(x.v))).sort((a, b) => a.v.localeCompare(b.v) || a.c.rota.localeCompare(b.c.rota) || a.c.nome.localeCompare(b.c.nome));
   const atr = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'ATR').length; const sai = cs.filter(c => DB.sit(c.id + '|' + TODAY) === 'SA').length;
   const ausR = aus.filter(x => !PARCIAL.has(x.v)); // atrasado e saída antecipada estão presentes: aparece na lista, mas não conta como ausência
   const por = {}; ausR.forEach(x => { por[x.v] = (por[x.v] || 0) + 1; });
-  const pres = cs.length - ausR.length - folgaHoje - ferias;
+  const pres = ct.presentes;
   const lista = aus.length ? `<div class="aus-l">${aus.slice(0, 40).map(x => `<button class="aus-it" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><span class="minw"><b>${esc(title(x.c.nome))}</b><small>${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}${AUS_COBRIVEL.has(x.v) ? (cobertoPor(x.c.id, TODAY) ? ` · coberto por ${esc(curto(nomeDe(cobertoPor(x.c.id, TODAY))))}` : ' · <em class="semt">sem substituto</em>') : ''}${(j => (j && j.cod === x.v ? ` · ${esc(textoJus(j))}` : JUS_CODS.includes(x.v) ? ' · <em class="semt">sem justificativa</em>' : ''))(DB.sitInfo(x.c.id + '|' + TODAY).jus)}</small></span><span class="pill ${SIT_TOM[x.v] || 'neu'}">${SIT_NOME[x.v]}</span></button>`).join('')}${aus.length > 40 ? `<p class="muted small m0">+ ${aus.length - 40}</p>` : ''}</div>` : '<div class="empty small">Ninguém ausente ou atrasado hoje.</div>';
   return `<div class="card"><header><h2>Ausências e atrasos de hoje</h2><p>${ddmm(TODAY)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header><div class="body">
     <div class="mini aus-mini"><div><b class="num">${pres}</b><span>Presentes</span></div><div><b class="num">${folgaHoje}</b><span>Folga</span></div>${ferias ? `<div><b class="num">${ferias}</b><span>Férias</span></div>` : ''}<div><b class="num" style="color:${ausR.length ? 'var(--st-nreal)' : 'inherit'}">${ausR.length}</b><span>Ausentes</span></div><div><b class="num">${pct(pres, cs.length - folgaHoje - ferias)}%</b><span>Presença dos escalados</span></div></div>
@@ -916,9 +938,9 @@ function cardBalanco(area, ini) {
   const cs = colabsDa(area); const rs = rotasDa(area); const tk = DAYS.map((_, k) => add(ini, k) === TODAY);
   const esc7 = rs.map(r => escalaRota(r, ini));
   const dias = DAYS.map((_, k) => {
-    const dt = add(ini, k); const quadro = cs.filter(c => DB.sit(c.id + '|' + dt) !== 'DS');
-    const mot = {}; let aus = 0, fe = 0, fer = 0;
-    quadro.forEach(c => { const x = sitDia(c, dt); if (x.auto || x.v === 'F') { fe++; return; } if (x.v === 'FE') { fer++; return; } if (AUSENCIA.has(x.v)) { aus++; mot[x.v] = (mot[x.v] || 0) + 1; } });
+    const dt = add(ini, k); const quadro = cs.filter(c => !desligadoNoDia(c, dt));
+    const ct = contarDia(quadro, dt); const fe = ct.folga, fer = ct.ferias, aus = ct.ausentes;
+    const mot = {}; for (const m of AUSENCIA) if (ct.porCodigo[m]) mot[m] = ct.porCodigo[m];
     const nec = esc7.reduce((n, e) => n + e.days[k].nec, 0);
     const def = rs.filter((r, i) => r.rota !== 'GESTÃO' && esc7[i].days[k].prog > 0 && esc7[i].days[k].disp < esc7[i].days[k].nec).length;
     const ids = new Set(cs.map(c => c.id)); const cob = cobDoDia(dt).filter(x => ids.has(x.aus)).length;
@@ -946,17 +968,17 @@ function cardBalanco(area, ini) {
     ${soma(d => d.heD + d.heA + d.heN) ? `${linha('Hora extra', d => (d.heD + d.heA + d.heN) || '·', soma(d => d.heD + d.heA + d.heN))}${linha('<span class="sub">a pedido da Dikma</span>', d => d.heD || '·', soma(d => d.heD), 'mot')}${linha('<span class="sub">a pedido da ArcelorMittal</span>', d => d.heA || '·', soma(d => d.heA), 'mot')}${soma(d => d.heN) ? linha('<span class="sub">sem origem informada</span>', d => d.heN || '·', soma(d => d.heN), 'mot') : ''}` : ''}
     <tr><th scope="row">Rotas em déficit</th>${dias.map((d, k) => cel(k, d.def ? `<span class="pill bad">${d.def}</span>` : '0')).join('')}<td class="c num tot">${soma(d => d.def)}</td></tr>
     </tbody></table></div>
-    <div class="body pt0"><p class="muted small m0">Escalados = quadro − folga (da escala ou lançada) − férias. Ausências = atestado, afastamento, treinamento, falta, abono e suspensão (folga e férias não contam). Disponíveis = escalados − ausências. Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga). <button class="btn ghost link" data-goescala="">Abrir Escala e Efetivo</button></p></div></div>`;
+    <div class="body pt0 row-between"><details class="calc"><summary>Como é calculado</summary><p>Escalados = quadro − folga (da escala ou lançada) − férias.</p><p>Ausências = atestado, afastamento, treinamento, falta, abono e suspensão (folga e férias não contam).</p><p>Disponíveis = escalados − ausências. Saldo = disponíveis − necessários. Necessário vem do dimensionamento por rota (efetivo padrão × atividades do dia ÷ carga).</p></details><button class="btn ghost link" data-goescala="">Abrir o Efetivo diário</button></div></div>`;
 }
 // Seletor rápido da situação: abre colado no dia tocado, um toque aplica. "Repetir" leva até o fim da semana.
 // ---- Substituição (quem cobre uma ausência) e origem da hora extra ----
 const HE_ORIG = { DIKMA: 'Dikma', ARCELOR: 'ArcelorMittal' };
 const HE_SIG = { DIKMA: 'D', ARCELOR: 'A' };
-const AUS_COBRIVEL = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT']);
+// AUS_COBRIVEL (situacao.js): ausências que pedem substituto
 // coberturas de um dia: [{ aus: id de quem faltou, sub: id de quem cobre }]
 let CDM = new Map(), CDv = -1;
 function cobDoDia(dt) { if (CDv !== DATAV) { CDM = new Map(); CDv = DATAV; } let r = CDM.get(dt); if (!r) { r = cobDoDiaCalc(dt); CDM.set(dt, r); } return r; }
-function cobDoDiaCalc(dt) { const x = (DB.sitExtraMes(dt.slice(0, 7)).cob) || {}; const out = []; for (const [k, sid] of Object.entries(x)) { const i = k.lastIndexOf('|'); if (k.slice(i + 1) === dt && sid) out.push({ aus: k.slice(0, i), sub: sid }); } return out; }
+function cobDoDiaCalc(dt) { return coberturasDoDia(DB.sitExtraMes(dt.slice(0, 7)).cob, dt); }
 const cobertoPor = (id, dt) => DB.sitInfo(id + '|' + dt).cob;
 const cobrindo = (id, dt) => { const x = cobDoDia(dt).find(y => y.sub === id); return x ? x.aus : ''; };
 // Substituto pode ser de outro conjunto (ex.: falta na Bateria coberta por alguém do Pátio): guardado como "conjunto:id".
@@ -1067,12 +1089,17 @@ function lancarEfetivo(key) {
     }
   });
 }
-// Faltas, atrasos e atestados dos últimos 7 dias ainda sem justificativa (só de quem a pessoa pode lançar).
-function jusPendentes() {
-  if (!ME || !COLABS.length) return 0;
+// Áreas de um conjunto (Pátio ou Bateria) em que a pessoa lança a presença — sem depender do módulo aberto.
+const areasSitDe = k => { if (!ME || !setsDe(ME).includes(k) || !podeItem('i_efetivo')) return []; if (isAdmin() || ['gestor', 'coordenador'].includes(ME.papel)) return SETS[k].areas; return [ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && SETS[k].areas.includes(a)); };
+const colabsDoSet = k => Object.values((DB.dados(k) || {}).colabs || {}).flat();
+const sitDoSet = (k, key) => { const m = key.split('|')[1].slice(0, 7); return (((DB.dados(k) || {}).sitByMonth || {})[m] || {})[key]; };
+// Faltas, atrasos e atestados dos últimos 7 dias ainda sem justificativa (só de quem a pessoa pode lançar), por conjunto:
+// o Meu dia mostra o mesmo número em qualquer módulo que a pessoa tenha aberto antes.
+function jusPendentes(k = SK) {
+  const areas = areasSitDe(k); if (!areas.length) return 0;
   const ds = []; for (let i = 0; i < 7; i++) ds.push(add(TODAY, -i));
   let n = 0;
-  for (const c of COLABS) { if (!canEditSit(c.area)) continue; for (const d of ds) { const v = DB.sit(c.id + '|' + d); if (!v || !JUS_CODS.includes(v)) continue; const j = DB.sitInfo(c.id + '|' + d).jus; if (!(j && j.cod === v)) n++; } }
+  for (const c of colabsDoSet(k)) { if (!areas.includes(c.area)) continue; for (const d of ds) { const v = sitDoSet(k, c.id + '|' + d); if (!v || !JUS_CODS.includes(v)) continue; const j = DB.sitInfo(c.id + '|' + d, k).jus; if (!(j && j.cod === v)) n++; } }
   return n;
 }
 // Justificativas do mês: lista de faltas, atrasos, atestados… com o que falta justificar primeiro.
@@ -1098,7 +1125,7 @@ function vEsJus() {
   const lista = grupos.filter(x => f === 'todas' || (f === 'pend' ? !x.j : !!x.j));
   const n = v => base.filter(x => x.v === v).length; const pend = grupos.filter(x => !x.j).length; const okG = grupos.length - pend;
   const LIM = UI.more || 80;
-  const linha = x => { const ed = canEditSit(x.c.area); const bt = ed ? `<button class="btn sm ${x.j ? 'ghost' : 'pri'}" data-jusk="${esc(x.c.id + '|' + x.dias.join(','))}">${x.j ? 'Editar' : 'Justificar'}</button>` : '';
+  const linha = x => { const ed = canEditSit(x.c.area); const bt = ed ? `<button class="btn sm ${x.j ? 'ghost' : 'lin'}" data-jusk="${esc(x.c.id + '|' + x.dias.join(','))}">${x.j ? 'Editar' : 'Justificar'}</button>` : '';
     return `<tr><td class="nowrap mono" data-l="Dia">${x.ini === x.fim ? ddmm(x.ini) : `${ddmm(x.ini)} a ${ddmm(x.fim)}<div class="muted small">${x.dias.length} dias</div>`}</td><td data-l="Colaborador"><b>${esc(title(x.c.nome))}</b><div class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</div></td><td class="nowrap" data-l="Situação"><span class="sit ${x.v}">${x.v}</span> ${SIT_NOME[x.v]}</td><td data-l="Justificativa">${x.j ? `${esc(textoJus(x.j))}<div class="muted small">${esc(x.j.nomePor || '')}${x.j.em ? ' · ' + ddmm(x.j.em.slice(0, 10)) : ''}${x.j.ocorr ? ' · registrada na ficha' : ''}</div>` : '<span class="pill warn">sem justificativa</span>'}</td><td class="r">${bt}</td></tr>`; };
   return `<div class="mini"><div><b class="num" style="color:${pend ? 'var(--st-atr)' : 'inherit'}">${pend}</b><span>Para justificar</span></div><div><b class="num">${okG}</b><span>Justificadas</span></div><div><b class="num">${n('FT')}</b><span>Faltas</span></div><div><b class="num">${n('ATR')}</b><span>Atrasos</span></div><div><b class="num">${n('SA')}</b><span>Saídas antecipadas</span></div><div><b class="num">${n('AT')}</b><span>Atestados</span></div></div>
   <div class="card"><header><h2>Justificativas</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</p></header>
@@ -1313,16 +1340,14 @@ function dimRotas(area) {
   return { rs, rows, def, ausT };
 }
 function miniEscala(area) {
-  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS');
-  // folga (da escala ou lançada) e férias não são ausência: só tiram a pessoa da escala do dia
-  const hoje = cs.map(c => sitDia(c, TODAY));
-  const fe = hoje.filter(x => x.auto || x.v === 'F').length, fer = hoje.filter(x => x.v === 'FE').length;
-  const aus = hoje.filter(x => !x.auto && AUSENCIA.has(x.v)).length;
+  const cs = colabsDa(area).filter(c => !desligadoNoDia(c, TODAY));
+  // folga (da escala ou lançada) e férias não são ausência: só tiram a pessoa da escala do dia (contagemDia, situacao.js)
+  const ct = contarDia(cs, TODAY); const fe = ct.folga, fer = ct.ferias, aus = ct.ausentes;
   const { def } = dimRotas(area);
   // letras de cada turno hoje, separadas em dia e noite
   const ciclos = Object.entries(escala().regimes).filter(([, r]) => r.tipo === 'ciclo').map(([k, r]) => ({ k, nome: k, tp: escala().turmasPeriodo(k, TODAY) })).filter(x => x.tp.D.length || x.tp.N.length);
   // presentes hoje por período (só quem está em turno)
-  const perHoje = { D: 0, N: 0 }; cs.forEach((c, i) => { const x = hoje[i]; if (!x.auto && !AUSENTE.has(x.v)) { const p = periodoDe(c, TODAY); if (p) perHoje[p]++; } });
+  const perHoje = ct.periodo;
   return `${ciclos.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${ciclos.map(x => `<span class="tchip">${esc(x.nome)}${x.tp.D.length ? ` · <i class="peri D">D</i> dia ${x.tp.D.join(' ')}` : ''}${x.tp.N.length ? ` · <i class="peri N">N</i> noite ${x.tp.N.join(' ')}` : ''}</span>`).join('')}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe - fer}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - fer - aus}</b><span>Presentes hoje</span></div>${perHoje.D + perHoje.N ? `<div><b class="num">${perHoje.D}<small class="perx"> · ${perHoje.N}</small></b><span>Turno dia · noite</span></div>` : ''}<div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div>${fer ? `<div><b class="num">${fer}</b><span>De férias</span></div>` : ''}<div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
 }
 // Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
@@ -1351,10 +1376,15 @@ function irEscala(rota) {
   salvarUI(); trocarTela(UI.view);
 }
 function vEsDim() {
-  const area = areaScope(); const { rows } = dimRotas(area);
+  const area = areaScope(); const { rows, def } = dimRotas(area);
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  return miniEscala(area) + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia. Necessário = efetivo padrão × atividades do dia ÷ carga padrão (em rota de turno, só a parte do quadro que trabalha por dia). Disponível já desconta a folga da escala. Em rota de turno, D e N mostram quantos estão de dia e de noite (em vermelho quando um dos turnos fica sem ninguém). Toque na rota para ver as pessoas</p></header><div class="tw"><table class="dimt"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
-  ${rows.map(({ r, e, dd }) => `<tr><td><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted">${AREA_S[r.area]}</td>` : ''}<td class="r num">${r.ef}</td><td class="r num">${r.carga}</td>${e.days.map((d, k) => `<td class="c ${tk[k] ? 'today' : ''}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes${d.dispD + d.dispN ? ` · turno: ${d.dispD} de dia e ${d.dispN} de noite` : ''}">${d.disp}/${d.nec}</span>${d.dispD + d.dispN ? `<small class="dnx${(d.dispD === 0 || d.dispN === 0) && d.prog ? ' bad' : ''}">D${d.dispD} · N${d.dispN}</small>` : ''}</td>`).join('')}<td>${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
+  // Faixa só com os números desta aba (a faixa completa do Efetivo fica no Efetivo diário)
+  const op = rows.filter(x => x.r.rota !== 'GESTÃO'); const kh = tk.indexOf(true);
+  const diasDef = op.reduce((n, x) => n + x.dd, 0);
+  const hj = kh >= 0 ? op.reduce((a, x) => ({ disp: a.disp + x.e.days[kh].disp, nec: a.nec + x.e.days[kh].nec }), { disp: 0, nec: 0 }) : null;
+  const band = M.faixa([{ r: 'Rotas', v: op.length, s: area === 'TODAS' ? 'todas as áreas' : AREA_S[area] }, { r: 'Com déficit na semana', v: def, tom: def ? 'bad' : 'ok', s: def ? 'faltam pessoas em algum dia' : 'nenhuma rota em falta' }, { r: 'Adequadas', v: op.length - def, s: 'todos os dias cobertos' }, { r: 'Dias com déficit', v: diasDef, tom: diasDef ? 'warn' : '', s: 'somando todas as rotas' }, hj && { r: 'Hoje · disponíveis / necessários', v: `${hj.disp}/${hj.nec}`, tom: hj.disp < hj.nec ? 'bad' : '', s: ddmm(TODAY) }]);
+  return band + `<div class="card"><header><h2>Dimensionamento por rota</h2><p>Disponíveis / necessários por dia · toque na rota para ver as pessoas</p></header><div class="body pt0 pb0"><details class="calc"><summary>Como é calculado</summary><p>Necessário = efetivo padrão × atividades do dia ÷ carga padrão (em rota de turno, só a parte do quadro que trabalha por dia).</p><p>Disponível já desconta a folga da escala. Em rota de turno, D e N mostram quantos estão de dia e de noite (em vermelho quando um dos turnos fica sem ninguém).</p></details></div><div class="tw"><table class="dimt tcard"><thead><tr><th>Rota</th>${area === 'TODAS' ? '<th>Área</th>' : ''}<th class="r">Ef. padrão</th><th class="r">Carga</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}<th>Situação</th></tr></thead><tbody>
+  ${rows.map(({ r, e, dd }) => `<tr><td class="tc-t"><button class="btn ghost link" data-goescala="${esc(r.area + '|' + r.rota)}">${esc(r.rota)}</button></td>${area === 'TODAS' ? `<td class="muted tc-s">${AREA_S[r.area]}</td>` : ''}<td class="r num dimn" data-l="Ef. padrão">${r.ef}</td><td class="r num dimn" data-l="Carga">${r.carga}</td>${e.days.map((d, k) => `<td class="c dimd ${tk[k] ? 'today' : ''}" data-l="${DL[k]} ${add(UI.ini, k).slice(8)}"><span class="cell num ${!d.prog && r.rota !== 'GESTÃO' ? 'neu' : d.disp < d.nec ? 'bad' : 'ok'}" title="${d.prog} atividades · ${d.aloc} alocados · ${d.aloc - d.disp} ausentes${d.dispD + d.dispN ? ` · turno: ${d.dispD} de dia e ${d.dispN} de noite` : ''}">${d.disp}/${d.nec}</span>${d.dispD + d.dispN ? `<small class="dnx${(d.dispD === 0 || d.dispN === 0) && d.prog ? ' bad' : ''}">D${d.dispD} · N${d.dispN}</small>` : ''}</td>`).join('')}<td class="dimsit">${r.rota === 'GESTÃO' ? '<span class="pill neu">Gestão</span>' : dd ? `<span class="pill bad" title="Faltam pessoas em ${dd} ${dd > 1 ? 'dias' : 'dia'} da semana">Déficit · ${dd} ${dd > 1 ? 'dias' : 'dia'}</span>` : '<span class="pill ok">Adequado</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
 }
 function vEsBal() {
@@ -1364,9 +1394,10 @@ function vEsBal() {
   const ehAus = y => !y.auto && AUSENCIA.has(y.v); // só ausência de verdade (folga e férias ficam de fora)
   const sem = cs.map(c => ({ c, d: DAYS.map((_, k) => sitDia(c, add(UI.ini, k))) })).filter(x => x.d.some(ehAus)).sort((a, b) => a.c.nome.localeCompare(b.c.nome));
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
-  return miniEscala(area) + `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>
-  <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência · só atestado, afastamento, treinamento, falta, abono e suspensão (folga e férias não entram)</p></header>${sem.length ? `<div class="tw"><table class="efd"><thead><tr><th>Colaborador</th><th>Rota</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
-    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button></td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}">${ehAus(y) ? `<span class="sit ${y.v} ro" title="${SIT_NOME[y.v] || y.v}">${y.v}</span>` : '<span class="muted" aria-hidden="true">·</span>'}</td>`).join('')}</tr>`).join('')}
+  const mob = isMobile();
+  return `<div class="grid2 g-ef">${cardAusencias(area)}${cardBalanco(area, UI.ini)}</div>
+  <div class="card"><header><h2>Ausências da semana</h2><p>${weekLabel(UI.ini)} · ${sem.length} pessoa${sem.length === 1 ? '' : 's'} com alguma ausência (folga e férias não entram)</p></header>${sem.length ? `<div class="tw"><table class="efd${mob ? ' efmob' : ''}"><thead><tr><th>Colaborador</th>${mob ? '' : '<th>Rota</th>'}${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
+    ${sem.map(x => `<tr><td><button class="btn ghost link" data-goescala="${esc(x.c.area + '|' + x.c.rota)}"><b>${esc(title(x.c.nome))}</b></button>${mob ? `<div class="muted small">${esc(x.c.rota)}</div>` : ''}</td>${mob ? '' : `<td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>`}${x.d.map((y, k) => `<td class="c ${tk[k] ? 'today' : ''}">${ehAus(y) ? `<span class="sit ${y.v} ro" title="${SIT_NOME[y.v] || y.v}">${y.v}</span>` : '<span class="muted" aria-hidden="true">·</span>'}</td>`).join('')}</tr>`).join('')}
   </tbody></table></div>` : '<div class="body"><div class="empty">Ninguém ausente nesta semana.</div></div>'}</div>`;
 }
 // Líder de cada pessoa das Atividades, pela ficha do Efetivo (só para quem tem as fichas). Nomes do mesmo líder viram um só.
@@ -1384,12 +1415,16 @@ function liderDosColabs() {
 // O líder confirma a equipe no início do turno (dia, noite ou administrativo): presente, falta ou atraso, um toque por pessoa.
 // Vira a presença do dia (o mesmo Efetivo diário) e fica registrado quem confirmou e a que horas.
 const PER_NOME = { D: 'Turno diurno', N: 'Turno noturno', ADM: 'Administrativo' };
-function equipeCheckin() {
-  const areas = myAreas().filter(a => AREAS.includes(a)); const out = [];
+// k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Líder e supervisor fazem o check-in das áreas deles.
+function equipeCheckin(k = SK) {
+  const areas = ME && ['lider', 'supervisor'].includes(ME.papel) ? areasSitDe(k) : []; const out = [];
+  const sitK = c => (k === SK ? sitDia(c, TODAY) : sitTela(situacaoDoDia(c, TODAY, fontesSit(key => sitDoSet(k, key)))));
+  const ckMes = k === SK ? (DB.sitExtraMes(TODAY.slice(0, 7)).ck || {}) : ((((DB.dados(k) || {}).sitExtra || {})[TODAY.slice(0, 7)] || {}).ck || {});
+  const lista = k === SK ? COLABS : colabsDoSet(k);
   for (const a of areas) {
     const g = {};
-    for (const c of COLABS.filter(c => c.area === a)) { const x = sitDia(c, TODAY); if (x.auto || ['F', 'FE', 'DS'].includes(x.v)) continue; const per = periodoDe(c, TODAY) || 'ADM'; (g[per] = g[per] || []).push({ c, v: x.v }); }
-    for (const per of ['D', 'N', 'ADM']) if (g[per]) out.push({ a, per, ps: g[per].sort((x, y) => x.c.nome.localeCompare(y.c.nome)), ck: (DB.sitExtraMes(TODAY.slice(0, 7)).ck || {})[`ck|${TODAY}|${a}|${per}`] || '' });
+    for (const c of lista.filter(c => c.area === a)) { const x = sitK(c); if (x.auto || ['F', 'FE', 'DS'].includes(x.v)) continue; const per = x.periodo || 'ADM'; (g[per] = g[per] || []).push({ c, v: x.v }); }
+    for (const per of ['D', 'N', 'ADM']) if (g[per]) out.push({ a, per, ps: g[per].sort((x, y) => x.c.nome.localeCompare(y.c.nome)), ck: ckMes[`ck|${TODAY}|${a}|${per}`] || '' });
   }
   return out;
 }
@@ -1403,7 +1438,7 @@ function cardCheckin() {
     return `<div class="ckg"><div class="row-between"><b>${PER_NOME[g.per]} · ${AREA_S[g.a]}</b><span class="row-gap"><span class="muted small">${pres} de ${g.ps.length} presentes</span><button class="btn sm pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar</button></span></div><div class="plist">${g.ps.map(x => `<div class="pitem"><div class="minw"><div class="t">${esc(title(x.c.nome))}</div><div class="l">${esc(x.c.rota)}${turmaDe(x.c) ? ' · turma ' + esc(turmaDe(x.c)) : ''}</div></div><div class="bt ckbt"><button class="btn sm ${x.v === 'P' || x.v === 'HE' ? 'on ok' : ''}" data-ck="${esc(x.c.id)}|P" aria-pressed="${x.v === 'P' || x.v === 'HE'}">Presente</button><button class="btn sm ${x.v === 'ATR' ? 'on warn' : ''}" data-ck="${esc(x.c.id)}|ATR" aria-pressed="${x.v === 'ATR'}">Atraso</button><button class="btn sm ${x.v === 'FT' ? 'on bad' : ''}" data-ck="${esc(x.c.id)}|FT" aria-pressed="${x.v === 'FT'}">Falta</button>${!['P', 'HE', 'ATR', 'FT'].includes(x.v) ? `<span class="pill ${tom(x.v)}">${SIT_NOME[x.v] || x.v}</span>` : ''}</div></div>`).join('')}</div><button class="btn pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar check-in · ${pres} de ${g.ps.length} presentes</button></div>`;
   }).join('')}</div></div>`;
 }
-const checkinPendentes = () => { try { return equipeCheckin().filter(g => !g.ck && (g.per !== 'N' || new Date().getHours() >= 17)).length; } catch (e) { return 0; } };
+const checkinPendentes = (k = SK) => { try { return equipeCheckin(k).filter(g => !g.ck && (g.per !== 'N' || new Date().getHours() >= 17)).length; } catch (e) { return 0; } };
 function vEsDia() {
   const area = areaScope();
   const rs = rotasDa(area);
@@ -1431,8 +1466,9 @@ function vEsDia() {
   const gk = c => (porPer ? grpPer(c) : porLider ? 'L|' + (lid(c) || '~') : porGestao && nivelG(c) ? 'G|' + nivelG(c) : c.area + '|' + c.rota);
   const NOME_G = { 1: 'COORDENAÇÃO', 2: 'SUPERVISÃO', 3: 'LIDERANÇA', 4: 'SEGURANÇA DO TRABALHO' };
   cs = cs.slice().sort((x, y) => porGestao ? (!nivelG(x) - !nivelG(y)) || (nivelG(x) && nivelG(y) ? nivelG(x) - nivelG(y) : (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999)) || x.nome.localeCompare(y.nome) : porGrupo ? gk(x).localeCompare(gk(y)) || x.nome.localeCompare(y.nome) : (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
-  const pres = DAYS.map((_, k) => cs.filter(c => { const v = sitDia(c, add(UI.ini, k)).v; return v !== 'DS' && !AUSENTE.has(v); }).length);
-  const quadro = DAYS.map((_, k) => cs.filter(c => { const dt = add(UI.ini, k); return DB.sit(c.id + '|' + dt) !== 'DS' && !folgaEscala(c, dt); }).length);
+  // rodapé: presentes / escalados de cada dia (a mesma conta do topo e dos grupos; férias e folga lançada saem do total)
+  const ctDia = DAYS.map((_, k) => contarDia(cs, add(UI.ini, k)));
+  const pres = ctDia.map(x => x.presentes), quadro = ctDia.map(x => x.escalados);
   const celula = (c, k) => {
     const dt = add(UI.ini, k); const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
@@ -1452,16 +1488,19 @@ function vEsDia() {
     if (todas && !q.trim() && g !== ant) {
       ant = g; const doG = cs.filter(x => gk(x) === g);
       const rot = porPer ? `${g.slice(2)}${['1', '2'].includes(g[0]) ? ` · turma ${[...new Set(doG.map(x => turmaDe(x)).filter(Boolean))].sort().join(', ')}` : ''}` : porLider ? (g === 'L|~' ? 'Sem líder na ficha' : 'LÍDER ' + g.slice(2)) : g.startsWith('G|') ? NOME_G[g.slice(2)] : c.rota; const kh = DAYS.findIndex((_, k) => tk[k]);
-      const ph = kh >= 0 ? doG.filter(x => { const v = sitDia(x, TODAY).v; return v !== 'DS' && !AUSENTE.has(v); }).length : null;
-      const eh = kh >= 0 ? doG.filter(x => { const s = sitDia(x, TODAY); return s.v !== 'DS' && !s.auto && s.v !== 'F' && s.v !== 'FE'; }).length : null; // folga e férias não contam como escalado
-      cab = `<tr class="grp-row"><th colspan="${isMobile() ? 8 : 9}">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porGrupo && !g.startsWith('G|') ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porGrupo || porGestao ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${porPer && g[0] >= '4' ? `${doG.length} pessoa${doG.length === 1 ? '' : 's'}` : ph != null ? `${ph}/${eh} presentes hoje${(() => { if (porPer) return ''; const pp = { D: 0, N: 0 }; doG.forEach(x => { const s = sitDia(x, TODAY); if (!s.auto && !AUSENTE.has(s.v)) { const p = periodoDe(x, TODAY); if (p) pp[p]++; } }); return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      const ctG = kh >= 0 ? contarDia(doG, TODAY) : null;
+      const ph = ctG ? ctG.presentes : null;
+      const eh = ctG ? ctG.escalados : null; // folga e férias não contam como escalado
+      cab = `<tr class="grp-row"><th colspan="${isMobile() ? 8 : 9}">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porGrupo && !g.startsWith('G|') ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porGrupo || porGestao ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${porPer && g[0] >= '4' ? `${doG.length} pessoa${doG.length === 1 ? '' : 's'}` : ph != null ? `${ph}/${eh} presentes hoje${(() => { if (porPer) return ''; const pp = ctG.periodo; return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
     }
     if (fechado) return cab;
     return cab + `<tr><td class="fnome"><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() || porGrupo || (porGestao && nivelG(c)) ? `${esc(c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${isMobile() ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${DAYS.map((_, k) => celula(c, k)).join('')}</tr>`;
   }).join('');
-  return miniEscala(area) + (tk.includes(true) ? cardCheckin() : '') + `<div class="card"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
-  <div class="body lbar efbar">${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida">${I.dl} Exportar semana</button>` : ''}${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}</div>
-  ${recolhe ? `<div class="body pt0 pb0 row-gap"><button class="btn sm" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
+  // No celular a faixa do Efetivo fica compacta (4 à vista) e os turnos de hoje numa linha que desliza, para a lista subir.
+  const faixaEf = miniEscala(area).replace('<div class="hojeturma">', '<div class="hojeturma scrollx">').replace('<div class="mini">', '<div class="mini compacta">');
+  return faixaEf + (tk.includes(true) ? cardCheckin() : '') + `<div class="card efcard"><header><h2>Efetivo diário</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'}</p></header>
+  <div class="body lbar efbar efbar1">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida" style="margin-left:auto">${I.dl} Exportar semana</button>` : ''}</div>
+  ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
   <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
   <div class="tw"><table class="efd${isMobile() ? ' efmob' : ''}"><thead><tr><th>Colaborador</th>${isMobile() ? '' : '<th>Função</th>'}${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${DL[k]}<br><span class="thd">${add(UI.ini, k).slice(8)}</span></th>`).join('')}</tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="${isMobile() ? 8 : 9}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
@@ -1472,25 +1511,25 @@ function vEsDia() {
 const NOME_AP = { R: 'Realizada', N: 'Não realizada', E: 'Extra' };
 const TOM_AP = { R: 'ok', N: 'bad', E: 'ext' };
 function vAprovar() {
-  const minhas = areasVerAprov(); const pode = aprovador();
+  const minhas = areasVerAprov(); const podeA = a => areasAprov().includes(a); const pode = minhas.some(podeA);
   if (!minhas.length) return '<div class="card"><div class="empty">Seu perfil não acompanha a aprovação.</div></div>';
   const area = minhas.includes(UI.aprArea) ? UI.aprArea : 'TODAS';
   const todas = listaAprov(minhas);
   const xs = area === 'TODAS' ? todas : todas.filter(x => x.doc.area === area);
-  const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev');
+  const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev'); const nA = xs.filter(x => podeA(x.doc.area)).length;
   // prazo de aprovação: o que o líder apontou num dia deve ser aprovado até o fim do dia seguinte
   const PRAZO_APROV = 1; const limite = add(TODAY, -PRAZO_APROV); const foraPrazo = xs.filter(x => x.dt < limite).length;
   const grupos = new Map();
   for (const x of xs) { const key = `${x.dt}|${x.doc.area}|${x.p.rota}`; if (!grupos.has(key)) grupos.set(key, []); grupos.get(key).push(x); }
   let h = minhas.length > 1 ? `<div class="rchips linha" role="group" aria-label="Área"><button class="rchip" data-aprarea="TODAS" aria-pressed="${area === 'TODAS'}">Todas<span class="c num">${todas.length || '✓'}</span></button>${minhas.map(a => { const n = todas.filter(x => x.doc.area === a).length; return `<button class="rchip" data-aprarea="${a}" aria-pressed="${a === area}">${AREA_S[a]}<span class="c num">${n || '✓'}</span></button>`; }).join('')}</div>` : '';
   h += `<div class="mini"><div><b class="num" style="color:${xs.length ? 'var(--st-atr)' : 'inherit'}">${xs.length}</b><span>Aguardando aprovação</span></div><div><b class="num">${grupos.size}</b><span>Rotas e dias</span></div><div><b class="num">${dev.length}</b><span>Devolvidas ao líder</span></div><div><b class="num" style="color:${foraPrazo ? 'var(--st-nreal)' : 'inherit'}">${foraPrazo}</b><span>Fora do prazo (mais de 1 dia)</span></div></div>
-  <div class="row-between"><p class="muted small m0">${pode ? 'O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.' : 'Só o supervisor da área aprova ou devolve. Aqui você acompanha o que está esperando.'}</p>${pode && xs.length > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${xs.length} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${xs.length})</button>`) : ''}</div>`;
+  <div class="row-between"><p class="muted small m0">${pode ? 'O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.' : 'Só o supervisor da área aprova ou devolve. Aqui você acompanha o que está esperando.'}${ME.papel === 'admin' && pode ? ` <b>Você aprova como reserva nas áreas sem supervisor: ${areasAprov().map(a => AREA_S[a]).join(', ')}.</b>` : ''}</p>${nA > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${nA} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${nA})</button>`) : ''}</div>`;
   if (!xs.length) h += '<div class="card"><div class="empty">Nada aguardando aprovação. Tudo o que os líderes apontaram já foi conferido.</div></div>';
   const abertos = UI.aprTodas || [];
   for (const [key, it] of [...grupos.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(0, 30)) { // mais antigos primeiro: o que está fora do prazo fica no topo
     const [dt, a, r] = key.split('|'); const tudo = abertos.includes(key);
-    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar${dt < limite ? ` · <span class="pill bad">fora do prazo · há ${Math.round((pd(TODAY) - pd(dt)) / 864e5)} dias</span>` : ''}</p>${pode ? `<span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span>` : ''}</header><div class="body"><div class="plist">
-    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div>${pode ? `<div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div>` : ''}</div>`; }).join('')}
+    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar${dt < limite ? ` · <span class="pill bad">fora do prazo · há ${Math.round((pd(TODAY) - pd(dt)) / 864e5)} dias</span>` : ''}</p>${podeA(a) ? `<span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span>` : ''}</header><div class="body"><div class="plist">
+    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div>${podeA(x.doc.area) ? `<div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div>` : ''}</div>`; }).join('')}
     ${it.length > 8 ? `<div class="pitem"><span class="muted">${tudo ? `${it.length} nesta rota` : `+ ${it.length - 8} nesta rota`}</span><button class="btn" data-act="aprTodas" data-k="${esc(key)}">${tudo ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
     </div></div></div>`;
   }
@@ -1563,7 +1602,7 @@ function vCausas() {
   h += `<div class="card"><header><h2>Plano de ação</h2><p>O que está sendo feito para cada causa · o efeito compara a média por semana nas 4 semanas antes e depois da ação</p></header><div class="body">${acoes.length ? `<div class="plist">${acoes.slice().sort((a, b) => (ord[a.status] || 0) - (ord[b.status] || 0) || String(a.prazo || '9').localeCompare(String(b.prazo || '9'))).map(a => {
     const ef = efeitoAcao(a.causa, a.area, a.em || TODAY); const venc = a.status !== 'feita' && a.prazo && a.prazo < TODAY; const ed = podeAcao(a.area);
     return `<div class="pitem acao"><div class="minw"><div class="t">${esc(a.acao)}</div><div class="l">${esc(a.causa)} · ${a.area === 'TODAS' ? 'todas as áreas' : AREA_S[a.area] || esc(a.area)}${a.resp ? ` · resp. ${esc(a.resp)}` : ''}${a.prazo ? ` · prazo ${ddmm(a.prazo)}` : ''}</div><div class="l">${ef.antes != null ? `Antes: ${nf(ef.antes)}/semana` : 'Antes: sem dados'} · ${ef.depois != null ? `depois: <b>${nf(ef.depois)}/semana</b>${ef.antes != null ? (ef.depois < ef.antes ? ' <span class="pill ok">caiu</span>' : ef.depois > ef.antes ? ' <span class="pill bad">subiu</span>' : ' <span class="pill neu">igual</span>') : ''}` : 'depois: aguardando a próxima semana'}</div></div><div class="row-gap">${a.status === 'feita' ? '<span class="pill ok">feita</span>' : venc ? '<span class="pill bad">prazo vencido</span>' : '<span class="pill warn">aberta</span>'}${ed ? (a.status === 'feita' ? `<button class="btn sm" data-act="acaoSt" data-k="${esc(a.id)}|aberta">Reabrir</button>` : `<button class="btn sm pri" data-act="acaoSt" data-k="${esc(a.id)}|feita">Concluir</button>`) + `<button class="btn sm ghost" data-act="acaoSt" data-k="${esc(a.id)}|cancelada" title="Tirar do plano">✕</button>` : ''}</div></div>`;
-  }).join('')}</div>` : `<div class="empty">Nenhuma ação ainda.${acompanha() ? ' Toque em “+ Ação” ao lado de uma causa no Pareto.' : ''}</div>`}</div></div>`;
+  }).join('')}</div>` : `<div class="empty"><b>Nenhuma ação ainda</b><span>${acompanha() ? 'Toque em “+ Ação” ao lado de uma causa no Pareto para registrar o que será feito.' : 'As ações registradas pela supervisão aparecem aqui.'}</span></div>`}</div></div>`;
   return h;
 }
 function novaAcaoSheet(causa) {
@@ -1706,7 +1745,7 @@ function vResumoDia() {
   }
   const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(x => x.id));
   const pa = listaAprov(as).filter(x => ids.has(x.doc.id) && x.k === k).length;
-  const cs = colabsDa(area).filter(c => DB.sit(c.id + '|' + d) !== 'DS');
+  const cs = colabsDa(area).filter(c => !desligadoNoDia(c, d));
   const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && (AUSENCIA.has(o.x.v) || PARCIAL.has(o.x.v))).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
   const folga = cs.filter(c => { const x = sitDia(c, d); return x.auto || x.v === 'F' || x.v === 'FE'; }).length;
   const pres = cs.length - aus.filter(o => !PARCIAL.has(o.x.v)).length - folga;
@@ -1731,15 +1770,8 @@ function vResumoHE() {
   const area = areaScope(); const semana = DAYS.map((_, k) => add(UI.ini, k));
   if (!UI.rDia || !semana.includes(UI.rDia)) UI.rDia = semana.includes(TODAY) ? TODAY : semana[0];
   const dias = rDia() ? [UI.rDia] : semana; const cfg = heCfg();
-  const regs = [];
-  for (const c of colabsDa(area)) {
-    const r = escala().regimes[regimeDe(c)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm;
-    for (const d of dias) {
-      const key = c.id + '|' + d; if (DB.sit(key) !== 'HE') continue;
-      const inf = DB.sitInfo(key); const h = horasHE(inf.hed); const cob = cobDoDia(d).find(x => x.sub === c.id);
-      regs.push({ c, d, orig: inf.he || '', det: inf.hed, horas: h, conta: h == null ? est : h, cobre: cob ? nomeDe(cob.aus) : '' });
-    }
-  }
+  // os mesmos registros do Banco de horas extras (registrosHE), só que do dia ou da semana
+  const regs = registrosHE(area, null, dias).map(x => { const cob = cobDoDia(x.d).find(y => y.sub === x.c.id); return { ...x, cobre: cob ? nomeDe(cob.aus) : '' }; });
   regs.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.c.nome.localeCompare(b.c.nome)));
   const soma = l => l.reduce((n, x) => n + x.conta, 0);
   const tot = soma(regs), inf = regs.filter(x => x.horas != null), sem = regs.filter(x => x.horas == null);
@@ -1815,10 +1847,11 @@ function horarioHE(c, dias, fim, k) {
   ['heIni', 'heFim', 'heInt'].forEach(i => $(i) && $(i).addEventListener('input', atual)); atual();
 }
 const heCfg = () => ({ ciclo: 12, adm: 8, limite: 0, ...((DB.cache.config && DB.cache.config.he) || {}) });
-// Registros de hora extra do mês: um por pessoa e dia, com horário (quando informado) e as horas.
-function registrosHE(area, m) {
+// Registros de hora extra do mês (ou dos dias pedidos): um por pessoa e dia, com horário (quando informado) e as horas.
+// Usado no Banco de horas extras, na exportação e no Resumo de HE (dia ou semana).
+function registrosHE(area, m, diasPedidos) {
   const cfg = heCfg(); const out = [];
-  const dias = []; for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
+  const dias = diasPedidos ? [...diasPedidos] : []; if (!diasPedidos) for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
   for (const c of colabsDa(area)) {
     const r = escala().regimes[regimeDe(c)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm;
     for (const d of dias) {
@@ -1842,7 +1875,7 @@ function vEsHe() {
   const motL = Object.entries(mot).sort((a, b) => b[1] - a[1]); const motMx = motL.length ? motL[0][1] : 1;
   return `<div class="mini"><div><b class="num">${fmtH(T.hInf + T.hEst)}</b><span>Horas no mês</span></div><div><b class="num">${fmtH(T.hInf)}</b><span>Com horário informado</span></div><div><b class="num" style="color:${T.semH ? 'var(--st-atr)' : 'inherit'}">${T.semH}</b><span>Sem horário (${fmtH(T.hEst)} estimadas)</span></div><div><b class="num">${T.dias}</b><span>Registros</span></div><div><b class="num">${T.DIKMA}</b><span>A pedido da Dikma</span></div><div><b class="num">${T.ARCELOR}</b><span>A pedido da ArcelorMittal</span></div>${cfg.limite ? `<div><b class="num" style="color:${acima ? 'var(--st-nreal)' : 'inherit'}">${acima}</b><span>Acima do limite (${cfg.limite} dias)</span></div>` : ''}</div>
   <div class="card"><header><h2>Registros</h2><p>${monthLabel(m)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · horário de início e fim de cada hora extra${canEditSit(area === 'TODAS' ? null : area) || todasAreas() ? ' · toque em “Informar” ou no horário para ajustar' : ''}</p><span class="r row-gap"><label class="btn sm"><input type="checkbox" id="heSemH" ${soSem ? 'checked' : ''}> Só sem horário</label>${!framed && !isMobile() && regs.length ? `<button class="btn sm" data-act="expHe">${I.dl} Exportar Excel</button>` : ''}</span></header>
-  ${lista.length ? `<div class="tw"><table class="hetab"><thead><tr><th>Data</th><th>Colaborador</th><th>Rota</th><th>Início</th><th>Fim</th><th class="r">Horas</th><th>A pedido de</th><th>Motivo</th></tr></thead><tbody>${lista.slice(0, LIM).map(x => { const pode = canEditSit(x.c.area); const hr = x.det && x.det.ini ? `${esc(x.det.ini)}` : ''; return `<tr${x.horas == null ? ' class="semh"' : ''}><td class="num">${DAYS[(pd(x.d).getDay() + 6) % 7]} ${ddmm(x.d)}</td><td><b>${esc(title(x.c.nome))}</b>${x.per ? ` <span class="tag">${x.per === 'N' ? 'noite' : 'dia'}</span>` : ''}</td><td class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.det && x.det.ini ? `<td class="num">${pode ? `<button class="btn ghost link" data-heh="${esc(x.key)}">${hr}</button>` : hr}</td><td class="num">${esc(x.det.fim)}${+x.det.int ? ` <small class="muted">−${x.det.int} min</small>` : ''}</td><td class="r num"><b>${fmtH(x.horas)}</b></td>` : `<td colspan="2">${pode ? `<button class="btn sm" data-heh="${esc(x.key)}">${I.relogio} Informar</button>` : '<span class="muted">sem horário</span>'}</td><td class="r num muted" title="Estimado: ${x.est} h por dia">~${fmtH(x.est)}</td>`}<td>${x.orig ? HE_ORIG[x.orig] : '<span class="muted">—</span>'}</td><td class="small">${x.det ? esc(x.det.mot || '') + (x.det.obs ? `<div class="muted">${esc(x.det.obs)}</div>` : '') : ''}</td></tr>`; }).join('')}</tbody></table></div>${lista.length > LIM ? `<div class="body"><button class="btn" data-act="heMais">Mostrar mais ${Math.min(100, lista.length - LIM)}</button></div>` : ''}` : `<div class="body"><div class="empty">${soSem ? 'Todas as horas extras do mês têm horário informado.' : 'Nenhuma hora extra lançada neste mês.'}</div></div>`}</div>
+  ${lista.length ? `<div class="tw"><table class="hetab tcard"><thead><tr><th>Data</th><th>Colaborador</th><th>Rota</th><th>Início</th><th>Fim</th><th class="r">Horas</th><th>A pedido de</th><th>Motivo</th></tr></thead><tbody>${lista.slice(0, LIM).map(x => { const pode = canEditSit(x.c.area); const hr = x.det && x.det.ini ? `${esc(x.det.ini)}` : ''; return `<tr${x.horas == null ? ' class="semh"' : ''}><td class="num" data-l="Data">${DAYS[(pd(x.d).getDay() + 6) % 7]} ${ddmm(x.d)}</td><td class="tc-t"><b>${esc(title(x.c.nome))}</b>${x.per ? ` <span class="tag">${x.per === 'N' ? 'noite' : 'dia'}</span>` : ''}</td><td class="muted small tc-s">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</td>${x.det && x.det.ini ? `<td class="num" data-l="Início">${pode ? `<button class="btn ghost link" data-heh="${esc(x.key)}">${hr}</button>` : hr}</td><td class="num" data-l="Fim">${esc(x.det.fim)}${+x.det.int ? ` <small class="muted">−${x.det.int} min</small>` : ''}</td><td class="r num" data-l="Horas"><b>${fmtH(x.horas)}</b></td>` : `<td colspan="2" class="tc-acao">${pode ? `<button class="btn sm" data-heh="${esc(x.key)}">${I.relogio} Informar</button>` : '<span class="muted">sem horário</span>'}</td><td class="r num muted" data-l="Horas" title="Estimado: ${x.est} h por dia">~${fmtH(x.est)}</td>`}<td data-l="A pedido de">${x.orig ? HE_ORIG[x.orig] : '<span class="muted">—</span>'}</td><td class="small tc-full" data-l="Motivo">${x.det ? esc(x.det.mot || '') + (x.det.obs ? `<div class="muted">${esc(x.det.obs)}</div>` : '') : ''}</td></tr>`; }).join('')}</tbody></table></div>${lista.length > LIM ? `<div class="body"><button class="btn" data-act="heMais">Mostrar mais ${Math.min(100, lista.length - LIM)}</button></div>` : ''}` : `<div class="body"><div class="empty">${soSem ? 'Todas as horas extras do mês têm horário informado.' : 'Nenhuma hora extra lançada neste mês.'}</div></div>`}</div>
   <div class="grid2"><div class="card"><header><h2>Por pessoa</h2><p>Horas informadas + estimadas para os dias sem horário (${cfg.ciclo} h turno · ${cfg.adm} h administrativo)</p></header>${linhas.length ? `<div class="tw"><table><thead><tr><th>Colaborador</th><th class="r">Dias</th><th class="r">Informadas</th><th class="r">Estimadas</th><th class="r">Total</th></tr></thead><tbody>${linhas.map(x => `<tr${cfg.limite && x.dias > cfg.limite ? ' class="acima"' : ''}><td><b>${esc(title(x.c.nome))}</b><div class="muted small">${esc(x.c.rota)}${area === 'TODAS' ? ' · ' + AREA_S[x.c.area] : ''}</div></td><td class="r num">${x.dias}${cfg.limite && x.dias > cfg.limite ? ' <span class="pill bad">acima</span>' : ''}</td><td class="r num">${x.hInf ? fmtH(x.hInf) : '·'}</td><td class="r num muted">${x.hEst ? '~' + fmtH(x.hEst) : '·'}</td><td class="r num"><b>${fmtH(x.total)}</b></td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><div class="empty">Ninguém com hora extra neste mês.</div></div>'}</div>
   <div class="card"><header><h2>Por motivo</h2><p>Horas no mês</p></header><div class="body">${motL.length ? `<div class="bars">${motL.map(([k, h]) => `<div class="barrow"><span class="n">${esc(k)}</span><div class="stack"><i style="width:${h / motMx * 100}%;background:${k === 'Sem horário informado' ? 'var(--st-prog)' : 'var(--st-extra)'}"></i></div><span class="p num">${fmtH(h)}</span></div>`).join('')}</div>` : '<div class="empty">Sem horas extras.</div>'}</div></div></div>
   <div class="card"><header><h2>Ajustes</h2><p>${ed ? 'Valem para todos' : 'Só o administrador ou o gestor altera'}</p></header><div class="body row-gap"><label class="sel"><span>Horas por dia · turno</span><input class="in numin" type="number" min="1" max="24" data-hecfg="ciclo" value="${cfg.ciclo}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Horas por dia · administrativo</span><input class="in numin" type="number" min="1" max="24" data-hecfg="adm" value="${cfg.adm}" ${ed ? '' : 'disabled'}></label><label class="sel"><span>Limite de dias no mês (0 = sem limite)</span><input class="in numin" type="number" min="0" max="31" data-hecfg="limite" value="${cfg.limite}" ${ed ? '' : 'disabled'}></label></div></div>`;
@@ -1866,7 +1899,7 @@ function vPend() {
   let h = '';
   if (myAreas().length > 1) h += `<div class="filters">${selMinhaArea('fArea')}</div>`;
   if (!myArea()) h += `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fArea"><option value="TODAS">Todas as áreas</option>${AREAS.map(a => `<option value="${a}" ${a === UI.area ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</select></label></div>`;
-  h += `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${at.length}</b><span>Atrasadas</span></div><div><b class="num">${lista.length}</b><span>Rotas com atraso</span></div><div><b class="num">${at.filter(x => x.dt >= add(TODAY, -7)).length}</b><span>Últimos 7 dias</span></div><div><b class="num">${at.length ? ddmm(at[0].dt) : '—'}</b><span>Mais antiga</span></div></div><p class="muted small m0">Considera o mês atual e o anterior. Sem apontamento, a atividade conta como atrasada; marque o que foi feito ou justifique o que não foi.</p>`;
+  h += `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${at.length}</b><span>Atrasadas</span></div><div><b class="num">${lista.length}</b><span>Rotas com atraso</span></div><div><b class="num">${at.filter(x => x.dt >= add(TODAY, -7)).length}</b><span>Últimos 7 dias</span></div><div><b class="num">${at.length ? ddmm(at[0].dt) : '—'}</b><span>Mais antiga</span></div></div><p class="muted small m0">Considera os últimos 60 dias (a mesma conta do menu e do Meu dia). Sem apontamento, a atividade conta como atrasada; marque o que foi feito ou justifique o que não foi.</p>`;
   if (!at.length) h += '<div class="card"><div class="empty">Tudo apontado. Nenhuma atividade atrasada.</div></div>';
   h += '<div class="grid2"><div class="stackcol">';
   for (const [key, xs] of lista.slice(0, 12)) {
@@ -1926,9 +1959,19 @@ function vPlano() {
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
-  ${ps.slice(0, UI.more || 120).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" aria-label="Rota de ${p.id}">${[...new Set([p.rota, ...rts])].map(r => `<option ${r === p.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" aria-label="Tipo de ${p.id}">${[...new Set([p.tipo, ...tipos()])].map(t => `<option ${t === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
-  </tbody></table></div>${ps.length > (UI.more || 120) ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${(UI.more || 120) + 300}">Mostrar mais ${Math.min(300, ps.length - (UI.more || 120))} de ${ps.length - (UI.more || 120)} · a tela fica mais leve mostrando por partes</button></div>` : ''}</div>`;
+  ${ps.slice(0, UI.more || 60).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" data-opts="rota" aria-label="Rota de ${p.id}"><option selected>${esc(p.rota)}</option></select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" data-opts="tipo" aria-label="Tipo de ${p.id}"><option selected>${esc(p.tipo)}</option></select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
+  </tbody></table></div>${ps.length > (UI.more || 60) ? `<div class="body pt0"><button class="btn center" style="white-space:normal;max-width:100%" data-act="more" data-n="${(UI.more || 60) + 120}">Mostrar mais ${Math.min(120, ps.length - (UI.more || 60))} (faltam ${ps.length - (UI.more || 60)})</button></div>` : ''}</div>`;
 }
+
+// Plano padrão: cada lista (rota, tipo) nasce só com o valor atual; as opções entram quando a pessoa toca nela.
+// Com 120 linhas, montar todas as opções de todas as listas deixava a tela com ~5 mil elementos (cerca de 1 s no celular).
+function encherOpcoes(sel) {
+  if (!sel || sel.dataset.cheio) return; sel.dataset.cheio = '1';
+  const atual = sel.value; const id = sel.dataset.prota || (sel.dataset.pcampo || '').split('|')[0]; const p = PL.get(id);
+  const lista = sel.dataset.opts === 'rota' ? rotasDa(p ? p.area : UI.pArea).filter(r => r.rota !== 'GESTÃO').map(r => r.rota) : tipos();
+  sel.innerHTML = [...new Set([atual, ...lista])].map(v => `<option ${v === atual ? 'selected' : ''}>${esc(v)}</option>`).join('');
+}
+for (const ev of ['pointerdown', 'focusin', 'keydown']) document.addEventListener(ev, e => { const t = e.target; if (t && t.matches && t.matches('select[data-opts]')) encherOpcoes(t); }, true);
 
 /* ---------------- GERADOR ---------------- */
 function vGerador() {
@@ -2013,7 +2056,7 @@ function vPerfis() {
     const vs = VIEWS.filter(v => v.mod === g.mod && !['usuarios', 'perfis'].includes(v.id));
     return `<tr class="grp-row"><th colspan="${PERFIS_ABAS.length + 2}">${esc(g.t)}</th></tr>` + vs.map(v => `<tr><td><b>${esc(v.nome)}</b>${v.admin ? ' <span class="tag-adm">Administração</span>' : ''}</td><td class="c muted" aria-label="Administrador sempre vê">✓</td>${PERFIS_ABAS.map(([p, n]) => { const ok = configuravel(p, v); const on = doPerfil(p, v, R); return `<td class="c"><input type="checkbox" class="tgl" data-perm="${p}|${v.id}" ${on ? 'checked' : ''} ${ok ? '' : 'disabled'} aria-label="${esc(v.nome)} para ${n}"></td>`; }).join('')}</tr>`).join('') + ITENS.filter(it => it.mod === g.mod).map(it => `<tr class="item-perm"><td><span class="it-ic" aria-hidden="true">↳</span> ${esc(it.nome)}<div class="muted small">${esc(it.d)}</div></td><td class="c muted" aria-label="Administrador sempre pode">✓</td>${PERFIS_ABAS.map(([p, n]) => { const ok = itemDoPapel(p, it); return ok ? `<td class="c"><input type="checkbox" class="tgl" data-perm="${p}|${it.id}" ${itemPerfil(p, it, R) ? 'checked' : ''} aria-label="${esc(it.nome)} para ${n}"></td>` : '<td class="c muted" title="Este perfil não faz isso">—</td>'; }).join('')}</tr>`).join('');
   }).join('');
-  return `<div class="card"><header><h2>Abas e ações por perfil</h2><p>Abas: desligada = some do menu e não abre nem por link. Ações (↳): o que o perfil pode fazer dentro das abas; desligada = o botão some. — = o perfil não faz isso. O administrador pode tudo sempre. Pátio e Bateria usam a mesma configuração.</p></header>
+  return `<div class="card"><header><h2>Abas e ações por perfil</h2><p>O administrador pode tudo sempre · Pátio e Bateria usam a mesma configuração</p></header><div class="body pt0 pb0"><details class="calc"><summary>Como ler esta tabela</summary><p>Abas: desligada = some do menu e não abre nem por link.</p><p>Ações (↳): o que o perfil pode fazer dentro das abas; desligada = o botão some. — = o perfil não faz isso.</p></details></div>
   <div class="tw"><table class="perm"><thead><tr><th>Aba</th><th class="c">Admin<br><small>sempre tudo</small></th>${PERFIS_ABAS.map(([, n]) => `<th class="c">${n}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table></div>
   <div class="body row-gap"><button class="btn pri" data-act="permSalvar" ${mudou ? '' : 'disabled'}>${mudou ? 'Salvar permissões' : 'Tudo salvo'}</button><button class="btn" data-act="permPadrao">Voltar ao padrão</button>${mudou ? '<button class="btn ghost" data-act="permDesfazer">Desfazer</button>' : ''}<span class="muted small">Abas de administração só podem ser ligadas para o Gestor. O que cada perfil pode alterar continua valendo pelo perfil.</span></div></div>
   <div class="card"><header><h2>Exceção por pessoa</h2><p>Opcional. Abra <b>Usuários e acessos</b> e use <b>Personalizar</b> na coluna Abas para dar ou tirar abas de uma pessoa sem mudar o perfil inteiro.</p></header>
@@ -2057,7 +2100,7 @@ function vImportar() {
 // opts: [{ t, d, ic, cur, larga }] · cfg.grade: as opções curtas viram uma grade (situações do dia), as largas ficam embaixo
 function sheet(titleTxt, sub, opts, onPick, cfg = {}) {
   const L = $('layer');
-  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cfg.grade ? ' comgrade' : ''}" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}"><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}<div class="opts${cfg.grade ? ' grade' : ''}">${opts.map((o, i) => `<button class="opt${o.larga ? ' larga' : ''}" data-o="${i}" ${o.cur ? 'aria-current="true"' : ''}>${o.ic || ''}<span>${esc(o.t)}${o.d ? `<br><small class="muted">${esc(o.d)}</small>` : ''}</span></button>`).join('')}</div><button class="btn center" data-o="x">${cfg.fechar || 'Cancelar'}</button></div></div>`;
+  L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet${cfg.grade ? ' comgrade' : ''}" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}"><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}<div class="opts${cfg.grade ? ' grade' : ''}">${opts.map((o, i) => `${o.sec ? `<div class="opt-sec">${esc(o.sec)}</div>` : ''}<button class="opt${o.larga ? ' larga' : ''}${o.cls ? ' ' + o.cls : ''}" data-o="${i}" ${o.cur ? 'aria-current="true"' : ''}>${o.ic || ''}<span>${esc(o.t)}${o.d ? `<br><small class="muted">${esc(o.d)}</small>` : ''}</span>${o.fim || ''}</button>`).join('')}</div><button class="btn center" data-o="x">${cfg.fechar || 'Cancelar'}</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') close(); };
   const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
   document.addEventListener('keydown', kd);
@@ -2209,6 +2252,9 @@ function medirTopo() {
 }
 function afterRender() {
   medirTopo();
+  M.ajustarFaixas($('view'));
+  // Fitas que deslizam de lado (áreas e rotas no Apontar): rolam até o botão escolhido, que antes podia ficar fora da tela.
+  document.querySelectorAll('#view .rchips.linha').forEach(f => { const a = f.querySelector('[aria-pressed="true"]'); if (!a || f.scrollWidth <= f.clientWidth) return; const fr = f.getBoundingClientRect(), ar = a.getBoundingClientRect(); if (ar.left < fr.left || ar.right > fr.right) f.scrollLeft += ar.left + ar.width / 2 - (fr.left + fr.width / 2); });
   const on = (id, ev, fn) => { const e = $(id); if (e && !e['_on_' + ev]) { e['_on_' + ev] = 1; e.addEventListener(ev, fn); } };
   on('fMes', 'change', e => mudarFiltro('fMes', e.target.value));
   on('fSem', 'change', e => mudarFiltro('fSem', e.target.value));
@@ -2266,10 +2312,12 @@ document.addEventListener('click', async e => {
     if (d.go === '__more') {
       const naBarra = barraDe().map(x => x[0]);
       const vs = viewsDoModulo().filter(v => !naBarra.includes(v.id));
-      const outros = modsDe(ME).filter(m => m !== UI.modulo).map(m => ({ t: 'Ir para ' + MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${I.swap}</span>` }));
+      // "Mais" em seções: as abas deste módulo primeiro, depois os outros módulos e, por fim, conta e tela.
+      const outros = modsDe(ME).filter(m => m !== UI.modulo).map((m, i) => ({ t: MODS[m].nome, d: MODS[m].sub, id: '__mod_' + m, ic: `<span class="opt-ic">${MOD_IC[m] || I.swap}</span>`, sec: i ? '' : 'Outros módulos' }));
       const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
       const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), ...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Atividades, equipamentos, efetivo, frequência e férias', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
-      return sheet('Mais', '', [...outros, ...vs.map(v => ({ t: v.nome, id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>` })), ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
+      if (extra.length) extra[0].sec = 'Conta e tela';
+      return sheet('Mais', '', [...vs.map((v, i) => ({ t: nomeCurto(v), id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>`, sec: i ? '' : 'Neste módulo · ' + MODS[UI.modulo].curto })), ...outros, ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
     }
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
     irParaModuloDa(d.go);
@@ -2286,7 +2334,8 @@ document.addEventListener('click', async e => {
   if (d.escfereq) { const R = rascEsc(); const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data)); R.feriados = R.feriados.concat(eqF.map(f => ({ data: f.data, desc: f.desc, semOp: true }))); render(); toast(`${eqF.length} feriado(s) copiados · salve para valer`); return; }
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
-    const [mod, view, area] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
+    const [mod, view, area, conj] = d.md.split('|'); if (!modsDe(ME).includes(mod)) return;
+    if (conj && SETS[conj] && setsDe(ME).includes(conj)) UI.esSet = conj; // Meu dia: abre no conjunto (Pátio ou Bateria) do aviso
     if (view === 'escala') { UI.esSet = mod === 'bateria' ? 'bateria' : 'patio'; UI.area = area || UI.area; irEscala(''); return; }
     const novaOc = view === 'gnovaoc';
     UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = { gcomigo: 'gcolab', gnovaoc: 'gcolab' }[view] || view; UI.confirm = null;
@@ -2395,6 +2444,7 @@ document.addEventListener('click', async e => {
     case 'limparProg': UI.q = ''; UI.soPend = false; UI.rota = 'TODAS'; UI.tipo = 'TODOS'; render(); break;
     case 'progTodas': { const area = areaScope(); const ks = new Set(); for (const doc of docsFor({ ini: UI.ini, area })) doc.ids.forEach(id => { const p = PL.get(id); if (p) ks.add(doc.area + '|' + p.rota); }); UI.progAbertas = (UI.progAbertas || []).length ? [] : [...ks]; render(); break; }
     case 'filtros': filtroSheet(); break;
+    case 'modsheet': modSheet(); break;
     case 'busca': abrirBusca(); break;
     case 'more': UI.more = +d.n; render(); break;
     case 'expJus': exportJus(); break;
@@ -2580,7 +2630,7 @@ if (DB.definirChaveArea) DB.definirChaveArea(c => {
   const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
   return ok ? chaveFicha(PES.lotacao(c).area) : null;
 });
-const MD = criarMeuDia({ checkinPend: () => checkinPendentes(), jusPend: () => jusPendentes(), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+const MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 // Aberto por um aviso do celular: vai direto para o Meu dia.
 // Links dos avisos no celular: ?m=<módulo>&v=<tela> (ex.: ?m=operacao&v=apontar). Tela que a pessoa não pode ver cai no início do módulo.
 // Os avisos levam à Operação: se o sistema estava aberto em outro acesso, passa para a Operação (devolve true quando trocou).
@@ -2608,8 +2658,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
   if (typeof ensureModulo === 'function') ensureModulo();
   aplicarSet(); render(); scrollTo(0, 0);
 });
-const EQ = criarEquip({ podeItem, escala: () => escala(), PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
-const AD = criarAdministrativo({ podeItem, limparPresenca, pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
+const EQ = criarEquip({ podeItem, escala: () => escala(), desligadoDe, PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI });
+const AD = criarAdministrativo({ podeItem, limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed });
 const GE = criarGestao({ podeItem, PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI });
 M.iniciarJanelas(); M.iniciarTopo();
 if (DB.definirAcesso) DB.definirAcesso(UI.acesso);
@@ -2705,7 +2755,7 @@ function tvHoje() {
 }
 function tvEfetivo() {
   const out = tvAreas().map(a => {
-    const cs = colabsDa(a).filter(c => DB.sit(c.id + '|' + TODAY) !== 'DS'); const x = { a, quadro: cs.length, pres: 0, folga: 0, ferias: 0, aus: {}, D: 0, N: 0, atr: 0 };
+    const cs = colabsDa(a).filter(c => !desligadoNoDia(c, TODAY)); const x = { a, quadro: cs.length, pres: 0, folga: 0, ferias: 0, aus: {}, D: 0, N: 0, atr: 0 };
     for (const c of cs) { const s = sitDia(c, TODAY); if (s.auto || s.v === 'F') x.folga++; else if (s.v === 'FE') x.ferias++; else if (AUSENCIA.has(s.v)) x.aus[s.v] = (x.aus[s.v] || 0) + 1; else { x.pres++; if (s.v === 'ATR') x.atr++; const p = periodoDe(c, TODAY); if (p) x[p]++; } }
     return x;
   });
@@ -2714,7 +2764,7 @@ function tvEfetivo() {
 function tvEfetivoRotas(area) {
   const por = new Map();
   for (const c of colabsDa(area)) {
-    if (DB.sit(c.id + '|' + TODAY) === 'DS') continue; const x = por.get(c.rota) || { nome: c.rota, a: area, pres: 0, aus: {}, D: 0, N: 0 }; por.set(c.rota, x);
+    if (desligadoNoDia(c, TODAY)) continue; const x = por.get(c.rota) || { nome: c.rota, a: area, pres: 0, aus: {}, D: 0, N: 0 }; por.set(c.rota, x);
     const s = sitDia(c, TODAY); if (s.auto || s.v === 'F' || s.v === 'FE') continue; if (AUSENCIA.has(s.v)) x.aus[s.v] = (x.aus[s.v] || 0) + 1; else { x.pres++; const p = periodoDe(c, TODAY); if (p) x[p]++; }
   }
   return [...por.values()].filter(x => x.pres || Object.keys(x.aus).length).sort((a, b) => a.nome.localeCompare(b.nome)).slice(0, 8);

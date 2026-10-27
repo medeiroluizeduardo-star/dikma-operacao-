@@ -16,10 +16,8 @@ export const DAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 export const DL = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 export const MOTIVOS = ['Efetivo insuficiente', 'Equipamento indisponível', 'Área não liberada pela operação', 'Chuva / condição climática', 'Prioridade operacional', 'Falta de material / EPI', 'Outro'];
-export const SITS = [['P', 'Presente'], ['F', 'Folga'], ['FE', 'Férias'], ['AT', 'Atestado'], ['AF', 'Afastado'], ['TR', 'Treinamento'], ['FT', 'Falta'], ['DS', 'Desligado'], ['HE', 'Hora extra'], ['ATR', 'Atrasado'], ['SA', 'Saída antecipada'], ['AB', 'Abono'], ['SP', 'Suspensão']];
-export const AUSENTE = new Set(['F', 'FE', 'AT', 'AF', 'TR', 'FT', 'DS', 'AB', 'SP']); // não está disponível no dia
-// Ausência de verdade: folga (F), férias (FE) e desligado (DS) não contam como ausência.
-export const AUSENCIA = new Set(['AT', 'AF', 'TR', 'FT', 'AB', 'SP']);
+// Códigos de situação: a tabela única fica em situacao.js; estes nomes continuam valendo para quem já usa.
+export { SITS, AUSENTE, AUSENCIA } from './situacao.js';
 export const PAPEIS = [['admin', 'Administrador'], ['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['administrativo', 'Administrativo'], ['leitor', 'Somente leitura'], ['bloqueado', 'Bloqueado']];
 export const ATIVOS = new Set(['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']);
 

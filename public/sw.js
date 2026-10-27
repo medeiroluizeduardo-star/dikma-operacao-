@@ -1,7 +1,7 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v74';
-const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
+const V = 'dikma-operacao-v76';
+const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'situacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));

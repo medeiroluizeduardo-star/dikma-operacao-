@@ -134,5 +134,35 @@ export function iniciarTopo() {
   addEventListener('resize', () => moverIndicador(), { passive: true });
 }
 
+// ---------- faixa de indicadores: um componente só em todas as telas ----------
+// faixa([{ r: 'Rótulo', v: 12, s: 'linha de apoio', tom: 'ok' | 'warn' | 'bad' | 'ext' }]) monta a faixa (o estado vai só na cor do número).
+// ajustarFaixas(raiz) roda depois de cada desenho, em .kpis, .mini e .kpis5: deixa no máximo 6 indicadores à vista
+// (os outros ficam em "Ver mais") e, no celular (2 colunas), faz o último ocupar a linha inteira quando sobra um.
+const TOM = { ok: 'var(--st-real)', warn: 'var(--st-atr)', bad: 'var(--st-nreal)', ext: 'var(--st-extra)' };
+export const faixa = (itens, cls = '') => `<div class="mini${cls ? ' ' + cls : ''}">${itens.filter(Boolean).map(x => `<div${x.t ? ` title="${x.t}"` : ''}><b class="num"${TOM[x.tom] ? ` style="color:${TOM[x.tom]}"` : ''}>${x.v}</b><span>${x.r}</span>${x.s ? `<small>${x.s}</small>` : ''}</div>`).join('')}</div>`;
+const MAX_FAIXA = 6;
+const faixasAbertas = new Set();
+export function ajustarFaixas(raiz) {
+  if (!raiz) return;
+  raiz.querySelectorAll('.kpis,.mini,.kpis5').forEach(f => {
+    const its = [...f.children].filter(x => !x.classList.contains('kmais'));
+    const chave = its.length + '|' + its.slice(0, 3).map(x => ((x.querySelector('span,.lbl') || x).textContent || '').trim()).join('|');
+    const aberta = faixasAbertas.has(chave);
+    // faixa "compacta" (Efetivo diário): no celular só 4 à vista, para a lista de pessoas subir
+    const max = f.classList.contains('compacta') && matchMedia('(max-width:860px)').matches ? 4 : MAX_FAIXA;
+    its.forEach((x, i) => x.classList.toggle('k-oculto', !aberta && i >= max));
+    let b = f.querySelector(':scope > .kmais');
+    if (its.length > max) {
+      if (!b) { b = document.createElement('button'); b.type = 'button'; b.className = 'kmais'; f.appendChild(b); }
+      b.textContent = aberta ? 'Ver menos' : `Ver mais (${its.length - max})`;
+      b.setAttribute('aria-expanded', String(aberta));
+      b.onclick = ev => { ev.stopPropagation(); if (faixasAbertas.has(chave)) faixasAbertas.delete(chave); else faixasAbertas.add(chave); ajustarFaixas(f.parentNode || raiz); };
+    } else if (b) b.remove();
+    const vis = its.filter(x => !x.classList.contains('k-oculto'));
+    let cel = 0; vis.forEach(x => { x.classList.remove('k-larga'); cel += x.classList.contains('hero') ? 2 : 1; });
+    if (cel % 2 && vis.length && !vis[vis.length - 1].classList.contains('hero')) vis[vis.length - 1].classList.add('k-larga');
+  });
+}
+
 // Esqueleto exibido enquanto os dados chegam.
 export const ESQUELETO = '<div class="card skel" aria-busy="true" aria-label="Carregando"><i></i><i></i><i></i><i></i></div>';

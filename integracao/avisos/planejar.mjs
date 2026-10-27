@@ -4,10 +4,10 @@ import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
+import { JUS_CODS, CODIGOS } from './lib/situacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true };
-const JUS_CODS = ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'];
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -121,7 +121,7 @@ export function planejar(d) {
   // 5) Resumo da semana que passou (segunda-feira, a partir das 7h), para administrador, gestor e coordenador.
   if (hora >= 7 && new Date(hoje + 'T12:00:00').getDay() === 1) {
     const ini = add(hoje, -7); const dm = s => `${s.slice(8)}/${s.slice(5, 7)}`;
-    const nomeAus = { FT: ['falta', 'faltas'], AT: ['atestado', 'atestados'], AF: ['afastamento', 'afastamentos'], SP: ['suspensão', 'suspensões'] };
+    const nomeAus = c => (CODIGOS[c] && CODIGOS[c].plural) || [c, c]; // tabela única (situacao.js)
     const pend = assinaturasPendentes(d.ocorr || [], hoje).total;
     const abertas = paradasAbertas(d.paradas || [], agora).length;
     for (const x of alvo) {
@@ -132,7 +132,7 @@ export function planejar(d) {
         const areas = areasDe(x.u, k); const S = d.sets[k]; if (!areas.length || !S) continue;
         const r = resumoSemana({ ...S, areas }, ini); if (!r.prog && !Object.keys(r.aus).length) continue;
         mod = mod || SETS[k].mod;
-        const aus = Object.entries(r.aus).map(([c, n]) => `${n} ${nomeAus[c][n > 1 ? 1 : 0]}`);
+        const aus = Object.entries(r.aus).map(([c, n]) => `${n} ${nomeAus(c)[n > 1 ? 1 : 0]}`);
         linhas.push(`${SETS[k].curto}: ${r.pct != null ? `${r.pct}% realizado (${r.R} de ${r.prog})` : 'sem programação'}${r.N ? ` · ${r.N} não realizada${r.N > 1 ? 's' : ''}` : ''}${aus.length ? ' · ' + aus.join(', ') : ''}`);
       }
       if (mods(x.u).includes('gestao') && pend) linhas.push(`Efetivo: ${pend} assinatura${pend > 1 ? 's' : ''} pendente${pend > 1 ? 's' : ''}`);
@@ -173,8 +173,10 @@ export function planejar(d) {
     const curto = t => String(t.title || '').replace(/\s·\s\d{2}\/\d{2}$/, '');
     for (const x of alvo) {
       const P = d.painel[x.uid]; if (!P || !x.prefs.painel) continue;
-      const abertas = (P.tasks || []).filter(t => t && !t.deleted && t.due && t.status !== 'done');
-      const doDia = abertas.filter(t => t.due === hoje), atr = abertas.filter(t => t.due < hoje);
+      // 'nfeita' = rotina diária de dia passado marcada como não feita: já está resolvida, não cobra mais.
+      const abertas = (P.tasks || []).filter(t => t && !t.deleted && t.due && t.status !== 'done' && t.status !== 'nfeita');
+      // rotina diária de dia que já passou não é "atrasada" (no painel ela aparece como "não marcada")
+      const doDia = abertas.filter(t => t.due === hoje), atr = abertas.filter(t => t.due < hoje && !(t.routine && PAINEL_DIARIOS.has(t.pid)));
       const cm = `pnl-m|${x.uid}|${hoje}`;
       if (hora >= 7 && !d.enviados[cm]) {
         const amanha = abertas.filter(t => t.due === add(hoje, 1) && !PAINEL_DIARIOS.has(t.pid));
@@ -190,7 +192,7 @@ export function planejar(d) {
       const ct = `pnl-t|${x.uid}|${hoje}`;
       if (hora >= 16 && !d.enviados[ct]) {
         const regs = (P.regs || []).filter(r => r && r.data && r.data.slice(0, 7) === hoje.slice(0, 7));
-        const sem = tp => regs.filter(r => r.tipo === tp && !r.lancado).length;
+        const sem = tp => regs.filter(r => r.tipo === tp && !r.lancado && !r.oculto).length; // registro ocultado no painel não cobra
         const f = sem('falta'), he = sem('he'), hp = sem('hp'), ind = regs.filter(r => r.tipo === 'ind' && r.status !== 'corrigido').length;
         const aberto = doDia.length + atr.length, med = f + he + hp;
         if (aberto || med || ind) {
