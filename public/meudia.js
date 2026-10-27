@@ -167,7 +167,7 @@ export function criarMeuDia(X) {
     // botões: o mais urgente (laranja) e o próximo de outro tipo; quando o nome repete, leva junto o lugar (ex.: "Apontar · Bateria")
     const rotA = t => t.acao || ACAO[t.go[1]] || 'Abrir';
     const segundo = urgentes.slice(1).find(t => t.go.join('|') !== (urgentes[0] && urgentes[0].go.join('|')) && t.go[1] !== urgentes[0].go[1]) || urgentes[1];
-    const doBotao = (t, i) => { const r = rotA(t); const rep = urgentes[0] && segundo && rotA(urgentes[0]) === rotA(segundo); return `<button class="btn${i ? '' : ' pri'}" data-md="${t.go.join('|')}">${rep && t.t.includes(' · ') ? `${r} · ${esc(t.t.split(' · ').pop())}` : r}</button>`; };
+    const doBotao = (t, i) => { const r0 = rotA(t); const r = ['Abrir', 'Ver'].includes(r0) ? `${r0} ${esc(t.t.split(' · ')[0])}` : r0; const rep = urgentes[0] && segundo && rotA(urgentes[0]) === rotA(segundo); return `<button class="btn${i ? '' : ' pri'}" data-md="${t.go.join('|')}">${rep && t.t.includes(' · ') ? `${r} · ${esc(t.t.split(' · ').pop())}` : r}</button>`; };
     const acoes = soLer() ? (urgentes[0] ? `<button class="btn" data-md="${urgentes[0].go.join('|')}">Ver</button>` : '') : [urgentes[0], segundo].filter(Boolean).map(doBotao).join('');
     let h = `<div class="md-hero"><div class="md-ht"><p class="md-sd">${saud}, ${esc(nome)} · ${dataTx}</p><h2${nU ? '' : ' class="ok"'}>${manchete}</h2><p class="md-rs">${resumo}</p></div>${acoes ? `<div class="md-ac">${acoes}</div>` : ''}</div>`;
     h += `<div class="md-top"><div class="card md-agora"><header><h2>Agora</h2><p>${urgentes.length ? 'Do mais urgente para o menos' : 'Nada pedindo ação'}</p></header><div class="body">${urgentes.length
