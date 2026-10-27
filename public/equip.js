@@ -8,20 +8,7 @@ import { indiceFerias } from './acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 import { situacaoDoDia, textoOperacao, feriadosOperacao } from './situacao.js';
 
-export const VIEWS_E = [
-  { id: 'epainel', nome: 'Painel', ic: 'painel', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'apontar', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'eq' },
-  { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'plano', grp: 'Avaliação', mod: 'eq' },
-  { id: 'eaval', nome: 'Avaliação mensal', ic: 'users', grp: 'Avaliação', mod: 'eq' },
-  { id: 'eanal', nome: 'Análises', ic: 'prog', grp: 'Avaliação', mod: 'eq' },
-  { id: 'econfig', nome: 'Configurações', ic: 'config', grp: 'Administração', mod: 'eq', admin: true }
-];
-export const SUB_E = {
-  epainel: 'Produtividade da operação de equipamentos', elanc: 'Alocações do dia e paradas dos equipamentos',
-  eequipe: 'Operadores, situação, frota e escala do mês', einsp: 'Checklist de 5S no equipamento e segurança', eaval: 'Notas do mês por operador',
-  eanal: 'Evolução mensal e qualidade dos lançamentos', econfig: 'Turnos, metas, pesos, causas e feriados'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
 export function criarEquip(X) {
   const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, UI, PES } = X;
@@ -31,7 +18,7 @@ export function criarEquip(X) {
   const E = () => DB.cache.e;
   const ME = () => X.ME;
   const podeEditar = () => isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel) && (!X.podeItem || X.podeItem('i_operacao')));
-  const U = UI.e || (UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null });
+  const U = UI.e; // valores iniciais em nucleo/estado.js
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const mesNome = ym => `${MESES_L[+ym.slice(5, 7) - 1]}/${ym.slice(0, 4)}`;
   const h1 = v => (Math.round((v || 0) * 10) / 10).toLocaleString('pt-BR');
@@ -490,7 +477,7 @@ export function criarEquip(X) {
     const perHoje = o => { if (o.escala !== '4x4' || !X.escala) return ''; const p = X.escala().previsto('4x4', o.turma, TODAY); return p && p.trab && p.periodo ? (p.periodo === 'N' ? ' · noite' : ' · dia') : ''; };
     const sitTxt = o => {
       const daFreq = ext(o, TODAY);
-      if (daFreq !== undefined) return daFreq ? `<span class="pill warn">${esc(title(daFreq))}</span><div class="muted small">pela Frequência / Efetivo diário</div>` : `<span class="pill ok">Trabalhando${perHoje(o)}</span><div class="muted small">pela Frequência / Efetivo diário</div>`;
+      if (daFreq !== undefined) return daFreq ? `<span class="pill warn">${esc(title(daFreq))}</span><div class="muted small">pela Frequência / Presença do dia</div>` : `<span class="pill ok">Trabalhando${perHoje(o)}</span><div class="muted small">pela Frequência / Presença do dia</div>`;
       if (!o.situacao || o.situacao === 'TRABALHANDO') return `<span class="pill ok">Trabalhando${perHoje(o)}</span>${ext.achou(o) ? '' : '<div class="muted small">fora da Frequência</div>'}`; const at = C.ausenteEm(o, TODAY); return `<span class="pill ${at ? 'warn' : 'neu'}">${esc(title(o.situacao))}</span><div class="muted small">${o.de ? dBR(o.de) : 'hoje'} a ${o.ate ? dBR(o.ate) : 'sem data'}${!at && o.de && o.de > TODAY ? ' · programado' : !at && o.ate && o.ate < TODAY ? ' · encerrado' : ''}</div>`; };
     // Busca e filtro de operadores: valem para a lista e para a escala do mês.
     const kOp = o => semAcento([o.nome, o.funcao, o.escala, o.turma ? 'turma ' + o.turma : '', o.situacao].filter(Boolean).join(' '));

@@ -47,7 +47,7 @@ export function criarPessoas(DB) {
     const area = v.ativ ? v.ativ.x.area : v.op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
     const partes = [];
     if (v.ativ) partes.push(`${SETS[v.ativ.set].curto} · ${AREA_S[v.ativ.x.area] || v.ativ.x.area} · ${v.ativ.x.rota}`);
-    if (v.op) partes.push('Operação de equipamentos');
+    if (v.op) partes.push('Equipamentos');
     return { ...v, area, txt: partes.join(' + ') || areaNome(area) };
   }
   // Lotação de muitas pessoas de uma vez (índices por matrícula e nome; usado nas listas do Efetivo).
@@ -59,19 +59,19 @@ export function criarPessoas(DB) {
     for (const c of lista) {
       const nn = norm(c.nome); const a = am.get(String(c.mat)) || an.get(nn) || null; const op = om.get(String(c.mat)) || on.get(nn) || null;
       const area = a ? a.x.area : op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
-      const partes = []; if (a) partes.push(`${SETS[a.set].curto} · ${AREA_S[a.x.area] || a.x.area} · ${a.x.rota}`); if (op) partes.push('Operação de equipamentos');
+      const partes = []; if (a) partes.push(`${SETS[a.set].curto} · ${AREA_S[a.x.area] || a.x.area} · ${a.x.rota}`); if (op) partes.push('Equipamentos');
       out.set(String(c.mat), { ativ: a, patio: a ? a.x : null, op, area, txt: partes.join(' + ') || areaNome(area) });
     }
     return out;
   }
   function areaNome(a) {
-    if (a === AREA_OP) return 'Operação de equipamentos';
+    if (a === AREA_OP) return 'Equipamentos';
     if (!a || a === AREA_GERAL) return 'Coqueria (sem rota)';
     const k = setDaArea(a); return k ? `${SETS[k].curto} · ${AREA_S[a] || a}` : a;
   }
   const areasAtuacao = () => [AREA_GERAL, ...SET_KEYS.filter(temSetDados).flatMap(k => SETS[k].areas), ...(temOp() ? [AREA_OP] : [])];
   // Grupos para o <select> de área de atuação
-  const gruposArea = () => [['Geral', [AREA_GERAL]], ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Operação', [AREA_OP]]] : [])];
+  const gruposArea = () => [['Geral', [AREA_GERAL]], ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Equipamentos', [AREA_OP]]] : [])];
 
   function funcoes() {
     const s = new Set();
@@ -155,7 +155,7 @@ export function criarPessoas(DB) {
   function semFicha() {
     const g = efetivo(); const out = [];
     for (const y of ativ()) if (!g.some(c => casa(y.x, c))) out.push({ nome: y.x.nome, funcao: y.x.funcao, area: y.x.area, rota: y.x.rota, regime: y.x.regime, onde: `${SETS[y.set].curto} · ${AREA_S[y.x.area]} · ${y.x.rota}` });
-    for (const o of ops()) if (!g.some(c => casa(o, c)) && !out.some(p => norm(p.nome) === norm(o.nome))) out.push({ nome: o.nome, funcao: o.funcao, area: AREA_OP, op: true, escala: o.escala, turma: o.turma, onde: 'Operação de equipamentos' });
+    for (const o of ops()) if (!g.some(c => casa(o, c)) && !out.some(p => norm(p.nome) === norm(o.nome))) out.push({ nome: o.nome, funcao: o.funcao, area: AREA_OP, op: true, escala: o.escala, turma: o.turma, onde: 'Equipamentos' });
     return out.sort((a, b) => a.nome.localeCompare(b.nome));
   }
 

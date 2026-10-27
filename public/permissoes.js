@@ -5,11 +5,11 @@ export const PERFIS_ABAS = [['gestor', 'Gestor'], ['coordenador', 'Coordenador']
 // Grupos da tela: Pátio e Bateria usam as mesmas telas, então dividem a mesma configuração.
 export const GRUPOS_ABAS = [
   { t: 'Todos os módulos', mod: 'all' },
-  { t: 'Painel (indicadores e resumo)', mod: 'pn' },
-  { t: 'Atividades Pátio · Atividades Bateria', mod: 'op' },
-  { t: 'Operação (equipamentos)', mod: 'eq' },
-  { t: 'Efetivo (escala, presença e fichas)', mod: 'ge' },
-  { t: 'Frequência e férias', mod: 'ad' },
+  { t: 'Indicadores (painéis e resumos)', mod: 'pn' },
+  { t: 'Atividades (Pátio e Bateria)', mod: 'op' },
+  { t: 'Pessoas no turno (escala e presença)', mod: 'ge' },
+  { t: 'Equipamentos', mod: 'eq' },
+  { t: 'RH (frequência, férias e fichas)', mod: 'ad' },
   { t: 'Configurações', mod: 'cf' }
 ];
 const SO_ADMIN = ['usuarios', 'perfis', 'gimport'];
@@ -55,9 +55,9 @@ export const ITENS = [
   { id: 'i_foraprog', mod: 'op', nome: 'Incluir atividade fora da programação', d: 'Programar no dia uma atividade que não estava prevista', quem: ['coordenador', 'supervisor'] },
   { id: 'i_aprovar', mod: 'op', nome: 'Aprovar e devolver apontamentos', d: 'Na aba Aprovação e no Apontar', quem: ['supervisor'] },
   { id: 'i_acoes', mod: 'op', nome: 'Criar e acompanhar ações das causas', d: 'Plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
-  { id: 'i_operacao', mod: 'eq', nome: 'Lançar e editar na Operação', d: 'Alocações, paradas, equipe, inspeções e avaliação', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
-  { id: 'i_efetivo', mod: 'ge', nome: 'Lançar no Efetivo diário', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
-  { id: 'i_fichas', mod: 'ge', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
+  { id: 'i_operacao', mod: 'eq', nome: 'Lançar e editar em Equipamentos', d: 'Alocações, paradas, equipe, inspeções e avaliação', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  { id: 'i_efetivo', mod: 'ge', nome: 'Lançar na Presença do dia', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  { id: 'i_fichas', mod: 'ad', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
   { id: 'i_freq', mod: 'ad', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
   { id: 'i_exportar', mod: 'all', nome: 'Exportar para o Excel', d: 'Botões de exportar de todas as abas', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'] },
   { id: 'i_imprimir', mod: 'all', nome: 'Imprimir e salvar em PDF', d: 'Folha do líder, resumos, etiquetas e fichas', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'] }

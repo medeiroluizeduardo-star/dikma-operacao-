@@ -215,7 +215,8 @@ service cloud.firestore {
       allow read: if eqm();
       allow write: if admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')));
     }
-    match /eqlanc/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
+    // Lançamentos: quem tem a Frequência também lê, porque a hora extra da Operação entra na folha.
+    match /eqlanc/{id} { allow read: if eqm() || acAdm(); allow create, update, delete: if eqEdita(); }
     match /eqpar/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
     match /eqinsp/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
     match /eqaval/{mes} { allow read: if eqm(); allow write: if eqEdita(); }

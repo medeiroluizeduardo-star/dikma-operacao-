@@ -11,16 +11,8 @@ import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from './p
 import { caixaBusca } from './busca.js';
 import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from './situacao.js';
 
-export const VIEWS_A = [
-  { id: 'afreq', nome: 'Frequência', ic: 'prog', grp: 'Frequência e férias', mod: 'ad' },
-  { id: 'aferias', nome: 'Férias', ic: 'sol', grp: 'Frequência e férias', mod: 'ad' },
-  { id: 'aimport', nome: 'Importar planilhas', ic: 'dl', grp: 'Administração', mod: 'ad', admin: true }
-];
-export const SUB_A = {
-  afreq: 'Folha de frequência de 16 a 15, por grupo',
-  aferias: 'Planejamento, quem está de férias e data limite',
-  aimport: 'Planilhas de frequência e de férias'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
+
 // Códigos que dá para lançar na folha (os mesmos do Efetivo diário, mais abono e suspensão).
 const CODS = CODIGOS_LANC;
 // CONTA (colunas de total da folha) vem da tabela única de códigos (situacao.js).
@@ -32,7 +24,7 @@ export function criarAdministrativo(X) {
   const $ = id => document.getElementById(id);
   const TODAY = today();
   const A = () => DB.cache.adm || { ferias: [], comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-  const U = UI.a || (UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' });
+  const U = UI.a; // valores iniciais em nucleo/estado.js
   const pode = () => editaAdm(ME()) && (!X.podeItem || X.podeItem('i_freq'));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
   const nomeComp = c => { const [a, m] = c.split('-').map(Number); return `${MESES_L[m - 1]} ${a}`; };
@@ -56,6 +48,13 @@ export function criarAdministrativo(X) {
   // férias, folga da escala (com feriados e turma pela ficha quando falta a letra) e presente.
   const lancadoDe = (conj, doc, p, dt) => (p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : ((doc.d || {})[p.k] || {})[dt]);
   const desligadoEm = p => { const a = p.desligado || '', b = X.desligadoDe ? X.desligadoDe(p) : ''; return a && b ? (a < b ? a : b) : a || b; };
+  // Hora extra lançada na Operação (lançamento de equipamento com status de hora extra): entra na folha pelo nome do operador.
+  let HEOP = null, HEOPv = -1;
+  const heOperacao = (nome, dt) => {
+    if (DB.heOpWatch) DB.heOpWatch(dt.slice(0, 7));
+    if (!HEOP || HEOPv !== (DB.cache.heOpV || 0)) { HEOPv = DB.cache.heOpV || 0; HEOP = new Map(); for (const l of Object.values(DB.cache.heOp || {}).flat()) HEOP.set(normNome(l.op) + '|' + l.data, l); }
+    return HEOP.get(normNome(nome) + '|' + dt) || null;
+  };
   function codigo(conj, comp, doc, g, p, dt, cmap) {
     const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap);
     const s = situacaoDoDia(p, dt, {
@@ -63,6 +62,8 @@ export function criarAdministrativo(X) {
       escala: E, regime: () => normRegime(rt.regime, E.regimes), turma: () => rt.turma, turmaFicha: X.turmaFicha, hoje: TODAY
     });
     if (s.por === 'lancado') return ['P', 'HE', 'ATR', 'SA'].includes(s.v) ? { v: s.v, auto: false, per: s.periodo } : { v: s.v, auto: false };
+    // nada lançado na folha, mas a Operação lançou hora extra para essa pessoa nesse dia
+    if ((s.por === 'escala' || s.por === 'padrao') && dt <= TODAY) { const h = heOperacao(p.nome, dt); if (h) return { v: 'HE', auto: true, por: 'operacao', motivo: `lançada na Operação · ${h.eq}${h.he ? ' · ' + String(h.he).replace('.', ',') + ' h' : ''}` }; }
     if (s.por === 'escala') return { v: 'F', auto: true, por: 'escala', motivo: s.motivo };
     if (s.por === 'padrao') return { v: s.v, auto: true, por: 'padrao', per: s.periodo };
     return { v: s.v, auto: true, por: s.por === 'desligado' ? 'padrao' : s.por };
@@ -140,7 +141,7 @@ export function criarAdministrativo(X) {
         corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.ativ ? 'Atividades' : 'só na folha'}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
           const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const ju = !c.auto && JUS_CODS.includes(c.v) ? jusDe(conj, doc, p, dt) : null; const semJus = !c.auto && JUS_CODS.includes(c.v) && !(ju && ju.cod === c.v) && dt <= TODAY;
-          const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
+          const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : c.por === 'operacao' ? ` (${c.motivo})` : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
           return `<td class="c${dt === TODAY ? ' today' : ''}"><button class="sit ${c.v}${c.auto && c.v !== 'P' ? ' auto' : ''}${dt > TODAY ? ' fut' : ''}${semJus ? ' semjus' : ''}" ${ed ? `data-a="cel" data-g="${gi}" data-p="${esc(p.k)}" data-dt="${dt}"` : 'disabled'} aria-label="${esc(title(p.nome))}, ${esc(tt)}" title="${esc(tt)}">${c.v === 'P' ? I.ok : c.v}${c.per ? `<i class="peri ${c.per}" aria-hidden="true">${c.per}</i>` : ''}</button></td>`;
         }).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot${t[k] ? ' on' : ''}">${t[k] || ''}</td>`).join('')}</tr>`;
       });
@@ -167,7 +168,7 @@ export function criarAdministrativo(X) {
     abrirLancamento({
       sheet, nome: title(p.nome), dt, ok: I.ok, codigos: CODS,
       atual: atual.auto ? { v: atual.v, auto: true, motivo: atual.por === 'ferias' ? 'férias' : atual.por === 'escala' ? 'pela escala' : '' } : { v: atual.v },
-      linhaInfo: (p.ativ ? 'Mesma presença do Efetivo diário' : 'Só na folha (fora das Atividades)') + (jAt ? `<br>Justificativa: ${esc(textoJus(jAt))}` : ''),
+      linhaInfo: (p.ativ ? 'Mesma presença da Presença do dia' : 'Só na folha (fora das Atividades)') + (jAt ? `<br>Justificativa: ${esc(textoJus(jAt))}` : ''),
       extras: !atual.auto && JUS_CODS.includes(atual.v) ? [{ t: jAt ? 'Editar a justificativa' : `Justificar ${(NOMES_CODIGO[atual.v] || '').toLowerCase()}`, d: jAt ? textoJus(jAt) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: '<span class="opt-ic">✎</span>' }] : [],
       aoExtra: v => { if (v === 'jus') justificar(conj, comp, p, [dt], atual.v, jAt); },
       depois: datas.filter(x => x > dt), fim: { t: 'Até o fim da competência', v: datas[datas.length - 1] },
@@ -215,7 +216,7 @@ export function criarAdministrativo(X) {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
     const { p } = achar(doc, gi, k); if (!p) return;
     const ed = pode();
-    sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Presença em comum com o Efetivo diário (' + esc(p.ativ) + ')' : 'Só na folha'}${p.notas && p.notas.length ? ' · ' + esc(p.notas.join(' · ')) : ''}`,
+    sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Presença em comum com a Presença do dia (' + esc(p.ativ) + ')' : 'Só na folha'}${p.notas && p.notas.length ? ' · ' + esc(p.notas.join(' · ')) : ''}`,
       [...(ed ? [...doc.grupos.map((g, i) => (i === +gi ? null : { t: 'Mover para ' + g.nome, v: 'mv:' + i })).filter(Boolean), { t: 'Tirar desta folha', d: 'Os lançamentos ficam guardados', v: 'rm' }] : []), { t: 'Ver férias', v: 'fer' }],
       async o => {
         if (o.v === 'fer') { U.fQ = p.nome; UI.view = 'aferias'; render(); return; }
@@ -309,7 +310,7 @@ export function criarAdministrativo(X) {
     if (st && st.prep) {
       const r = st.prep.resumo;
       h += `<div class="card"><header><h2>Conferência</h2><p>${esc(st.origem || '')}</p></header><div class="body stackcol">
-        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na presença do Efetivo diário (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
+        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Presença do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
         ${r.ferias ? `<div><b>Férias</b>: ${r.ferias.total} períodos (${r.ferias.comData} com data marcada)</div><label class="mchip"><input type="checkbox" id="aImpSubst" ${st.subst ? 'checked' : ''}><span>Substituir as férias que já estão no sistema (${A().ferias.length})</span></label>` : ''}
         ${r.semRH.length ? `<details class="legdet"><summary>${r.semRH.length} nome(s) sem ficha no RH (entram na folha mesmo assim)</summary><p class="small m0">${r.semRH.map(x => esc(title(x.nome))).join(' · ')}</p></details>` : ''}
         <div class="row-gap"><button class="btn pri" data-a="impOk" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Gravando…' : 'Gravar no sistema'}</button><button class="btn" data-a="impCancel">Cancelar</button></div></div></div>`;
@@ -397,7 +398,7 @@ export function criarAdministrativo(X) {
     const conj = U.conj, comp = U.comp, datas = diasDaCompetencia(comp);
     const lev = levantar(conj, datas);
     if (lev.carregando && !lev.pessoas.length) return '<div class="card skel"><i></i><i></i><i></i></div>';
-    if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em Frequência e férias › Frequência.</div></div>`;
+    if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em RH › Frequência.</div></div>`;
     const k = indicadores(lev, datas); const fe = feriasProximas();
     const hojeI = k.ate.indexOf(TODAY); const hj = hojeI >= 0 ? k.dia[hojeI] : null;
     const kp = (l, v, sub, cor) => `<div class="kpi"><span class="lbl">${cor ? `<i class="dot" style="background:${cor}"></i>` : ''}${l}</span><span class="v num">${v}</span><span class="s">${sub}</span></div>`;

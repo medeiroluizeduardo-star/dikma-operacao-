@@ -150,6 +150,8 @@ test('cada módulo só é lido por quem tem o módulo', async () => {
   await assertFails(getDoc(doc(db('liderRec'), 'b_semanas', SEM_B1)));
   await assertFails(getDoc(doc(db('liderRec'), 'eqlanc', 'l1')));
   await assertSucceeds(getDoc(doc(db('liderEq'), 'eqlanc', 'l1')));
+  await assertSucceeds(getDoc(doc(db('freqLeitor'), 'eqlanc', 'l1')), 'a Frequência lê os lançamentos (hora extra da Operação entra na folha)');
+  await assertFails(setDoc(doc(db('freqLeitor'), 'eqlanc', 'l2'), { mes: '2026-10' }), 'a Frequência só lê');
   await assertSucceeds(getDoc(doc(db('sup'), 'b_semanas', SEM_B1)));
 });
 

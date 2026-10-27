@@ -1,7 +1,7 @@
 // Service worker: guarda a interface para abrir sem sinal.
 // Os dados (Firestore) têm cache próprio no navegador e sincronizam quando o sinal volta.
-const V = 'dikma-operacao-v76';
-const SHELL = ['index.html', 'app.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'situacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
+const V = 'dikma-operacao-v79';
+const SHELL = ['index.html', 'estilo.css', 'app.js', 'nucleo/base.js', 'nucleo/estado.js', 'nucleo/acoes.js', 'nucleo/modulos.js', 'ui/icones.js', 'ui/janelas.js', 'ui/shell.js', 'calc/atividades.js', 'calc/presenca.js', 'navegacao.js', 'telas/atividades.js', 'telas/apontar.js', 'telas/efetivo.js', 'telas/horas-justificativas.js', 'telas/relatorios.js', 'telas/config.js', 'eventos.js', 'tv.js', 'inicio.js', 'cal.js', 'data.js', 'gestao.js', 'equip.js', 'eqcalc.js', 'pessoas.js', 'importar.js', 'movimento.js', 'meudia.js', 'hoje.js', 'permissoes.js', 'busca.js', 'escala.js', 'acessos.js', 'administrativo.js', 'exportar.js', 'presenca.js', 'aprovacao.js', 'situacao.js', 'tema.js', 'planilhas-adm.js', 'vendor/firebase.js', 'icons/icon-512.png', 'img/dikma-simbolo.png', 'manifest.webmanifest', 'icons/icon-192.png', 'img/dikma-logo.png', 'img/dikma-logo-branco.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
@@ -9,7 +9,11 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-// Página (index.html): sempre pela rede, para pegar versão nova; sem sinal, usa a guardada.
+// Página principal (/ e index.html): abre da versão guardada na hora e, ao mesmo tempo, busca a da rede em segundo
+// plano para a próxima abertura (stale-while-revalidate). Assim o sinal fraco do pátio não segura a abertura.
+// A versão nova do sistema continua chegando pelo próprio service worker (V muda a cada publicação) e o aviso
+// "Nova versão do sistema disponível" aparece como antes (inicio.js, controllerchange).
+// Outros endereços (como /painel, que é redirecionado): pela rede; sem sinal, a tela principal guardada.
 // Código, imagens e dados da demonstração: direto da versão guardada (abre na hora). A cada publicação o
 // nome V muda, o navegador baixa a versão nova inteira em segundo plano e ela vale a partir da próxima abertura.
 self.addEventListener('fetch', e => {
@@ -19,10 +23,14 @@ self.addEventListener('fetch', e => {
     if (u.pathname.startsWith('/__/')) return; // configuração e login do Firebase: sempre pela rede
     const pagina = e.request.mode === 'navigate' || u.pathname === '/' || u.pathname.endsWith('.html');
     if (pagina) {
-      // Só a tela principal fica guardada para abrir sem sinal (outros endereços, como /painel, são redirecionados).
+      // Só a tela principal fica guardada para abrir sem sinal.
       const chave = 'index.html';
-      e.respondWith(fetch(e.request).then(r => { if (r.ok) { const c = r.clone(); caches.open(V).then(ca => ca.put(chave, c)); } return r; })
-        .catch(() => caches.match(chave)));
+      const daRede = () => fetch(e.request).then(r => { if (r.ok && !r.redirected) { const c = r.clone(); caches.open(V).then(ca => ca.put(chave, c)); } return r; });
+      if (u.pathname === '/' || u.pathname === '/index.html') {
+        const nova = daRede();
+        e.waitUntil(nova.then(() => {}, () => {}));
+        e.respondWith(caches.match(chave).then(hit => hit || nova).catch(() => caches.match(chave)));
+      } else e.respondWith(daRede().catch(() => caches.match(chave)));
       return;
     }
     e.respondWith(caches.open(V).then(ca => ca.match(e.request, { ignoreSearch: true }).then(hit => hit || fetch(e.request).then(r => { if (r.ok) ca.put(e.request, r.clone()); return r; }))));

@@ -328,3 +328,11 @@ export async function admImportar({ comps, presenca, ferias, substituirFerias })
 // Equipe e frota (Operação) lê a mesma folha e a mesma presença do dia
 Object.defineProperty(cache, 'eqFreq', { get: () => ({ comps: cache.adm.comps, sit: { patio: S.patio.sitByMonth, bateria: S.bateria.sitByMonth }, v: versao }), enumerable: false });
 export function eqFreqWatch() { /* tudo já está em memória */ }
+// Hora extra lançada na Operação: na demonstração vem dos lançamentos que já estão em memória.
+export function heOpWatch(ym) {
+  cache.heOp = cache.heOp || {};
+  const l = (cache.e.lanc || []).filter(x => x.data && x.data.slice(0, 7) === ym && ['HORA EXTRA', 'HE NOTURNA'].includes(x.status) && x.op)
+    .map(x => ({ data: x.data, op: x.op, eq: x.eq || '', status: x.status, he: +x.he || 0, ini: x.ini || '', fim: x.fim || '' }));
+  const sig = l.length + '|' + l.map(x => x.data + x.op).join(); if (cache.heOp[ym] && cache.heOp[ym]._sig === sig) return;
+  l._sig = sig; cache.heOp[ym] = l; cache.heOpV = (cache.heOpV || 0) + 1;
+}

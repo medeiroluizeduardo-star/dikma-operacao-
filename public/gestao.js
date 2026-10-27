@@ -8,20 +8,7 @@ import { REGIMES_PADRAO, normRegime } from './escala.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
 
-export const VIEWS_G = [
-  { id: 'gpainel', nome: 'Painel', ic: 'painel', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gcolab', nome: 'Colaboradores', ic: 'users', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gimpr', nome: 'Impressão', ic: 'print', grp: 'Fichas de acompanhamento', mod: 'ge' },
-  { id: 'gimport', nome: 'Importar dados', ic: 'dl', grp: 'Administração', mod: 'ge', admin: true },
-  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'config', grp: 'Administração', mod: 'ge', admin: true }
-];
-export const SUB_G = {
-  gpainel: 'Indicadores das fichas de acompanhamento',
-  gcolab: 'Cadastro, controle da ficha e assinaturas de cada colaborador',
-  gimpr: 'Ficha (Folhas 1 e 2) e via de assinatura',
-  gimport: 'Colaboradores e ocorrências a partir de uma planilha',
-  gtipos: 'Tipos, texto padrão e o que vai para a Folha 1'
-};
+// As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
 export function criarGestao(X) {
   const { DB, esc, title, I, sheet, formSheet, toast, showErr, render, isAdmin, prepararFoto, framed, UI, PES } = X;
@@ -32,7 +19,7 @@ export function criarGestao(X) {
   const podeEditar = () => isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'].includes(ME().papel) && (!X.podeItem || X.podeItem('i_fichas')));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const dias = (a, b) => Math.round((pd(b) - pd(a)) / 864e5);
-  const U = UI.g || (UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' });
+  const U = UI.g; // valores iniciais em nucleo/estado.js
   const SEL = new Set(); // matrículas marcadas na lista (exclusão em lote)
 
   /* ---------- cálculos ---------- */
@@ -369,11 +356,11 @@ export function criarGestao(X) {
       <label class="sel"><span>Nome completo</span><input class="in" id="ncNome" value="${esc(c.nome)}"></label>
       <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="ncSetor" list="dlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio"><datalist id="dlSetor">${[...new Set(G().colabs.map(x => x.setor).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
       <label class="sel"><span>Setor (RH)</span><input class="in" id="ncSub" list="dlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento"><datalist id="dlSub">${[...new Set(G().colabs.map(x => x.subsetor).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label></div>
-      <div class="fsec"><b>Área de atuação e função</b><small>Vale para todos os módulos: Efetivo, Atividades Pátio, Atividades Bateria e Operação.</small></div>
+      <div class="fsec"><b>Área de atuação e função</b><small>Vale para todas as áreas: fichas (RH), Atividades Pátio e Bateria, Pessoas no turno e Equipamentos.</small></div>
       <label class="sel"><span>Área de atuação</span><select class="in" id="ncArea">${PES.gruposArea().map(([g, l]) => `<optgroup label="${esc(g)}">${opt(l, L.area, PES.areaNome)}</optgroup>`).join('')}</select></label>
       <div class="row2" id="ncPatioBox"><label class="sel"><span id="ncRotaLbl">Rota</span><select class="in" id="ncRota"></select></label><label class="sel"><span>Regime</span><select class="in" id="ncReg">${regimeOpts((L.patio && L.patio.regime) || 'ADMINISTRATIVO')}</select></label></div>
-      ${PES.temOp() ? `<label class="switch" id="ncOpLbl"><input type="checkbox" id="ncOp" ${L.op ? 'checked' : ''}><span>Opera equipamentos (equipe do módulo Operação)</span></label>
-      <div class="row2" id="ncOpBox"><label class="sel"><span>Escala (Operação)</span><select class="in" id="ncEsc">${opt(['ADM', '4x4'], (L.op && L.op.escala) || 'ADM')}</select></label><label class="sel"><span>Turma 4x4</span><select class="in" id="ncTurOp"><option value="">—</option>${opt(Object.keys(eqc.turmas || {}), (L.op && L.op.turma) || '')}</select></label></div>` : ''}
+      ${PES.temOp() ? `<label class="switch" id="ncOpLbl"><input type="checkbox" id="ncOp" ${L.op ? 'checked' : ''}><span>Opera equipamentos (equipe da área Equipamentos)</span></label>
+      <div class="row2" id="ncOpBox"><label class="sel"><span>Escala (Equipamentos)</span><select class="in" id="ncEsc">${opt(['ADM', '4x4'], (L.op && L.op.escala) || 'ADM')}</select></label><label class="sel"><span>Turma 4x4</span><select class="in" id="ncTurOp"><option value="">—</option>${opt(Object.keys(eqc.turmas || {}), (L.op && L.op.turma) || '')}</select></label></div>` : ''}
       <label class="sel"><span>Função</span><input class="in" id="ncFun" list="dlFun" autocomplete="off" value="${esc(c.funcao || (L.patio && L.patio.funcao) || (L.op && L.op.funcao) || '')}" placeholder="Escolha da lista ou digite"><datalist id="dlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>
       <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><label class="sel"><span>Líder imediato</span><input class="in" id="ncLid" value="${esc(c.lider || '')}"></label></div>
       <label class="sel"><span>Demissão</span><input class="in" type="date" id="ncDem" value="${c.dem || ''}"></label>
@@ -411,9 +398,9 @@ export function criarGestao(X) {
     const nOc = xs.reduce((n, x) => n + x.oc.length, 0);
     const L = lot(); const emMod = xs.filter(x => { const l = L.get(String(x.c.mat)); return l && (l.ativ || l.op); }).length;
     formSheet(xs.length === 1 ? 'Excluir colaborador' : `Excluir ${xs.length} colaboradores`, xs.length === 1 ? `${esc(title(xs[0].c.nome))} · ${xs[0].c.mat}` : '', `
-      <p class="m0">A ficha sai do Efetivo. Não dá para desfazer.</p>
+      <p class="m0">A ficha sai do RH. Não dá para desfazer.</p>
       ${xs.length > 1 ? `<p class="small muted m0">${xs.slice(0, 12).map(x => esc(title(x.c.nome))).join(', ')}${xs.length > 12 ? ` e mais ${xs.length - 12}` : ''}</p>` : ''}
-      ${emMod ? `<label class="switch"><input type="checkbox" id="exMod" checked><span>Tirar também de Atividades Pátio, Atividades Bateria e Operação (${emMod} pessoa(s) estão lá)</span></label>` : ''}
+      ${emMod ? `<label class="switch"><input type="checkbox" id="exMod" checked><span>Tirar também de Atividades Pátio, Atividades Bateria e Equipamentos (${emMod} pessoa(s) estão lá)</span></label>` : ''}
       ${nOc ? `<label class="switch"><input type="checkbox" id="exOc"><span>Apagar também as ${nOc} ocorrência(s)</span></label><p class="small muted m0">Desmarcado, as ocorrências continuam em Ocorrências com o nome da pessoa.</p>` : ''}
       <label class="switch"><input type="checkbox" id="exOk"><span>Confirmo a exclusão</span></label>`, 'Excluir', async () => {
       if (!$('exOk').checked) throw new Error('Marque "Confirmo a exclusão".');
