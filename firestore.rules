@@ -116,8 +116,9 @@ service cloud.firestore {
         || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
 
-    // Aprovação dos apontamentos: só o supervisor da área aprova ou devolve o que foi apontado.
-    function aprovaDa(area) { return gestorDa(area) && perfil().papel == 'supervisor'; }
+    // Aprovação dos apontamentos: o supervisor da área aprova ou devolve o que foi apontado; o administrador é a reserva.
+    // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
+    function aprovaDa(area) { return (gestorDa(area) && perfil().papel == 'supervisor') || admin(); }
     // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também.
     function acompanhaDa(area) { return admin() || (gestorDa(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
     match /aprov/{id} {
@@ -184,7 +185,8 @@ service cloud.firestore {
       allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
         || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
-    function aprovaDaB(area) { return gestorDaB(area) && perfil().papel == 'supervisor'; }
+    // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
+    function aprovaDaB(area) { return (gestorDaB(area) && perfil().papel == 'supervisor') || admin(); }
     function acompanhaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
     match /b_aprov/{id} {
       allow read: if ba();

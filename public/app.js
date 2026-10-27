@@ -179,10 +179,12 @@ function escolherFora(doc, k, rota) {
 /* ---------------- aprovação dos apontamentos ---------------- */
 // O líder aponta; o supervisor (ou coordenador, gestor, administrador) aprova ou devolve com o motivo.
 // O que ainda espera aprovação já conta nos números, com o selo "aguardando". Vale dos apontamentos a partir de APROV_DESDE.
-const aprovador = () => !!ME && aprovaPapel(ME.papel) && podeItem('i_aprovar'); // só o supervisor aprova
+const aprovador = () => !!ME && (aprovaPapel(ME.papel) || ME.papel === 'admin') && podeItem('i_aprovar'); // supervisor; administrador como reserva
+// Áreas sem supervisor ativo neste conjunto: o administrador aprova no lugar dele (aprovador reserva).
+const areasSemSupervisor = () => AREAS.filter(a => !(DB.cache.usuarios || []).some(u => u.papel === 'supervisor' && !u.bloqueado && (u.area === a || u.area2 === a) && modulosDe(u).includes(SETS[SK].mod)));
 const acompanha = () => !!ME && acompanhaPapel(ME.papel); // vê a Aprovação e cria ações (supervisor para cima)
-const areasAprov = () => (aprovador() ? myAreas() : []);
-const areasVerAprov = () => (aprovador() ? myAreas() : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
+const areasAprov = () => (!aprovador() ? [] : ME.papel === 'admin' ? areasSemSupervisor() : myAreas());
+const areasVerAprov = () => (aprovador() && ME.papel !== 'admin' ? myAreas() : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
 const aprovDe = (doc, pid, k) => ((DB.cache.aprov || {})[doc.id] || {})[pid + '|' + k];
 // 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
 const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY, doc.m[doc.ids[i] + '|' + k]);
@@ -209,7 +211,7 @@ function gravarApont(doc, ch) {
   DATAV++;
   if (!ch.length) return;
   DB.setStatusMany(doc.id, ch);
-  if (!aprovador() || !canEdit(doc.area)) return;
+  if (!areasAprov().includes(doc.area) || !canEdit(doc.area)) return; // quem aprova a área (supervisor, ou o administrador como reserva)
   const it = {};
   for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = c === 'N' ? { s: 'A', c, m: x.motivo || '' } : { s: 'A', c }; }
   if (Object.keys(it).length) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível registrar a aprovação'));
@@ -540,7 +542,7 @@ function barraDe() {
     : UI.modulo === 'config' ? [['cfgeral', 'Geral', 'config'], ['cfconf', 'Conferência', 'pend'], ['cfescala', 'Escalas', 'escala'], ['usuarios', 'Usuários', 'users'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'frequencia' ? [['afreq', 'Frequência', 'prog'], ['aferias', 'Férias', 'sol'], ['aimport', 'Importar', 'dl'], ['__more', 'Mais', 'more']]
     : UI.modulo === 'paineis' ? [['painel', 'Atividades', 'painel'], ['resumo', 'Resumo', 'print'], ['epainel', 'Equip.', 'painel'], ['fpainel', 'Frequência', 'prog'], ['gpainel', 'Fichas', 'users'], ['meudia', 'Hoje', 'sol'], ['__more', 'Mais', 'more']]
-    : aprovador() ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
+    : aprovador() && ME.papel !== 'admin' ? [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['aprovar', 'Aprovar', 'aprov'], ['pend', 'Pendências', 'pend'], ['__more', 'Mais', 'more']]
     : [['meudia', 'Hoje', 'sol'], ['apontar', 'Apontar', 'apontar'], ['pend', 'Pendências', 'pend'], ['causas', 'Causas', 'causas'], ['__more', 'Mais', 'more']];
   { const ok = new Set(viewsDoModulo().map(v => v.id)); for (let i = tb.length - 1; i >= 0; i--) if (tb[i][0] !== '__more' && !ok.has(tb[i][0])) tb.splice(i, 1); }
   return [...tb.filter(x => x[0] !== '__more').slice(0, 4), ['__more', 'Mais', 'more']];
@@ -1472,25 +1474,25 @@ function vEsDia() {
 const NOME_AP = { R: 'Realizada', N: 'Não realizada', E: 'Extra' };
 const TOM_AP = { R: 'ok', N: 'bad', E: 'ext' };
 function vAprovar() {
-  const minhas = areasVerAprov(); const pode = aprovador();
+  const minhas = areasVerAprov(); const podeA = a => areasAprov().includes(a); const pode = minhas.some(podeA);
   if (!minhas.length) return '<div class="card"><div class="empty">Seu perfil não acompanha a aprovação.</div></div>';
   const area = minhas.includes(UI.aprArea) ? UI.aprArea : 'TODAS';
   const todas = listaAprov(minhas);
   const xs = area === 'TODAS' ? todas : todas.filter(x => x.doc.area === area);
-  const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev');
+  const dev = listaAprov(area === 'TODAS' ? minhas : [area], 'dev'); const nA = xs.filter(x => podeA(x.doc.area)).length;
   // prazo de aprovação: o que o líder apontou num dia deve ser aprovado até o fim do dia seguinte
   const PRAZO_APROV = 1; const limite = add(TODAY, -PRAZO_APROV); const foraPrazo = xs.filter(x => x.dt < limite).length;
   const grupos = new Map();
   for (const x of xs) { const key = `${x.dt}|${x.doc.area}|${x.p.rota}`; if (!grupos.has(key)) grupos.set(key, []); grupos.get(key).push(x); }
   let h = minhas.length > 1 ? `<div class="rchips linha" role="group" aria-label="Área"><button class="rchip" data-aprarea="TODAS" aria-pressed="${area === 'TODAS'}">Todas<span class="c num">${todas.length || '✓'}</span></button>${minhas.map(a => { const n = todas.filter(x => x.doc.area === a).length; return `<button class="rchip" data-aprarea="${a}" aria-pressed="${a === area}">${AREA_S[a]}<span class="c num">${n || '✓'}</span></button>`; }).join('')}</div>` : '';
   h += `<div class="mini"><div><b class="num" style="color:${xs.length ? 'var(--st-atr)' : 'inherit'}">${xs.length}</b><span>Aguardando aprovação</span></div><div><b class="num">${grupos.size}</b><span>Rotas e dias</span></div><div><b class="num">${dev.length}</b><span>Devolvidas ao líder</span></div><div><b class="num" style="color:${foraPrazo ? 'var(--st-nreal)' : 'inherit'}">${foraPrazo}</b><span>Fora do prazo (mais de 1 dia)</span></div></div>
-  <div class="row-between"><p class="muted small m0">${pode ? 'O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.' : 'Só o supervisor da área aprova ou devolve. Aqui você acompanha o que está esperando.'}</p>${pode && xs.length > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${xs.length} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${xs.length})</button>`) : ''}</div>`;
+  <div class="row-between"><p class="muted small m0">${pode ? 'O que o líder aponta já conta nos números, com o selo “aguardando”. Aprove ou devolva com o motivo para ele corrigir.' : 'Só o supervisor da área aprova ou devolve. Aqui você acompanha o que está esperando.'}${ME.papel === 'admin' && pode ? ` <b>Você aprova como reserva nas áreas sem supervisor: ${areasAprov().map(a => AREA_S[a]).join(', ')}.</b>` : ''}</p>${nA > 1 ? (UI.confirm === 'aprvTudo' ? `<span class="confirm">Aprovar os ${nA} apontamentos? <button class="btn pri sm" data-act="aprvTudo">Confirmar</button><button class="btn sm" data-act="cancel">Cancelar</button></span>` : `<button class="btn pri sm" data-act="askAprvTudo">${I.ok} Aprovar tudo (${nA})</button>`) : ''}</div>`;
   if (!xs.length) h += '<div class="card"><div class="empty">Nada aguardando aprovação. Tudo o que os líderes apontaram já foi conferido.</div></div>';
   const abertos = UI.aprTodas || [];
   for (const [key, it] of [...grupos.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).slice(0, 30)) { // mais antigos primeiro: o que está fora do prazo fica no topo
     const [dt, a, r] = key.split('|'); const tudo = abertos.includes(key);
-    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar${dt < limite ? ` · <span class="pill bad">fora do prazo · há ${Math.round((pd(TODAY) - pd(dt)) / 864e5)} dias</span>` : ''}</p>${pode ? `<span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span>` : ''}</header><div class="body"><div class="plist">
-    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div>${pode ? `<div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div>` : ''}</div>`; }).join('')}
+    h += `<div class="card aprov"><header><h2>${esc(r)}</h2><p>${DAYS[(new Date(dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(dt)}${minhas.length > 1 ? ' · ' + AREA_S[a] : ''} · ${it.length} para aprovar${dt < limite ? ` · <span class="pill bad">fora do prazo · há ${Math.round((pd(TODAY) - pd(dt)) / 864e5)} dias</span>` : ''}</p>${podeA(a) ? `<span class="r"><button class="btn sm" data-act="aprvGrupo" data-k="${esc(key)}">${I.ok} Aprovar ${it.length > 1 ? 'todas' : ''}</button></span>` : ''}</header><div class="body"><div class="plist">
+    ${(tudo ? it : it.slice(0, 8)).map(x => { const c = x.doc.d[x.i][x.k]; const m = x.doc.m[x.p.id + '|' + x.k]; const ref = `${esc(x.doc.id)}|${x.i}|${x.k}`; return `<div class="pitem"><div class="minw"><div class="t">${esc(x.p.ativ)}</div><div class="l">${esc(x.p.local)} · <span class="mono">${x.p.id}</span> · <span class="pill ${TOM_AP[c]}">${NOME_AP[c]}</span></div>${m ? `<div class="l just">Justificativa: ${esc(m)}</div>` : ''}</div>${podeA(x.doc.area) ? `<div class="bt"><button class="ok-btn sm" data-act="aprv" data-k="${ref}" aria-label="Aprovar" title="Aprovar">✓</button><button class="no-btn sm dev-btn" data-act="devl" data-k="${ref}" aria-label="Devolver ao líder" title="Devolver ao líder">↩</button></div>` : ''}</div>`; }).join('')}
     ${it.length > 8 ? `<div class="pitem"><span class="muted">${tudo ? `${it.length} nesta rota` : `+ ${it.length - 8} nesta rota`}</span><button class="btn" data-act="aprTodas" data-k="${esc(key)}">${tudo ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
     </div></div></div>`;
   }
@@ -1926,9 +1928,19 @@ function vPlano() {
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
-  ${ps.slice(0, UI.more || 120).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" aria-label="Rota de ${p.id}">${[...new Set([p.rota, ...rts])].map(r => `<option ${r === p.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" aria-label="Tipo de ${p.id}">${[...new Set([p.tipo, ...tipos()])].map(t => `<option ${t === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
-  </tbody></table></div>${ps.length > (UI.more || 120) ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${(UI.more || 120) + 300}">Mostrar mais ${Math.min(300, ps.length - (UI.more || 120))} de ${ps.length - (UI.more || 120)} · a tela fica mais leve mostrando por partes</button></div>` : ''}</div>`;
+  ${ps.slice(0, UI.more || 60).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" data-opts="rota" aria-label="Rota de ${p.id}"><option selected>${esc(p.rota)}</option></select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" data-opts="tipo" aria-label="Tipo de ${p.id}"><option selected>${esc(p.tipo)}</option></select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
+  </tbody></table></div>${ps.length > (UI.more || 60) ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${(UI.more || 60) + 120}">Mostrar mais ${Math.min(120, ps.length - (UI.more || 60))} de ${ps.length - (UI.more || 60)} · a tela fica mais leve mostrando por partes</button></div>` : ''}</div>`;
 }
+
+// Plano padrão: cada lista (rota, tipo) nasce só com o valor atual; as opções entram quando a pessoa toca nela.
+// Com 120 linhas, montar todas as opções de todas as listas deixava a tela com ~5 mil elementos (cerca de 1 s no celular).
+function encherOpcoes(sel) {
+  if (!sel || sel.dataset.cheio) return; sel.dataset.cheio = '1';
+  const atual = sel.value; const id = sel.dataset.prota || (sel.dataset.pcampo || '').split('|')[0]; const p = PL.get(id);
+  const lista = sel.dataset.opts === 'rota' ? rotasDa(p ? p.area : UI.pArea).filter(r => r.rota !== 'GESTÃO').map(r => r.rota) : tipos();
+  sel.innerHTML = [...new Set([atual, ...lista])].map(v => `<option ${v === atual ? 'selected' : ''}>${esc(v)}</option>`).join('');
+}
+for (const ev of ['pointerdown', 'focusin', 'keydown']) document.addEventListener(ev, e => { const t = e.target; if (t && t.matches && t.matches('select[data-opts]')) encherOpcoes(t); }, true);
 
 /* ---------------- GERADOR ---------------- */
 function vGerador() {
