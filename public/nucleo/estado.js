@@ -20,7 +20,7 @@ export function mudouDados() { DATAV++; }
 export function definirAuth(a) { AUTH = a; ME = a.user || null; }
 export const UI = { view: 'painel', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
-try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo === 'adm' ? 'frequencia' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; if (v.apArea) UI.apArea = v.apArea; if (v.aRotaPor) UI.aRotaPor = v.aRotaPor; if (v.progAbertas) UI.progAbertas = v.progAbertas; } catch (e) { /* ignora */ }
+try { const v = JSON.parse(localStorage.getItem('coqueria-ui') || '{}'); if (v.view) UI.view = v.view; if (v.modulo) UI.modulo = v.modulo === 'escala' ? 'gestao' : v.modulo === 'adm' || v.modulo === 'administrativo' ? 'frequencia' : v.modulo; if (v.esSet) UI.esSet = v.esSet; if (v.cfSet) UI.cfSet = v.cfSet; if (v.apArea) UI.apArea = v.apArea; if (v.aRotaPor) UI.aRotaPor = v.aRotaPor; if (v.progAbertas) UI.progAbertas = v.progAbertas; } catch (e) { /* ignora */ }
 // Acesso (porta de entrada) desta sessão: operacao | sistema (o antigo Administrativo agora é um módulo da Operação).
 try { const a = localStorage.getItem('dikma-acesso'); if (ACESSO[a]) UI.acesso = a; } catch (e) { /* ignora */ }
 if (!UI.acesso) UI.acesso = 'operacao';
@@ -76,20 +76,29 @@ export function ensurePeriod() {
   if (!UI.ini || !ws.includes(UI.ini)) UI.ini = ws.includes(CUR_WEEK) ? CUR_WEEK : ws[0];
   DB.watchMonths([UI.mes, CUR_MONTH, addMonth(CUR_MONTH, -1)]);
 }
-// Escala e Efetivo não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
+// Pessoas no turno (escala e presença) não se marca no usuário: vem junto com Atividades Pátio ou Bateria.
+// gestao = fichas de acompanhamento (RH) · frequencia = frequência e férias (RH).
 export const MODS_MARCAVEIS = ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'];
-// Módulos marcados no usuário (os que trazem dados) · modsDe = o que aparece no menu:
-// Efetivo também aparece para quem tem Atividades (parte da escala); Configurações para administrador e gestor.
+// Módulos marcados no usuário (os que trazem dados) · modsDe = o que aparece no menu, nesta ordem:
+// Indicadores (paineis) · Atividades (operacao e bateria, um item só no menu) · Pessoas no turno (gestao: escala e
+// presença, para quem tem Atividades) · Equipamentos · RH (frequencia: frequência e férias e/ou as fichas) · Configurações.
+// Os nomes internos são os de antes (o módulo gestao marcado no usuário continua sendo o das fichas).
 export const modsReais = u => (!u ? [] : u.papel === 'admin' ? MODS_MARCAVEIS : modulosDe(u).filter(m => MODS_MARCAVEIS.includes(m)));
 export const temFichas = u => modsReais(u).includes('gestao');
-// Módulos que aparecem no menu, conforme o acesso aberto: Operação (os módulos da pessoa) ou Administração do sistema.
+// Módulos que aparecem no menu, conforme o acesso aberto: o dia a dia (os módulos da pessoa) ou Administração do sistema.
 export const modsDe = u => {
   if (!u) return [];
   if (UI.acesso === 'sistema') return u.papel === 'admin' ? ['config'] : [];
-  const b = modsReais(u); const ms = MODS_MARCAVEIS.filter(m => b.includes(m) || (m === 'gestao' && (b.includes('operacao') || b.includes('bateria'))));
-  // Painel: aparece para quem tem algum módulo com painel (atividades, equipamentos, fichas ou frequência).
-  const l = (setsDe(u).length || b.includes('equipamentos') || b.includes('gestao') || b.includes('frequencia')) ? ['paineis', ...ms] : ms;
-  // Gestor: Configurações dos módulos dele (plano, gerador, rotas, operação, tipos de ocorrência, escalas) no mesmo acesso
+  const b = modsReais(u); const ativ = b.includes('operacao') || b.includes('bateria');
+  const l = [];
+  // Indicadores: para quem tem algum módulo com painel (atividades, equipamentos, fichas ou frequência).
+  if (ativ || b.includes('equipamentos') || b.includes('gestao') || b.includes('frequencia')) l.push('paineis');
+  if (b.includes('operacao')) l.push('operacao');
+  if (b.includes('bateria')) l.push('bateria');
+  if (ativ) l.push('gestao');
+  if (b.includes('equipamentos')) l.push('equipamentos');
+  if (b.includes('frequencia') || b.includes('gestao')) l.push('frequencia');
+  // Gestor: Configurações dos módulos dele (plano, gerador, rotas, equipamentos, tipos de ocorrência, escalas) no mesmo acesso
   return u.papel === 'gestor' ? [...l, 'config'] : l;
 };
 export const setsDe = u => ['patio', 'bateria'].filter(k => modsReais(u).includes(SETS[k].mod));

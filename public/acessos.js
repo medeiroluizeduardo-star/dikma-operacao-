@@ -6,7 +6,7 @@
 import { normNome } from './planilhas-adm.js';
 
 export const ACESSOS = [
-  { k: 'operacao', nome: 'Operação', sub: 'Atividades, equipamentos, efetivo, frequência e férias', inicio: 'meudia' },
+  { k: 'operacao', nome: 'Dikma Gestão', sub: 'Indicadores, Atividades, Pessoas no turno, Equipamentos e RH', inicio: 'meudia' },
   { k: 'sistema', nome: 'Administração do sistema', sub: 'Ajustes de todo o sistema · só o administrador', inicio: 'cfgeral' }
 ];
 export const ACESSO = Object.fromEntries(ACESSOS.map(a => [a.k, a]));

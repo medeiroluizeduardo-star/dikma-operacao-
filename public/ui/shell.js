@@ -4,10 +4,10 @@ import * as M from '../movimento.js';
 import { ACESSO } from '../acessos.js';
 import { semAcento, filtrarLista } from '../busca.js';
 import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
-import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarAcesso, salvarUI, meses, isAdmin, admMod, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, setsDe, aplicarSet } from '../nucleo/estado.js';
+import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarAcesso, salvarUI, meses, isAdmin, admMod, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC, ACESSO_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, nomeCurto, MODS, viewsDoModulo, ensureModulo, ES_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, ES_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -86,6 +86,8 @@ function mockSwitcher() {
 /* ---------------- shell ---------------- */
 // Desenha a tela. Trocar de tela anima a entrada; atualização de dados mantém a rolagem das tabelas.
 let ULT = '';
+// Abas das fichas de acompanhamento dentro do RH (desenhadas por gestao.js).
+const G_VIEWS = ['gcolab', 'gimpr'];
 export function render() {
   const view = $('view');
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
@@ -111,9 +113,10 @@ function renderTela() {
   $('gate').hidden = true; $('shell').hidden = false;
   ensureModulo(); aplicarSet(); rebuild();
   if (TV) { renderTV(); return; }
-  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : comModulo('AD', m => m.render(UI.view))); afterRender(); return; }
+  // RH: frequência e férias (administrativo.js) e fichas de acompanhamento (gestao.js)
+  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : G_VIEWS.includes(UI.view) ? comModulo('GE', m => m.render(UI.view)) : comModulo('AD', m => m.render(UI.view))); afterRender(); return; }
   if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
-  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(UI.view)) || UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' || (UI.modulo === 'gestao' && UI.view !== 'epainel') ? comModulo('GE', m => m.render(UI.view)) : comModulo('EQ', m => m.render(UI.view))); afterRender(); return; }
+  if (UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' ? comModulo('GE', m => m.render(UI.view)) : comModulo('EQ', m => m.render(UI.view))); afterRender(); return; }
   if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
   if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && !['ativ', 'he'].includes(resTipo())))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? comModulo('AD', m => m.painel()) : vResumoOutro()); afterRender(); return; }
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
@@ -133,22 +136,23 @@ let raf = 0;
 export const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id && a.matches('input[type=search],input[type=text],input:not([type])') ? [a.id, a.selectionStart] : null; render(); if (keep) { const n = $(keep[0]); if (n && document.activeElement !== n) { n.focus(); try { n.setSelectionRange(keep[1], keep[1]); } catch (e) { /* ignora */ } } } }), 40); };
 
 function renderNav() {
-  const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos';
+  const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos', rh = UI.modulo === 'frequencia';
   // Selo de Pendências: atrasadas dos últimos 60 dias na área da pessoa (a mesma janela de Pendências e do Meu dia).
   const atr = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
-  const gb = ge ? (temFichas(ME) && GE ? GE.badge() : 0) : eqm && EQ ? EQ.badge() : 0; // selos aparecem quando a tela do módulo já chegou
+  const gb = rh ? (temFichas(ME) && GE ? GE.badge() : 0) : eqm && EQ ? EQ.badge() : 0; // selos aparecem quando a tela do módulo já chegou
   const apv = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
-  const ms = modsDe(ME);
+  const ms = modsMenu();
   const cur = MODS[UI.modulo];
-  const linha = m => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${MODS[m].sub}</small></span>`;
+  const linha = (m, atual) => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${atual ? MODS[m].sub : subMod(m)}</small></span>`; // no botão: o conjunto aberto; na lista: a área inteira
   let h = `<div class="modpick${UI.modOpen ? ' aberto' : ''}">
-    <button class="modbtn" ${ms.length > 1 ? `data-modmenu="1" aria-haspopup="menu" aria-expanded="${!!UI.modOpen}" aria-label="Módulo atual: ${cur.nome}. Trocar de módulo"` : 'tabindex="-1" aria-disabled="true"'}>${linha(UI.modulo)}${ms.length > 1 ? `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 10l4-4 4 4M8 14l4 4 4-4"/></svg>` : ''}</button>
-    ${ms.length > 1 ? `<div class="modmenu" role="menu" aria-label="Módulos">${ms.map(m => `<button role="menuitemradio" aria-checked="${UI.modulo === m}" data-mod="${m}">${linha(m)}${UI.modulo === m ? '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</button>`).join('')}</div>` : ''}
+    <button class="modbtn" ${ms.length > 1 ? `data-modmenu="1" aria-haspopup="menu" aria-expanded="${!!UI.modOpen}" aria-label="Módulo atual: ${cur.nome}. Trocar de módulo"` : 'tabindex="-1" aria-disabled="true"'}>${linha(UI.modulo, true)}${ms.length > 1 ? `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 10l4-4 4 4M8 14l4 4 4-4"/></svg>` : ''}</button>
+    ${ms.length > 1 ? `<div class="modmenu" role="menu" aria-label="Módulos">${ms.map(m => `<button role="menuitemradio" aria-checked="${mesmoItem(UI.modulo, m)}" data-mod="${m}">${linha(m)}${mesmoItem(UI.modulo, m) ? '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</button>`).join('')}</div>` : ''}
   </div>`, g = '';
-  for (const v of viewsDoModulo()) {
+  const pai = (VIEWS.find(v => v.id === UI.view) || {}).pai; // aba aberta por botão (Folha do líder, Etiquetas): marca a aba pai
+  for (const v of abasDoMenu()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
     const badge = v.id === 'pend' && atr ? atr : v.id === 'aprovar' && apv ? apv : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
-    h += `<button data-go="${v.id}" ${UI.view === v.id ? 'aria-current="page"' : ''}${nomeCurto(v) !== v.nome ? ` title="${esc(v.nome)}"` : ''}>${I[v.ic]}<span>${nomeCurto(v)}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
+    h += `<button data-go="${v.id}" ${UI.view === v.id || pai === v.id ? 'aria-current="page"' : ''}${nomeCurto(v) !== v.nome ? ` title="${esc(v.nome)}"` : ''}>${I[v.ic]}<span>${nomeCurto(v)}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
   }
   pintar('nav', h);
   pintar('who', DEMO
@@ -158,15 +162,17 @@ function renderNav() {
   // Só o administrador vê a Administração do sistema: um botão leva para lá e outro volta para a Operação.
   // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
   { const w = $('who'); if (w && !w.querySelector('[data-painel]') && isAdmin()) w.insertAdjacentHTML('afterbegin', `<a class="btn rail-btn" data-painel href="${PAINEL_URL}" target="_blank" rel="noopener">${I.painel} Meu painel</a>`); }
-  { const w = $('who'); if (w && !w.querySelector('[data-act="irAcesso"]') && isAdmin()) { const k = UI.acesso === 'sistema' ? 'operacao' : 'sistema'; w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="irAcesso">${ACESSO_IC[k] || ''} ${k === 'sistema' ? 'Administração do sistema' : 'Voltar para a Operação'}</button>`); } }
+  { const w = $('who'); if (w && !w.querySelector('[data-act="irAcesso"]') && isAdmin()) { const k = UI.acesso === 'sistema' ? 'operacao' : 'sistema'; w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="irAcesso">${ACESSO_IC[k] || ''} ${k === 'sistema' ? 'Administração do sistema' : 'Sair da Administração do sistema'}</button>`); } }
   const tb = barraDe();
   pintarBarra(tb, atr, gb, apv);
 }
 function pintarBarra(tb, atr, gb, apv = 0) {
-  const inMore = !tb.some(x => x[0] === UI.view);
+  const pai = (VIEWS.find(v => v.id === UI.view) || {}).pai;
+  const aqui = id => UI.view === id || pai === id;
+  const inMore = !tb.some(x => aqui(x[0]));
   const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
   const rot = (id, n) => (id === '__more' ? n : nomeCurto(VIEWS.find(v => v.id === id)) || n);
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && ME.papel !== 'leitor' ? 'big' : ''}" ${(UI.view === id || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && ME.papel !== 'leitor' ? 'big' : ''}" ${(aqui(id) || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
 }
 export function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -221,19 +227,18 @@ export function filtroSheet() {
 function indiceBusca() {
   const out = []; const ms = modsDe(ME);
   for (const v of viewsDoModulo()) out.push({ t: v.nome, d: `Tela · ${MODS[UI.modulo].nome}`, k: 'tela', ir: () => { UI.view = v.id; } });
-  for (const m of ms) if (m !== UI.modulo) out.push({ t: MODS[m].nome, d: `Módulo · ${MODS[m].sub}`, k: 'tela', ir: () => { UI.modulo = m; UI.view = MODS[m].inicio; } });
-  if (UI.modulo === 'frequencia') { // Frequência e férias: pessoas das folhas e das férias
+  for (const m of modsMenu()) if (!mesmoItem(m, UI.modulo)) out.push({ t: MODS[m].nome, d: `Área · ${subMod(m)}`, k: 'tela', ir: () => { trocarModulo(m); } });
+  if (UI.modulo === 'frequencia' && modsReais(ME).includes('frequencia')) { // RH: pessoas das folhas de frequência e das férias
     const vistos = new Set(); const A = DB.cache.adm || {};
     for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'aferias'; if (UI.a) { UI.a.fQ = f.nome; UI.a.fAba = 'todas'; } } }); }
     for (const [id, c] of Object.entries(A.comps || {})) if (c) for (const g of c.grupos || []) for (const p of g.pessoas) { const k = p.mat || p.nome; if (vistos.has('f' + k)) continue; vistos.add('f' + k); out.push({ t: title(p.nome), d: `Frequência · ${id.startsWith('bateria') ? 'Bateria' : 'Pátio'} · ${g.nome}`, k: 'pessoa', ir: () => { UI.view = 'afreq'; if (UI.a) { UI.a.conj = id.split('|')[0]; UI.a.q = p.nome; } } }); }
-    return out;
   }
   for (const k of setsDe(ME)) {
     const st = DB.dados(k); if (!st || !st.config) continue;
     for (const r of st.config.rotas || []) if (r.carga > 0 && (!myAreas().length || myAreas().includes(r.area))) out.push({ t: r.rota, d: `Rota · ${SETS[k].curto} · ${AREA_S[r.area]}`, k: 'rota', ir: () => { UI.modulo = SETS[k].mod; UI.view = 'apontar'; UI.area = r.area; UI.aRota = r.rota; } });
-    for (const a of Object.keys(st.colabs || {})) for (const c of st.colabs[a]) out.push({ t: title(c.nome), d: `Escala · ${SETS[k].curto} · ${AREA_S[c.area] || c.area} · ${c.rota}`, k: 'pessoa', ir: () => { UI.modulo = 'gestao'; UI.view = 'esdia'; UI.esSet = k; UI.eRota = '*'; UI.eQ = title(c.nome); } });
+    for (const a of Object.keys(st.colabs || {})) for (const c of st.colabs[a]) out.push({ t: title(c.nome), d: `Pessoas no turno · ${SETS[k].curto} · ${AREA_S[c.area] || c.area} · ${c.rota}`, k: 'pessoa', ir: () => { UI.modulo = 'gestao'; UI.view = 'esdia'; UI.esSet = k; UI.eRota = '*'; UI.eQ = title(c.nome); } });
   }
-  if (temFichas(ME)) for (const c of (DB.cache.g && DB.cache.g.colabs) || []) out.push({ t: title(c.nome), d: `Ficha · matrícula ${c.mat}`, k: 'pessoa', ir: () => { UI.modulo = 'gestao'; UI.view = 'gcolab'; if (UI.g) UI.g.mat = c.mat; else UI.g = { mat: c.mat }; } });
+  if (temFichas(ME)) for (const c of (DB.cache.g && DB.cache.g.colabs) || []) out.push({ t: title(c.nome), d: `Ficha (RH) · matrícula ${c.mat}`, k: 'pessoa', ir: () => { UI.modulo = 'frequencia'; UI.view = 'gcolab'; if (UI.g) UI.g.mat = c.mat; else UI.g = { mat: c.mat }; } });
   if (ms.includes('equipamentos') && DB.cache.e && DB.cache.e.cad) {
     for (const f of DB.cache.e.cad.frota || []) out.push({ t: f.id, d: `Equipamento · ${title(f.tipo || '')}`, k: 'eq', ir: () => { UI.modulo = 'equipamentos'; UI.view = 'eequipe'; } });
     for (const o of DB.cache.e.cad.operadores || []) out.push({ t: title(o.nome), d: `Operador · ${title(o.funcao || '')}`, k: 'pessoa', ir: () => { UI.modulo = 'equipamentos'; UI.view = 'eequipe'; } });
@@ -267,13 +272,13 @@ const BUSCA_BTN = '<button type="button" class="btn ghost buscabtn" data-act="bu
 // Etiqueta do módulo no topo do celular: mostra em que módulo a pessoa está e abre a troca de módulo.
 function modTag() {
   const cur = MODS[UI.modulo]; if (!cur || !ME) return '';
-  const pode = modsDe(ME).length > 1;
-  return `<button type="button" class="modtag" ${pode ? 'data-act="modsheet" aria-haspopup="dialog"' : 'aria-disabled="true" tabindex="-1"'} aria-label="Módulo: ${esc(cur.nome)}${pode ? '. Tocar para trocar de módulo' : ''}"><span class="mi">${MOD_IC[UI.modulo] || ''}</span><b>${esc(cur.curto)}</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+  const pode = modsMenu().length > 1;
+  return `<button type="button" class="modtag" ${pode ? 'data-act="modsheet" aria-haspopup="dialog"' : 'aria-disabled="true" tabindex="-1"'} aria-label="Área: ${esc(cur.nome)}${pode ? '. Tocar para trocar de área' : ''}"><span class="mi">${MOD_IC[UI.modulo] || ''}</span><b>${esc(cur.curto)}</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 export function modSheet() {
-  const ms = modsDe(ME);
+  const ms = modsMenu();
   const ok = '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-  sheet('Trocar de módulo', '', ms.map(m => ({ t: MODS[m].nome, d: MODS[m].sub, m, cur: m === UI.modulo, cls: 'mod', ic: `<span class="mi">${MOD_IC[m] || ''}</span>`, fim: m === UI.modulo ? ok : '' })), o => { if (o.m !== UI.modulo) trocarModulo(o.m); });
+  sheet('Trocar de área', '', ms.map(m => ({ t: MODS[m].nome, d: subMod(m), m, cur: mesmoItem(m, UI.modulo), cls: 'mod', ic: `<span class="mi">${MOD_IC[m] || ''}</span>`, fim: mesmoItem(m, UI.modulo) ? ok : '' })), o => { if (!mesmoItem(o.m, UI.modulo)) trocarModulo(o.m); });
 }
 // Topo: só título (1 linha), subtítulo (1 linha), Buscar e conexão. Os filtros vão para a barra logo abaixo (#fbarra).
 function pintarTopo(titulo, sub, filtros = '') {
@@ -287,10 +292,10 @@ function renderTop() {
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintarTopo(v.nome, sub, sw); return;
   }
-  if (UI.modulo === 'frequencia') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : SUB_A[v.id] || '', v.id === 'meudia' || !AD ? '' : AD.topo(v.id)); return; }
+  if (UI.modulo === 'frequencia') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todas as áreas' : SUB_A[v.id] || SUB_G[v.id] || '', v.id === 'meudia' || G_VIEWS.includes(v.id) || !AD ? '' : AD.topo(v.id)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
-  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Operação de equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
-  if ((UI.modulo === 'gestao' && !ES_VIEWS.includes(v.id)) || UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todos os módulos' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'); return; }
+  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
+  if (UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todas as áreas' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
@@ -299,6 +304,15 @@ function renderTop() {
   else {
     if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
     if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
+  }
+  // Atividades: seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular; troca o conjunto e fica na mesma aba.
+  const ativ = (UI.modulo === 'operacao' || UI.modulo === 'bateria') && v.mod === 'op';
+  if (ativ && modsDe(ME).includes('operacao') && modsDe(ME).includes('bateria')) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${[['operacao', 'patio'], ['bateria', 'bateria']].map(([m, k]) => `<button type="button" role="tab" data-atset="${m}" aria-selected="${UI.modulo === m}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
+  // Programação: Folha do líder e Etiquetas QR abrem por botões no topo (saíram do menu); nelas, um botão volta para a Programação.
+  if (ativ && (UI.view === 'prog' || v.pai === 'prog')) {
+    const vs = viewsDoModulo();
+    const bt = UI.view === 'prog' ? [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']].filter(([id]) => vs.some(x => x.id === id)) : vs.some(x => x.id === 'prog') ? [['prog', 'Programação', 'prog']] : [];
+    if (bt.length) ctr += `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>`;
   }
   pintarTopo(v.nome, sub, ctr);
 }
@@ -369,7 +383,8 @@ function afterRender() {
 // e a tela nova é desenhada no quadro seguinte. Assim o celular não parece travado enquanto monta a tela.
 let trocaRaf = 0;
 export function trocarTela(id = UI.view) {
-  document.querySelectorAll('#nav [data-go], #tabbar [data-go]').forEach(b => { if (b.dataset.go === id) b.setAttribute('aria-current', 'page'); else if (b.dataset.go !== '__more') b.removeAttribute('aria-current'); });
+  const pai = (VIEWS.find(v => v.id === id) || {}).pai; // Folha do líder e Etiquetas marcam a Programação
+  document.querySelectorAll('#nav [data-go], #tabbar [data-go]').forEach(b => { if (b.dataset.go === id || b.dataset.go === pai) b.setAttribute('aria-current', 'page'); else if (b.dataset.go !== '__more') b.removeAttribute('aria-current'); });
   M.moverIndicador();
   const v = $('view'); if (v) v.classList.add('saindo');
   cancelAnimationFrame(trocaRaf);
