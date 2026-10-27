@@ -29,7 +29,7 @@ const arquivos = [];
 for (const p of arquivos) {
   const rel = path.relative(pub, p);
   if (/(^|\/)seed[^/]*\.json$|\.(xlsx|xlsm|xls|csv)$/i.test(rel)) { problemas.push(`${rel}: arquivo de dados não pode ficar no site (mova para dados-importacao/)`); continue; }
-  if (!/\.(js|json|html|webmanifest|txt|md)$/i.test(rel) || rel.startsWith('vendor/')) continue;
+  if (!/\.(js|json|html|css|webmanifest|txt|md)$/i.test(rel) || rel.startsWith('vendor/')) continue;
   const txt = norm(fs.readFileSync(p, 'utf8'));
   let n = 0;
   for (const k of nomes) if (txt.includes(k)) n++;
