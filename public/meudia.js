@@ -45,7 +45,9 @@ export function criarMeuDia(X) {
     });
   }
 
-  const ir = (mod, view, area, txt, pri) => `<button class="btn ${pri ? 'pri' : ''} sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`;
+  // Quem só consulta (visitante) não vê botão de ação: só "Ver". O laranja fica para a ação principal da faixa de abertura.
+  const soLer = () => ME().papel === 'leitor';
+  const ir = (mod, view, area, txt) => (soLer() ? (view === 'gnovaoc' ? '' : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">Ver</button>`) : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`);
   const vazio = t => `<p class="muted small m0">${t}</p>`;
 
   function cardAvisos() {
@@ -153,10 +155,21 @@ export function criarMeuDia(X) {
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };
     tiles.sort((a, b) => ordem[a.tom] - ordem[b.tom] || b.n - a.n);
     const ACAO = { apontar: 'Apontar', pend: 'Apontar', escala: 'Ver escala', epar: 'Abrir', gocorr: 'Ver', gcomigo: 'Recolher', gpainel: 'Ver fichas' };
-    const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn ${t.tom === 'bad' ? 'pri' : ''} sm" data-md="${t.go.join('|')}">${t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
+    const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn sm" data-md="${t.go.join('|')}">${soLer() ? 'Ver' : t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
     const urgentes = tiles.filter(t => t.tom === 'bad' || t.tom === 'warn');
     const chips = tiles.filter(t => t.tom === 'neu');
-    let h = `<div class="md-hero"><div><h2>${saud}, ${esc(nome)}.</h2><p>${(DIAS_L[d.getDay()][0].toUpperCase() + DIAS_L[d.getDay()].slice(1))}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}</p></div></div>`;
+    // Faixa de abertura (como no Meu painel): saudação e data numa linha pequena, manchete com o número do que pede ação hoje,
+    // resumo com o mais crítico em destaque e até 2 botões.
+    const nU = urgentes.length;
+    const dataTx = `${DIAS_L[d.getDay()]}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}`;
+    const manchete = !nU ? 'Tudo em dia' : soLer() ? `<span class="num">${nU}</span> ${nU === 1 ? 'ponto de atenção' : 'pontos de atenção'} hoje` : `<span class="num">${nU}</span> ${nU === 1 ? 'coisa pede' : 'coisas pedem'} ação hoje`;
+    const resumo = nU ? urgentes.slice(0, 2).map(t => `<span class="${t.tom === 'bad' ? 'crit' : ''}"><b class="num">${t.n.toLocaleString('pt-BR')}</b> ${esc(t.t)}</span>`).join(' · ') : 'Nada pendente nos seus módulos agora.';
+    // botões: o mais urgente (laranja) e o próximo de outro tipo; quando o nome repete, leva junto o lugar (ex.: "Apontar · Bateria")
+    const rotA = t => t.acao || ACAO[t.go[1]] || 'Abrir';
+    const segundo = urgentes.slice(1).find(t => t.go.join('|') !== (urgentes[0] && urgentes[0].go.join('|')) && t.go[1] !== urgentes[0].go[1]) || urgentes[1];
+    const doBotao = (t, i) => { const r = rotA(t); const rep = urgentes[0] && segundo && rotA(urgentes[0]) === rotA(segundo); return `<button class="btn${i ? '' : ' pri'}" data-md="${t.go.join('|')}">${rep && t.t.includes(' · ') ? `${r} · ${esc(t.t.split(' · ').pop())}` : r}</button>`; };
+    const acoes = soLer() ? (urgentes[0] ? `<button class="btn" data-md="${urgentes[0].go.join('|')}">Ver</button>` : '') : [urgentes[0], segundo].filter(Boolean).map(doBotao).join('');
+    let h = `<div class="md-hero"><div class="md-ht"><p class="md-sd">${saud}, ${esc(nome)} · ${dataTx}</p><h2${nU ? '' : ' class="ok"'}>${manchete}</h2><p class="md-rs">${resumo}</p></div>${acoes ? `<div class="md-ac">${acoes}</div>` : ''}</div>`;
     h += `<div class="md-top"><div class="card md-agora"><header><h2>Agora</h2><p>${urgentes.length ? 'Do mais urgente para o menos' : 'Nada pedindo ação'}</p></header><div class="body">${urgentes.length
       ? urgentes.slice(0, 3).map(linha).join('') + (urgentes.length > 3 ? `<details class="md-mais"><summary>Mais ${urgentes.length - 3}</summary>${urgentes.slice(3).map(linha).join('')}</details>` : '')
       : '<p class="md-ok m0"><b>Tudo em dia.</b> Nada pendente nos seus módulos agora.</p>'}</div></div>`;
