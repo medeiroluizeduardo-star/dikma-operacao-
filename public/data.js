@@ -36,9 +36,9 @@ import {
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
   getMessaging, getToken, deleteToken, mensagensSuportadas
 } from './vendor/firebase.js';
-import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth } from './cal.js';
+import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
-import { podeAcesso, temFreq } from './acessos.js';
+import { podeAcesso, temFreq, resumoFerias } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
@@ -226,6 +226,8 @@ function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   // Operação e Administração do sistema: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
   on(doc(db, 'adm', 'feriasAtivas'), s => { cache.feriasAtivas = (s.exists() && s.data().itens) || []; changed(); });
+  // Desligamentos (data de demissão das fichas), refeitos todo dia pela rotina do GitHub: DS automático para quem não lê as fichas.
+  on(doc(db, 'adm', 'desligados'), s => { cache.desligados = (s.exists() && s.data().itens) || []; changed(); });
   if (me.papel === 'admin') on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
   // Módulo Frequência e férias (dentro da Operação): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
   if (acessoAtual === 'operacao' && temFreq(me)) startAdm(on);
@@ -243,7 +245,7 @@ function startData() {
     on(collection(db, C('plano', k)), qs => { st.plano = {}; qs.forEach(d => { st.plano[d.id] = d.data().itens || []; }); changed(); });
     // plano de ação das causas de não realização (acoes/{id}: { causa, area, acao, resp, prazo, status, em, por })
     on(collection(db, C('acoes', k)), qs => { st.acoes = {}; qs.forEach(d => { st.acoes[d.id] = { id: d.id, ...d.data() }; }); changed(); });
-    on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; }); st.colabsLoaded = !qs.metadata.fromCache || qs.size > 0; changed(); if (gestaoOn) conferirAreas(); });
+    on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; st.maiorId = Math.max(st.maiorId || 0, +d.data().maiorId || 0); }); st.colabsLoaded = !qs.metadata.fromCache || qs.size > 0; changed(); if (gestaoOn) conferirAreas(); });
   }
   on(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(40)), qs => {
     cache.log = qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { ...x, at: x.at ? x.at.toDate() : new Date() }; });
@@ -281,7 +283,9 @@ const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, fp: x.fp |
 // Meses em tempo real. O mês anterior, o atual e o próximo ficam sempre ligados (Meu dia, Painel, avisos);
 // os outros que a pessoa abrir ficam ligados até 4 de cada vez (os mais antigos saem). Assim, voltar a uma
 // tela já vista não recarrega nada.
-const mesesBase = () => { const m = today().slice(0, 7); return [addMonth(m, -1), m, addMonth(m, 1)]; };
+// Também os meses que cobrem os últimos 60 dias: a conta de "atrasadas" usa essa janela fixa (hoje.js) no menu,
+// em Pendências e no Meu dia.
+const mesesBase = () => { const m = today().slice(0, 7); const out = []; for (let x = monthOfWeek(weekOf(add(today(), -60))); x <= m; x = addMonth(x, 1)) out.push(x); return [...new Set([...out, addMonth(m, -1), m, addMonth(m, 1)])]; };
 const usoMes = new Map(); // "conjunto|mês" → último uso
 export function watchMonths(meses) { watchSet(cur, meses); }
 function watchSet(k, meses) {
@@ -361,7 +365,14 @@ export function setSitExtra(campo, key, val, k = cur) {
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, C('plano'), area), { itens }));
 // k = conjunto (patio | bateria); o cadastro do Efetivo grava nos dois, seja qual for o módulo aberto.
-export const salvarColabsArea = (area, itens, k = setDaArea(area) || cur) => track(setDoc(doc(db, C('colaboradores', k), area), { itens }));
+// Número do colaborador (C012, B034): o maior já usado no conjunto fica guardado junto da lista (maiorId) e só cresce,
+// para que um número liberado (pessoa excluída ou que mudou de conjunto) nunca seja dado a outra pessoa.
+const numId = id => parseInt(String(id || '').replace(/\D/g, ''), 10) || 0;
+export function maiorIdUsado(k) { const st = S[k]; let m = st.maiorId || 0; for (const l of Object.values(st.colabs || {})) for (const x of l) m = Math.max(m, numId(x.id)); return m; }
+export function salvarColabsArea(area, itens, k = setDaArea(area) || cur) {
+  const maiorId = Math.max(maiorIdUsado(k), ...itens.map(x => numId(x.id))); S[k].maiorId = maiorId;
+  return track(setDoc(doc(db, C('colaboradores', k), area), { itens, maiorId }));
+}
 export const saveRotas = rotas => track(updateDoc(doc(db, C('config'), 'sistema'), { rotas }));
 export const saveConfig = patch => track(updateDoc(doc(db, C('config'), 'sistema'), patch));
 
@@ -522,11 +533,8 @@ export function admSetJus(conj, comp, p, data, val) {
 export const admSalvarComp = (conj, comp, dados) => track(setDoc(doc(db, 'freqcomp', conj + '|' + comp), { ...dados, conj, competencia: comp, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
 export const admSalvarGrupos = (conj, comp, grupos) => track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), { grupos, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
 // Férias: grava e refaz o resumo que a Operação lê.
-function resumoFerias(lista) {
-  const ini = addMonth(today().slice(0, 7), -2) + '-01', fim = addMonth(today().slice(0, 7), 6) + '-31';
-  return lista.filter(f => f.inicio && f.termino && f.termino >= ini && f.inicio <= fim).map(f => ({ mat: f.mat || '', nome: f.nome, inicio: f.inicio, termino: f.termino }));
-}
-function gravarResumoFerias() { return track(setDoc(doc(db, 'adm', 'feriasAtivas'), { itens: resumoFerias(cache.adm.ferias), atualizadoEm: serverTimestamp() })); }
+// (a mesma conta da rotina diária do GitHub, que também refaz o resumo todo dia: resumoFerias em acessos.js)
+function gravarResumoFerias() { return track(setDoc(doc(db, 'adm', 'feriasAtivas'), { itens: resumoFerias(cache.adm.ferias, today()), atualizadoEm: serverTimestamp() }, { merge: true })); }
 export async function feriasSalvar(id, dados) {
   const ref = id ? doc(db, 'ferias', id) : doc(collection(db, 'ferias'));
   const x = { ...dados, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid };

@@ -38,7 +38,8 @@ export function criarMeuDia(X) {
   function dadosDoSet(k) {
     const st = DB.dados(k); if (!st || !st.config) return null;
     const sit = {}; for (const v of Object.values(st.sitByMonth || {})) Object.assign(sit, v);
-    return resumoAtividades({
+    const cob = {}; for (const v of Object.values(st.sitExtra || {})) Object.assign(cob, (v && v.cob) || {});
+    return resumoAtividades({ cob,
       areas: areasDe(k), plano: SETS[k].areas.flatMap(a => st.plano[a] || []), semanas: st.semanas,
       colabs: SETS[k].areas.flatMap(a => st.colabs[a] || []), sit, rotas: st.config.rotas || [], hoje: today(),
       sitDe: X.sitEscala ? X.sitEscala(key => sit[key]) : undefined, fator: X.fatorRota
@@ -103,10 +104,11 @@ export function criarMeuDia(X) {
       if (!areas.length) continue;
       const nomeAreas = areas.length === SETS[k].areas.length ? 'todas as áreas' : areas.map(a => AREA_S[a]).join(' e ');
       if (r.hoje.total) progresso.push({ nome: `${SETS[k].curto} · hoje`, sub: nomeAreas, feitas: r.hoje.R + r.hoje.E + r.hoje.N, total: r.hoje.total, go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
-      if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
+      if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar (últimos 60 dias)', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
       { const st = DB.dados(k); // aprovação dos apontamentos: o supervisor vê o que falta aprovar; o líder, o que voltou para corrigir
-        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
-        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev'); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
+        const noPlano = (ids => pid => ids.has(pid))(new Set(SETS[k].areas.flatMap(a => (st.plano[a] || []).map(p => p.id)))); // o mesmo filtro da Aprovação
+        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'pend', noPlano); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
+        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev', noPlano); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
       if (r.deficit.length) tiles.push({ n: r.deficit.length, t: `${r.deficit.length === 1 ? 'rota' : 'rotas'} com déficit amanhã · ${SETS[k].curto}`, s: `${ddmm(r.amanha)}`, tom: 'bad', go: [mod, 'escala', r.deficit[0].area] });
       const pend = r.rotas.filter(x => x.total);
       blocos.push(`<div class="card md-card"><header><h2>${SETS[k].nome}</h2><p>Hoje · ${esc(nomeAreas)}</p><span class="r">${ir(mod, 'apontar', areas.length === 1 ? areas[0] : '', `${I.apontar} Apontar`, true)}</span></header><div class="body stackcol" style="gap:14px">
@@ -146,8 +148,11 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
-    if (X.jusPend) { const n = X.jusPend(); if (n) tiles.push({ n, t: n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa', s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', ''], acao: 'Justificar' }); }
-    if (X.checkinPend) { const n = X.checkinPend(); if (n) tiles.push({ n, t: n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar', s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', ''], acao: 'Fazer' }); }
+    // Justificativas e check-in: contados por conjunto (Pátio e Bateria), não pelo módulo aberto antes
+    for (const k of SET_KEYS) {
+      if (X.jusPend) { const n = X.jusPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa'} · ${SETS[k].curto}`, s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', '', k], acao: 'Justificar' }); }
+      if (X.checkinPend) { const n = X.checkinPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'check-ins do turno por confirmar' : 'check-in do turno por confirmar'} · ${SETS[k].curto}`, s: 'confirme a equipe: presente, falta ou atraso', tom: 'warn', go: ['gestao', 'esdia', '', k], acao: 'Fazer' }); }
+    }
     const d = new Date(); const nome = title((u.nome || '').split(' ')[0]);
     const saud = d.getHours() < 12 ? 'Bom dia' : d.getHours() < 18 ? 'Boa tarde' : 'Boa noite';
     const ordem = { bad: 0, warn: 1, neu: 2, ok: 3 };

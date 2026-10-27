@@ -17,7 +17,9 @@ export const ITENS_SEG = [['epi', 'Uso de EPI'], ['cinto', 'Cinto de segurança'
 
 // ext(o, data): situação vinda da Frequência / Efetivo diário / Férias (nome da situação, null = trabalhando,
 // undefined = sem informação, usa a do cadastro).
-export function criarCalc(cfg, cad, ext) {
+// prev(o, data) opcional: escala central ({ trab } ou null sem turma) — a mesma do Efetivo diário e da Frequência.
+// Sem ela (conferência com a planilha no Node), vale a conta da planilha: 4x4 fixo e dias úteis menos feriados sem operação.
+export function criarCalc(cfg, cad, ext, prev) {
   const T = cfg.turno;
   const opMap = new Map((cad.operadores || []).map(o => [o.nome, o]));
   const frotaMap = new Map((cad.frota || []).map(f => [f.id, f]));
@@ -50,13 +52,16 @@ export function criarCalc(cfg, cad, ext) {
   const situacao = p => (p.fim ? 'LIBERADO' : 'SEM LIBERAÇÃO');
 
   // 4x4: dia de trabalho se (dia − base) mod 8 < 4
-  const trabalha4x4 = (turma, data) => { const b = (cfg.turmas || {})[turma]; if (!b) return null; return (((diffD(b, data) % 8) + 8) % 8) < 4; };
-  const diaUtil = data => dow(data) >= 1 && dow(data) <= 5 && !feriadosSemOp.has(data);
+  const trabalha4x4 = (turma, data) => {
+    if (prev) { const p = prev({ escala: '4x4', turma }, data); return p ? !!p.trab : null; }
+    const b = (cfg.turmas || {})[turma]; if (!b) return null; return (((diffD(b, data) % 8) + 8) % 8) < 4;
+  };
+  const diaUtil = data => { if (prev) { const p = prev({ escala: 'ADM' }, data); if (p) return !!p.trab; } return dow(data) >= 1 && dow(data) <= 5 && !feriadosSemOp.has(data); };
   function contar(a, b, f) { let n = 0; if (a > b) return 0; for (let d = a; d <= b; d = addD(d, 1)) if (f(d)) n++; return n; }
   const diasUteis = (a, b) => contar(a, b, diaUtil);
   function diasPrevistosOp(o, a, b) {
     if (a > b) return 0;
-    if ((o.escala || 'ADM') === '4x4') { if (!(cfg.turmas || {})[o.turma]) return Math.round((diffD(a, b) + 1) / 2); return contar(a, b, d => trabalha4x4(o.turma, d)); }
+    if ((o.escala || 'ADM') === '4x4') { if (trabalha4x4(o.turma, a) === null) return Math.round((diffD(a, b) + 1) / 2); return contar(a, b, d => trabalha4x4(o.turma, d)); }
     return diasUteis(a, b);
   }
   const sitDesconta = s => { const x = (cfg.situacoes || []).find(z => z.sit === s); return x ? x.desconta : true; };

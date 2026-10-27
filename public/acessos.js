@@ -41,3 +41,31 @@ export function indiceFerias(itens) {
     return l.find(f => f.inicio <= dt && dt <= f.termino) || null;
   };
 }
+
+// Resumo das férias lido por todos (adm/feriasAtivas): de 2 meses antes a 6 meses depois de hoje.
+// Refeito ao salvar férias e, todo dia, pela rotina do GitHub (integracao/avisos), para não ficar velho.
+export function resumoFerias(lista, hoje) {
+  const [y, m] = hoje.slice(0, 7).split('-').map(Number);
+  const mes = n => { const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const ini = mes(-2) + '-01', fim = mes(6) + '-31';
+  return (lista || []).filter(f => f.inicio && f.termino && f.termino >= ini && f.inicio <= fim).map(f => ({ mat: f.mat || '', nome: f.nome, inicio: f.inicio, termino: f.termino }));
+}
+
+// ---- Desligamento: a data de demissão da ficha (Efetivo) vale como DS automático em todos os módulos ----
+// fichas: [{ mat, nome, dem }] · devolve (pessoa {mat?, nome}) → data de demissão ('' quando não tem)
+export function indiceDesligados(fichas) {
+  const porMat = new Map(), porNome = new Map();
+  for (const f of fichas || []) {
+    if (!f || !f.dem) continue;
+    if (f.mat) porMat.set(String(f.mat), f.dem);
+    const k = normNome(f.nome); if (k && !porNome.has(k)) porNome.set(k, f.dem);
+  }
+  return p => {
+    if (!p) return '';
+    if (p.mat && porMat.has(String(p.mat))) return porMat.get(String(p.mat));
+    return porNome.get(normNome(p.nome)) || '';
+  };
+}
+// Resumo dos desligamentos lido por todos (adm/desligados), gravado pela rotina do GitHub a partir das fichas
+export const resumoDesligados = fichas => (fichas || []).filter(f => f && f.dem && f.nome).map(f => ({ mat: f.mat || '', nome: f.nome, dem: f.dem }))
+  .sort((a, b) => (a.nome < b.nome ? -1 : a.nome > b.nome ? 1 : 0));
