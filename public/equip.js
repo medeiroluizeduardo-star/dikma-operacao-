@@ -85,7 +85,9 @@ export function criarEquip(X) {
 
   /* ---------- painel ---------- */
   const SEM = { 1: ['ok', 'Na meta'], 2: ['warn', 'Perto da meta'], 3: ['bad', 'Fora da meta'], 0: ['neu', 'Sem dados'] };
-  const kpi = (lbl, v, s, sem) => `<div class="kpi"><span class="lbl">${sem != null ? `<i class="dot st-${SEM[sem][0]}" title="${SEM[sem][1]}"></i>` : ''}${lbl}</span><span class="v num">${v}</span><span class="s">${s}</span></div>`;
+  // Estado (na meta, perto, fora) só na cor do número, como em todas as faixas de indicadores.
+  const COR_SEM = { ok: 'var(--st-real)', warn: 'var(--st-atr)', bad: 'var(--st-nreal)' };
+  const kpi = (lbl, v, s, sem) => `<div class="kpi"${sem != null ? ` title="${SEM[sem][1]}"` : ''}><span class="lbl">${lbl}</span><span class="v num"${sem != null && COR_SEM[SEM[sem][0]] ? ` style="color:${COR_SEM[SEM[sem][0]]}"` : ''}>${v}</span><span class="s">${s}</span></div>`;
   function vPainel() {
     const C = calc(); const M = E().config.metas;
     const { k, ops, rk } = C.mes(U.mes, E().lanc, E().par, E().insp, (E().aval[U.mes] || {}), TODAY);
@@ -96,31 +98,30 @@ export function criarEquip(X) {
     const q4 = ops.filter(x => x.aloc > 0 && x.o.escala === '4x4').length;
     let h = `<div class="filters">${selMes('eMes', U.mes)}<span class="muted" style="align-self:flex-end">Período ${dBR(k.janela[0])} a ${dBR(k.janela[1])} · ${k.diasOperados} de ${k.diasUteis} dias úteis com lançamento · ${k.nPar} paradas</span></div>`;
     if (!k.aloc) h += '<div class="card"><div class="empty">Nenhum lançamento neste mês.</div></div>';
-    h += `<div class="kpis k8">
-      ${kpi('Dias operados', k.diasOperados, `de ${k.diasUteis} dias úteis · ${k.aloc} alocações`)}
-      ${kpi('Horas operadas', h1(k.hoper), `${pc(k.aprov)} da janela · meta ≥ ${pc(M.aprov)}`, sm.aprov)}
+    // Uma faixa só: os 6 indicadores principais à vista e os outros em "Ver mais".
+    h += `<div class="kpis">
       ${kpi('Disponibilidade física', pc(k.disp), `meta ≥ ${pc(M.disp)}`, sm.disp)}
       ${kpi('Efetividade', pc(k.efet), `alocações sem fora/manutenção · meta ≥ ${pc(M.efet)}`, sm.efet)}
+      ${kpi('Horas operadas', h1(k.hoper), `${pc(k.aprov)} da janela · meta ≥ ${pc(M.aprov)}`, sm.aprov)}
       ${kpi('Paradas', k.nPar, `${k.parEq} por falha de equipamento`)}
-      ${kpi('Horas paradas', h1(k.hParEq), 'falha de equipamento')}
       ${kpi('MTTR', h2(k.mttr) + ' h', `tempo médio de reparo · meta ≤ ${h1(M.mttr)} h`, sm.mttr)}
+      ${kpi('Nota média da equipe', h1(k.notaMedia), `meta ≥ ${M.nota}`, sm.nota)}
+      ${kpi('Dias operados', k.diasOperados, `de ${k.diasUteis} dias úteis · ${k.aloc} alocações`)}
+      ${kpi('Horas paradas', h1(k.hParEq), 'falha de equipamento')}
       ${kpi('MTBF', h1(k.mtbf) + ' h', `horas entre falhas · meta ≥ ${h1(M.mtbf)} h`, sm.mtbf)}
-    </div>
-    <div class="kpis k8">
+      ${kpi('Sem liberação', k.semLib, `meta ≤ ${M.semlib}`, sm.semlib)}
+      ${kpi('Paradas do operador', k.parOp, `${h1(k.hParOp)} h · meta ≤ ${M.parop}`, sm.parop)}
       ${kpi('Operadores ativos', k.opsAtivos, `${k.opsAtivos - q4} ADM · ${q4} 4x4`)}
       ${kpi('Horas extras', hhmm(k.heH), `${k.alocHE} alocações HE · ${k.cobert} coberturas`)}
-      ${kpi('Sem liberação', k.semLib, `meta ≤ ${M.semlib}`, sm.semlib)}
-      <div class="kpi"><span class="lbl">🏆 Destaque do mês</span><span class="v vsm">${k.destaque ? esc(short(k.destaque.o.nome)) : '–'}</span><span class="s">${k.destaque ? h1(k.destaque.nota) + ' pts · ' + k.destaque.classe : ''}</span></div>
       ${kpi('Fora da coqueria hoje', foraHoje.length, foraHoje.slice(0, 2).map(o => short(o.nome) + ' (' + o.situacao.toLowerCase() + ')').join(', ') || 'todos trabalhando')}
-      ${kpi('Nota média da equipe', h1(k.notaMedia), `meta ≥ ${M.nota}`, sm.nota)}
       ${kpi('Avaliações pendentes', k.pendentes, `sem nota · ${k.inspecoes} inspeções`)}
-      ${kpi('Paradas do operador', k.parOp, `${h1(k.hParOp)} h · meta ≤ ${M.parop}`, sm.parop)}
+      <div class="kpi"><span class="lbl">🏆 Destaque do mês</span><span class="v vsm">${k.destaque ? esc(short(k.destaque.o.nome)) : '–'}</span><span class="s">${k.destaque ? h1(k.destaque.nota) + ' pts · ' + k.destaque.classe : ''}</span></div>
     </div>`;
     // por operador + horas por dia
     const porAloc = ops.filter(x => x.aloc > 0).sort((a, b) => b.aloc - a.aloc || b.hoper - a.hoper);
     const mx = Math.max(1, ...k.porDia.map(d => d.hoper + d.hpar));
-    h += `<div class="grid2"><div class="card"><header><h2>Produtividade por operador</h2><p>Por alocações · cinza = não fixo</p></header><div class="tw"><table><thead><tr><th>Operador</th><th class="r">Aloc.</th><th class="r">H. operadas</th><th class="r">H. paradas</th><th class="r">Por causa dele</th><th class="r">Cobertura</th><th class="r">Nota prod.</th></tr></thead><tbody>
-      ${porAloc.map(x => `<tr class="${x.o.fixo === false ? 'muted' : ''}"><td><b>${esc(short(x.o.nome))}</b></td><td class="r num">${x.aloc}</td><td class="r num">${h1(x.hoper)}</td><td class="r num">${h1(x.hpar)}</td><td class="r num">${h1(x.hparOp)}</td><td class="r num">${pc(x.cobEsc)}</td><td class="r num">${Math.round(x.scProd)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Sem alocações.</td></tr>'}
+    h += `<div class="grid2"><div class="card"><header><h2>Produtividade por operador</h2><p>Por alocações · cinza = não fixo</p></header><div class="tw"><table class="tcard"><thead><tr><th>Operador</th><th class="r">Aloc.</th><th class="r">H. operadas</th><th class="r">H. paradas</th><th class="r">Por causa dele</th><th class="r">Cobertura</th><th class="r">Nota prod.</th></tr></thead><tbody>
+      ${porAloc.map(x => `<tr class="${x.o.fixo === false ? 'muted' : ''}"><td class="tc-t" style="min-width:160px"><b>${esc(short(x.o.nome))}</b></td><td class="r num" data-l="Alocações">${x.aloc}</td><td class="r num" data-l="H. operadas">${h1(x.hoper)}</td><td class="r num" data-l="H. paradas">${h1(x.hpar)}</td><td class="r num" data-l="Por causa dele">${h1(x.hparOp)}</td><td class="r num" data-l="Cobertura">${pc(x.cobEsc)}</td><td class="r num" data-l="Nota prod.">${Math.round(x.scProd)}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Sem alocações.</td></tr>'}
       </tbody></table></div></div>
       <div class="card"><header><h2>Horas por dia</h2><p>Operadas × paradas</p></header><div class="body"><div class="legend"><span><i style="background:var(--st-real)"></i>Operadas</span><span><i style="background:var(--st-nreal)"></i>Paradas</span></div>
       <div class="cols cmes" role="img" aria-label="Horas por dia do mês">${k.porDia.map(d => `<div class="col" title="${dBR(d.data)}: ${h1(d.hoper)} h operadas, ${h1(d.hpar)} h paradas, ${d.aloc} alocações">${d.hpar ? `<i style="height:${d.hpar / mx * 100}%;background:var(--st-nreal)"></i>` : ''}${d.hoper ? `<i style="height:${d.hoper / mx * 100}%;background:var(--st-real)"></i>` : ''}</div>`).join('')}</div>
@@ -541,7 +542,7 @@ export function criarEquip(X) {
     const l = E().insp.filter(x => x.data.slice(0, 7) === U.inMes).sort((a, b) => (a.data < b.data ? 1 : -1));
     const pcx = v => (v == null ? '–' : pc(v));
     let h = `<div class="filters">${selMes('eInMes', U.inMes)}${podeEditar() ? `<button class="btn pri" data-e="novaInsp" style="align-self:flex-end">${I.plus} Inspeção</button>` : ''}</div>`;
-    if (!l.length) return h + '<div class="card"><div class="empty">Nenhuma inspeção neste mês. As inspeções entram na nota de 5S e de segurança da classificação.</div></div>';
+    if (!l.length) return h + `<div class="card"><div class="empty"><b>Nenhuma inspeção em ${MESES_L[+U.inMes.slice(5) - 1].toLowerCase()}</b><span>As inspeções entram na nota de 5S e de segurança da classificação.</span>${podeEditar() ? `<button class="btn" data-e="novaInsp">${I.plus} Inspeção</button>` : ''}</div></div>`;
     h += `<div class="card"><div class="tw"><table><thead><tr><th>Data</th><th>Operador</th><th>Identificação</th><th class="r">5S</th><th class="r">Segurança</th><th>Não conformes</th><th>Inspetor</th><th></th></tr></thead><tbody>
       ${l.map(x => { const nc = [...ITENS_5S, ...ITENS_SEG].filter(([k]) => (x.itens || {})[k] === 'NC').map(([, n]) => n); return `<tr><td class="num">${dBR(x.data)}</td><td><b>${esc(short(x.op))}</b></td><td class="mono">${esc(x.eq || '')}</td><td class="r num">${pcx(x.p5s)}</td><td class="r num">${pcx(x.pseg)}</td><td class="small">${nc.length ? `<span class="pill bad">${nc.length}</span> ${esc(nc.join(', '))}` : '<span class="pill ok">Tudo conforme</span>'}</td><td class="small">${esc(title(x.inspetor || ''))}</td><td>${podeEditar() ? `<button class="btn ghost danger" data-e="delInsp" data-id="${x.id}" aria-label="Excluir inspeção">✕</button>` : ''}</td></tr>`; }).join('')}
       </tbody></table></div></div>`;
@@ -582,8 +583,8 @@ export function criarEquip(X) {
         <div class="avg"><label>Proatividade${nota(x.o.nome, 'proat', 5)}</label><label>5S${nota(x.o.nome, 's5', 5)}</label><label>Segurança${nota(x.o.nome, 'seg', 5)}</label><label>Faltas${num(x.o.nome, 'faltas', x)}</label><label>Atrasos${num(x.o.nome, 'atrasos', x)}</label><label>Atestados${num(x.o.nome, 'atest', x)}</label></div>
         <input class="in" data-av="${esc(x.o.nome)}|obs" value="${esc((av[x.o.nome] || {}).obs || '')}" placeholder="Observações" ${ed ? '' : 'disabled'} aria-label="Observações"></div>`).join('') || '<div class="card"><div class="empty">Nenhum operador com alocação no mês.</div></div>'}</div>`;
     }
-    h += `<div class="card"><div class="tw"><table><thead><tr><th>Operador</th><th class="c">Proatividade</th><th class="c">5S</th><th class="c">Segurança</th><th class="c">Faltas</th><th class="c">Atrasos</th><th class="c">Atestados</th><th>Observações</th><th class="r">Nota</th></tr></thead><tbody>
-      ${l.map(x => `<tr><td><b>${esc(short(x.o.nome))}</b><div class="muted small">${x.aloc} alocações${x.ninsp ? ' · ' + x.ninsp + ' inspeções' : ''}</div></td><td class="c">${nota(x.o.nome, 'proat', 5)}</td><td class="c">${nota(x.o.nome, 's5', 5)}</td><td class="c">${nota(x.o.nome, 'seg', 5)}</td><td class="c">${num(x.o.nome, 'faltas', x)}</td><td class="c">${num(x.o.nome, 'atrasos', x)}</td><td class="c">${num(x.o.nome, 'atest', x)}</td><td><input class="in" data-av="${esc(x.o.nome)}|obs" value="${esc((av[x.o.nome] || {}).obs || '')}" ${ed ? '' : 'disabled'} aria-label="Observações"></td><td class="r num"><b>${x.ranked ? h1(x.nota) : '–'}</b>${x.classe ? `<div class="small muted">${x.classe.toLowerCase()}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum operador com alocação no mês.</td></tr>'}
+    h += `<div class="card"><div class="tw"><table class="avt"><thead><tr><th class="avn">Operador</th><th class="c avs">Proatividade</th><th class="c avs">5S</th><th class="c avs">Segurança</th><th class="c avq">Faltas</th><th class="c avq">Atrasos</th><th class="c avq">Atestados</th><th>Observações</th><th class="r avq">Nota</th></tr></thead><tbody>
+      ${l.map(x => `<tr><td class="avn"><b>${esc(short(x.o.nome))}</b><div class="muted small">${x.aloc} alocações${x.ninsp ? ' · ' + x.ninsp + ' inspeções' : ''}</div></td><td class="c avs">${nota(x.o.nome, 'proat', 5)}</td><td class="c avs">${nota(x.o.nome, 's5', 5)}</td><td class="c avs">${nota(x.o.nome, 'seg', 5)}</td><td class="c avq">${num(x.o.nome, 'faltas', x)}</td><td class="c avq">${num(x.o.nome, 'atrasos', x)}</td><td class="c avq">${num(x.o.nome, 'atest', x)}</td><td><input class="in" data-av="${esc(x.o.nome)}|obs" value="${esc((av[x.o.nome] || {}).obs || '')}" ${ed ? '' : 'disabled'} aria-label="Observações"></td><td class="r num"><b>${x.ranked ? h1(x.nota) : '–'}</b>${x.classe ? `<div class="small muted">${x.classe.toLowerCase()}</div>` : ''}</td></tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum operador com alocação no mês.</td></tr>'}
       </tbody></table></div></div>`;
     return h;
   }

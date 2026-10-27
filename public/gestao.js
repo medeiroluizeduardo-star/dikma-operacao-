@@ -98,11 +98,11 @@ export function criarGestao(X) {
     const out = [];
     for (const x of indice().values()) {
       if (!x.ativo) continue;
-      if (x.dc != null && x.dc >= 38 && x.dc <= 45) out.push({ t: 'warn', mat: x.c.mat, txt: `${title(x.c.nome)} completa 45 dias de experiência ${x.dc === 45 ? 'hoje' : 'em ' + (45 - x.dc) + (45 - x.dc === 1 ? ' dia' : ' dias')}` });
-      if (x.dc != null && x.dc >= 83 && x.dc <= 90) out.push({ t: 'bad', mat: x.c.mat, txt: `${title(x.c.nome)}: fim da experiência (90 dias) ${x.dc === 90 ? 'hoje' : 'em ' + (90 - x.dc) + (90 - x.dc === 1 ? ' dia' : ' dias')}` });
+      if (x.dc != null && x.dc >= 38 && x.dc <= 45) out.push({ t: 'warn', prazo: 45 - x.dc, mat: x.c.mat, txt: `${title(x.c.nome)} completa 45 dias de experiência ${x.dc === 45 ? 'hoje' : 'em ' + (45 - x.dc) + (45 - x.dc === 1 ? ' dia' : ' dias')}` });
+      if (x.dc != null && x.dc >= 83 && x.dc <= 90) out.push({ t: 'bad', prazo: 90 - x.dc, mat: x.c.mat, txt: `${title(x.c.nome)}: fim da experiência (90 dias) ${x.dc === 90 ? 'hoje' : 'em ' + (90 - x.dc) + (90 - x.dc === 1 ? ' dia' : ' dias')}` });
       if (!x.intOk && !x.c.intAnt) out.push({ t: 'warn', mat: x.c.mat, txt: `${title(x.c.nome)}: integração ${x.nInt} de ${tiposF1().length}` });
       const velha = x.pend.find(o => dias(o.data, TODAY) > 7);
-      if (velha) out.push({ t: 'bad', mat: x.c.mat, txt: `${title(x.c.nome)}: assinatura pendente há ${dias(velha.data, TODAY)} dias` });
+      if (velha) out.push({ t: 'bad', prazo: 0, mat: x.c.mat, txt: `${title(x.c.nome)}: assinatura pendente há ${dias(velha.data, TODAY)} dias` });
     }
     return out;
   }
@@ -134,13 +134,15 @@ export function criarGestao(X) {
     let h = `<div class="filters"><label class="sel"><span>De</span><input class="in" type="date" id="gDe" value="${U.de}"></label><label class="sel"><span>Até</span><input class="in" type="date" id="gAte" value="${U.ate}"></label>${selArea('gFaP')}</div>
     <div class="kpis">
       <div class="kpi hero"><span class="lbl">Fichas em dia (ativos)</span><span class="v num">${pc(emDia, at.length)}%</span><span class="s num">${emDia} de ${at.length} colaboradores ativos</span><div class="meter"><i style="width:${pc(emDia, at.length)}%"></i></div></div>
+      <div class="kpi"><span class="lbl">Aguardando assinatura</span><span class="v num" style="color:${velhas.length ? 'var(--st-nreal)' : aguard.length ? 'var(--st-atr)' : 'inherit'}">${aguard.length}</span><span class="s">${velhas.length} há mais de 7 dias</span></div>
+      <div class="kpi"><span class="lbl">Ocorrências no período</span><span class="v num">${noPer.length}</span><span class="s">${pc(assinadas.length, noPer.length)}% assinadas</span></div>
+      <div class="kpi"><span class="lbl">Recusas</span><span class="v num" style="color:${noPer.some(o => o.status === 'recusada') ? 'var(--st-nreal)' : 'inherit'}">${noPer.filter(o => o.status === 'recusada').length}</span><span class="s">no período</span></div>
       <div class="kpi"><span class="lbl">Ativos</span><span class="v num">${at.length}</span><span class="s">${all.length - at.length} desligados</span></div>
       <div class="kpi"><span class="lbl">Em experiência</span><span class="v num">${at.filter(x => x.exp).length}</span><span class="s">até 90 dias de casa</span></div>
       <div class="kpi"><span class="lbl">Integração completa</span><span class="v num">${pc(at.filter(x => x.intOk).length, at.length)}%</span><span class="s">dos ativos</span></div>
-      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Aguardando assinatura</span><span class="v num">${aguard.length}</span><span class="s">${velhas.length} há mais de 7 dias</span></div>
-      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Recusas</span><span class="v num">${noPer.filter(o => o.status === 'recusada').length}</span><span class="s">no período</span></div>
-    </div>
-    <div class="mini"><div><b class="num">${noPer.length}</b><span>Ocorrências no período</span></div><div><b class="num">${pc(assinadas.length, noPer.length)}%</b><span>Taxa de assinatura</span></div><div><b class="num">${media}</b><span>Dias até assinar (média)</span></div><div><b class="num">${disc}</b><span>Advertências e suspensões</span></div></div>`;
+      <div class="kpi"><span class="lbl">Dias até assinar</span><span class="v num">${media}</span><span class="s">média no período</span></div>
+      <div class="kpi"><span class="lbl">Advertências e suspensões</span><span class="v num">${disc}</span><span class="s">no período</span></div>
+    </div>`;
     // tendência 12 meses
     const meses = []; let [y, m] = TODAY.split('-').map(Number);
     for (let i = 0; i < 12; i++) { meses.unshift(`${y}-${pad(m)}`); m--; if (!m) { m = 12; y--; } }
@@ -154,8 +156,8 @@ export function criarGestao(X) {
       <div class="card"><header><h2>Por tipo</h2><p>No período</p></header><div class="body">${pt.length ? `<div class="bars">${pt.map(([t, n]) => `<div class="barrow mot"><span class="n">${esc(t)}</span><div class="stack clear"><i style="width:${n / mt * 100}%;background:var(--accent)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma ocorrência no período.</div>'}</div></div></div>`;
     const al = alertas().filter(a => mats.has(String(a.mat)));
     const antigas = aguard.slice().sort((a, b) => (a.data < b.data ? -1 : 1)).slice(0, 8);
-    h += `<div class="grid2"><div class="card"><header><h2>Alertas</h2><p>Experiência, integração e assinaturas</p></header><div class="body">${al.length ? `<div class="plist">${al.slice(0, 12).map(a => `<div class="pitem"><div class="minw"><span class="pill ${a.t}">${a.t === 'bad' ? 'Urgente' : 'Atenção'}</span> <span>${esc(a.txt)}</span></div><button class="btn" data-g="ficha" data-mat="${a.mat}">Abrir ficha</button></div>`).join('')}</div>${al.length > 12 ? `<p class="muted small m0">+ ${al.length - 12} alertas</p>` : ''}` : '<div class="empty">Nenhum alerta.</div>'}</div></div>
-      <div class="card"><header><h2>Assinaturas mais antigas</h2><p>Aguardando assinatura</p></header><div class="body">${antigas.length ? `<div class="plist">${antigas.map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${dBR(o.data)} · ${esc(o.tipo)}${o.desc ? ' · ' + esc(o.desc) : ''} · ${dias(o.data, TODAY)} dia(s)</div></div>${podeEditar() ? `<button class="btn pri" data-g="assinar" data-mat="${o.mat}">Assinar</button>` : ''}</div>`).join('')}</div>` : '<div class="empty">Nenhuma assinatura pendente.</div>'}</div></div></div>`;
+    h += `<div class="grid2"><div class="card"><header><h2>Alertas</h2><p>Experiência, integração e assinaturas</p></header><div class="body">${al.length ? `<div class="plist">${al.slice(0, 12).map(a => `<div class="pitem"><div class="minw">${(u => `<span class="pill ${u ? 'bad' : 'warn'}">${u ? 'Urgente' : 'Atenção'}</span>`)(a.t === 'bad' && a.prazo != null && a.prazo <= 3)} <span>${esc(a.txt)}</span></div><button class="btn sm" data-g="ficha" data-mat="${a.mat}">Abrir ficha</button></div>`).join('')}</div>${al.length > 12 ? `<p class="muted small m0">+ ${al.length - 12} alertas</p>` : ''}` : '<div class="empty">Nenhum alerta.</div>'}</div></div>
+      <div class="card"><header><h2>Assinaturas mais antigas</h2><p>Aguardando assinatura</p></header><div class="body">${antigas.length ? `<div class="plist">${antigas.map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${dBR(o.data)} · ${esc(o.tipo)}${o.desc ? ' · ' + esc(o.desc) : ''} · ${dias(o.data, TODAY)} ${dias(o.data, TODAY) === 1 ? 'dia' : 'dias'}</div></div>${podeEditar() ? `<button class="btn sm lin" data-g="assinar" data-mat="${o.mat}">Assinar</button>` : ''}</div>`).join('')}</div>` : '<div class="empty">Nenhuma assinatura pendente.</div>'}</div></div></div>`;
     return h;
   }
 

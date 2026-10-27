@@ -1466,6 +1466,201 @@ tr.clicavel{cursor:pointer}tr.clicavel:hover td{background:color-mix(in srgb,var
   .jtab td.r{grid-column:1/-1;order:4;justify-self:start}
   .card .tw:has(.jtab){overflow:visible}
 }
+
+/* ================= Etapa 2 (visual): componentes únicos em todas as telas ================= */
+/* 1. Faixa de indicadores: .kpis, .mini e .kpis5 são o mesmo componente (rótulo pequeno, número grande, linha de apoio).
+      O estado aparece só na cor do número. Computador: uma faixa com divisórias de 1px. Celular: 2 colunas, sem rolar de lado.
+      No máximo 6 à vista; o resto fica em "Ver mais" (movimento.js · ajustarFaixas). */
+.kpis,.mini,.kpis5{display:flex;flex-wrap:wrap;gap:1px;background:var(--line-2);border:1px solid var(--line-2);border-radius:var(--r);overflow:hidden;box-shadow:var(--e1);padding:0;-webkit-mask-image:none;mask-image:none}
+.kpis>.kpi,.mini>div,.kpis5>div{flex:1 1 130px;min-width:0;display:flex;flex-direction:column;gap:2px;padding:12px 16px;background:var(--surface);border:0;border-radius:0;box-shadow:none;margin:0;overflow:visible}
+.kpis>.kpi.hero{flex:1.7 1 220px}
+.mini>div>span,.kpis5>div>span,.kpis .kpi .lbl{order:-1;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
+.mini>div>b,.kpis5>div>b{font-family:var(--f-display);font-size:32px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums}
+.mini>div>small,.kpis5>div>small{font-size:12px;color:var(--ink-3)}
+.kpis .kpi .v{font-size:34px}.kpis .kpi.hero .v{font-size:46px}
+.kpis .kpi .v.vsm{font-size:22px}
+.k-oculto{display:none!important}
+.kmais{flex:1 0 auto;max-width:100%;border:0;background:var(--surface);color:var(--ink-2);font:inherit;font-weight:600;font-size:12.5px;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.kmais:hover{color:var(--ink);background:var(--surface-2)}
+.card .body>.mini,.card .body>.kpis{box-shadow:none}
+@media (max-width:860px){
+  .kpis,.mini,.kpis5{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;overflow:hidden;padding:0}
+  .kpis>.kpi,.mini>div,.kpis5>div{padding:9px 12px;flex-direction:column;align-items:stretch}
+  .kpis>.kpi.hero,.kpis>.k-larga,.mini>.k-larga,.kpis5>.k-larga,.kmais{grid-column:1/-1}
+  .mini>div>b,.kpis5>div>b{font-size:24px}
+  .kpis .kpi .v{font-size:26px}.kpis .kpi.hero .v{font-size:34px}
+  .mini>div>span,.kpis5>div>span,.kpis .kpi .lbl{font-size:10.5px;letter-spacing:.04em}
+  .mini>div>small,.kpis5>div>small,.kpis .kpi .s{font-size:11.5px}
+}
+
+/* 2. Topo e barra de filtros: o topo tem só título (1 linha), subtítulo (1 linha), Buscar e conexão.
+      Os filtros ficam numa barra logo abaixo, sempre igual (no celular, o botão-resumo que abre a janela). */
+.top{flex-wrap:nowrap}
+.top h1{min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top h1 small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fbarra{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 12px;padding:10px 28px;border-bottom:1px solid var(--line-2);background:var(--bg)}
+.fbarra:empty{display:none}
+.fbarra .filters{gap:10px}
+.fbarra .seg.setsw{align-self:flex-end}
+.fbarra .compnav{align-self:center}
+.fbarra .fbar{width:100%}
+.modtag{display:none}
+@media (min-width:861px){
+  .top .buscabtn span,.top .buscabtn kbd{display:inline}
+  .top .syncwrap .pill{font-size:11.5px}
+}
+@media (max-width:860px){
+  .top{display:grid;grid-template-columns:minmax(0,1fr) auto auto;grid-template-areas:"mod busca sync" "tit tit tit";gap:4px 8px;padding:8px 16px 10px;align-items:center}
+  .top h1{grid-area:tit;width:auto;padding-right:0!important;font-size:22px;margin:0}
+  .top .buscabtn{grid-area:busca;position:static;padding:6px 8px}
+  .top .syncwrap{grid-area:sync;position:static;order:0}
+  .modtag{grid-area:mod;display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px 3px 4px;font:inherit;font-size:12.5px;font-weight:600;min-height:32px}
+  .modtag .mi{width:24px;height:24px;flex:none;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink)}
+  .modtag .mi svg{width:14px;height:14px}
+  .modtag b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
+  .modtag .chev{width:14px;height:14px;flex:none;color:var(--ink-3)}
+  .modtag[aria-disabled="true"] .chev{display:none}
+  body.rolou .top h1{font-size:18px}
+  .fbarra{padding:10px 16px;gap:8px}
+  .fbarra .filters{width:100%}
+}
+@media print{.fbarra,.modtag{display:none!important}}
+body.tv .fbarra{display:none}
+/* janela de opções com seções ("Neste módulo" e "Outros módulos") */
+.opt-sec{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:10px 2px 2px}
+.opt-sec:first-child{padding-top:0}
+.opt .ok{width:16px;height:16px;margin-left:auto;color:var(--accent);flex:none}
+.opt.mod .mi{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none;background:var(--surface-2);color:var(--ink-2)}
+.opt.mod[aria-current="true"] .mi{background:var(--accent);color:var(--accent-ink)}
+.opt.mod .mi svg{width:17px;height:17px}
+
+/* 3. Tabelas: margem lateral igual à do cartão; abaixo de 820px as tabelas de dados viram cartões */
+.card table th:first-child,.card table td:first-child{padding-left:18px}
+.card table th:last-child,.card table td:last-child{padding-right:18px}
+table.dimt td:last-child{white-space:nowrap}
+.calc{margin:0;font-size:12.5px;color:var(--ink-2)}
+.calc>summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;color:var(--ink-2);font-weight:600;font-size:12.5px;padding:2px 0}
+.calc>summary::-webkit-details-marker{display:none}
+.calc>summary::before{content:"i";display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;border:1.5px solid currentColor;font-size:10.5px;font-weight:700;font-style:italic;font-family:Georgia,serif}
+.calc[open]>summary{margin-bottom:6px}
+.calc p{margin:0 0 4px;line-height:1.5;max-width:860px}
+@media (max-width:820px){
+  table.tcard,table.tcard tbody{display:block;min-width:0}
+  table.tcard thead{display:none}
+  table.tcard tbody{display:flex;flex-direction:column;gap:8px;padding:10px}
+  table.tcard tr{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 10px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+  table.tcard tr.semh{background:color-mix(in srgb,var(--st-atr) 6%,var(--surface))}
+  table.tcard td{border:0!important;padding:0!important;background:none!important;min-width:0;text-align:left!important}
+  table.tcard td[data-l]::before{content:attr(data-l);display:block;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin-bottom:1px}
+  table.tcard td.tc-t{grid-column:1/-1;order:-2;font-size:14px}
+  table.tcard td.tc-s{grid-column:1/-1;order:-1}
+  table.tcard td.tc-full{grid-column:1/-1}
+  table.tcard td.tc-acao{grid-column:1/-1;order:9}
+  table.tcard td.tc-acao .btn{width:100%;justify-content:center}
+  table.tcard td:empty{display:none}
+  table.tcard td.empty{grid-column:1/-1}
+  .card .tw:has(> table.tcard){overflow:visible}
+  /* Dimensionamento: rota em cima e uma mini-fita com os 7 dias */
+  table.dimt.tcard tr{grid-template-columns:repeat(7,minmax(0,1fr));gap:6px 4px;align-items:center}
+  table.dimt.tcard td.tc-t{grid-column:1/-1;order:-3}
+  table.dimt.tcard td.tc-s{grid-column:1/5;order:-2;font-size:12px}
+  table.dimt.tcard td.dimn{grid-column:span 3;font-size:12px;color:var(--ink-2)}
+  table.dimt.tcard td.dimn+td.dimn{grid-column:span 4}
+  table.dimt.tcard td.dimn::before{display:inline;margin-right:6px;font-size:10px}
+  table.dimt.tcard td.dimd{text-align:center!important}
+  table.dimt.tcard td.dimd::before{text-align:center;letter-spacing:0;font-size:9.5px}
+  table.dimt.tcard td.dimd .cell{min-width:0;font-size:11.5px;padding:4px 0}
+  table.dimt.tcard td.dimd .dnx{font-size:9px;white-space:normal;line-height:1.1}
+  table.dimt.tcard td.dimd.today .cell{box-shadow:0 0 0 1.5px var(--focus)}
+  table.dimt.tcard td.dimsit{grid-column:5/8;order:-2;justify-self:end}
+  table.dimt.tcard td.tc-t .btn.link{font-size:14px}
+  /* Balanço semanal: tabela compacta que cabe na tela (sem rolar de lado) */
+  .card .tw:has(> table.bal){overflow:visible}
+  table.bal{table-layout:fixed;font-size:11.5px}
+  table.bal th,table.bal td{padding:5px 1px!important}
+  table.bal th:first-child{width:27%;padding-left:10px!important;white-space:normal!important;font-size:11.5px}
+  table.bal thead th{font-size:9.5px;letter-spacing:0;white-space:normal}
+  table.bal td.tot{font-size:10.5px}
+  table.bal .pill{padding:1px 5px;font-size:10.5px}
+  table.bal tr.mot .sub{padding-left:4px}
+}
+
+/* filtros que a tela monta no corpo (Equipamentos, Equipe, Inspeções, Avaliação, Fichas): mesma barra logo abaixo do topo */
+#view>.filters:first-child{margin:-20px -28px 0;padding:10px 28px;border-bottom:1px solid var(--line-2);background:var(--bg);gap:10px 12px;align-items:flex-end}
+@media (max-width:860px){#view>.filters:first-child{margin:-16px -16px 0;padding:10px 16px}#view>.filters:first-child .sel{flex:1 1 140px}}
+/* 4. Ajustes rápidos */
+.card .body.pt0{padding-top:0}.card .body.pb0{padding-bottom:4px}
+.efabre .btn.link{min-height:28px}
+.grid2,.g2,.md-grid,.cfgrid,.cfreg{align-items:start}
+.card .empty,.body>.empty,#view>.empty{margin:14px 18px 18px;padding:22px 18px;border:1.5px dashed var(--line);border-radius:12px;text-align:center;color:var(--ink-2);background:color-mix(in srgb,var(--surface-2) 50%,transparent);display:flex;flex-direction:column;align-items:center;gap:8px}
+.card .body .empty,.card td .empty,td.empty{margin:4px 0}
+td.empty{display:table-cell;border:1.5px dashed var(--line)!important;border-radius:12px}
+.empty b{color:var(--ink);font-size:14px}
+.empty.small{padding:14px}
+.empty .btn{margin-top:4px}
+/* "Urgente" só para o que passou do prazo; ações de linha com contorno (o laranja fica para a ação principal) */
+.btn.lin{background:var(--surface);color:var(--ink);border-color:var(--line);font-weight:600}
+.btn.lin:hover{border-color:var(--accent);color:var(--accent)}
+/* etiquetas: nome longo quebra; a frase da câmera só sai na impressão */
+.qrtxt b{overflow-wrap:anywhere}
+.qrtxt small{display:none}
+@media print{.qrtxt small{display:block}}
+/* Avaliação mensal (computador): larguras de coluna corretas */
+table.avt{table-layout:fixed;min-width:860px}
+table.avt th.avn,table.avt td.avn{width:210px}
+table.avt th.avq,table.avt td.avq{width:84px}
+table.avt th.avs,table.avt td.avs{width:104px}
+table.avt td .in{width:100%;min-width:0}
+table.avt td .numin{width:64px}
+/* Frequência: dias com largura fixa, sem cabeçalhos encavalados; a rolagem fica só dentro da tabela */
+.freqtw:not(.semana) table.freq th.c,.freqtw:not(.semana) table.freq td.c{min-width:30px}
+.freqtw:not(.semana) table.freq thead th.c{line-height:1.15;font-size:10.5px}
+table.freq tr.grp-row th,table.efd tr.grp-row th{white-space:normal}
+table.freq tr.grp-row th>*{vertical-align:middle}
+.freqtw.semana table.freq tr.grp-row .gcount{display:block;margin:2px 0 0 20px}
+.freqtw.semana table.freq tr.grp-row .btn.sm{margin-left:4px}
+/* Efetivo diário no celular: busca, agrupar e rota numa linha só; "Abrir todas" discreto */
+.efabre{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.efabre .btn{font-size:12.5px}
+@media (max-width:860px){
+  .efbar.efbar1{display:flex!important;flex-wrap:nowrap;gap:6px;align-items:flex-end}
+  .efbar.efbar1>.srch{flex:1 1 auto;min-width:0;max-width:none}
+  .efbar.efbar1>.sel{flex:0 1 112px;min-width:0}
+  .efbar.efbar1>.sel>span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .efbar.efbar1 select.in{padding:7px 4px;font-size:14px;width:100%}
+  .efbar.efbar1 .srch .in{font-size:15px}
+  .efbar.efbar1>.muted,.efbar.efbar1>.btn{flex:none}
+  .efabre .muted{display:none}
+  .card.efcard>header{display:none}
+  .card:has(> .efbar1){display:flex;flex-wrap:wrap;align-items:center}
+  .card:has(> .efbar1)>*{flex:1 1 100%;min-width:0}
+  .card:has(> .efbar1)>.efabre{flex:1 1 auto;width:auto;padding-top:0;padding-bottom:0}
+  .card:has(> .efbar1)>.efabre+.legdet{flex:0 0 auto;padding-left:0}
+  .card:has(> .efbar1)>.legdet[open]{flex-basis:100%;padding-left:18px}
+  .card:has(> .efbar1)>.efbar1{padding-bottom:8px}
+  .mini.compacta>div{padding:7px 12px}
+  .mini.compacta>div>b{font-size:21px}
+  .hojeturma.scrollx{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-bottom:0}
+  .hojeturma.scrollx::-webkit-scrollbar{display:none}
+  .hojeturma.scrollx>*{flex:none}
+  table.efd.efmob .sit{min-width:0;padding:0 2px!important}
+}
+
+/* 5. Meu dia: faixa de abertura com manchete (mesmo jeito do Meu painel) */
+.md-hero{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px 20px}
+.md-hero .md-ht{min-width:0;flex:1 1 320px}
+.md-hero .md-sd{margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#C9C9E6;font-weight:600}
+.md-hero .md-sd::first-letter{text-transform:uppercase}
+.md-hero h2 .num{color:#FFB08F}
+.md-hero h2.ok .num{color:#7EE2A8}
+.md-hero .md-rs{margin:6px 0 0;color:#D8D8EE;font-size:14px}
+.md-hero .md-rs b{color:#fff}
+.md-hero .md-rs .crit{color:#FFB08F;font-weight:600}
+.md-hero .md-ac{display:flex;gap:8px;flex-wrap:wrap}
+.md-hero .btn{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff}
+.md-hero .btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.5)}
+.md-hero .btn.pri{background:var(--accent-btn);border-color:var(--accent-btn);color:#fff}
+@media (max-width:860px){.md-hero{padding:16px 16px 18px;border-radius:14px}.md-hero .md-ac{width:100%}.md-hero .md-ac .btn{flex:1;justify-content:center}}
 </style>
 </head>
 <body>
@@ -1478,6 +1673,7 @@ tr.clicavel{cursor:pointer}tr.clicavel:hover td{background:color-mix(in srgb,var
   </aside>
   <main>
     <div class="top" id="top"></div>
+    <div class="fbarra" id="fbarra" role="group" aria-label="Filtros"></div>
     <div class="wrap" id="view"></div>
   </main>
   <nav class="tabbar" id="tabbar" aria-label="Navegação"></nav>
