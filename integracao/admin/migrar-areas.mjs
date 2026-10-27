@@ -9,8 +9,8 @@ import { conectar, raiz, resumo } from './comum.mjs';
 // As contas ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 const lib = path.join(path.dirname(new URL(import.meta.url).pathname), 'lib');
 fs.mkdirSync(lib, { recursive: true });
-for (const f of ['cal', 'pessoas']) {
-  const src = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/(\w+)\.js'/g, "from './$1.mjs'");
+for (const f of ['cal', 'pessoas', 'situacao', 'escala']) {
+  const src = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(lib, f + '.mjs'), src);
 }
 const { SETS, SET_KEYS } = await import('./lib/cal.mjs');
