@@ -2,7 +2,7 @@
 import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, AUSENCIA, add, ddmm, addMonth } from './cal.js';
 import * as M from './movimento.js';
 import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, esc, pct, title, n0, $ } from './nucleo/base.js';
-import { AUTH, ME, PL, SK, AREAS, UI, myAreas, setsDe, aplicarSet } from './nucleo/estado.js';
+import { AUTH, ME, PL, SK, AREAS, UI, myAreas, setsDe, aplicarSet, perfil } from './nucleo/estado.js';
 import { docsFor, stats, rotasDa, atrasadasAll, listaAprov } from './calc/atividades.js';
 import { sitDia, desligadoNoDia, periodoDe, SIT_NOME, colabsDa } from './calc/presenca.js';
 import { formSheet, toast } from './ui/janelas.js';
@@ -28,7 +28,8 @@ if (TV && !TVC.claro) document.documentElement.setAttribute('data-theme', 'dark'
 let TVS = { i: 0, volta: 0, pausa: false, t0: Date.now() }, TV_TIMER = 0, TV_PREV = null;
 // Áreas desta TV: a escolhida na configuração; senão, as áreas de quem entrou (líder, supervisor); senão, todas do conjunto.
 const tvAreas = () => { if (TVC.area && AREAS.includes(TVC.area)) return [TVC.area]; const m = myAreas().filter(a => AREAS.includes(a)); return m.length ? m : AREAS; };
-const tvMinhas = () => (ME && ['lider', 'supervisor'].includes(ME.papel) ? [ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS_ATIV.includes(a)) : []);
+const tvP = () => perfil('gestao') || perfil('operacao'); // o Modo TV abre pela Gestão
+const tvMinhas = () => (ME && ['lider', 'supervisor'].includes(tvP()) ? [ME.area, tvP() === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS_ATIV.includes(a)) : []);
 const tvUma = () => (tvAreas().length === 1 ? tvAreas()[0] : null);
 const tvCenasAtivas = () => TVC.cenas.filter(k => k !== 'equip' || (DB.cache.e && DB.cache.e.loaded && DB.cache.e.config));
 // Equipamentos desta TV: com área escolhida (ou líder/supervisor), só os lançados naquela área ("Local da atividade" do lançamento).

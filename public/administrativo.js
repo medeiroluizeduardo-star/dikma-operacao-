@@ -464,7 +464,7 @@ export function criarAdministrativo(X) {
 
   /* ---------- eventos ---------- */
   document.addEventListener('click', async e => {
-    const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || (UI.modulo !== 'frequencia' && !(UI.modulo === 'paineis' && ['conj', 'comp'].includes(t.dataset.a)))) return;
+    const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || UI.modulo !== 'rh') return;
     const a = t.dataset.a, v = t.dataset.v;
     if (a === 'conj') { U.conj = v; render(); }
     else if (a === 'comp') { U.comp = compMais(U.comp, +v); U.fSem = null; render(); }
@@ -502,16 +502,16 @@ export function criarAdministrativo(X) {
   });
   // Celular: arrastar a folha para o lado troca a semana
   { let x0 = null, y0 = null;
-    document.addEventListener('touchstart', e => { const t = e.target.closest && e.target.closest('.freqtw.semana'); if (!t || UI.modulo !== 'frequencia') { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('touchstart', e => { const t = e.target.closest && e.target.closest('.freqtw.semana'); if (!t || UI.modulo !== 'rh') { x0 = null; return; } x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
     document.addEventListener('touchend', e => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0; x0 = null; if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return; const b = document.querySelector(`[data-a="fsem"][data-v="${dx < 0 ? 1 : -1}"]:not([disabled])`); if (b) b.click(); }, { passive: true });
   }
   document.addEventListener('input', e => {
-    if (UI.modulo !== 'frequencia') return;
+    if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aQ') { U.q = e.target.value; (X.agendar || render)(); }
     if (e.target.id === 'aFQ') { U.fQ = e.target.value; (X.agendar || render)(); }
   });
   document.addEventListener('change', e => {
-    if (UI.modulo !== 'frequencia') return;
+    if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aFSetor') { U.fSetor = e.target.value; render(); }
     if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
     if (e.target.id === 'aFMes') { U.fMes = e.target.value; render(); }

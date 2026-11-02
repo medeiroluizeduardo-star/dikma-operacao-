@@ -1,11 +1,21 @@
 rules_version = '2';
-// Regras de segurança — Programação do Pátio de Carvão
-// Perfis: admin (tudo), gestor (todas as áreas + administração dos módulos dele, menos usuários),
-// coordenador (aponta em todas as áreas dos módulos dele), supervisor (até 2 áreas: area e area2),
-// lider (1 área), administrativo (Frequência e férias + fichas do Efetivo; vê as Atividades sem apontar),
-// leitor (só lê), bloqueado (sem acesso).
-// Módulos por usuário (campo modulos em usuarios/{uid}): operacao = Atividades Pátio, bateria = Atividades Bateria,
-// equipamentos = Operação, gestao = Efetivo. A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
+// Regras de segurança — Dikma Gestão (Coqueria)
+// ACESSO POR MÓDULO (usuarios/{uid}.acesso, a partir da fase 2 da divisão em 5 módulos):
+//   acesso  = { operacao, gestao, seguranca, rh: perfil no módulo; administracao: 'admin' | 'modulo' }
+//   escopos = parte de ['patio', 'bateria', 'equipamentos']; as Fichas de acompanhamento = 'gestao' em modulos.
+//   Cada regra confere o perfil DO MÓDULO certo:
+//   - Pátio/Bateria (semanas, aprov, plano, colaboradores, situacao, acoes): ler = Operação ou Gestão + escopo;
+//     apontar e lançar a presença = Operação (líder a gestor) na área; aprovar = Operação · Supervisor
+//     (o administrador é a reserva); ações das causas = Operação ou Gestão (supervisor para cima) na área.
+//   - Plano, rotas, gerador = Administração: administrador, ou 'Dos módulos' com Gestão · Gestor no escopo.
+//   - Equipamentos (eq*) = escopo Equipamentos: Operação grava; Gestão lê (e lança a Avaliação mensal).
+//   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas.
+//   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
+//   - Usuários, config/permissoes = Administração completa (administrador).
+// TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
+// Perfis antigos: admin, gestor, coordenador, supervisor (até 2 áreas: area e area2), lider (1 área),
+// administrativo, leitor, bloqueado. A tela Usuários continua gravando também os campos antigos (papel, modulos).
+// A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -13,55 +23,82 @@ service cloud.firestore {
     function hasProfile() { return signed() && exists(uref()); }
     function perfil() { return get(uref()).data; }
     function ativo() { return hasProfile() && perfil().papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']; }
-    function admin() { return hasProfile() && perfil().papel == 'admin'; }
-    function gestor() { return hasProfile() && perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']; }   // quem aponta
+    // ---- Acesso por módulo ----
+    function nvU(u) { return 'acesso' in u; }                                       // cadastro já no modelo novo
+    function pmU(u, m) { return u.get('acesso', {}).get(m, ''); }                    // perfil no módulo ('' = sem acesso)
+    function escU(u, e) { return e in u.get('escopos', []); }
+    function adminU(u) { return u.papel == 'admin' || (u.papel != 'bloqueado' && nvU(u) && pmU(u, 'administracao') == 'admin'); }
+    function nv() { return nvU(perfil()); }
+    function pEm(m) { return pmU(perfil(), m); }
+    function esc(e) { return escU(perfil(), e); }
+    // Pátio → módulo antigo 'operacao'; Bateria → 'bateria' (para a regra de antes).
+    function modDe(e) { return e == 'patio' ? 'operacao' : e; }
+    function admin() { return hasProfile() && adminU(perfil()); }
+    function gestor() { return hasProfile() && perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']; }   // quem aponta (antigo)
     function todasAreas() { return hasProfile() && perfil().papel in ['gestor', 'coordenador']; }
     function minhaArea(area) { return perfil().get('area', '') == area || (perfil().papel == 'supervisor' && perfil().get('area2', '') == area); }
+    // Área no perfil de um módulo: líder 1 área; supervisor também a 2ª; gestor e coordenador todas.
+    function areaEm(p, area) { return p in ['gestor', 'coordenador'] || (p in ['supervisor', 'lider'] && (perfil().get('area', '') == area || (p == 'supervisor' && perfil().get('area2', '') == area))); }
     function mods() { return perfil().get('modulos', ['operacao']); }
-    function admMod(m) { return admin() || (ativo() && acOp() && perfil().papel == 'gestor' && m in mods()); }   // administração do módulo
-    // Acessos (portas de entrada): operacao (padrão de quem não tem o campo), administrativo. O administrador entra em todos.
+    // Administração dos módulos: administrador; ou 'Dos módulos' sendo Gestor (Gestão) no escopo — Equipamentos aceita
+    // também o Gestor da Operação; as Fichas pedem a Gestão com as Fichas.
+    function admModNovo(m) {
+      return pEm('administracao') == 'modulo' && (
+        (m == 'operacao' && pEm('gestao') == 'gestor' && esc('patio'))
+        || (m == 'bateria' && pEm('gestao') == 'gestor' && esc('bateria'))
+        || (m == 'equipamentos' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor') && esc('equipamentos'))
+        || (m == 'gestao' && pEm('gestao') == 'gestor' && 'gestao' in mods()));
+    }
+    function admMod(m) { return admin() || (ativo() && (nv() ? admModNovo(m) : (acOp() && perfil().papel == 'gestor' && m in mods()))); }   // administração do módulo
+    // Acessos antigos (portas de entrada): operacao (padrão de quem não tem o campo), administrativo.
     function acessos() { return perfil().get('acessos', ['operacao']); }
-    // O antigo acesso Administrativo virou o módulo Frequência e férias da Operação ('frequencia' em modulos).
     function acOp() { return admin() || 'operacao' in acessos() || 'administrativo' in acessos(); }
-    function acAdm() { return ativo() && (admin() || perfil().papel == 'administrativo' || 'frequencia' in mods() || 'administrativo' in acessos()); }   // módulo Frequência e férias
-    function admEdita() { return acAdm() && perfil().papel != 'leitor'; }
-    function op() { return ativo() && acOp() && (admin() || 'operacao' in mods()); }        // Atividades Pátio
-    function ge() { return hasProfile() && geU(perfil()); }          // Efetivo (fichas)
-    function eqm() { return ativo() && acOp() && (admin() || 'equipamentos' in mods()); }   // Operação (equipamentos)
-    function eqEdita() { return eqm() && (admin() || perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']); }
+    // RH: Frequência e férias (ler) e quem grava (Administrativo).
+    function acAdm() { return ativo() && (admin() || (nv() ? pEm('rh') != '' : (perfil().papel == 'administrativo' || 'frequencia' in mods() || 'administrativo' in acessos()))); }
+    function admEdita() { return acAdm() && (admin() || (nv() ? pEm('rh') == 'administrativo' : perfil().papel != 'leitor')); }
+    // Lê as Atividades de um conjunto (e = patio | bateria): Operação ou Gestão com o escopo.
+    function lePB(e) { return ativo() && (admin() || (nv() ? ((pEm('operacao') != '' || pEm('gestao') != '') && esc(e)) : (acOp() && modDe(e) in mods()))); }
+    function op() { return lePB('patio'); }        // Atividades Pátio
+    function ba() { return lePB('bateria'); }      // Atividades Bateria
+    function ge() { return hasProfile() && geU(perfil()); }          // Fichas (Gestão)
+    // Equipamentos: ler = escopo Equipamentos com Operação ou Gestão; gravar = Operação (líder a gestor).
+    function eqm() { return ativo() && (admin() || (nv() ? ((pEm('operacao') != '' || pEm('gestao') != '') && esc('equipamentos')) : (acOp() && 'equipamentos' in mods()))); }
+    function eqEdita() { return eqm() && (admin() || (nv() ? pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] : perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider'])); }
+    // Avaliação mensal (fica na Gestão): também quem lança pela Gestão.
+    function eqAvalEdita() { return eqEdita() || (eqm() && nv() && pEm('gestao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
     function geEdita() { return hasProfile() && geEditaU(perfil()); }
-    function gestorDa(area) { return gestor() && acOp() && 'operacao' in mods() && (todasAreas() || minhaArea(area)); }
-    function ba() { return ativo() && acOp() && (admin() || 'bateria' in mods()); }        // módulo Atividades Bateria
+    // Aponta e lança a presença na área (Operação · líder a gestor, com o escopo).
+    function apontaDa(area, e) { return nv() ? (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] && areaEm(pEm('operacao'), area))
+      : (gestor() && acOp() && modDe(e) in mods() && (todasAreas() || minhaArea(area))); }
+    function gestorDa(area) { return apontaDa(area, 'patio'); }
+    function gestorDaB(area) { return apontaDa(area, 'bateria'); }
     // Atividade fora da programação (campo fp da semana): só coordenador e supervisor da área (e o administrador).
-    function criaForaDa(area) { return gestorDa(area) && perfil().papel in ['coordenador', 'supervisor']; }
-    function criaForaDaB(area) { return gestorDaB(area) && perfil().papel in ['coordenador', 'supervisor']; }
-    function gestorDaB(area) { return gestor() && acOp() && 'bateria' in mods() && (todasAreas() || minhaArea(area)); }
-    // Efetivo por área: administrador, gestor, coordenador e somente leitura veem todas as áreas;
-    // supervisor, as 2 dele; líder, a dele; quem tem a Operação de equipamentos, também os operadores.
+    function criaFora(area, e) { return apontaDa(area, e) && (nv() ? pEm('operacao') in ['coordenador', 'supervisor'] : perfil().papel in ['coordenador', 'supervisor']); }
+    function criaForaDa(area) { return criaFora(area, 'patio'); }
+    function criaForaDaB(area) { return criaFora(area, 'bateria'); }
+    // Presença do dia (situacao): quem aponta no conjunto (Operação), o RH (Administrativo) e o administrador.
+    function lancaSit(e) { return admin() || admEdita() || (nv() ? (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']) : (gestor() && modDe(e) in mods() && acOp())); }
+    // Efetivo por área: administrador, gestor, coordenador, administrativo e somente leitura veem todas as áreas;
+    // supervisor, as 2 dele; líder, a dele; quem tem o escopo Equipamentos, também os operadores.
     function todasFichas() { return hasProfile() && todasFichasU(perfil()); }
     function minhaFicha(area) { return hasProfile() && minhaFichaU(perfil(), area); }
     // As mesmas contas, recebendo o perfil já lido (u): cada regra lê o perfil uma vez só e fica dentro do limite
-    // de expressões do Firestore.
+    // de expressões do Firestore. No modelo novo, vale o perfil da Gestão e as Fichas (gestao em modulos).
+    function pgU(u) { return adminU(u) ? 'admin' : (nvU(u) ? pmU(u, 'gestao') : u.papel); }   // perfil nas fichas
     function geU(u) { return u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']
-      && (u.papel == 'admin' || ('operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao']))); }
-    function geEditaU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo']; }
-    function todasFichasU(u) { return geU(u) && u.papel in ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor']; }
-    function minhaAreaU(u, area) { return u.get('area', '') == area || (u.papel == 'supervisor' && u.get('area2', '') == area); }
-    function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in u.get('modulos', ['operacao']))); }
-    function admGestaoU(u) { return u.papel == 'admin' || (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])); }
+      && (adminU(u) || (nvU(u) ? (pmU(u, 'gestao') != '' && 'gestao' in u.get('modulos', [])) : ('operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])))); }
+    function geEditaU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo']; }
+    function todasFichasU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor']; }
+    function minhaAreaU(u, area) { return u.get('area', '') == area || (pgU(u) == 'supervisor' && u.get('area2', '') == area); }
+    function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && (nvU(u) ? escU(u, 'equipamentos') : 'equipamentos' in u.get('modulos', ['operacao'])))); }
+    function admGestaoU(u) { return adminU(u) || (nvU(u) ? (pmU(u, 'administracao') == 'modulo' && pmU(u, 'gestao') == 'gestor' && 'gestao' in u.get('modulos', []))
+      : (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao']))); }
     function veOcorrU(u, o) { return todasFichasU(u) || (geU(u) && (minhaFichaU(u, o.area) || o.criadoPor == request.auth.uid || o.recolhe == u.get('nomeUp', '#'))); }
-    // ---- Acesso por módulo (fase 1 da divisão em 5 módulos; ainda NÃO usado pelas regras das coleções) ----
-    // usuarios/{uid}.acesso = { operacao, gestao, seguranca, rh: perfil do módulo; administracao: 'admin' | 'modulo' }
-    // usuarios/{uid}.escopos = parte de ['patio', 'bateria', 'equipamentos']. Só o administrador grava (match /usuarios).
-    // Na transição a tela Usuários grava também papel/modulos (public/acessos.js, legadoDoAcesso), que são o que as
-    // regras abaixo conferem. Na fase 2 as regras de cada coleção passam a usar estas funções.
-    function acessoU(u) { return u.get('acesso', {}); }
-    function perfilEmU(u, mod) { return acessoU(u).get(mod, null); }                  // perfil no módulo (null = sem acesso)
-    function temModU(u, mod) { return u.papel != 'bloqueado' && perfilEmU(u, mod) != null; }
-    function perfilEm(mod) { return perfilEmU(perfil(), mod); }
-    function temMod(mod) { return hasProfile() && temModU(perfil(), mod); }
+    // Perfil no módulo (para Segurança e para os testes): null/'' = sem acesso.
+    function perfilEm(mod) { return pEm(mod); }
+    function temMod(mod) { return hasProfile() && perfil().papel != 'bloqueado' && pEm(mod) != ''; }
     function perfilEmEntre(mod, perfis) { return temMod(mod) && perfilEm(mod) in perfis; }
-    function temEscopo(e) { return hasProfile() && e in perfil().get('escopos', []); }
+    function temEscopo(e) { return hasProfile() && esc(e); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
 
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
@@ -119,7 +156,7 @@ service cloud.firestore {
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
       allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
-      allow write: if admin() || (gestor() && 'operacao' in mods() && acOp()) || admEdita();
+      allow write: if lancaSit('patio');
     }
 
     match /semanas/{id} {
@@ -131,9 +168,13 @@ service cloud.firestore {
 
     // Aprovação dos apontamentos: o supervisor da área aprova ou devolve o que foi apontado; o administrador é a reserva.
     // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
-    function aprovaDa(area) { return (gestorDa(area) && perfil().papel == 'supervisor') || admin(); }
-    // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também.
-    function acompanhaDa(area) { return admin() || (gestorDa(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    function aprova(area, e) { return (apontaDa(area, e) && (nv() ? pEm('operacao') == 'supervisor' : perfil().papel == 'supervisor')) || admin(); }
+    function aprovaDa(area) { return aprova(area, 'patio'); }
+    // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também. Pela Operação
+    // ou pela Gestão (a tela Causas e ações fica na Gestão).
+    function acompanha(area, e) { return admin() || (nv() ? (ativo() && esc(e) && ((pEm('operacao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('operacao'), area)) || (pEm('gestao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('gestao'), area))))
+      : (apontaDa(area, e) && perfil().papel in ['gestor', 'coordenador', 'supervisor'])); }
+    function acompanhaDa(area) { return acompanha(area, 'patio'); }
     match /aprov/{id} {
       allow read: if op();
       allow create, update: if aprovaDa(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
@@ -142,7 +183,8 @@ service cloud.firestore {
 
     // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
     function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
-    function acaoPode(area, m) { return area == 'TODAS' ? (admin() || (todasAreas() && acOp() && m in mods())) : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
+    function acaoTodas(e) { return admin() || (nv() ? (ativo() && esc(e) && (pEm('operacao') in ['gestor', 'coordenador'] || pEm('gestao') in ['gestor', 'coordenador'])) : (todasAreas() && acOp() && modDe(e) in mods())); }
+    function acaoPode(area, m) { return area == 'TODAS' ? acaoTodas(m == 'operacao' ? 'patio' : 'bateria') : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
     match /acoes/{id} {
       allow read: if op();
       allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'operacao');
@@ -190,7 +232,7 @@ service cloud.firestore {
     }
     match /b_situacao/{mes} {
       allow read: if ba() || acAdm() || eqm();
-      allow write: if admin() || (gestor() && 'bateria' in mods() && acOp()) || admEdita();
+      allow write: if lancaSit('bateria');
     }
     match /b_semanas/{id} {
       allow read: if ba();
@@ -199,8 +241,8 @@ service cloud.firestore {
         || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
     // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
-    function aprovaDaB(area) { return (gestorDaB(area) && perfil().papel == 'supervisor') || admin(); }
-    function acompanhaDaB(area) { return admin() || (gestorDaB(area) && perfil().papel in ['gestor', 'coordenador', 'supervisor']); }
+    function aprovaDaB(area) { return aprova(area, 'bateria'); }
+    function acompanhaDaB(area) { return acompanha(area, 'bateria'); }
     match /b_aprov/{id} {
       allow read: if ba();
       allow create, update: if aprovaDaB(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
@@ -232,7 +274,7 @@ service cloud.firestore {
     match /eqlanc/{id} { allow read: if eqm() || acAdm(); allow create, update, delete: if eqEdita(); }
     match /eqpar/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
     match /eqinsp/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
-    match /eqaval/{mes} { allow read: if eqm(); allow write: if eqEdita(); }
+    match /eqaval/{mes} { allow read: if eqm(); allow write: if eqAvalEdita(); }
 
     // ---------- Módulo Efetivo: fichas de acompanhamento ----------
     // gestao/config: tipos de ocorrência e texto da ficha (todos do Efetivo). gestao/colaboradores: lista antiga,
@@ -271,7 +313,7 @@ service cloud.firestore {
     // Escala de turno (regimes, turmas e feriados) usada por todos os módulos. Todos leem; administrador e gestor alteram.
     match /config/escalas {
       allow read: if ativo();
-      allow write: if admin() || (ativo() && perfil().papel == 'gestor');
+      allow write: if admin() || (ativo() && (nv() ? (pEm('administracao') == 'modulo' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor')) : perfil().papel == 'gestor'));
     }
 
     // Abas que cada perfil vê (tela Perfis e permissões). Todos leem; só o administrador muda.

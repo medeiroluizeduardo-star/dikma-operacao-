@@ -4,6 +4,7 @@
 // (b_colaboradores/{ÁREA}) e na Operação (eq/cadastro.operadores). A ligação é pela matrícula e,
 // na falta dela, pelo nome.
 import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S } from './cal.js';
+import { perfilDe, temFichasU, escoposDe } from './acessos.js';
 
 export const AREA_GERAL = 'COQUERIA';
 export const AREA_OP = 'OPERAÇÃO DE EQUIPAMENTOS';
@@ -17,14 +18,14 @@ export const ehAreaAtiv = a => AREAS_ATIV.includes(a);
 // guardam a mesma área. Quem vê o quê é garantido pelas regras do Firestore; estas funções só espelham a regra.
 export const FICHA_GERAL = 'GERAL';
 export const chaveFicha = a => (AREAS_ATIV.includes(a) || a === AREA_OP ? a : FICHA_GERAL);
-const modsU = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
-// Administrador, gestor, coordenador e somente leitura (com o Efetivo) veem as fichas de todas as áreas.
-export const veTodasFichas = u => !!u && (u.papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(u.papel) && modsU(u).includes('gestao')));
-// Supervisor: as 2 áreas dele · líder: a área dele · quem tem a Operação de equipamentos: também os operadores.
+// Fichas são da Gestão: vale o perfil da Gestão (com as Fichas de acompanhamento).
+// Administrador, gestor, coordenador, administrativo e somente leitura veem as fichas de todas as áreas.
+export const veTodasFichas = u => !!u && temFichasU(u) && ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor'].includes(perfilDe(u, 'gestao'));
+// Supervisor: as 2 áreas dele · líder: a área dele · quem tem o escopo Equipamentos: também os operadores.
 export const areasFichaDe = u => {
-  if (!u || !modsU(u).includes('gestao')) return [];
-  const l = [u.area, u.papel === 'supervisor' ? u.area2 : null].filter(a => a && AREAS_ATIV.includes(a));
-  if (modsU(u).includes('equipamentos')) l.push(AREA_OP);
+  if (!u || !temFichasU(u)) return [];
+  const l = [u.area, perfilDe(u, 'gestao') === 'supervisor' ? u.area2 : null].filter(a => a && AREAS_ATIV.includes(a));
+  if (escoposDe(u).includes('equipamentos')) l.push(AREA_OP);
   return [...new Set(l)];
 };
 

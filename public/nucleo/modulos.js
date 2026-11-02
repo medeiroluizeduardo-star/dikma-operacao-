@@ -7,7 +7,7 @@ import * as M from '../movimento.js';
 import { criarMeuDia } from '../meudia.js';
 import { fatorRota } from '../escala.js';
 import { DB, framed, esc, title } from './base.js';
-import { ME, UI, podeItem, admMod, modsReais } from './estado.js';
+import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './estado.js';
 import { I } from '../ui/icones.js';
 import { escala, turmaFicha, desligadoDe, sitDiaDe, limparPresenca } from '../calc/presenca.js';
 import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js';
@@ -24,19 +24,21 @@ export function criarModulos() {
   // Área de atuação de cada ficha do Efetivo (organiza as fichas por área no banco). Só o administrador calcula,
   // e só depois que os dados de todos os módulos chegaram; antes disso devolve null e nada muda de lugar.
   if (DB.definirChaveArea) DB.definirChaveArea(c => {
-    if (!ME || ME.papel !== 'admin') return null;
+    if (!isAdmin()) return null;
     const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
     return ok ? chaveFicha(PES.lotacao(c).area) : null;
   });
-  MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+  MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 }
 
 // ---- telas carregadas sob demanda ----
 // EQ: Operação (equip.js, que traz eqcalc.js) · AD: Frequência e férias (administrativo.js) · GE: fichas do Efetivo (gestao.js, que traz importar.js)
 const CARGA = {
-  EQ: () => import('../equip.js').then(m => { EQ = m.criarEquip({ podeItem, escala: () => escala(), desligadoDe, PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, framed, UI }); }),
-  AD: () => import('../administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem, limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
-  GE: () => import('../gestao.js').then(m => { GE = m.criarGestao({ podeItem, PES, get ME() { return ME; }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: admMod, prepararFoto, framed, UI }); })
+  // Cada tela recebe a pessoa vista no módulo em que está (o papel vira o perfil daquele módulo): Equipamentos na
+  // Operação (lançar) ou na Gestão (Avaliação mensal e Análises), Frequência no RH e fichas na Gestão.
+  EQ: () => import('../equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(UI.modulo === 'gestao' ? 'gestao' : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
+  AD: () => import('../administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
+  GE: () => import('../gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
 const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE };
 const pedidos = {};

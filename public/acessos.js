@@ -1,54 +1,31 @@
-// Dikma Gestão — acessos (portas de entrada do sistema) e férias em comum.
-// Operação: Atividades Pátio e Bateria, Operação de equipamentos, Efetivo e Frequência e férias (módulos marcados no usuário).
-// Administração do sistema: ajustes de todo o sistema, só o administrador.
-// O antigo acesso "Administrativo" virou o módulo Frequência e férias dentro da Operação: quem tinha o acesso
-// marcado (campo acessos com 'administrativo') continua entrando e passa a ter o módulo.
-// Acesso por módulo (divisão em Operação, Gestão, Segurança, RH e Administração): modelo novo e conversão logo abaixo.
+// Dikma Gestão — acesso por módulo (Operação, Gestão, Segurança, RH e Administração) e férias em comum.
+// Cada pessoa tem um perfil em cada módulo que usa (campo acesso em usuarios/{uid}) e os escopos (Pátio, Bateria,
+// Equipamentos). As telas usam o perfil DO MÓDULO em que estão (perfilDe) e as regras do Firestore fazem a mesma conta.
+// Cadastro antigo (papel único + modulos) ainda é lido: acessoDe converte na hora (acessoDoLegado).
 // Este arquivo não usa o Firestore: as contas são testadas em testes/acessos.test.mjs e usadas pela rotina
 // integracao/admin/converter-acessos.mjs.
 import { normNome } from './planilhas-adm.js';
 
-export const ACESSOS = [
-  { k: 'operacao', nome: 'Dikma Gestão', sub: 'Indicadores, Atividades, Pessoas no turno, Equipamentos e RH', inicio: 'meudia' },
-  { k: 'sistema', nome: 'Administração do sistema', sub: 'Ajustes de todo o sistema · só o administrador', inicio: 'cfgeral' }
-];
-export const ACESSO = Object.fromEntries(ACESSOS.map(a => [a.k, a]));
 const antigoAdm = u => Array.isArray(u.acessos) && u.acessos.includes('administrativo');
-export const acessosDe = u => (!u ? [] : u.papel === 'admin' ? ACESSOS.map(a => a.k) : ['operacao']);
-export const podeAcesso = (u, k) => acessosDe(u).includes(k === 'administrativo' ? 'operacao' : k);
-// Módulo Frequência e férias: marcado no usuário (modulos) ou o antigo acesso Administrativo.
+// Módulo Frequência e férias do cadastro antigo: marcado no usuário (modulos) ou o antigo acesso Administrativo.
 // O perfil Administrativo já tem o módulo, mesmo sem marcar.
-export const temFreq = u => !!u && (u.papel === 'admin' || u.papel === 'administrativo' || (Array.isArray(u.modulos) && u.modulos.includes('frequencia')) || antigoAdm(u));
-// Módulos do usuário (os marcados); usuário antigo só do Administrativo não ganha a Operação sem querer.
+const temFreqLegado = u => !!u && (u.papel === 'admin' || u.papel === 'administrativo' || (Array.isArray(u.modulos) && u.modulos.includes('frequencia')) || antigoAdm(u));
+// Módulos do cadastro antigo (os marcados); usuário antigo só do Administrativo não ganha a Operação sem querer.
 export const modulosDe = u => {
   if (!u) return [];
   const m = Array.isArray(u.modulos) && u.modulos.length ? [...u.modulos] : antigoAdm(u) && !u.acessos.includes('operacao') ? [] : ['operacao'];
-  if (temFreq(u) && !m.includes('frequencia')) m.push('frequencia');
+  if (temFreqLegado(u) && !m.includes('frequencia')) m.push('frequencia');
   return m;
 };
-// Quem edita a Frequência e as Férias (somente leitura só consulta).
-export const editaAdm = u => temFreq(u) && u.papel !== 'leitor';
 
-// ---- Acesso por módulo (fase 1 da divisão em 5 módulos) ----
-// Modelo novo no cadastro usuarios/{uid}:
+// ---- Acesso por módulo ----
+// Modelo no cadastro usuarios/{uid}:
 //   acesso  = { operacao?: perfil, gestao?: perfil, seguranca?: perfil, rh?: perfil, administracao?: 'admin' | 'modulo' }
 //   escopos = parte de ['patio', 'bateria', 'equipamentos'] (conjuntos usados dentro da Operação e da Gestão)
 // As áreas continuam em area/area2 (líder 1, supervisor até 2; gestor e coordenador todas) e as exceções em abas.
-//
-// TRANSIÇÃO (fase 1): as telas e as regras de segurança ainda leem os campos antigos (papel único + modulos).
-// Por isso a tela Usuários faz GRAVAÇÃO DUPLA: grava o modelo novo E os campos antigos tirados dele
-// (legadoDoAcesso). Limitações enquanto durar a transição:
-//  - Vale um perfil só para tudo: o mais alto entre os módulos. Ex.: Operação · Líder + Gestão · Supervisor
-//    funciona como Supervisor nos dois. Perfis diferentes por módulo só aparecem na tela de usuários;
-//    as regras passam a conferir o perfil de cada módulo na fase 2 (funções perfilEm/temMod em firestore.rules).
-//  - Segurança ainda não existe nas telas (fase 3): o acesso fica gravado, mas não abre nada. Quem só tem
-//    Segurança fica com papel 'leitor' e modulos ['seguranca'] (marca que nenhuma tela de hoje reconhece).
-//  - Gestão sem as Fichas de acompanhamento ainda é possível (campo antigo modulos sem 'gestao'), para não dar
-//    fichas a quem não tinha. Isso vai como extras.fichas.
-//  - Pátio e Bateria ainda abrem Operação e Gestão juntas (módulo antigo de Atividades): quem tiver só a Gestão com
-//    o escopo Pátio também verá as telas da Operação do Pátio, com o mesmo perfil.
-//  - Quem só tem RH com papel antigo de Supervisor (ex.: analista de frequência) volta como Administrativo:
-//    as permissões de hoje são as mesmas.
+// As Fichas de acompanhamento (Gestão) continuam marcadas como 'gestao' no campo antigo modulos.
+// A tela Usuários ainda grava também os campos antigos (papel, modulos), tirados do acesso (legadoDoAcesso): as regras
+// os usam como alternativa para cadastros que ainda não têm o acesso por módulo.
 export const MODULOS_ACESSO = [
   { k: 'operacao', nome: 'Operação', sub: 'Apontar, Aprovação, Pendências, Equipamentos e Efetivo', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'leitor'] },
   { k: 'gestao', nome: 'Gestão', sub: 'Programação, Fichas, Dimensionamento, Indicadores e Resumos', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'administrativo', 'leitor'] },
@@ -109,14 +86,67 @@ export function legadoDoAcesso(acesso, escopos, extras = {}) {
   // antigo (sem modulos = Atividades Pátio).
   if (!modulos.length) modulos.push('seguranca');
   if (extras.bloqueado) papel = 'bloqueado';
-  const comArea = ['lider', 'supervisor'].includes(papel);
-  return { papel, modulos, acessos: ['operacao'], area: comArea ? area : null, area2: papel === 'supervisor' ? area2 : null };
+  // A área vale para quem é líder ou supervisor em algum módulo (Operação ou Gestão); a 2ª, para quem é supervisor.
+  const pm = [a.operacao, a.gestao];
+  const comArea = pm.some(p => ['lider', 'supervisor'].includes(p)) || ['lider', 'supervisor'].includes(papel);
+  const comArea2 = pm.includes('supervisor') || papel === 'supervisor';
+  return { papel, modulos, acessos: ['operacao'], area: comArea ? area : null, area2: comArea2 ? area2 : null };
 }
 // O acesso do usuário: o modelo novo, se já foi gravado; senão, o que a conversão faria (convertido: false).
 export function acessoDe(u) {
   if (u && u.acesso && typeof u.acesso === 'object') return { acesso: { ...u.acesso }, escopos: Array.isArray(u.escopos) ? [...u.escopos] : [], fichas: modulosDe(u).includes('gestao') || u.papel === 'admin', convertido: true };
   return { ...acessoDoLegado(u), convertido: false };
 }
+// ---- Perfil por módulo (o que as telas usam) ----
+// Guardado por cadastro (o objeto do usuário) enquanto acesso, escopos, papel e modulos não mudam: as telas
+// perguntam o perfil muitas vezes a cada desenho.
+const MEMO = new WeakMap();
+function acessoMemo(u) {
+  const m = MEMO.get(u);
+  if (m && m.a === u.acesso && m.e === u.escopos && m.p === u.papel && m.m === u.modulos) return m.r;
+  const r = acessoDe(u); MEMO.set(u, { a: u.acesso, e: u.escopos, p: u.papel, m: u.modulos, r }); return r;
+}
+// Administrador (Administração completa): pode tudo em todos os módulos.
+export const ehAdminU = u => !!u && u.papel !== 'bloqueado' && (u.papel === 'admin' || acessoMemo(u).acesso.administracao === 'admin');
+// Perfil da pessoa no módulo (operacao, gestao, seguranca, rh, administracao). 'admin' = administrador (tudo);
+// null = sem acesso ao módulo. Bloqueado não tem perfil em nada.
+export function perfilDe(u, mod) {
+  if (!u || u.papel === 'bloqueado') return null;
+  if (ehAdminU(u)) return 'admin';
+  return acessoMemo(u).acesso[mod] || null;
+}
+// Escopos (Pátio, Bateria, Equipamentos); o administrador tem todos.
+export const escoposDe = u => (!u || u.papel === 'bloqueado' ? [] : ehAdminU(u) ? ['patio', 'bateria', 'equipamentos'] : acessoMemo(u).escopos);
+// Gestão com as Fichas de acompanhamento.
+export const temFichasU = u => !!u && (ehAdminU(u) || (!!perfilDe(u, 'gestao') && acessoMemo(u).fichas));
+// Marcas no formato antigo, tiradas do acesso (operacao = Pátio, bateria, equipamentos, gestao = fichas,
+// frequencia = RH). Usadas para saber que dados carregar e nas contas que não dependem do perfil.
+export function marcasDe(u) {
+  if (!u || u.papel === 'bloqueado') return [];
+  if (ehAdminU(u)) return ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'];
+  const e = escoposDe(u); const opGe = !!(perfilDe(u, 'operacao') || perfilDe(u, 'gestao')); const l = [];
+  if (opGe && e.includes('patio')) l.push('operacao');
+  if (opGe && e.includes('bateria')) l.push('bateria');
+  if (opGe && e.includes('equipamentos')) l.push('equipamentos');
+  if (temFichasU(u)) l.push('gestao');
+  if (perfilDe(u, 'rh')) l.push('frequencia');
+  return l;
+}
+// RH: Frequência e férias (ler) e quem edita (Administrativo; somente leitura só consulta).
+export const temFreq = u => !!perfilDe(u, 'rh');
+export const editaAdm = u => ['admin', 'administrativo'].includes(perfilDe(u, 'rh'));
+// A pessoa "vista" dentro de um módulo: o mesmo cadastro com o papel trocado pelo perfil daquele módulo. Serve para as
+// contas que recebem o usuário (fichas por área, Meu dia, telas carregadas sob demanda) usarem o perfil certo.
+const VISTA = new WeakMap();
+export function usuarioEm(u, mod) {
+  if (!u) return u;
+  const p = perfilDe(u, mod) || 'sem';
+  const k = [u.papel, u.area, u.area2, u.nome, u.trocarSenha].join('|');
+  let c = VISTA.get(u); if (!c || c.a !== u.acesso || c.e !== u.escopos || c.m !== u.modulos || c.abas !== u.abas || c.k !== k) { c = { a: u.acesso, e: u.escopos, m: u.modulos, abas: u.abas, k, v: {} }; VISTA.set(u, c); }
+  const x = c.v[mod]; if (x && x.papel === p) return x;
+  return (c.v[mod] = { ...u, papel: p, modulos: marcasDe(u), area2: u.area2 });
+}
+
 // Selos curtos da lista de usuários: [['Operação', 'Líder'], ['Gestão', 'Supervisor'], ...]
 export const selosAcesso = acesso => MODULOS_ACESSO.filter(m => acesso && acesso[m.k]).map(m => [m.nome, PERFIL_NOME[acesso[m.k]] || acesso[m.k], m.k]);
 

@@ -9,9 +9,15 @@ import { conectar, raiz, resumo } from './comum.mjs';
 // As contas ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 const lib = path.join(path.dirname(new URL(import.meta.url).pathname), 'lib');
 fs.mkdirSync(lib, { recursive: true });
-for (const f of ['cal', 'pessoas', 'situacao', 'escala']) {
-  const src = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");
-  fs.writeFileSync(path.join(lib, f + '.mjs'), src);
+// Copia cal.js e pessoas.js e TUDO o que eles importam (segue os imports), para a lista nunca ficar desatualizada.
+{
+  const fila = ['cal', 'pessoas'], feitos = new Set();
+  while (fila.length) {
+    const f = fila.shift(); if (feitos.has(f)) continue; feitos.add(f);
+    const bruto = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8');
+    for (const m of bruto.matchAll(/from '\.\/([\w-]+)\.js'/g)) fila.push(m[1]);
+    fs.writeFileSync(path.join(lib, f + '.mjs'), bruto.replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
+  }
 }
 const { SETS, SET_KEYS } = await import('./lib/cal.mjs');
 const { criarPessoas, chaveFicha, FICHA_GERAL } = await import('./lib/pessoas.mjs');

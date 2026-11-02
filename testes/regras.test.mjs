@@ -38,7 +38,19 @@ const USUARIOS = {
   admvSo: { papel: 'administrativo', modulos: [] },
   // Já com o acesso por módulo (fase 1): os campos antigos gravados junto (legadoDoAcesso) continuam valendo.
   liderNovo: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'], nome: 'Líder Novo' },
-  segReg: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] }
+  segReg: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] },
+  // Fase 2: o perfil de cada módulo vale nas regras. Os campos antigos (papel, modulos) vão como a tela grava
+  // (legadoDoAcesso: papel = o mais alto), para provar que as regras olham o acesso, não o papel único.
+  opLiderGeLeitor: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'], nome: 'Misto' },
+  opLiderGeSup: { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'supervisor' }, escopos: ['patio'], nome: 'Misto Sup' },
+  rhSo: { papel: 'administrativo', modulos: ['frequencia'], acesso: { rh: 'administrativo' }, escopos: [] },
+  rhLeitorNovo: { papel: 'leitor', modulos: ['frequencia'], acesso: { rh: 'leitor' }, escopos: [] },
+  admModulo: { papel: 'gestor', modulos: ['operacao', 'gestao'], acesso: { gestao: 'gestor', administracao: 'modulo' }, escopos: ['patio'] },
+  admModSemGestor: { papel: 'gestor', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], acesso: { gestao: 'supervisor', administracao: 'modulo' }, escopos: ['patio'] },
+  eqGeLeitor: { papel: 'leitor', modulos: ['equipamentos'], acesso: { gestao: 'leitor' }, escopos: ['equipamentos'] },
+  eqGeSup: { papel: 'supervisor', modulos: ['equipamentos'], acesso: { gestao: 'supervisor' }, escopos: ['equipamentos'] },
+  eqOpLider: { papel: 'lider', modulos: ['equipamentos'], acesso: { operacao: 'lider' }, escopos: ['equipamentos'] },
+  bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
@@ -365,7 +377,7 @@ test('acesso por módulo: ninguém muda o próprio acesso nem os escopos; só o 
   await assertSucceeds(updateDoc(doc(db('admin'), 'usuarios', 'segReg'), { acesso: { seguranca: 'registra' }, escopos: [] }));
   await assertSucceeds(setDoc(doc(db('admin'), 'usuarios', 'novo2'), { papel: 'lider', nome: 'x', login: 'x', modulos: ['operacao'], acesso: { operacao: 'lider' }, escopos: ['patio'] }));
 });
-test('acesso por módulo (transição): quem já foi convertido continua com as mesmas permissões dos campos antigos', async () => {
+test('acesso por módulo: quem já foi convertido (mesmo perfil nos módulos) continua com as mesmas permissões de antes', async () => {
   await assertSucceeds(getDoc(doc(db('liderNovo'), 'semanas', SEM)));
   await assertSucceeds(updateDoc(doc(db('liderNovo'), 'semanas', SEM), { s: { 'REC-001': 'R______' } }));
   await assertFails(updateDoc(doc(db('liderNovo'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }), 'fora da área dele');
@@ -492,4 +504,66 @@ test('plano de ação: supervisor cria e conclui na área dele; coordenador tamb
   await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac7'), { ...a, acao: 'x'.repeat(401) }), 'texto muito longo');
   await assertSucceeds(setDoc(doc(db('sup'), 'b_acoes', 'b1'), { ...a, area: 'BATERIA 1' }));
   await assertFails(deleteDoc(doc(db('sup'), 'acoes', 'ac1')));
+});
+
+// ---------------- fase 2: o perfil de cada módulo vale nas regras ----------------
+test('perfil por módulo: líder na Operação aponta e lança a presença; como leitor na Gestão não grava o plano nem cria ações', async () => {
+  const d = db('opLiderGeLeitor');
+  await assertSucceeds(getDoc(doc(d, 'semanas', SEM)));
+  await assertSucceeds(updateDoc(doc(d, 'semanas', SEM), { s: { 'REC-001': 'R______' } }));
+  await assertFails(updateDoc(doc(d, 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }), 'fora da área');
+  await assertSucceeds(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-09': 'FT' } }, { merge: true }));
+  await assertFails(setDoc(doc(d, 'plano', 'RECEBIMENTO'), { itens: [] }), 'leitor na Gestão não grava o plano');
+  await assertFails(setDoc(doc(d, 'acoes', 'mx1'), { causa: 'Chuva', area: 'RECEBIMENTO', acao: 'Cobrir o pátio' }), 'leitor na Gestão não cria ação');
+  await assertFails(setDoc(doc(d, 'aprov', SEM), { area: 'RECEBIMENTO', mes: '2026-10', v: {} }, { merge: true }), 'líder não aprova');
+  await assertFails(getDoc(doc(d, 'gcolab', 'RECEBIMENTO')), 'Gestão sem as Fichas');
+  await assertFails(getDoc(doc(d, 'b_semanas', SEM_B1)), 'sem o escopo Bateria');
+});
+test('perfil por módulo: o papel antigo (o mais alto) não vale mais quando há acesso por módulo', async () => {
+  const d = db('opLiderGeSup'); // papel antigo supervisor, mas Operação · Líder
+  await assertFails(setDoc(doc(d, 'aprov', SEM), { area: 'RECEBIMENTO', mes: '2026-10', v: {} }, { merge: true }), 'aprovar é da Operação · Supervisor');
+  await assertSucceeds(updateDoc(doc(d, 'semanas', SEM), { s: { 'REC-002': 'R______' } }));
+  await assertFails(updateDoc(doc(d, 'semanas', SEM_PREP), { s: { 'PRE-002': 'R______' } }), 'a 2ª área é só do supervisor; na Operação é líder');
+  await assertSucceeds(setDoc(doc(d, 'acoes', 'mx2'), { causa: 'Chuva', area: 'PREPARAÇÃO', acao: 'Cobrir o pátio' }), 'ações pela Gestão · Supervisor, na 2ª área');
+  await assertFails(setDoc(doc(db('admModSemGestor'), 'plano', 'RECEBIMENTO'), { itens: [] }), 'Dos módulos sem ser Gestor da Gestão');
+  await assertFails(getDoc(doc(db('admModSemGestor'), 'seeds', 'seed')));
+});
+test('só RH: lê e grava a frequência e as férias; não lê as semanas nem o plano', async () => {
+  const d = db('rhSo');
+  await assertSucceeds(getDoc(doc(d, 'freqcomp', 'patio|2026-10')));
+  await assertSucceeds(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [] }));
+  await assertSucceeds(setDoc(doc(d, 'ferias', 'rh1'), { nome: 'X', inicio: '2026-11-01', termino: '2026-11-30' }));
+  await assertSucceeds(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-10': 'AT' } }, { merge: true }), 'a Frequência grava a presença de quem está nas Atividades');
+  await assertSucceeds(getDoc(doc(d, 'eqlanc', 'l1')), 'hora extra da Operação na folha');
+  for (const [c, id] of [['semanas', SEM], ['plano', 'RECEBIMENTO'], ['config', 'sistema'], ['eq', 'cadastro'], ['gestao', 'colaboradores']]) await assertFails(getDoc(doc(d, c, id)), `RH não lê ${c}`);
+  await assertSucceeds(getDocs(collection(db('rhLeitorNovo'), 'ferias')));
+  await assertFails(setDoc(doc(db('rhLeitorNovo'), 'ferias', 'rh2'), { nome: 'Y' }), 'RH somente leitura não grava');
+  await assertFails(setDoc(doc(db('rhLeitorNovo'), 'situacao', '2026-10'), { v: { 'C001|2026-10-11': 'AT' } }, { merge: true }));
+});
+test('Administração Dos módulos: Gestor da Gestão cuida do plano, das rotas e das escalas do escopo; usuários e perfis não', async () => {
+  const d = db('admModulo');
+  await assertSucceeds(setDoc(doc(d, 'plano', 'RECEBIMENTO'), { itens: [] }));
+  await assertSucceeds(updateDoc(doc(d, 'config', 'sistema'), { rotas: [] }));
+  await assertSucceeds(updateDoc(doc(d, 'config', 'escalas'), { regimes: [] }));
+  await assertSucceeds(getDoc(doc(d, 'seeds', 'seed')));
+  await assertFails(setDoc(doc(d, 'b_plano', 'BATERIA 1'), { itens: [] }), 'sem o escopo Bateria');
+  await assertFails(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-12': 'FT' } }, { merge: true }), 'sem a Operação não lança a presença');
+  await assertFails(setDoc(doc(d, 'aprov', SEM), { area: 'RECEBIMENTO', mes: '2026-10', v: {} }, { merge: true }), 'nem aprova');
+  await assertFails(setDoc(doc(d, 'usuarios', 'novo3'), { papel: 'lider', nome: 'x', login: 'x' }));
+  await assertFails(setDoc(doc(d, 'config', 'permissoes'), { x: 2 }));
+});
+test('Equipamentos por módulo: a Operação lança; a Gestão lê e só lança a Avaliação mensal', async () => {
+  await assertSucceeds(setDoc(doc(db('eqOpLider'), 'eqlanc', 'mx1'), { mes: '2026-10' }));
+  await assertSucceeds(getDoc(doc(db('eqGeLeitor'), 'eqlanc', 'l1')));
+  await assertSucceeds(getDoc(doc(db('eqGeLeitor'), 'eq', 'cadastro')));
+  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqlanc', 'mx2'), { mes: '2026-10' }));
+  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqaval', '2026-10'), { x: 1 }));
+  await assertSucceeds(setDoc(doc(db('eqGeSup'), 'eqaval', '2026-10'), { x: 1 }));
+  await assertFails(setDoc(doc(db('eqGeSup'), 'eqlanc', 'mx3'), { mes: '2026-10' }), 'a Gestão não lança na Operação');
+  await assertFails(getDoc(doc(db('eqGeSup'), 'semanas', SEM)), 'escopo só Equipamentos');
+});
+test('bloqueado com acesso por módulo guardado: não lê nem grava nada', async () => {
+  for (const [c, id] of [['semanas', SEM], ['config', 'sistema'], ['eq', 'cadastro'], ['gcolab', 'RECEBIMENTO'], ['freqcomp', 'patio|2026-10'], ['usuarios', 'liderRec']]) await assertFails(getDoc(doc(db('bloqNovo'), c, id)));
+  await assertFails(setDoc(doc(db('bloqNovo'), 'plano', 'RECEBIMENTO'), { itens: [] }));
+  await assertFails(setDoc(doc(db('bloqNovo'), 'usuarios', 'novo4'), { papel: 'admin', nome: 'x', login: 'x' }));
 });

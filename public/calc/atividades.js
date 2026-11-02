@@ -2,9 +2,9 @@
 import { SETS, DAYS, add, ddmm } from '../cal.js';
 import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov, listarAprov } from '../aprovacao.js';
 import { listaAtrasadas } from '../hoje.js';
-import { modulosDe } from '../acessos.js';
+import { perfilDe, escoposDe } from '../acessos.js';
 import { DB, TODAY, esc } from '../nucleo/base.js';
-import { ME, PL, SK, AREAS, DATAV, mudouDados, UI, rotas, podeItem, todasAreas, myAreas, canEdit, podeForaProg } from '../nucleo/estado.js';
+import { ME, PL, SK, AREAS, DATAV, mudouDados, UI, rotas, podeItem, todasAreas, myAreas, canEdit, podeForaProg, perfil, isAdmin, modAqui } from '../nucleo/estado.js';
 import { sheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 
@@ -90,14 +90,15 @@ export function escolherFora(doc, k, rota) {
 /* ---------------- aprovação dos apontamentos ---------------- */
 // O líder aponta; o supervisor (ou coordenador, gestor, administrador) aprova ou devolve com o motivo.
 // O que ainda espera aprovação já conta nos números, com o selo "aguardando". Vale dos apontamentos a partir de APROV_DESDE.
-export const aprovador = () => !!ME && (aprovaPapel(ME.papel) || ME.papel === 'admin') && podeItem('i_aprovar');
+// Aprovar é da Operação: vale o perfil da Operação, em qualquer tela.
+export const aprovador = () => !!ME && (aprovaPapel(perfil('operacao')) || isAdmin()) && podeItem('i_aprovar', 'operacao');
  // supervisor; administrador como reserva
 // Áreas sem supervisor ativo neste conjunto: o administrador aprova no lugar dele (aprovador reserva).
-const areasSemSupervisor = () => AREAS.filter(a => !(DB.cache.usuarios || []).some(u => u.papel === 'supervisor' && !u.bloqueado && (u.area === a || u.area2 === a) && modulosDe(u).includes(SETS[SK].mod)));
-export const acompanha = () => !!ME && acompanhaPapel(ME.papel);
- // vê a Aprovação e cria ações (supervisor para cima)
-export const areasAprov = () => (!aprovador() ? [] : ME.papel === 'admin' ? areasSemSupervisor() : myAreas());
-export const areasVerAprov = () => (aprovador() && ME.papel !== 'admin' ? myAreas() : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
+const areasSemSupervisor = () => AREAS.filter(a => !(DB.cache.usuarios || []).some(u => perfilDe(u, 'operacao') === 'supervisor' && !u.bloqueado && (u.area === a || u.area2 === a) && escoposDe(u).includes(SK)));
+// Acompanha (vê a Aprovação, cria ações): supervisor para cima, no módulo pedido (padrão: o da tela).
+export const acompanha = (mod = modAqui()) => !!ME && acompanhaPapel(perfil(mod));
+export const areasAprov = () => (!aprovador() ? [] : isAdmin() ? areasSemSupervisor() : myAreas('operacao'));
+export const areasVerAprov = () => (aprovador() && !isAdmin() ? myAreas('operacao') : acompanha() ? (todasAreas() ? AREAS : myAreas()) : []);
 export const aprovDe = (doc, pid, k) => ((DB.cache.aprov || {})[doc.id] || {})[pid + '|' + k];
 // 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)
 export const estAprov = (doc, i, k) => estadoAprov(doc.d[i][k], diasDe(doc)[k], aprovDe(doc, doc.ids[i], k), TODAY, doc.m[doc.ids[i] + '|' + k]);

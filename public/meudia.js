@@ -16,11 +16,15 @@ export function criarMeuDia(X) {
 
   // O que a pessoa enxerga em cada módulo
   const temMod = m => X.modsDe(ME()).includes(m);
-  const todas = m => ME().papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(ME().papel) && temMod(m));
+  // Perfil em cada módulo (Operação, Gestão, RH): cada bloco usa o perfil do módulo de onde vem.
+  const P = m => (X.perfil ? X.perfil(m) : ME().papel);
+  const pAtiv = () => P('operacao') || P('gestao'); // atividades: o da Operação; sem Operação, o da Gestão
+  const ehAdm = () => P('administracao') === 'admin';
+  const todas = m => pAtiv() === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(pAtiv()) && temMod(m));
   function areasDe(k) {
     if (!temMod(SETS[k].mod)) return [];
     if (todas(SETS[k].mod)) return SETS[k].areas;
-    const u = ME(); return [...new Set([u.area, u.papel === 'supervisor' ? u.area2 : null].filter(a => a && SETS[k].areas.includes(a)))];
+    const u = ME(); return [...new Set([u.area, pAtiv() === 'supervisor' ? u.area2 : null].filter(a => a && SETS[k].areas.includes(a)))];
   }
 
   // Os meses e as paradas já são carregados no login (data.js); aqui só esperamos chegar tudo,
@@ -47,7 +51,7 @@ export function criarMeuDia(X) {
   }
 
   // Quem só consulta (visitante) não vê botão de ação: só "Ver". O laranja fica para a ação principal da faixa de abertura.
-  const soLer = () => ME().papel === 'leitor';
+  const soLer = () => ['operacao', 'gestao', 'rh'].map(P).filter(Boolean).every(p => p === 'leitor');
   const ir = (mod, view, area, txt) => (soLer() ? (view === 'gnovaoc' ? '' : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">Ver</button>`) : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`);
   const vazio = t => `<p class="muted small m0">${t}</p>`;
 
@@ -56,17 +60,17 @@ export function criarMeuDia(X) {
     const prefs = { ...PREFS_PADRAO, ...((meus && meus.prefs) || {}) };
     const opcoes = [
       temMod('equipamentos') && ['paradas', 'Parada sem liberação há mais de 2 horas'],
-      temMod('gestao') && ME().papel !== 'leitor' && ['assinaturas', 'Assinatura com você ou da sua área há mais de 7 dias (às 8h)'],
-      (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(ME().papel) && ['atividades', 'Atividades do dia ainda sem apontar (às 15h)'],
-      (temMod('operacao') || temMod('bateria')) && ME().papel === 'lider' && ['aprovacao', 'Atividade devolvida pelo supervisor (na hora)'],
-      (temMod('operacao') || temMod('bateria')) && aprovaPapel(ME().papel) && ['aprovacao', 'Apontamentos esperando sua aprovação há mais de 1 dia (às 8h)'],
+      temMod('gestao') && P('gestao') !== 'leitor' && ['assinaturas', 'Assinatura com você ou da sua área há mais de 7 dias (às 8h)'],
+      (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(P('operacao')) && ['atividades', 'Atividades do dia ainda sem apontar (às 15h)'],
+      (temMod('operacao') || temMod('bateria')) && P('operacao') === 'lider' && ['aprovacao', 'Atividade devolvida pelo supervisor (na hora)'],
+      (temMod('operacao') || temMod('bateria')) && aprovaPapel(P('operacao')) && ['aprovacao', 'Apontamentos esperando sua aprovação há mais de 1 dia (às 8h)'],
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)'],
-      (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(ME().papel) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
-      ['admin', 'gestor', 'coordenador'].includes(ME().papel) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
-      ME().papel === 'admin' && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
+      (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
+      (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
+      ehAdm() && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
     ].filter(Boolean);
     let corpo;
-    if (!cfg.vapid) corpo = ME().papel === 'admin'
+    if (!cfg.vapid) corpo = ehAdm()
       ? `<p class="small m0">Para ligar os avisos, cole a <b>chave pública Web Push</b> do Firebase (Configurações do projeto › Cloud Messaging › Certificados push da Web › Gerar par de chaves). Passo a passo no README.</p>
          <div class="row-gap"><input class="in grow" id="mdVapid" placeholder="Chave pública (começa com B…)" autocomplete="off"><button class="btn pri" data-md-av="vapid">Salvar chave</button></div>`
       : vazio('O administrador ainda não ligou os avisos no celular.');
@@ -75,7 +79,7 @@ export function criarMeuDia(X) {
         ${ativo ? `<button class="btn ghost sm" data-md-av="testar">Testar neste aparelho</button><button class="btn sm" data-md-av="desligar" ${ST.ocupado ? 'disabled' : ''}>Desligar</button>` : `<button class="btn pri sm" data-md-av="ligar" ${ST.ocupado || !ST.suportado ? 'disabled' : ''}>${ST.ocupado ? 'Ligando…' : 'Ligar avisos'}</button>`}</div>
       <div class="mchips">${opcoes.map(([k, t]) => `<label class="mchip"><input type="checkbox" data-md-pref="${k}" ${prefs[k] ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}`;
-    if (cfg.vapid && ME().papel === 'admin') corpo += estadoRotina();
+    if (cfg.vapid && ehAdm()) corpo += estadoRotina();
     return `<div class="card"><header><h2>Avisos no celular</h2></header><div class="body stackcol" style="gap:12px">${corpo}</div></div>`;
   }
 
@@ -109,8 +113,8 @@ export function criarMeuDia(X) {
       if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar (últimos 60 dias)', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
       { const st = DB.dados(k); // aprovação dos apontamentos: o supervisor vê o que falta aprovar; o líder, o que voltou para corrigir
         const noPlano = (ids => pid => ids.has(pid))(new Set(SETS[k].areas.flatMap(a => (st.plano[a] || []).map(p => p.id)))); // o mesmo filtro da Aprovação
-        if (aprovaPapel(u.papel)) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'pend', noPlano); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
-        else if (u.papel === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev', noPlano); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
+        if (aprovaPapel(P('operacao'))) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'pend', noPlano); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
+        else if (P('operacao') === 'lider') { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'dev', noPlano); if (n) tiles.push({ n, t: `devolvidas pelo supervisor · ${SETS[k].curto}`, s: 'confira o motivo e aponte de novo', tom: 'bad', go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''], acao: 'Corrigir' }); } }
       if (r.deficit.length) tiles.push({ n: r.deficit.length, t: `${r.deficit.length === 1 ? 'rota' : 'rotas'} com déficit amanhã · ${SETS[k].curto}`, s: `${ddmm(r.amanha)}`, tom: 'bad', go: [mod, 'escala', r.deficit[0].area] });
       const pend = r.rotas.filter(x => x.total);
       blocos.push(`<div class="card md-card"><header><h2>${SETS[k].nome}</h2><p>Hoje · ${esc(nomeAreas)}</p><span class="r">${ir(mod, 'apontar', areas.length === 1 ? areas[0] : '', `${I.apontar} Apontar`, true)}</span></header><div class="body stackcol" style="gap:14px">
@@ -144,7 +148,7 @@ export function criarMeuDia(X) {
         if (comigo.length) tiles.push({ n: comigo.length, t: 'assinaturas para você recolher', s: [...new Set(comigo.map(o => title(o.nome).split(' ')[0]))].slice(0, 3).join(', '), tom: comigo.some(o => o.data <= add(hoje, -7)) ? 'bad' : 'warn', go: ['frequencia', 'gcomigo', ''], acao: 'Recolher' });
         if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['frequencia', 'gocorr', ''] });
         if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['paineis', 'gpainel', ''] });
-        blocos.push(`<div class="card md-card"><header><h2>Fichas (RH)</h2><p>Fichas de acompanhamento</p><span class="r">${ir('frequencia', 'gnovaoc', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
+        blocos.push(`<div class="card md-card"><header><h2>Fichas</h2><p>Fichas de acompanhamento</p><span class="r">${ir('frequencia', 'gnovaoc', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
           ${a.total ? `<div><div class="md-sub ${a.velhas.length ? 'bad' : ''}">Aguardando assinatura (${a.total})</div><div class="plist">${(a.velhas.length ? a.velhas : (G.ocorr || []).filter(o => o.status === 'pendente')).slice(0, 5).map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${ddmm(o.data)} · ${esc(o.tipo)}</div></div><span class="pill ${o.data <= add(hoje, -7) ? 'bad' : 'warn'}">${Math.round((new Date(hoje) - new Date(o.data)) / 864e5)} dias</span></div>`).join('')}</div></div>` : vazio('Nenhuma assinatura pendente.')}
           ${exp.length ? `<div><div class="md-sub">Experiência vencendo</div><div class="md-pessoas">${exp.slice(0, 12).map(x => `<span class="md-pessoa"><b>${esc(title(x.c.nome))}</b><small>${x.d} dias de casa · fecha ${x.d <= 45 ? '45' : '90'} em ${(x.d <= 45 ? 45 : 90) - x.d} dia(s)</small></span>`).join('')}</div></div>` : ''}
         </div></div>`);

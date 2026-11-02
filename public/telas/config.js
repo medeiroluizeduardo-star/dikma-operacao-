@@ -3,16 +3,16 @@
 import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../cal.js';
 import { competenciaDe, diasDaCompetencia } from '../planilhas-adm.js';
 import { semAcento, casa, caixaBusca } from '../busca.js';
-import { MODULOS_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso } from '../acessos.js';
+import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe } from '../acessos.js';
 import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../escala.js';
-import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU } from '../permissoes.js';
+import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../permissoes.js';
 import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admMod, papelNome, modsReais, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
 import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
-import { VIEWS, MOD_MARCA } from '../navegacao.js';
+import { VIEWS } from '../navegacao.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
@@ -20,7 +20,6 @@ import { comModulo } from '../nucleo/modulos.js';
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
 // vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação, Efetivo e Meu dia.
-const ehGestor = () => !!ME && ME.papel === 'gestor';
 function vCfGeral() {
   const E = escala(); const card = (ic, t, sub, corpo, botoes) => `<div class="card cfc"><header><span class="cfi">${ic}</span><div class="minw"><h2>${t}</h2><p>${sub}</p></div></header><div class="body">${corpo}<div class="row-gap cfb">${botoes}</div></div></div>`;
   const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
@@ -38,9 +37,9 @@ function vCfGeral() {
     h += card(MOD_IC[SETS[k].mod], SETS[k].nome, SETS[k].areas.map(a => AREA_S[a]).join(' · '), c ? kv([['Rotas', (c.rotas || []).length], ['Atividades no plano', nPlano], ['Meses gerados', ms.length ? ms.slice(-3).map(monthLabel).join(', ') : '—']]) : '<p class="muted m0">Planilha ainda não importada.</p>', `${ir('config', 'Rotas e configurações', k)}${ir('plano', 'Plano padrão', k)}${ir('gerador', 'Gerador de meses', k)}`);
   }
   // Operação
-  if (VIEWS.find(v => v.id === 'econfig').req()) { const e = DB.cache.e; const c = e && e.config; h += card(MOD_IC.equipamentos, 'Equipamentos', 'Lançamentos, frota e operadores', c ? kv([['Operadores', (e.cad.operadores || []).length], ['Frota', (e.cad.frota || []).length], ['Causas de parada', (c.causas || []).length], ['Turno ADM · 4x4', `${c.turno.admIni}–${c.turno.admFim} · ${c.turno.x4Ini}–${c.turno.x4Fim}`]]) : '<p class="muted m0">Planilha ainda não importada.</p>', ir('econfig', 'Configurações da Operação')); }
+  if (VIEWS.find(v => v.id === 'econfig').req()) { const e = DB.cache.e; const c = e && e.config; h += card(MOD_IC.equipamentos, 'Equipamentos', 'Lançamentos, frota e operadores', c ? kv([['Operadores', (e.cad.operadores || []).length], ['Frota', (e.cad.frota || []).length], ['Causas de parada', (c.causas || []).length], ['Turno ADM · 4x4', `${c.turno.admIni}–${c.turno.admFim} · ${c.turno.x4Ini}–${c.turno.x4Fim}`]]) : '<p class="muted m0">Planilha ainda não importada.</p>', ir('econfig', 'Configurações dos equipamentos')); }
   // Efetivo
-  if (VIEWS.find(v => v.id === 'gtipos').req()) { const g = DB.cache.g; h += card(MOD_IC.gestao, 'Fichas (RH)', 'Fichas de acompanhamento', kv([['Fichas', (g.colabs || []).length], ['Tipos de ocorrência', ((g.config && g.config.tipos) || []).length], ['Na Folha 1', ((g.config && g.config.tipos) || []).filter(t => t.f1).length]]), `${ir('gtipos', 'Tipos de ocorrência')}${isAdmin() ? ir('gimport', 'Importar dados') : ''}`); }
+  if (VIEWS.find(v => v.id === 'gtipos').req()) { const g = DB.cache.g; h += card(MOD_IC.gestao, 'Fichas', 'Fichas de acompanhamento (Gestão)', kv([['Fichas', (g.colabs || []).length], ['Tipos de ocorrência', ((g.config && g.config.tipos) || []).length], ['Na Folha 1', ((g.config && g.config.tipos) || []).filter(t => t.f1).length]]), `${ir('gtipos', 'Tipos de ocorrência')}${isAdmin() ? ir('gimport', 'Importar dados') : ''}`); }
   // Acesso
   if (isAdmin()) { const us = DB.cache.usuarios; const exc = us.filter(u => u.abas && Object.keys(u.abas).length).length; const av = DB.cache.avisosCfg && DB.cache.avisosCfg.vapid; h += card(I.users, 'Acesso', 'Usuários, perfis e avisos', kv([['Usuários ativos', us.filter(u => u.papel !== 'bloqueado').length], ['Bloqueados', us.filter(u => u.papel === 'bloqueado').length], ['Com abas personalizadas', exc], ['Avisos no celular', av ? 'chave configurada' : '<span class="semt">sem chave</span>']]), `${ir('usuarios', 'Usuários e acessos')}${ir('perfis', 'Perfis e permissões')}`); }
   return h + '</div>';
@@ -52,7 +51,7 @@ export function rascEsc() {
   return UI.escR;
 }
 function vCfEscala() {
-  const R = rascEsc(); const E = criarEscala(R, {}, []); const ed = isAdmin() || ehGestor();
+  const R = rascEsc(); const E = criarEscala(R, {}, []); const ed = admDe('escala');
   const salvo = JSON.stringify({ r: escala().regimes, f: (DB.cache.escalas && DB.cache.escalas.feriados) || [] }) === JSON.stringify({ r: R.regimes, f: R.feriados });
   // calendário dos próximos 14 dias
   const dias = []; for (let i = 0; i < 14; i++) dias.push(add(TODAY, i));
@@ -235,10 +234,11 @@ export function lerAcesso(px) {
 export function resumoAcesso(st) {
   const a = st.acesso || {};
   if (!Object.keys(a).length) return 'Escolha o perfil em pelo menos um módulo.';
+  if (a.administracao === 'admin') return 'Administrador: vê e faz tudo em todos os módulos.';
   const v = legadoDoAcesso(a, st.escopos, st);
-  const perfis = new Set(['operacao', 'gestao', 'rh'].map(k => a[k]).filter(Boolean));
-  const mods = v.papel === 'admin' ? 'todos os módulos' : v.modulos.filter(m => MOD_ANTIGO[m]).map(m => MOD_ANTIGO[m]).join(', ') || 'nenhum módulo de hoje (Segurança chega na fase 3)';
-  return `Enquanto a divisão não termina, o sistema usa um perfil só: <b>${esc(papelNome(v.papel))}</b> · ${esc(mods)}.${perfis.size > 1 ? ' Os perfis diferentes por módulo passam a valer na próxima fase.' : ''}${(st.area || st.area2) && !v.area ? ' A área não se aplica a este perfil (vê todas ou nenhuma).' : ''}`;
+  const partes = MODULOS_ACESSO.filter(m => a[m.k]).map(m => `${m.nome}: ${perfilNome(m.k, a[m.k])}`);
+  const semEsc = (a.operacao || a.gestao) && !(st.escopos || []).length;
+  return `Cada módulo usa o seu perfil: <b>${esc(partes.join(' · '))}</b>.${semEsc ? ' Sem escopo (Pátio, Bateria ou Equipamentos), a Operação e a Gestão ficam vazias.' : ''}${(st.area || st.area2) && !v.area ? ' A área não se aplica a estes perfis (veem todas ou nenhuma).' : ''}`;
 }
 // Confere o formulário e devolve os campos para gravar (modelo novo + antigos). uid = quem está sendo editado.
 export function validarAcesso(st, uid) {
@@ -247,7 +247,7 @@ export function validarAcesso(st, uid) {
   if (a.operacao && !st.escopos.length) throw new Error('A Operação precisa de pelo menos um escopo: Pátio, Bateria ou Equipamentos.');
   const v = legadoDoAcesso(a, st.escopos, st);
   const ativ = v.modulos.includes('operacao') || v.modulos.includes('bateria');
-  if (ativ && ['lider', 'supervisor'].includes(v.papel) && !v.area) throw new Error('Escolha a área do líder ou supervisor.');
+  if (ativ && [a.operacao, a.gestao].some(p => ['lider', 'supervisor'].includes(p)) && !v.area) throw new Error('Escolha a área do líder ou supervisor.');
   if (v.area && ativ) { const k = setDaArea(v.area); if (k && !st.escopos.includes(k)) throw new Error(`A área ${AREA_S[v.area]} é do escopo ${SETS[k].curto}. Marque esse escopo.`); }
   if (v.area2 && v.area2 === v.area) throw new Error('A 2ª área precisa ser diferente da primeira.');
   if (v.area2 && !v.area) throw new Error('Escolha a primeira área antes da segunda.');
@@ -268,7 +268,7 @@ function selosDe(u) {
   const tags = [u.papel === 'bloqueado' ? '<span class="pill bad">Bloqueado</span>' : '', r.convertido ? '' : '<span class="pill warn" title="Cadastro ainda no modelo antigo: estes são os módulos que a conversão vai gravar">a converter</span>'].join('');
   return `<div class="selos">${tags}${selos.join('') || '<span class="muted small">Sem acesso</span>'}${esc_}</div>`;
 }
-const areaTxt = u => (u.papel === 'admin' || u.papel === 'gestor' || u.papel === 'coordenador' ? '<span class="muted small">Todas</span>' : [u.area, u.papel === 'supervisor' ? u.area2 : null].filter(Boolean).map(a => AREA_S[a] || a).join(' · ') || '<span class="muted">—</span>');
+const areaTxt = u => { const ps = ['operacao', 'gestao'].map(m => perfilDe(u, m)).filter(Boolean); const l = ps.some(p => ['lider', 'supervisor'].includes(p)) ? [u.area, ps.includes('supervisor') ? u.area2 : null].filter(Boolean).map(a => AREA_S[a] || a) : []; return l.length ? l.join(' · ') : ps.some(p => ['admin', 'gestor', 'coordenador', 'leitor', 'administrativo'].includes(p)) ? '<span class="muted small">Todas</span>' : '<span class="muted">—</span>'; };
 export function vUsuarios() {
   const us = DB.cache.usuarios.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
   const ativos = us.filter(u => u.papel !== 'bloqueado').length;
@@ -301,11 +301,11 @@ export function editarAcessoSheet(uid) {
     toast('Acesso atualizado');
   });
 }
-// Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
-const KEY_MOD = { paineis: 'pn', operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge', frequencia: 'ad' };
-const viewsDaPessoa = u => { const ks = new Set(['all', ...modsDe(u).map(m => KEY_MOD[m])]); return VIEWS.filter(v => ks.has(v.mod) && configuravel(u.papel, v) && (!v.reqU || v.reqU(u))); };
+// Abas que a pessoa pode ter, conforme os módulos dela (com o módulo de cada uma; Meu dia conta uma vez só).
+const viewsDaPessoa = u => { const ms = modsDe(u); return VIEWS.filter(v => (v.mod === 'all' ? ms.length > 0 : ms.includes(v.mod)) && (() => { const m = v.mod === 'all' ? ms.find(x => x !== 'administracao') || 'operacao' : v.mod; const p = perfilDe(u, m); return p && p !== 'admin' && configuravel(m, p, v); })() && (!v.reqU || v.reqU(u))); };
+const modDaAba = (u, v) => (v.mod === 'all' ? modsDe(u).find(x => x !== 'administracao') || 'operacao' : v.mod);
 function celulaAbas(u) {
-  if (u.papel === 'admin') return '<span class="muted small">Todas</span>';
+  if (perfilDe(u, 'administracao') === 'admin') return '<span class="muted small">Todas</span>';
   if (u.papel === 'bloqueado') return '<span class="muted small">—</span>';
   const r = resumoExcecao(u, viewsDaPessoa(u), permCfg());
   const txt = [r.menos ? `${r.menos} a menos` : '', r.mais ? `${r.mais} a mais` : ''].filter(Boolean).join(' · ');
@@ -313,18 +313,18 @@ function celulaAbas(u) {
 }
 export function abasPessoaSheet(uid) {
   const u = DB.cache.usuarios.find(x => x.uid === uid); if (!u) return;
-  const cfg = permCfg(); const vs = viewsDaPessoa(u);
-  const grupos = GRUPOS_ABAS.map(g => [g, vs.filter(v => v.mod === g.mod)]).filter(([, l]) => l.length);
-  const itensDe = mod => ITENS.filter(it => it.mod === mod && itemDoPapel(u.papel, it) && (mod === 'all' || grupos.some(([g]) => g.mod === mod)));
-  const linhaItem = it => { const base = itemPerfil(u.papel, it, cfg); const on = podeItemU(u, it.id, cfg); return `<label class="tgl-row item"><span>↳ ${esc(it.nome)}${on !== base ? ' <small class="exc-t">exceção</small>' : ''}<br><small class="muted">${esc(it.d)}</small></span><input type="checkbox" class="tgl" data-pitem="${it.id}" ${on ? 'checked' : ''} aria-label="${esc(it.nome)}"></label>`; };
-  const html = `<div class="abas-p">${grupos.map(([g, l]) => `<div class="abas-g"><b>${esc(g.t)}</b>${l.map(v => { const base = doPerfil(u.papel, v, cfg); const on = podeVer(u, v, cfg); return `<label class="tgl-row"><span>${esc(v.nome)}${on !== base ? ' <small class="exc-t">exceção</small>' : ''}</span><input type="checkbox" class="tgl" data-pabas="${v.id}" ${on ? 'checked' : ''} aria-label="${esc(v.nome)}"></label>`; }).join('')}${itensDe(g.mod).map(linhaItem).join('')}</div>`).join('')}${grupos.some(([g]) => g.mod === 'all') ? '' : itensDe('all').length ? `<div class="abas-g"><b>Todos os módulos</b>${itensDe('all').map(linhaItem).join('')}</div>` : ''}</div>
-    <label class="switch"><input type="checkbox" id="paReset"><span>Voltar ao padrão do perfil (${esc(papelNome(u.papel))})</span></label>`;
-  formSheet('Abas e ações de ' + title(u.nome), `${papelNome(u.papel)} · o que for diferente do perfil fica como exceção só desta pessoa`, html, 'Salvar', async () => {
+  const cfg = permCfg(); const vs = viewsDaPessoa(u); const ms = modsDe(u);
+  const grupos = GRUPOS_ABAS.filter(g => ms.includes(g.mod)).map(g => [g, vs.filter(v => modDaAba(u, v) === g.mod)]);
+  const itensDe = mod => ITENS.filter(it => it.mod === mod && itemDoPapel(perfilDe(u, mod), it) && perfilDe(u, mod) !== 'admin');
+  const linhaItem = it => { const p = perfilDe(u, it.mod); const base = itemPerfil(it.mod, p, it, cfg); const on = podeItemU(u, it.id, cfg, it.mod); return `<label class="tgl-row item"><span>↳ ${esc(it.nome)}${on !== base ? ' <small class="exc-t">exceção</small>' : ''}<br><small class="muted">${esc(it.d)}</small></span><input type="checkbox" class="tgl" data-pitem="${it.id}" ${on ? 'checked' : ''} aria-label="${esc(it.nome)}"></label>`; };
+  const html = `<div class="abas-p">${grupos.filter(([g, l]) => l.length || itensDe(g.mod).length).map(([g, l]) => `<div class="abas-g"><b>${esc(g.t)} · ${esc(perfilNome(g.mod, perfilDe(u, g.mod)))}</b>${l.map(v => { const m = modDaAba(u, v); const base = doPerfil(m, perfilDe(u, m), v, cfg); const on = podeVer(u, v, cfg, m); return `<label class="tgl-row"><span>${esc(v.nome)}${on !== base ? ' <small class="exc-t">exceção</small>' : ''}</span><input type="checkbox" class="tgl" data-pabas="${v.id}" ${on ? 'checked' : ''} aria-label="${esc(v.nome)}"></label>`; }).join('')}${itensDe(g.mod).map(linhaItem).join('')}</div>`).join('')}</div>
+    <label class="switch"><input type="checkbox" id="paReset"><span>Voltar ao padrão dos perfis</span></label>`;
+  formSheet('Abas e ações de ' + title(u.nome), 'O que for diferente do perfil do módulo fica como exceção só desta pessoa', html, 'Salvar', async () => {
     let abas = null;
     if (!$('paReset').checked) {
       abas = {};
-      document.querySelectorAll('[data-pabas]').forEach(i => { const v = VIEWS.find(x => x.id === i.dataset.pabas); if (i.checked !== doPerfil(u.papel, v, cfg)) abas[v.id] = i.checked; });
-      document.querySelectorAll('[data-pitem]').forEach(i => { const it = ITENS.find(x => x.id === i.dataset.pitem); if (it && i.checked !== itemPerfil(u.papel, it, cfg)) abas[it.id] = i.checked; });
+      document.querySelectorAll('[data-pabas]').forEach(i => { const v = VIEWS.find(x => x.id === i.dataset.pabas); const m = modDaAba(u, v); if (i.checked !== doPerfil(m, perfilDe(u, m), v, cfg)) abas[v.id] = i.checked; });
+      document.querySelectorAll('[data-pitem]').forEach(i => { const it = ITENS.find(x => x.id === i.dataset.pitem); if (it && i.checked !== itemPerfil(it.mod, perfilDe(u, it.mod), it, cfg)) abas[it.id] = i.checked; });
       if (!Object.keys(abas).length) abas = null;
     }
     await DB.setUsuario(uid, { abas });
@@ -334,25 +334,39 @@ export function abasPessoaSheet(uid) {
 }
 
 /* ---------------- PERFIS E PERMISSÕES ---------------- */
-// Rascunho em UI.perm até salvar; Pátio e Bateria dividem a mesma configuração.
+// Uma tabela por módulo (abas × perfis daquele módulo). Rascunho em UI.perm até salvar, com as chaves novas
+// 'módulo|perfil'; o que estava gravado no formato antigo (uma chave por perfil) entra no rascunho já convertido.
+const abasDoModulo = mod => VIEWS.filter(v => (v.mod === mod || (v.mod === 'all' && mod !== 'administracao')) && !['usuarios', 'perfis', 'gimport'].includes(v.id));
 export function rascunhoPerm() {
-  if (!UI.perm) { const c = permCfg(); UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, { ...(c[p] || {}) }])); }
+  if (!UI.perm) {
+    const c = permCfg(); UI.perm = {};
+    for (const g of GRUPOS_ABAS) for (const [p] of PERFIS_MOD[g.mod]) {
+      const r = {};
+      for (const v of abasDoModulo(g.mod)) if (configuravel(g.mod, p, v)) r[v.id] = doPerfil(g.mod, p, v, c);
+      for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it)) r[it.id] = itemPerfil(g.mod, p, it, c);
+      UI.perm[chavePerm(g.mod, p)] = r;
+    }
+  }
   return UI.perm;
 }
+const permR = (R, mod, p, id) => { const x = R[chavePerm(mod, p)]; return x && typeof x[id] === 'boolean' ? x[id] : true; };
 export function vPerfis() {
   const R = rascunhoPerm(); const cfg = permCfg();
-  const mudou = PERFIS_ABAS.some(([p]) => VIEWS.some(v => configuravel(p, v) && doPerfil(p, v, R) !== doPerfil(p, v, cfg)) || ITENS.some(it => itemPerfil(p, it, R) !== itemPerfil(p, it, cfg)));
-  const us = DB.cache.usuarios.filter(u => !['admin', 'bloqueado'].includes(u.papel));
+  const mod = GRUPOS_ABAS.some(g => g.mod === UI.permMod) ? UI.permMod : 'operacao';
+  const mudouEm = m => PERFIS_MOD[m].some(([p]) => abasDoModulo(m).some(v => configuravel(m, p, v) && permR(R, m, p, v.id) !== doPerfil(m, p, v, cfg)) || ITENS.some(it => it.mod === m && itemDoPapel(p, it) && permR(R, m, p, it.id) !== itemPerfil(m, p, it, cfg)));
+  const mudou = GRUPOS_ABAS.some(g => mudouEm(g.mod));
+  const us = DB.cache.usuarios.filter(u => perfilDe(u, 'administracao') !== 'admin' && u.papel !== 'bloqueado');
   const comExc = us.filter(u => resumoExcecao(u, viewsDaPessoa(u), cfg).tem);
-  const linhas = GRUPOS_ABAS.map(g => {
-    const vs = VIEWS.filter(v => v.mod === g.mod && !['usuarios', 'perfis'].includes(v.id));
-    return `<tr class="grp-row"><th colspan="${PERFIS_ABAS.length + 2}">${esc(g.t)}</th></tr>` + vs.map(v => `<tr><td><b>${esc(v.nome)}</b>${v.admin ? ' <span class="tag-adm">Administração</span>' : ''}</td><td class="c muted" aria-label="Administrador sempre vê">✓</td>${PERFIS_ABAS.map(([p, n]) => { const ok = configuravel(p, v); const on = doPerfil(p, v, R); return `<td class="c"><input type="checkbox" class="tgl" data-perm="${p}|${v.id}" ${on ? 'checked' : ''} ${ok ? '' : 'disabled'} aria-label="${esc(v.nome)} para ${n}"></td>`; }).join('')}</tr>`).join('') + ITENS.filter(it => it.mod === g.mod).map(it => `<tr class="item-perm"><td><span class="it-ic" aria-hidden="true">↳</span> ${esc(it.nome)}<div class="muted small">${esc(it.d)}</div></td><td class="c muted" aria-label="Administrador sempre pode">✓</td>${PERFIS_ABAS.map(([p, n]) => { const ok = itemDoPapel(p, it); return ok ? `<td class="c"><input type="checkbox" class="tgl" data-perm="${p}|${it.id}" ${itemPerfil(p, it, R) ? 'checked' : ''} aria-label="${esc(it.nome)} para ${n}"></td>` : '<td class="c muted" title="Este perfil não faz isso">—</td>'; }).join('')}</tr>`).join('');
-  }).join('');
-  return `<div class="card"><header><h2>Abas e ações por perfil</h2><p>O administrador pode tudo sempre · Pátio e Bateria usam a mesma configuração</p></header><div class="body pt0 pb0"><details class="calc"><summary>Como ler esta tabela</summary><p>Abas: desligada = some do menu e não abre nem por link.</p><p>Ações (↳): o que o perfil pode fazer dentro das abas; desligada = o botão some. — = o perfil não faz isso.</p></details></div>
-  <div class="tw"><table class="perm"><thead><tr><th>Aba</th><th class="c">Admin<br><small>sempre tudo</small></th>${PERFIS_ABAS.map(([, n]) => `<th class="c">${n}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table></div>
-  <div class="body row-gap"><button class="btn pri" data-act="permSalvar" ${mudou ? '' : 'disabled'}>${mudou ? 'Salvar permissões' : 'Tudo salvo'}</button><button class="btn" data-act="permPadrao">Voltar ao padrão</button>${mudou ? '<button class="btn ghost" data-act="permDesfazer">Desfazer</button>' : ''}<span class="muted small">Abas de administração só podem ser ligadas para o Gestor. O que cada perfil pode alterar continua valendo pelo perfil.</span></div></div>
+  const perfis = PERFIS_MOD[mod];
+  const vs = abasDoModulo(mod); let g0 = '';
+  const linhas = vs.map(v => { const cab = v.grp !== g0 ? (g0 = v.grp, `<tr class="grp-row"><th colspan="${perfis.length + 2}">${esc(v.grp)}</th></tr>`) : ''; return cab + `<tr><td><b>${esc(v.nome)}</b></td><td class="c muted" aria-label="Administrador sempre vê">✓</td>${perfis.map(([p, n]) => { const ok = configuravel(mod, p, v); return ok ? `<td class="c"><input type="checkbox" class="tgl" data-perm="${mod}|${p}|${v.id}" ${permR(R, mod, p, v.id) ? 'checked' : ''} aria-label="${esc(v.nome)} para ${esc(n)}"></td>` : '<td class="c muted" title="Só o administrador">—</td>'; }).join('')}</tr>`; }).join('')
+    + ITENS.filter(it => it.mod === mod).map(it => `<tr class="item-perm"><td><span class="it-ic" aria-hidden="true">↳</span> ${esc(it.nome)}<div class="muted small">${esc(it.d)}</div></td><td class="c muted" aria-label="Administrador sempre pode">✓</td>${perfis.map(([p, n]) => (itemDoPapel(p, it) ? `<td class="c"><input type="checkbox" class="tgl" data-perm="${mod}|${p}|${it.id}" ${permR(R, mod, p, it.id) ? 'checked' : ''} aria-label="${esc(it.nome)} para ${esc(n)}"></td>` : '<td class="c muted" title="Este perfil não faz isso">—</td>')).join('')}</tr>`).join('');
+  const abasMod = `<div class="seg" role="tablist" aria-label="Módulo">${GRUPOS_ABAS.map(g => `<button type="button" role="tab" data-permmod="${g.mod}" aria-selected="${g.mod === mod}">${esc(g.t)}${mudouEm(g.mod) ? ' •' : ''}</button>`).join('')}</div>`;
+  return `<div class="card"><header><h2>Abas e ações por perfil, em cada módulo</h2><p>Cada pessoa tem um perfil em cada módulo; aqui se escolhe o que cada perfil vê e faz dentro do módulo. O administrador pode tudo sempre · Pátio e Bateria usam a mesma configuração</p></header><div class="body pt0 stackcol">${abasMod}<details class="calc"><summary>Como ler esta tabela</summary><p>Abas: desligada = some do menu e não abre nem por link.</p><p>Ações (↳): o que o perfil pode fazer dentro das abas; desligada = o botão some. — = o perfil não faz isso.</p><p>Na Administração, só o perfil “Dos módulos” pode ter abas ligadas.</p></details></div>
+  <div class="tw"><table class="perm"><thead><tr><th>Aba · ${esc(MODULO_ACESSO[mod].nome)}</th><th class="c">Admin<br><small>sempre tudo</small></th>${perfis.map(([, n]) => `<th class="c">${esc(n)}</th>`).join('')}</tr></thead><tbody>${linhas}</tbody></table></div>
+  <div class="body row-gap"><button class="btn pri" data-act="permSalvar" ${mudou ? '' : 'disabled'}>${mudou ? 'Salvar permissões' : 'Tudo salvo'}</button><button class="btn" data-act="permPadrao">Voltar ao padrão</button>${mudou ? '<button class="btn ghost" data-act="permDesfazer">Desfazer</button>' : ''}<span class="muted small">O que cada perfil pode alterar continua valendo pelo perfil (as regras de segurança conferem).</span></div></div>
   <div class="card"><header><h2>Exceção por pessoa</h2><p>Opcional. Abra <b>Usuários e acessos</b> e use <b>Personalizar</b> na coluna Abas para dar ou tirar abas de uma pessoa sem mudar o perfil inteiro.</p></header>
-  ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Perfil</th><th>Módulos</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${papelNome(u.papel)}</td><td>${modsReais(u).map(m => MOD_MARCA[m].curto).join(' · ')}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
+  ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Acesso</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${esc(textoAcesso(acessoDe(u).acesso))}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
 }
 
 // Senha: no mínimo 8 caracteres, sem sequência óbvia e sem o próprio usuário ou nome. Devolve o problema ou ''.
@@ -379,7 +393,7 @@ export function vConfig() {
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */
 export function vImportar() {
-  if (!admMod()) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
+  if (!admDe('ativ')) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
   const ws = []; for (const m of [CUR_MONTH]) for (const w of weeksOfMonth(m)) ws.push(w);
   return `<div class="card"><header><h2>Importar dados da planilha · ${esc(SETS[SK].nome)}</h2><p>Plano padrão, rotas, colaboradores e as situações já lançadas no efetivo diário da planilha ${SK === 'bateria' ? 'PLANEJAMENTO DE ATIVIDADES BATERIA (Bateria 1, Bateria 2, Trilho e CDQ)' : 'do Pátio de Carvão'}</p></header><div class="body stackcol">
    <label class="sel"><span>Começar a programação na semana</span><select class="in" id="impIni">${ws.map(w => `<option value="${w}" ${w === UI.impIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
@@ -387,12 +401,18 @@ export function vImportar() {
    <button class="btn pri" data-act="importar" ${UI.busy ? 'disabled' : ''} style="align-self:flex-start">${UI.busy ? 'Importando…' : 'Importar e gerar a programação'}</button>
   </div></div>`;
 }
+// Grava só no formato novo ('módulo|perfil'); as chaves antigas (uma por perfil) saem.
 acoes.permSalvar = async (t, d) => {
   const R = rascunhoPerm(); const out = {};
-  for (const [p] of PERFIS_ABAS) { out[p] = {}; for (const v of VIEWS) if (configuravel(p, v) && !doPerfil(p, v, R)) out[p][v.id] = false; else if (configuravel(p, v) && v.admin) out[p][v.id] = true; for (const it of ITENS) if (itemDoPapel(p, it) && !itemPerfil(p, it, R)) out[p][it.id] = false; }
+  for (const g of GRUPOS_ABAS) for (const [p] of PERFIS_MOD[g.mod]) {
+    const k = chavePerm(g.mod, p); const o = {};
+    for (const v of abasDoModulo(g.mod)) if (configuravel(g.mod, p, v)) { const on = permR(R, g.mod, p, v.id); if (!on) o[v.id] = false; else if (g.mod === 'administracao') o[v.id] = true; }
+    for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it) && !permR(R, g.mod, p, it.id)) o[it.id] = false;
+    out[k] = o;
+  }
   await DB.salvarPermissoes(out); UI.perm = null; DB.log('Alterou as abas por perfil'); toast('Permissões salvas'); render();
 };
-acoes.permPadrao = (t, d) => { UI.perm = Object.fromEntries(PERFIS_ABAS.map(([p]) => [p, {}])); render(); toast('Padrão carregado. Salve para aplicar'); };
+acoes.permPadrao = (t, d) => { UI.perm = {}; render(); toast('Padrão carregado. Salve para aplicar'); };
 acoes.permDesfazer = (t, d) => { UI.perm = null; render(); };
 acoes.escSalvar = (t, d) => {
   const R = rascEsc(); DB.salvarEscalas({ regimes: R.regimes, feriados: R.feriados });

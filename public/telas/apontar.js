@@ -1,7 +1,7 @@
 // Tela Apontar: o líder marca o que foi feito no dia (e a justificativa do que não foi).
 import { AREA_S, DAYS, MOTIVOS, pd, add, ddmm } from '../cal.js';
 import { DB, TODAY, esc, title, $ } from '../nucleo/base.js';
-import { PL, AREAS, UI, admMod, myAreas, myArea, areaScope, canEdit, podeForaProg } from '../nucleo/estado.js';
+import { PL, AREAS, UI, admDe, myAreas, myArea, areaScope, canEdit, podeForaProg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { st, rotasDa, localChange, setSt, incluirFora, tirarFora, escolherFora, areasAprov, aprovDe, estAprov, gravarApont, CHIP, ST_NOME } from '../calc/atividades.js';
@@ -24,7 +24,7 @@ export function vApontar() {
   const areasLista = myArea() ? myAreas() : AREAS;
   const chipsArea = varias ? `<div class="rchips linha" role="group" aria-label="Área">${areasLista.map(a => { const p = pendDia(a, UI.dia); return `<button class="rchip" data-aparea="${a}" aria-pressed="${a === area}">${AREA_S[a]}${p ? `<span class="c num">${p}</span>` : ''}</button>`; }).join('')}</div>` : '';
   const doc = DB.cache.semanas[area + '|' + UI.ini];
-  if (!doc) return chipsArea + `<div class="card"><div class="empty">Esta semana ainda não foi gerada para ${AREA_S[area]}.${admMod() ? ' <button class="btn sm" data-go="gerador">Abrir o Gerador de meses</button>' : ' O administrador gera os meses em Gerador de meses.'}</div></div>`;
+  if (!doc) return chipsArea + `<div class="card"><div class="empty">Esta semana ainda não foi gerada para ${AREA_S[area]}.${admDe('ativ') ? ' <button class="btn sm" data-go="gerador">Abrir o Gerador de meses</button>' : ' O administrador gera os meses em Gerador de meses.'}</div></div>`;
   const k = UI.dia;
   const rts = rotasDa(area).filter(r => r.carga > 0).map(r => r.rota);
   const edit = canEdit(area);

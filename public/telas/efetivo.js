@@ -9,7 +9,7 @@ import * as M from '../movimento.js';
 import { semAcento, casa, caixaBusca, campoBusca } from '../busca.js';
 import { PERIODO } from '../escala.js';
 import { DB, TODAY, framed, esc, pct, title, $ } from '../nucleo/base.js';
-import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEditSit, temFichas, setsDe, aplicarSet } from '../nucleo/estado.js';
+import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEditSit, temFichas, setsDe, aplicarSet, perfil, admDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
@@ -190,7 +190,8 @@ function miniEscala(area) {
   return `${ciclos.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${ciclos.map(x => `<span class="tchip">${esc(x.nome)}${x.tp.D.length ? ` · <i class="peri D">D</i> dia ${x.tp.D.join(' ')}` : ''}${x.tp.N.length ? ` · <i class="peri N">N</i> noite ${x.tp.N.join(' ')}` : ''}</span>`).join('')}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe - fer}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - fer - aus}</b><span>Presentes hoje</span></div>${perHoje.D + perHoje.N ? `<div><b class="num">${perHoje.D}<small class="perx"> · ${perHoje.N}</small></b><span>Turno dia · noite</span></div>` : ''}<div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div>${fer ? `<div><b class="num">${fer}</b><span>De férias</span></div>` : ''}<div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
 }
 // Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
-const podeTurma = () => isAdmin() || (!!ME && ME.papel === 'gestor');
+// Turma de quem trabalha em turno: grava no cadastro das rotas (quem administra Pátio/Bateria).
+const podeTurma = () => admDe('ativ');
 function turmaTag(c) {
   const rg = regimeDe(c); const r = escala().regimes[rg]; const t = turmaDe(c);
   if (!r || r.tipo !== 'ciclo') return esc(regimeNome(c));
@@ -209,9 +210,9 @@ export function turmaSheet(id) {
 }
 // Abre Pessoas no turno (Presença do dia) no conjunto atual, já na rota (area|rota) quando vier de um link.
 export function irEscala(rota) {
-  if (!setsDe(ME).length) return;
-  if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || UI.modulo === 'paineis') UI.esSet = SK;
-  UI.modulo = 'gestao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
+  // A Presença do dia fica na Operação (vem do Dimensionamento e do Balanço, na Gestão, no mesmo conjunto).
+  if (!setsDe(ME, 'operacao').includes(SK)) return;
+  UI.esSet = SK; UI.modulo = 'operacao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
   salvarUI(); trocarTela(UI.view);
 }
 export function vEsDim() {
@@ -256,7 +257,7 @@ function liderDosColabs() {
 export const PER_NOME = { D: 'Turno diurno', N: 'Turno noturno', ADM: 'Administrativo' };
 // k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Líder e supervisor fazem o check-in das áreas deles.
 export function equipeCheckin(k = SK) {
-  const areas = ME && ['lider', 'supervisor'].includes(ME.papel) ? areasSitDe(k) : []; const out = [];
+  const areas = ME && ['lider', 'supervisor'].includes(perfil('operacao')) ? areasSitDe(k) : []; const out = [];
   const sitK = c => (k === SK ? sitDia(c, TODAY) : sitTela(situacaoDoDia(c, TODAY, fontesSit(key => sitDoSet(k, key)))));
   const ckMes = k === SK ? (DB.sitExtraMes(TODAY.slice(0, 7)).ck || {}) : ((((DB.dados(k) || {}).sitExtra || {})[TODAY.slice(0, 7)] || {}).ck || {});
   const lista = k === SK ? COLABS : colabsDoSet(k);

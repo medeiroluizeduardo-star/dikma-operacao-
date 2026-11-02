@@ -4,7 +4,7 @@ import { JUS_CODS, textoJus } from '../presenca.js';
 import { baixarExcel, dataBR } from '../exportar.js';
 import { semAcento } from '../busca.js';
 import { DB, TODAY, framed, esc, title, $ } from '../nucleo/base.js';
-import { ME, SK, UI, isAdmin, podeItem, admMod, todasAreas, areaScope, canEditSit, modsDe } from '../nucleo/estado.js';
+import { ME, SK, UI, isAdmin, podeItem, admDe, todasAreas, areaScope, canEditSit, temFichas, perfil } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { escala, regimeDe, sitDia, periodoDe, SIT_NOME, colabsDa, HE_ORIG, areasSitDe, colabsDoSet, sitDoSet } from '../calc/presenca.js';
@@ -59,8 +59,8 @@ function exportJus() {
 }
 // Ficha do colaborador (módulo Efetivo) para registrar a falta ou o atraso como ocorrência, quando a pessoa pode.
 function fichaDe(c) {
-  const G = DB.cache.g; if (!G || !G.loaded || !ME || !modsDe(ME).includes('gestao')) return null;
-  if (!(isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'].includes(ME.papel) && podeItem('i_fichas')))) return null;
+  const G = DB.cache.g; if (!G || !G.loaded || !ME || !temFichas(ME)) return null;
+  if (!(isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'].includes(perfil('gestao')) && podeItem('i_fichas', 'gestao')))) return null;
   const nk = x => semAcento(String(x || '')).toUpperCase().replace(/\s+/g, ' ').trim();
   return (G.colabs || []).find(x => (c.mat && String(x.mat) === String(c.mat)) || nk(x.nome) === nk(c.nome)) || null;
 }
@@ -130,7 +130,7 @@ function cardHeOperacao(m) {
   <div class="tw"><table class="tcard"><thead><tr><th>Data</th><th>Operador</th><th>Equipamento</th><th>Situação</th><th class="r">Horas</th></tr></thead><tbody>${l.slice(0, 80).map(x => `<tr><td class="num">${ddmm(x.data)}</td><td>${esc(title(x.op))}</td><td>${esc(x.eq)}</td><td>${x.status === 'HE NOTURNA' ? 'Noturna' : 'Hora extra'}</td><td class="r num">${x.he ? fmtH(x.he) : '—'}</td></tr>`).join('')}</tbody></table></div></div>`;
 }
 export function vEsHe() {
-  const area = areaScope(); const cfg = heCfg(); const m = UI.mes; const ed = admMod();
+  const area = areaScope(); const cfg = heCfg(); const m = UI.mes; const ed = admDe('ativ');
   const regs = registrosHE(area, m);
   const por = new Map(); for (const x of regs) { const p = por.get(x.c.id) || { c: x.c, dias: 0, DIKMA: 0, ARCELOR: 0, '': 0, hInf: 0, hEst: 0, semH: 0 }; p.dias++; p[x.orig]++; if (x.horas == null) { p.hEst += x.est; p.semH++; } else p.hInf += x.horas; por.set(x.c.id, p); }
   const linhas = [...por.values()].map(x => ({ ...x, total: x.hInf + x.hEst })).sort((a, b) => b.total - a.total || a.c.nome.localeCompare(b.c.nome));

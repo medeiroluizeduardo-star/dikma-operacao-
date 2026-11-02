@@ -4,7 +4,7 @@ import { JUS_CODS, textoJus } from '../presenca.js';
 import { PARCIAL } from '../situacao.js';
 import * as M from '../movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, n0 } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, AREAS, UI, areaScope, modsReais, setsDe } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, AREAS, UI, areaScope, modsReais, setsDe, temEquipEm } from '../nucleo/estado.js';
 import { I } from '../ui/icones.js';
 import { docsFor, stats, listaAprov } from '../calc/atividades.js';
 import { sitDia, desligadoNoDia, SIT_NOME, colabsDa, HE_ORIG, cobDoDia, cobertoPor, nomeDe } from '../calc/presenca.js';
@@ -15,8 +15,10 @@ import { modulo } from '../nucleo/modulos.js';
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
 // Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
-const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u).length > 0], ['he', 'Horas extras', u => setsDe(u).length > 0], ['oper', 'Equipamentos', u => modsReais(u).includes('equipamentos')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
-const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME));
+// Resumos ficam na Gestão: atividades e horas extras com Pátio/Bateria, Equipamentos com o escopo; a Frequência só
+// para quem também tem o RH (os dados da folha vêm de lá).
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'gestao').length > 0], ['he', 'Horas extras', u => setsDe(u, 'gestao').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'gestao')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
+const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (UI.modulo === 'rh' ? t[0] === 'freq' : true));
 export const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
 export const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
 const abasResumo = () => { const l = tiposRes(); return l.length > 1 ? `<div class="seg resabas noprint" role="tablist" aria-label="Tipo de resumo">${l.map(([k, n]) => `<button type="button" role="tab" data-rtipo="${k}" aria-selected="${resTipo() === k}">${n}</button>`).join('')}</div>` : ''; };
