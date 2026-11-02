@@ -6,7 +6,7 @@ import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../hoje.js';
 import { indiceFerias, indiceDesligados } from '../acessos.js';
 import { criarEscala, normRegime, letra, fatorRota } from '../escala.js';
 import { DB, title } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
 
 
 /* ---------------- ESCALA DE TURNO ---------------- */
@@ -157,6 +157,6 @@ export function removerCobertura(ausId, dt) {
   if (cod === 'HE' && prev && !prev.trab) { DB.setSit(key, null, r.k); DB.setSitExtra('he', key, null, r.k); DB.setSitExtra('hed', key, null, r.k); }
 }
 // Áreas de um conjunto (Pátio ou Bateria) em que a pessoa lança a presença — sem depender do módulo aberto.
-export const areasSitDe = k => { if (!ME || !setsDe(ME).includes(k) || !podeItem('i_efetivo')) return []; if (isAdmin() || ['gestor', 'coordenador'].includes(ME.papel)) return SETS[k].areas; return [ME.area, ME.papel === 'supervisor' ? ME.area2 : null].filter(a => a && SETS[k].areas.includes(a)); };
+export const areasSitDe = k => { const p = perfil('operacao'); if (!ME || !setsDe(ME, 'operacao').includes(k) || !podeItem('i_efetivo', 'operacao') || !['admin', 'gestor', 'coordenador', 'supervisor', 'lider'].includes(p)) return []; if (p === 'admin' || ['gestor', 'coordenador'].includes(p)) return SETS[k].areas; return [ME.area, p === 'supervisor' ? ME.area2 : null].filter(a => a && SETS[k].areas.includes(a)); };
 export const colabsDoSet = k => Object.values((DB.dados(k) || {}).colabs || {}).flat();
 export const sitDoSet = (k, key) => { const m = key.split('|')[1].slice(0, 7); return (((DB.dados(k) || {}).sitByMonth || {})[m] || {})[key]; };

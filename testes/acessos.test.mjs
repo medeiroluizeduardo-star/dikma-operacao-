@@ -135,3 +135,49 @@ test('acessoDe: usa o modelo novo quando existe, senão mostra a conversão', ()
   assert.equal(velho.convertido, false); assert.deepEqual(velho.acesso, { operacao: 'lider' });
   assert.deepEqual(selosAcesso({ operacao: 'lider', gestao: 'supervisor', administracao: 'modulo' }), [['Operação', 'Líder', 'operacao'], ['Gestão', 'Supervisor', 'gestao'], ['Administração', 'Dos módulos', 'administracao']]);
 });
+
+// ---- Fase 2: o perfil de cada módulo vale nas telas ----
+import { perfilDe, escoposDe, temFichasU, marcasDe, usuarioEm, ehAdminU } from '../public/acessos.js';
+import { podeVer, doPerfil, podeItemU, valorCfg, configuravel } from '../public/permissoes.js';
+test('perfilDe: cada módulo tem o seu perfil; administrador é admin em tudo; bloqueado não tem nada', () => {
+  const misto = { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'] };
+  assert.equal(perfilDe(misto, 'operacao'), 'lider');
+  assert.equal(perfilDe(misto, 'gestao'), 'leitor');
+  assert.equal(perfilDe(misto, 'rh'), null);
+  assert.equal(temFichasU(misto), false, 'Gestão sem as Fichas');
+  assert.deepEqual(marcasDe(misto), ['operacao']);
+  assert.equal(perfilDe({ papel: 'admin' }, 'seguranca'), 'admin');
+  assert.equal(ehAdminU({ papel: 'gestor', acesso: { administracao: 'admin' } }), true);
+  assert.equal(perfilDe({ papel: 'bloqueado', acesso: { operacao: 'gestor' }, escopos: ['patio'] }, 'operacao'), null);
+  assert.deepEqual(escoposDe({ papel: 'bloqueado', acesso: { operacao: 'gestor' }, escopos: ['patio'] }), []);
+  // cadastro antigo (sem acesso): converte na hora
+  assert.equal(perfilDe({ papel: 'supervisor', modulos: ['frequencia'] }, 'rh'), 'administrativo');
+  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao'] }, 'administracao'), 'modulo');
+});
+test('usuarioEm: a pessoa vista no módulo tem o papel do módulo (usado pelas telas de Equipamentos, Fichas e Frequência)', () => {
+  const u = { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'supervisor', rh: 'leitor' }, escopos: ['patio'] };
+  assert.equal(usuarioEm(u, 'operacao').papel, 'lider');
+  assert.equal(usuarioEm(u, 'gestao').papel, 'supervisor');
+  assert.equal(usuarioEm(u, 'rh').papel, 'leitor');
+  assert.equal(usuarioEm(u, 'gestao'), usuarioEm(u, 'gestao'), 'guardado enquanto o cadastro não muda');
+});
+test('permissões por módulo: a configuração antiga (por perfil) vale para o mesmo perfil em cada módulo; a nova (módulo|perfil) manda', () => {
+  const v = { id: 'causas', mod: 'gestao' }, ap = { id: 'apontar', mod: 'operacao' }, adm = { id: 'plano', mod: 'administracao' };
+  const antigo = { lider: { causas: false, apontar: true }, gestor: { plano: false } };
+  assert.equal(doPerfil('gestao', 'lider', v, antigo), false, 'formato antigo lido');
+  assert.equal(doPerfil('operacao', 'lider', ap, antigo), true);
+  assert.equal(doPerfil('administracao', 'modulo', adm, antigo), false, 'o Gestor antigo vale para a Administração Dos módulos');
+  const novo = { ...antigo, 'gestao|lider': { causas: true } };
+  assert.equal(valorCfg(novo, 'gestao', 'lider', 'causas'), true, 'a chave nova vence a antiga');
+  assert.equal(configuravel('administracao', 'lider', adm), false);
+  const misto = { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'] };
+  assert.equal(podeVer(misto, v, { 'gestao|leitor': { causas: false } }), false, 'vale o perfil da Gestão (leitor), não o da Operação');
+  assert.equal(podeVer(misto, v, { 'gestao|lider': { causas: false } }), true);
+  assert.equal(podeVer(misto, { id: 'meudia', mod: 'all' }, {}, 'gestao'), true);
+  // itens: apontar é da Operação; exportar existe em cada módulo
+  assert.equal(podeItemU(misto, 'i_apontar', {}), true);
+  assert.equal(podeItemU(misto, 'i_apontar', { 'operacao|lider': { i_apontar: false } }), false);
+  assert.equal(podeItemU(misto, 'i_exportar', { 'gestao|leitor': { i_exportar_gestao: false } }, 'gestao'), false);
+  assert.equal(podeItemU(misto, 'i_exportar', { 'gestao|leitor': { i_exportar_gestao: false } }, 'operacao'), true);
+  assert.equal(podeItemU(misto, 'i_exportar', { leitor: { i_exportar: false } }, 'gestao'), false, 'item antigo lido no módulo');
+});

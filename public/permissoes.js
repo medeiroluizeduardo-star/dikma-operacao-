@@ -1,81 +1,113 @@
 // Dikma Gestão — quais abas cada perfil vê (config/permissoes) e exceção por pessoa (campo abas em usuarios/{uid}).
-// Regra: administrador vê tudo. Abas de administração só podem ser ligadas para o Gestor.
+// As abas e os itens são configurados POR MÓDULO: a chave é 'módulo|perfil' (ex.: 'operacao|lider', 'gestao|leitor').
+// Formato antigo (uma chave por perfil, ex.: 'lider') continua valendo: na leitura, o perfil antigo vale para o
+// mesmo perfil em cada módulo que o tem (o Gestor antigo vale também para a Administração 'Dos módulos').
+// Regra: administrador vê tudo. Abas da Administração só podem ser ligadas para o perfil 'Dos módulos'.
 // Sem nada configurado, todo perfil vê todas as abas comuns dos módulos dele (o comportamento de antes).
-export const PERFIS_ABAS = [['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['administrativo', 'Administrativo'], ['leitor', 'Somente leitura']];
-// Grupos da tela: Pátio e Bateria usam as mesmas telas, então dividem a mesma configuração.
-export const GRUPOS_ABAS = [
-  { t: 'Todos os módulos', mod: 'all' },
-  { t: 'Indicadores (painéis e resumos)', mod: 'pn' },
-  { t: 'Atividades (Pátio e Bateria)', mod: 'op' },
-  { t: 'Pessoas no turno (escala e presença)', mod: 'ge' },
-  { t: 'Equipamentos', mod: 'eq' },
-  { t: 'RH (frequência, férias e fichas)', mod: 'ad' },
-  { t: 'Configurações', mod: 'cf' }
-];
-const SO_ADMIN = ['usuarios', 'perfis', 'gimport'];
-export const configuravel = (papel, v) => !SO_ADMIN.includes(v.id) && (!v.admin || papel === 'gestor');
-const padrao = () => true;
+import { MODULOS_ACESSO, perfilDe, perfilNome } from './acessos.js';
 
-// O que o perfil vê, sem olhar exceções da pessoa.
-export function doPerfil(papel, v, cfg) {
+// Perfis de cada módulo que dá para configurar (o administrador sempre vê tudo).
+export const PERFIS_MOD = Object.fromEntries(MODULOS_ACESSO.map(m => [m.k, m.perfis.filter(p => p !== 'admin').map(p => [p, perfilNome(m.k, p)])]));
+// Grupos da tela Perfis e permissões: um por módulo. 'all' = Meu dia (vale em todos os módulos).
+export const GRUPOS_ABAS = [
+  { t: 'Operação', mod: 'operacao' },
+  { t: 'Gestão', mod: 'gestao' },
+  { t: 'Segurança', mod: 'seguranca' },
+  { t: 'RH', mod: 'rh' },
+  { t: 'Administração', mod: 'administracao' }
+];
+// Perfil antigo (chave do formato antigo) que vale para cada perfil de cada módulo.
+const ANTIGO = { modulo: 'gestor', registra: null, trata: null };
+const antigoDe = p => (p in ANTIGO ? ANTIGO[p] : p);
+export const chavePerm = (mod, papel) => `${mod}|${papel}`;
+// Valor configurado (true/false) para o perfil no módulo, ou undefined.
+export function valorCfg(cfg, mod, papel, id) {
+  if (!cfg) return undefined;
+  const n = cfg[chavePerm(mod, papel)];
+  if (n && typeof n[id] === 'boolean') return n[id];
+  const a = antigoDe(papel); const o = a && cfg[a];
+  return o && typeof o[id] === 'boolean' ? o[id] : undefined;
+}
+const SO_ADMIN = ['usuarios', 'perfis', 'gimport'];
+// Aba que o perfil do módulo pode ter ligada (as da Administração, só o perfil 'Dos módulos').
+export const configuravel = (mod, papel, v) => !SO_ADMIN.includes(v.id) && (mod !== 'administracao' || papel === 'modulo');
+// Módulo de uma aba para a configuração: Meu dia (all) fica com o módulo pedido.
+const modDaAba = (v, mod) => (v.mod === 'all' ? mod : v.mod);
+
+// O que o perfil (do módulo) vê, sem olhar exceções da pessoa.
+export function doPerfil(mod, papel, v, cfg) {
   if (papel === 'admin') return true;
-  if (!configuravel(papel, v)) return false;
-  const c = cfg && cfg[papel] && cfg[papel][v.id];
-  return typeof c === 'boolean' ? c : padrao(papel, v);
+  if (!papel || !configuravel(mod, papel, v)) return false;
+  const c = valorCfg(cfg, mod, papel, v.id);
+  return typeof c === 'boolean' ? c : true;
 }
-// O que esta pessoa vê: exceção dela, senão o perfil.
-export function podeVer(u, v, cfg) {
+// O que esta pessoa vê na aba v (Meu dia: no módulo mod): exceção dela, senão o perfil dela naquele módulo.
+export function podeVer(u, v, cfg, mod) {
   if (!u) return false;
-  if (u.papel === 'admin') return true;
-  if (!configuravel(u.papel, v)) return false;
+  const m = modDaAba(v, mod); const papel = perfilDe(u, m);
+  if (papel === 'admin') return true;
+  if (!papel || !configuravel(m, papel, v)) return false;
   const ex = u.abas && u.abas[v.id];
-  return typeof ex === 'boolean' ? ex : doPerfil(u.papel, v, cfg);
+  return typeof ex === 'boolean' ? ex : doPerfil(m, papel, v, cfg);
 }
-// Resumo da exceção: quantas abas a mais e a menos que o perfil.
+// Resumo da exceção: quantas abas e itens a mais e a menos que o perfil.
 export function resumoExcecao(u, views, cfg) {
   let menos = 0, mais = 0;
   for (const v of views) {
-    const ex = u.abas && u.abas[v.id]; if (typeof ex !== 'boolean' || !configuravel(u.papel, v)) continue;
-    const base = doPerfil(u.papel, v, cfg); if (ex === base) continue;
+    const ex = u.abas && u.abas[v.id]; if (typeof ex !== 'boolean') continue;
+    const m = modDaAba(v, 'operacao'); const papel = perfilDe(u, m); if (!papel || papel === 'admin' || !configuravel(m, papel, v)) continue;
+    const base = doPerfil(m, papel, v, cfg); if (ex === base) continue;
     if (ex) mais++; else menos++;
   }
   for (const it of ITENS) { // itens que a pessoa perdeu ou ganhou de volta em relação ao perfil
-    const ex = u.abas && u.abas[it.id]; if (typeof ex !== 'boolean' || !itemDoPapel(u.papel, it)) continue;
-    const base = itemPerfil(u.papel, it, cfg); if (ex === base) continue;
+    const ex = u.abas && u.abas[it.id]; if (typeof ex !== 'boolean') continue;
+    const m = it.mod; const papel = perfilDe(u, m); if (!itemDoPapel(papel, it)) continue;
+    const base = itemPerfil(m, papel, it, cfg); if (ex === base) continue;
     if (ex) mais++; else menos++;
   }
   return { menos, mais, tem: menos + mais > 0 };
 }
 
 // ---- Itens (o que a pessoa pode FAZER dentro das abas) ----
-// Cada item vale só para os perfis que já podem fazer aquilo (quem: perfis). Aqui dá para TIRAR o item de um
-// perfil ou de uma pessoa; nada passa do que o perfil permite. Guardados no mesmo lugar das abas, com a chave do item.
+// Cada item é de um módulo e vale só para os perfis daquele módulo que já podem fazer aquilo (quem). Aqui dá para
+// TIRAR o item de um perfil ou de uma pessoa; nada passa do que o perfil permite. Guardados junto das abas.
+// Exportar e Imprimir existem em cada módulo (ids com o módulo no fim, ex.: i_exportar_rh); o id antigo
+// (i_exportar, i_imprimir) continua valendo como exceção da pessoa em todos os módulos.
+const EXP = ['i_exportar', 'Exportar para o Excel', 'Botões de exportar das abas'], IMP = ['i_imprimir', 'Imprimir e salvar em PDF', 'Folha do líder, resumos, etiquetas e fichas'];
+const comunsDe = (mod, quem) => [EXP, IMP].map(([id, nome, d]) => ({ id: `${id}_${mod}`, base: id, mod, nome, d, quem }));
 export const ITENS = [
-  { id: 'i_apontar', mod: 'op', nome: 'Apontar atividades', d: 'Marcar realizada ou não realizada, com justificativa', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
-  { id: 'i_foraprog', mod: 'op', nome: 'Incluir atividade fora da programação', d: 'Programar no dia uma atividade que não estava prevista', quem: ['coordenador', 'supervisor'] },
-  { id: 'i_aprovar', mod: 'op', nome: 'Aprovar e devolver apontamentos', d: 'Na aba Aprovação e no Apontar', quem: ['supervisor'] },
-  { id: 'i_acoes', mod: 'op', nome: 'Criar e acompanhar ações das causas', d: 'Plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
-  { id: 'i_operacao', mod: 'eq', nome: 'Lançar e editar em Equipamentos', d: 'Alocações, paradas, equipe, inspeções e avaliação', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
-  { id: 'i_efetivo', mod: 'ge', nome: 'Lançar na Presença do dia', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
-  { id: 'i_fichas', mod: 'ad', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
-  { id: 'i_freq', mod: 'ad', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
-  { id: 'i_exportar', mod: 'all', nome: 'Exportar para o Excel', d: 'Botões de exportar de todas as abas', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'] },
-  { id: 'i_imprimir', mod: 'all', nome: 'Imprimir e salvar em PDF', d: 'Folha do líder, resumos, etiquetas e fichas', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'] }
+  { id: 'i_apontar', mod: 'operacao', nome: 'Apontar atividades', d: 'Marcar realizada ou não realizada, com justificativa', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  { id: 'i_foraprog', mod: 'operacao', nome: 'Incluir atividade fora da programação', d: 'Programar no dia uma atividade que não estava prevista', quem: ['coordenador', 'supervisor'] },
+  { id: 'i_aprovar', mod: 'operacao', nome: 'Aprovar e devolver apontamentos', d: 'Na aba Aprovação e no Apontar', quem: ['supervisor'] },
+  { id: 'i_operacao', mod: 'operacao', nome: 'Lançar e editar em Equipamentos', d: 'Alocações, paradas, equipe e inspeções', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  { id: 'i_efetivo', mod: 'operacao', nome: 'Lançar na Presença do dia', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  ...comunsDe('operacao', ['gestor', 'coordenador', 'supervisor', 'lider', 'leitor']),
+  { id: 'i_acoes', mod: 'gestao', nome: 'Criar e acompanhar ações das causas', d: 'Plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
+  { id: 'i_fichas', mod: 'gestao', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
+  { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
+  ...comunsDe('gestao', ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']),
+  { id: 'i_freq', mod: 'rh', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['administrativo'] },
+  ...comunsDe('rh', ['administrativo', 'leitor'])
 ];
-export const itemDoPapel = (papel, it) => it.quem.includes(papel);
-// O item no perfil (sem exceção da pessoa).
-export function itemPerfil(papel, it, cfg) {
+export const itemDoPapel = (papel, it) => !!papel && (papel === 'admin' || it.quem.includes(papel));
+// O item no perfil do módulo (sem exceção da pessoa). Lê também a chave antiga do item (formato de antes).
+export function itemPerfil(mod, papel, it, cfg) {
   if (papel === 'admin') return true;
   if (!itemDoPapel(papel, it)) return false;
-  const c = cfg && cfg[papel] && cfg[papel][it.id];
+  let c = valorCfg(cfg, mod, papel, it.id);
+  if (typeof c !== 'boolean' && it.base) c = valorCfg(cfg, mod, papel, it.base);
   return typeof c === 'boolean' ? c : true;
 }
-// O item para esta pessoa: exceção dela (só para tirar ou devolver o que o perfil tem), senão o perfil.
-export function podeItemU(u, id, cfg) {
+// O item para esta pessoa: exceção dela (só para tirar ou devolver o que o perfil tem), senão o perfil do módulo.
+// id pode ser o comum (i_exportar, i_imprimir): vale o do módulo pedido (mod).
+export function podeItemU(u, id, cfg, mod) {
   if (!u) return false;
-  if (u.papel === 'admin') return true;
-  const it = ITENS.find(x => x.id === id); if (!it) return true;
-  if (!itemDoPapel(u.papel, it)) return true; // quem não tem pelo perfil continua barrado pelas regras de sempre
-  const ex = u.abas && u.abas[id];
-  return typeof ex === 'boolean' ? ex : itemPerfil(u.papel, it, cfg);
+  const it = ITENS.find(x => x.id === id) || (mod && ITENS.find(x => x.base === id && x.mod === mod)) || ITENS.find(x => x.base === id);
+  if (!it) return true;
+  const papel = perfilDe(u, it.mod);
+  if (papel === 'admin') return true;
+  if (!itemDoPapel(papel, it)) return true; // quem não tem pelo perfil continua barrado pelas regras de sempre
+  let ex = u.abas && u.abas[it.id];
+  if (typeof ex !== 'boolean' && it.base) ex = u.abas && u.abas[it.base];
+  return typeof ex === 'boolean' ? ex : itemPerfil(it.mod, papel, it, cfg);
 }

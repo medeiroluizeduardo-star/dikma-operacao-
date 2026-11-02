@@ -47,4 +47,11 @@ export const ACESSO_IC = {
   sistema: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg>'
 };
 MOD_IC.frequencia = ACESSO_IC.administrativo;
+// Os 5 módulos: Operação (pátio), Gestão (painel), Segurança (escudo), RH (folha) e Administração (engrenagem).
+MOD_IC.seguranca = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 3v5c0 4.6-3 8.3-7 10-4-1.7-7-5.4-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>';
+MOD_IC.rh = ACESSO_IC.administrativo;
+MOD_IC.administracao = MOD_IC.config;
 MOD_IC.paineis = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16"/></svg>';
+MOD_IC.gestao = MOD_IC.paineis;
+I.tv = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>';
+I.escudo = MOD_IC.seguranca;

@@ -1,7 +1,7 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
-import { podeAcesso, acessoDoLegado, legadoDoAcesso } from './acessos.js';
+import { acessoDoLegado, legadoDoAcesso, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
 
 export const isMock = true;
@@ -13,9 +13,9 @@ export const setAtual = () => cur;
 export const dados = k => S[k];
 export const cache = { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }, eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
-export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k === 'patio' ? ['operacao'] : [])).includes(SETS[k].mod));
-export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
-export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
+export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod);
+export const temEquip = u => marcasDe(u).includes('equipamentos');
+export const temGestao = u => marcasDe(u).includes('gestao');
 const LS = 'coqueria-demo-v2';
 // Demonstração: dados de exemplo com nomes e matrículas fictícios (pasta demo/). Os dados reais não ficam no site.
 const seed_ = async nome => { const r = await fetch('demo/' + nome.replace(/^seed/, 'exemplo')); if (!r.ok) throw new Error('Dados de exemplo não encontrados: ' + nome); return r.json(); };
@@ -76,14 +76,14 @@ async function fresh() {
   cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
-    ...lideres.map(c => ({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
+    ...lideres.map(c => liderGestao({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
     { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'] },
     { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'] },
     { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'] },
     { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] },
     { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] },
-    ...usuariosSeguranca(),
+    ...usuariosSeguranca(), ...usuariosMistos(),
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
     { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }].map(comAcesso);
 }
@@ -98,6 +98,22 @@ function usuariosSeguranca() {
   const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
   return [{ uid: 'segr', nome: 'Técnico de Segurança', login: 'seguranca', senha: '123456', ...reg, ...leg(reg, {}) },
     { uid: 'segt', nome: 'Supervisor da Preparação (Segurança)', login: 'seguranca.trata', senha: '123456', ...tra, ...leg(tra, { fichas: true, area: 'PREPARAÇÃO' }) }];
+}
+
+// Líderes: como os reais, Operação · Líder e Gestão · Líder (Programação, Folha do líder), sem as Fichas.
+function liderGestao(u) {
+  if (u.papel !== 'lider') return u;
+  const k = setDaArea(u.area) || 'patio';
+  return { ...u, acesso: { operacao: 'lider', gestao: 'lider' }, escopos: [k] };
+}
+// Perfis diferentes por módulo: aponta na Operação como líder e só consulta a Gestão; e uma Administração
+// "Dos módulos" de quem é Gestor só na Gestão do Pátio.
+function usuariosMistos() {
+  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
+  const mis = { acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'] };
+  const mod = { acesso: { gestao: 'gestor', rh: 'leitor', administracao: 'modulo' }, escopos: ['patio'] };
+  return [{ uid: 'misto', nome: 'Líder (Gestão só leitura)', login: 'misto', senha: '123456', ...mis, ...leg(mis, { fichas: false, area: 'RECEBIMENTO' }) },
+    { uid: 'gmod', nome: 'Gestor da Gestão do Pátio', login: 'gestor.patio', senha: '123456', ...mod, ...leg(mod, { fichas: true }) }];
 }
 
 export async function start(callbacks) {
@@ -115,19 +131,20 @@ export async function start(callbacks) {
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   if (me && !cache.usuarios.some(u => u.uid === 'admv')) cache.usuarios.push({ uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] });
   if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] });
-  if (me) for (const u of usuariosSeguranca()) if (!cache.usuarios.some(x => x.uid === u.uid || x.login === u.login)) cache.usuarios.push(u);
+  if (me) for (const u of [...usuariosSeguranca(), ...usuariosMistos()]) if (!cache.usuarios.some(x => x.uid === u.uid || x.login === u.login)) cache.usuarios.push(u);
+  if (me) cache.usuarios = cache.usuarios.map(u => (u.papel === 'lider' && u.acesso && !u.acesso.gestao && !u.acesso.seguranca && u.uid !== 'misto' ? liderGestao(u) : u));
+  if (me) me = cache.usuarios.find(u => u.uid === me.uid) || me;
   await iniciarAdm();
   emitAuth(); changed();
 }
-let acessoAtual = 'operacao';
-export const definirAcesso = k => { acessoAtual = k === 'sistema' ? 'sistema' : 'operacao'; };
+// Módulo Administração: na demonstração tudo já está em memória.
+export function iniciarAdministracao() { /* nada a carregar */ }
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
-  if (acessoAtual === 'sistema' && me.papel !== 'admin') acessoAtual = 'operacao';
-  if (!podeAcesso(me, acessoAtual)) return cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual });
+  if (!(ehAdminU(me) || marcasDe(me).length || (me.acesso && (me.acesso.seguranca || me.acesso.administracao)) || (!me.acesso && modulosDe(me).length))) return cb.onAuth({ status: 'semAcesso', user: me });
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
-  cb.onAuth({ status: 'ready', user: me, acesso: acessoAtual });
+  cb.onAuth({ status: 'ready', user: me });
 }
 export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
 export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }

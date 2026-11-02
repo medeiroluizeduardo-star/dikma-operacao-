@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
 import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
-import { indiceFerias, acessosDe, podeAcesso, editaAdm, modulosDe, temFreq } from '../public/acessos.js';
+import { indiceFerias, perfilDe, editaAdm, modulosDe, temFreq } from '../public/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
 function livro(abas) {
@@ -90,11 +90,11 @@ test('férias em comum: o índice acha pela matrícula ou pelo nome, só dentro 
   assert.equal(idx({ mat: '1001', nome: 'ANA EXEMPLO' }, '2026-10-04'), null);
 });
 
-test('acessos: Operação para todos, Administração do sistema só o administrador; Frequência é módulo', () => {
-  assert.deepEqual(acessosDe({ papel: 'lider' }), ['operacao']);
-  assert.deepEqual(acessosDe({ papel: 'gestor', acessos: ['administrativo', 'sistema'] }), ['operacao']);
-  assert.deepEqual(acessosDe({ papel: 'admin' }), ['operacao', 'sistema']);
-  assert.equal(podeAcesso({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'sistema'), false);
+test('acessos: Administração completa só o administrador; Frequência e férias são do RH', () => {
+  assert.equal(perfilDe({ papel: 'lider', modulos: ['operacao'] }, 'administracao'), null);
+  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'administracao'), 'modulo');
+  assert.equal(perfilDe({ papel: 'admin' }, 'administracao'), 'admin');
+  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'rh'), 'administrativo');
   assert.equal(temFreq({ papel: 'lider', modulos: ['operacao'] }), false);
   assert.equal(temFreq({ papel: 'supervisor', modulos: ['frequencia'] }), true);
   assert.deepEqual(modulosDe({ papel: 'supervisor', acessos: ['administrativo'], modulos: [] }), ['frequencia'], 'antigo Administrativo: só o módulo novo');

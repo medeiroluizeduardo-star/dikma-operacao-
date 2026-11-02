@@ -38,7 +38,7 @@ import {
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
-import { podeAcesso, temFreq, resumoFerias } from './acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
 
 export const isMock = false;
@@ -53,14 +53,12 @@ const C = (n, k = cur) => SETS[k].pre + n;
 export const cache = { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
 function novoE() { return { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }; }
-export const temEquip = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('equipamentos'));
-export const temSet = (u, k) => !!u && (u.papel === 'admin' || (u.modulos || (k === 'patio' ? ['operacao'] : [])).includes(SETS[k].mod));
+// Que dados carregar: tirado do acesso por módulo (escopos com Operação ou Gestão, Fichas, RH).
+export const temEquip = u => marcasDe(u).includes('equipamentos');
+export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod);
 export const temOperacao = u => temSet(u, 'patio');
 export const temBateria = u => temSet(u, 'bateria');
-export const temGestao = u => !!u && (u.papel === 'admin' || (u.modulos || []).includes('gestao'));
-// Acesso aberto nesta sessão (operacao | sistema). O app define antes de entrar. O antigo Administrativo entra na Operação.
-let acessoAtual = 'operacao';
-export const definirAcesso = a => { acessoAtual = a === 'sistema' ? 'sistema' : 'operacao'; };
+export const temGestao = u => marcasDe(u).includes('gestao');
 
 let fbApp = null;
 let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
@@ -138,11 +136,10 @@ export async function start(callbacks) {
       if (first) updateDoc(s.ref, { ultimoAcesso: serverTimestamp() }).catch(() => {});
       if (!ATIVOS.has(me.papel)) { stopData(); cb.onAuth({ status: 'blocked', user: me }); return; }
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
-      // A Administração do sistema só aparece para o administrador; os demais sempre entram na Operação.
-      if (acessoAtual === 'sistema' && me.papel !== 'admin') acessoAtual = 'operacao';
-      if (!podeAcesso(me, acessoAtual) || (acessoAtual === 'sistema' && me.papel !== 'admin')) { stopData(); cb.onAuth({ status: 'semAcesso', user: me, acesso: acessoAtual }); return; }
+      // Sem nenhum módulo (nem perfil em algum módulo) não entra.
+      if (!temAlgumModulo(me)) { stopData(); cb.onAuth({ status: 'semAcesso', user: me }); return; }
       if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); }
-      cb.onAuth({ status: 'ready', user: me, acesso: acessoAtual });
+      cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
 }
@@ -224,20 +221,14 @@ export async function alterarSenha(atual, nova) {
 
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
-  // Operação e Administração do sistema: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
+  // Todos: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
   on(doc(db, 'adm', 'feriasAtivas'), s => { cache.feriasAtivas = (s.exists() && s.data().itens) || []; changed(); });
   // Desligamentos (data de demissão das fichas), refeitos todo dia pela rotina do GitHub: DS automático para quem não lê as fichas.
   on(doc(db, 'adm', 'desligados'), s => { cache.desligados = (s.exists() && s.data().itens) || []; changed(); });
-  if (me.papel === 'admin') on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
-  // Módulo Frequência e férias (dentro da Operação): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
-  if (acessoAtual === 'operacao' && temFreq(me)) startAdm(on);
-  // Administração do sistema: a conferência do cadastro olha também férias e a folha da competência atual.
-  if (acessoAtual === 'sistema' && me.papel === 'admin') {
-    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-    on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
-    const comp = competenciaDe(today());
-    for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
-  }
+  if (ehAdminU(me)) on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
+  // RH (Frequência e férias): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
+  if (temFreq(me)) startAdm(on);
+  // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo (iniciarAdministracao).
   for (const k of SET_KEYS) {
     const st = S[k];
     if (!temSet(me, k)) { st.configLoaded = true; continue; }
@@ -259,15 +250,31 @@ function startData() {
   // Abas por perfil (tela Perfis e permissões).
   on(doc(db, 'config', 'permissoes'), s => { cache.permissoes = s.exists() ? (s.data().abas || {}) : {}; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
-  if (me.papel === 'admin') on(doc(db, 'avisos_enviados', 'estado'), s => { const x = s.exists() ? s.data() : null; cache.avisosEstado = x ? { ...x, enviados: undefined, ultimaExecucao: x.ultimaExecucao && x.ultimaExecucao.toDate ? x.ultimaExecucao.toDate() : null } : null; changed(); });
+  if (ehAdminU(me)) on(doc(db, 'avisos_enviados', 'estado'), s => { const x = s.exists() ? s.data() : null; cache.avisosEstado = x ? { ...x, enviados: undefined, ultimaExecucao: x.ultimaExecucao && x.ultimaExecucao.toDate ? x.ultimaExecucao.toDate() : null } : null; changed(); });
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
-  if (me.papel === 'admin') on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
+  if (ehAdminU(me)) on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear();
   // já liga os meses de todos os conjuntos da pessoa: trocar de módulo ou abrir o Meu dia não espera o servidor
   for (const k of SET_KEYS) watchSet(k, keep.filter(x => x.startsWith(k + '|')).map(x => x.slice(k.length + 1)));
 }
+// Módulo Administração (só o administrador): a Conferência do cadastro olha também as férias completas e a folha da
+// competência atual. Liga ao abrir o módulo, sem recarregar a página; quem tem o RH já tem as férias.
+let admSisOn = false;
+export function iniciarAdministracao() {
+  if (admSisOn || !db || !me || !ehAdminU(me) || !dataSubs.length) return;
+  admSisOn = true;
+  const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  if (!admOn) {
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+    on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
+  }
+  const comp = competenciaDe(today());
+  for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
+}
+// Alguma coisa para abrir: perfil em algum módulo (ou o cadastro antigo com algum módulo).
+const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao)) || (!u.acesso && modulosDe(u).length > 0);
 function stopData() {
-  dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false;
+  dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false; admSisOn = false;
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
@@ -614,7 +621,7 @@ function startGestao() {
   }
   g();
   // Ponte com o Senior: o que a rotina do GitHub trouxe (só o administrador vê).
-  if (me.papel === 'admin') on(doc(db, 'integracao', 'senior'), s => { const x = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; cache.g.senior = x ? { ...x, recebidoEm: x.recebidoEm && x.recebidoEm.toDate ? x.recebidoEm.toDate() : null, tentativaEm: x.tentativaEm && x.tentativaEm.toDate ? x.tentativaEm.toDate() : null, aplicadoEm: x.aplicadoEm && x.aplicadoEm.toDate ? x.aplicadoEm.toDate() : null } : null; changed(); });
+  if (ehAdminU(me)) on(doc(db, 'integracao', 'senior'), s => { const x = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; cache.g.senior = x ? { ...x, recebidoEm: x.recebidoEm && x.recebidoEm.toDate ? x.recebidoEm.toDate() : null, tentativaEm: x.tentativaEm && x.tentativaEm.toDate ? x.tentativaEm.toDate() : null, aplicadoEm: x.aplicadoEm && x.aplicadoEm.toDate ? x.aplicadoEm.toDate() : null } : null; changed(); });
 }
 let antigaFichas = null;
 function usarAntigaSeVazio() {
@@ -624,7 +631,7 @@ function usarAntigaSeVazio() {
 // reorganiza as fichas por área e leva junto as ocorrências e assinaturas da pessoa. Só quando já dá para saber a área.
 let conferindo = null;
 function conferirAreas() {
-  if (!me || me.papel !== 'admin' || conferindo) return;
+  if (!me || !ehAdminU(me) || conferindo) return;
   conferindo = setTimeout(async () => {
     conferindo = null;
     const itens = cache.g.colabs || []; if (!itens.length) return;

@@ -2,17 +2,16 @@
 // Botões com data-act chamam a ação registrada em acoes (nucleo/acoes.js); cada tela registra as suas.
 import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './cal.js';
 import { pedirJus } from './presenca.js';
-import { ACESSO } from './acessos.js';
 import { letra, periodosDe } from './escala.js';
 import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './nucleo/base.js';
-import { AUTH, ME, PL, COLABS, SK, UI, salvarAcesso, salvarUI, rotas, isAdmin, podeItem, admMod, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, MODS_MARCAVEIS, modsDe, setsDe, aplicarSet } from './nucleo/estado.js';
+import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, modsDe, setsDe, aplicarSet, moduloNovo } from './nucleo/estado.js';
 import { acoes } from './nucleo/acoes.js';
-import { I, MOD_IC, ACESSO_IC } from './ui/icones.js';
+import { I, MOD_IC } from './ui/icones.js';
 import { setSt, tirarFora } from './calc/atividades.js';
 import { sitDia, curto, removerCobertura } from './calc/presenca.js';
-import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, ES_VIEWS, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
+import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
 import { sheet, formSheet, showErr, toggleEye, toast } from './ui/janelas.js';
-import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, irAcesso, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela } from './ui/shell.js';
+import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela } from './ui/shell.js';
 import { apArea, cellMenu, pedirJustificativa, apply } from './telas/apontar.js';
 import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from './telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from './telas/horas-justificativas.js';
@@ -40,7 +39,6 @@ document.addEventListener('keydown', e => {
 });
 acoes.trocarAcesso = async (t, d) => { UI.escolha = null; UI.modOpen = false; await DB.signOut(); };
 acoes.tema = (t, d) => { temaSheet(); };
-acoes.irAcesso = (t, d) => { irAcesso(UI.acesso === 'sistema' ? 'operacao' : 'sistema'); };
 acoes.senha = (t, d) => { alterarSenhaSheet(); };
 acoes.logout = (t, d) => { DB.signOut(); };
 acoes.mockReset = async (t, d) => { await DB.mockReset(); toast('Demonstração restaurada'); };
@@ -60,18 +58,19 @@ document.addEventListener('click', async e => {
       const naBarra = barraDe().map(x => x[0]);
       const vs = abasDoMenu().filter(v => !naBarra.includes(v.id));
       // "Mais" em seções: as abas desta área primeiro, depois as outras áreas e, por fim, conta e tela.
-      const outros = modsMenu().filter(m => !mesmoItem(m, UI.modulo)).map((m, i) => ({ t: MODS[m].nome, d: subMod(m), id: '__mod_' + m, ic: `<span class="opt-ic">${MOD_IC[m] || I.swap}</span>`, sec: i ? '' : 'Outras áreas' }));
-      const outroAc = UI.acesso === 'sistema' ? 'operacao' : 'sistema';
-      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), ...(isAdmin() ? [{ t: outroAc === 'sistema' ? 'Administração do sistema' : 'Sair da Administração do sistema', id: '__acesso', d: outroAc === 'sistema' ? 'Ajustes de todo o sistema · só o administrador' : 'Volta para Indicadores, Atividades, Pessoas no turno, Equipamentos e RH', ic: `<span class="opt-ic">${ACESSO_IC[outroAc]}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      const outros = modsMenu().filter(m => !mesmoItem(m, UI.modulo)).map((m, i) => ({ t: MODS[m].nome, d: subMod(m), id: '__mod_' + m, ic: `<span class="opt-ic">${MOD_IC[m] || I.swap}</span>`, sec: i ? '' : 'Outros módulos' }));
+      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       if (extra.length) extra[0].sec = 'Conta e tela';
-      return sheet('Mais', '', [...vs.map((v, i) => ({ t: nomeCurto(v), id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>`, sec: i ? '' : 'Nesta área · ' + MODS[UI.modulo].curto })), ...outros, ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__acesso') return irAcesso(outroAc); if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
+      return sheet('Mais', '', [...vs.map((v, i) => ({ t: nomeCurto(v), id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>`, sec: i ? '' : 'Neste módulo · ' + MODS[UI.modulo].curto })), ...outros, ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
     }
-    { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'cf' && UI.modulo !== 'config' && modsDe(ME).includes('config')) { if (UI.modulo === 'operacao' || UI.modulo === 'bateria' || (UI.modulo === 'gestao' && ES_VIEWS.includes(UI.view))) UI.cfSet = SK; UI.modulo = 'config'; UI.modOpen = false; aplicarSet(); } }
+    // Atalho para uma configuração (ex.: Gerador de meses no Apontar): abre na Administração no mesmo conjunto.
+    { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'administracao' && UI.modulo !== 'administracao' && modsDe(ME).includes('administracao')) { if (UI.modulo === 'operacao' || UI.modulo === 'gestao') UI.cfSet = SK; UI.modulo = 'administracao'; UI.modOpen = false; aplicarSet(); } }
     irParaModuloDa(d.go);
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); trocarTela(d.go); return;
   }
-  if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'config'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); trocarTela(view); return; }
+  if (d.cfgo) { const [view, set] = d.cfgo.split('|'); if (set) UI.cfSet = set; UI.modulo = 'administracao'; aplicarSet(); UI.view = view; UI.confirm = null; salvarUI(); trocarTela(view); return; }
   if (d.cfset) { UI.cfSet = d.cfset; salvarUI(); render(); return; }
+  if (d.permmod) { UI.permMod = d.permmod; render(); return; }
   // Escalas e turnos (rascunho até salvar)
   if (d.escdel) { const [k, l] = d.escdel.split('|'); delete rascEsc().regimes[k].turmas[l]; render(); return; }
   if (d.escper) { const [k, i] = d.escper.split('|'); const r = rascEsc().regimes[k]; const a = [...periodosDe(r)]; a[+i] = a[+i] === 'N' ? 'D' : 'N'; r.periodos = a.join(''); render(); return; }
@@ -82,16 +81,20 @@ document.addEventListener('click', async e => {
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
     const [mod0, view, area, conj] = d.md.split('|');
-    // Meu dia: o aviso diz o módulo antigo (ex.: gestao para as fichas); a tela vai para a área onde ela está agora.
-    const vNova = { gcomigo: 'gcolab', gnovaoc: 'gcolab', gocorr: 'gcolab', epar: 'elanc' }[view] || view;
-    const mod = mod0 === 'operacao' || mod0 === 'bateria' || view === 'escala' ? mod0 : (moduloDaView(vNova) || mod0);
+    // Meu dia: o botão diz o módulo de antes (operacao/bateria = Pátio/Bateria, equipamentos, frequencia...); a tela
+    // vai para o módulo onde ela está agora, no conjunto certo.
+    const vNova = { gcomigo: 'gcolab', gnovaoc: 'gcolab', gocorr: 'gcolab', epar: 'elanc', escala: 'esdia' }[view] || view;
+    const set = conj && SETS[conj] ? conj : mod0 === 'bateria' ? 'bateria' : mod0 === 'operacao' ? 'patio' : null;
+    const mod = moduloDaView(vNova) || moduloNovo(mod0, true);
     if (!modsDe(ME).includes(mod)) return;
-    if (conj && SETS[conj] && setsDe(ME).includes(conj)) UI.esSet = conj; // Meu dia: abre no conjunto (Pátio ou Bateria) do aviso
-    if (view === 'escala') { UI.esSet = mod === 'bateria' ? 'bateria' : 'patio'; UI.area = area || UI.area; irEscala(''); return; }
+    if (set && setsDe(ME).includes(set)) UI.esSet = set; // Meu dia: abre no conjunto (Pátio ou Bateria) do aviso
+    if (view === 'escala') { UI.modulo = 'operacao'; UI.area = area || UI.area; aplicarSet(); irEscala(''); return; }
     const novaOc = view === 'gnovaoc';
-    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = { gcomigo: 'gcolab', gnovaoc: 'gcolab' }[view] || view; UI.confirm = null;
-    if (area && (mod === 'operacao' || mod === 'bateria')) { UI.area = area; UI.aRota = null; UI.eRota = null; }
+    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = vNova; UI.confirm = null;
+    if (area && set) { UI.area = area; UI.aRota = null; UI.eRota = null; }
     if (view === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
+    if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
+    if (view === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
     ensureModulo(); aplicarSet(); salvarUI(); trocarTela(UI.view);
     if (novaOc) { const b = document.querySelector('[data-g="novaOc"]'); if (b) b.click(); }
     return;
@@ -169,9 +172,8 @@ document.addEventListener('submit', async e => {
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
     if (f.id === 'fLogin') {
-      UI.acesso = 'operacao'; salvarAcesso(); DB.definirAcesso(UI.acesso);
-      UI.modulo = MODS_MARCAVEIS.includes(UI.modulo) ? UI.modulo : 'operacao';
-      UI.view = ACESSO[UI.acesso].inicio; salvarUI();
+      // Entra no Meu dia, no módulo em que estava (ensureModulo leva para um que a pessoa tem).
+      UI.view = 'meudia'; salvarUI();
       try { localStorage.setItem('dikma-ultimo-login', DB.normLogin($('lgUser').value)); } catch (e) { /* ignora */ }
       await DB.signIn($('lgUser').value, $('lgPass').value); return;
     }
@@ -208,14 +210,14 @@ document.addEventListener('change', e => {
     if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? { ...c, turma: t.value } : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
   if (t.dataset.mdPref) { MD.onChange(t); return; }
-  if (t.dataset.perm) { const [p, id] = t.dataset.perm.split('|'); rascunhoPerm()[p][id] = t.checked; render(); return; }
+  if (t.dataset.perm) { const [m, p, id] = t.dataset.perm.split('|'); const R = rascunhoPerm(); (R[m + '|' + p] ||= {})[id] = t.checked; render(); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
   // Formulário de acesso por módulo (novo usuário e editar acesso): atualiza o resumo de como fica hoje.
   if (t.dataset.acf) { const px = t.dataset.acf; const st = lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = resumoAcesso(st); return; }
   // Plano padrão: rota, local, atividade e tipo editáveis na própria linha
   if (t.dataset.prota || t.dataset.pcampo) {
-    if (!admMod()) return;
+    if (!admDe('ativ')) return;
     const [id, campo] = t.dataset.prota ? [t.dataset.prota, 'rota'] : t.dataset.pcampo.split('|'); const p = PL.get(id); if (!p) return;
     const v = String(t.value || '').replace(/\s+/g, ' ').trim(); if (!v) { toast('O campo não pode ficar vazio'); t.value = p[campo]; return; }
     if (v === p[campo]) return;
@@ -225,7 +227,7 @@ document.addEventListener('change', e => {
   }
   // Renomear rota: troca na lista de rotas, no plano padrão e nos colaboradores da rota (mesma área)
   if (t.dataset.rnome) {
-    if (!admMod()) return;
+    if (!admDe('ativ')) return;
     const i = +t.dataset.rnome; const r = rotas()[i]; const novo = String(t.value || '').replace(/\s+/g, ' ').trim().toUpperCase();
     if (!r || !novo || novo === r.rota) { t.value = r ? r.rota : ''; return; }
     if (rotas().some((x, j) => j !== i && x.area === r.area && x.rota === novo)) { toast('Já existe uma rota com esse nome nesta área'); t.value = r.rota; return; }
@@ -236,7 +238,7 @@ document.addEventListener('change', e => {
     if (UI.aRotaPor && UI.aRotaPor[r.area] === velho) UI.aRotaPor[r.area] = novo; if (UI.aRota === velho) UI.aRota = novo;
     rebuild(); DB.log(`Rota renomeada: ${velho} → ${novo} (${AREA_S[r.area]})`); toast(`Rota renomeada para ${novo}`); render(); return;
   }
-  if (t.dataset.hecfg) { if (!admMod()) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
+  if (t.dataset.hecfg) { if (!admDe('ativ')) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
 });
 // Atalho: "/" leva para a busca da tela (quando não está digitando em outro campo).
 document.addEventListener('keydown', e => {
@@ -277,7 +279,7 @@ if (DB.marcarUso) ['pointerdown', 'keydown'].forEach(ev => document.addEventList
     if (!st.v || !ME) return;
     if (st.m && st.m !== UI.modulo && modsDe(ME).includes(st.m)) UI.modulo = st.m;
     UI.view = st.v; UI.confirm = null; ensureModulo(); aplicarSet();
-    try { localStorage.setItem('coqueria-ui', JSON.stringify({ view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (x) { /* ignora */ }
+    try { localStorage.setItem('coqueria-ui', JSON.stringify({ v5: 1, view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (x) { /* ignora */ }
     render(); scrollTo(0, 0);
   });
 }

@@ -1,13 +1,12 @@
 // Moldura da tela: entrada (login), desenho da tela (render), menu lateral, barra de baixo, topo, filtros, busca e tema.
 import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../cal.js';
 import * as M from '../movimento.js';
-import { ACESSO } from '../acessos.js';
 import { semAcento, filtrarLista } from '../busca.js';
 import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
-import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarAcesso, salvarUI, meses, isAdmin, admMod, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, aplicarSet } from '../nucleo/estado.js';
-import { I, MOD_IC, ACESSO_IC } from './icones.js';
+import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
+import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, ES_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -42,20 +41,13 @@ function aplicarTema(t) {
   const w = $('who'); if (w) { const b = w.querySelector('[data-act="tema"]'); if (b) b.remove(); } render();
 }
 export function temaSheet() { const t = temaAtual(); sheet('Tema da tela', 'Vale só neste aparelho', Object.entries(TEMAS).map(([k, n]) => ({ t: n, d: k === 'auto' ? 'Segue o claro ou escuro do aparelho' : '', k, cur: k === t, ic: `<span class="opt-ic">${IC_TEMA[k]}</span>` })), o => { aplicarTema(o.k); toast(`Tema ${o.t.toLowerCase()}`); }); }
-// Troca entre a Operação e a Administração do sistema (só o administrador): recarrega para buscar os dados certos.
-export function irAcesso(k) {
-  if (!isAdmin() || !ACESSO[k]) return;
-  UI.acesso = k; salvarAcesso(); if (DB.definirAcesso) DB.definirAcesso(k);
-  UI.modulo = k === 'sistema' ? 'config' : 'operacao'; UI.view = ACESSO[k].inicio; UI.modOpen = false; salvarUI();
-  $('view').innerHTML = M.ESQUELETO; location.reload();
-}
 function renderGate() {
   const s = AUTH.status;
   const sair = `<button class="btn" data-act="logout">${I.out} Sair</button>`;
   if (s === 'loading') return gate('<p class="muted">Carregando…</p>');
   if (s === 'noConfig') return gate(`<h2>Sistema ainda não conectado</h2><p>Este endereço não encontrou a configuração do Firebase. Publique pelo Firebase Hosting (veja o README do projeto).</p><a class="btn" href="?demo">Abrir a demonstração</a>`);
   if (s === 'signedOut') {
-    // Todo mundo entra direto na Operação; a Administração do sistema o administrador abre lá dentro.
+    // Todo mundo entra direto nos módulos que tem (Operação, Gestão, Segurança, RH, Administração).
     return gate(`<h2>Entrar</h2><p class="muted m0">Use o usuário e a senha que o administrador passou.</p>
     ${AUTH.expirou ? '<p class="small m0" role="status"><b>Sua sessão terminou depois de 7 dias sem uso.</b> Entre de novo.</p>' : ''}
     ${AUTH.msg ? `<p class="err m0" role="alert">${esc(AUTH.msg)}</p>` : ''}
@@ -68,7 +60,7 @@ function renderGate() {
     <button type="button" class="btn ghost sm temab" data-act="tema">${IC_TEMA[temaAtual()]} Tema: ${TEMAS[temaAtual()].toLowerCase()}</button>
     ${DEMO ? '<p class="muted small m0">Demonstração: usuário <b>admin</b>, senha <b>123456</b>.</p>' : ''}`);
   }
-  if (s === 'semAcesso') return gate(`<h2>Sem acesso</h2><p>O usuário <b>${esc(AUTH.user.login || AUTH.user.nome || '')}</b> não entra em <b>${esc((ACESSO[AUTH.acesso] || {}).nome || '')}</b>.${AUTH.acesso === 'sistema' ? ' Esse acesso é só do administrador.' : ' Fale com o administrador do sistema.'}</p><button class="btn pri" data-act="trocarAcesso">Entrar em outro acesso</button>`);
+  if (s === 'semAcesso') return gate(`<h2>Sem acesso</h2><p>O usuário <b>${esc(AUTH.user.login || AUTH.user.nome || '')}</b> ainda não tem acesso a nenhum módulo. Fale com o administrador do sistema.</p><button class="btn pri" data-act="trocarAcesso">Entrar com outro usuário</button>`);
   if (s === 'firstAdmin') return gate(`<h2>Sistema sem administrador</h2><p>Por segurança, o administrador não é criado por esta tela.</p><p class="muted small">Quem cuida do sistema cria pelo GitHub: <b>Actions › Administrador do sistema › Run workflow</b>, informando nome e usuário. A senha provisória aparece no resultado da execução.</p>`);
   if (s === 'mustChange') return gate(`<h2>Crie sua senha</h2><p>Olá, <b>${esc(title(AUTH.user.nome))}</b>. No primeiro acesso, troque a senha provisória por uma só sua.</p><form id="fMust" class="stackform" novalidate>
     ${senhaField('mcPass', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password')}
@@ -86,8 +78,6 @@ function mockSwitcher() {
 /* ---------------- shell ---------------- */
 // Desenha a tela. Trocar de tela anima a entrada; atualização de dados mantém a rolagem das tabelas.
 let ULT = '';
-// Abas das fichas de acompanhamento dentro do RH (desenhadas por gestao.js).
-const G_VIEWS = ['gcolab', 'gimpr'];
 export function render() {
   const view = $('view');
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
@@ -108,39 +98,64 @@ export function render() {
     const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
   }
 }
+// Telas de cada arquivo carregado sob demanda: Equipamentos (EQ), fichas (GE) e Frequência (AD).
+const EQ_VIEWS = ['elanc', 'eequipe', 'einsp', 'eaval', 'eanal', 'epainel', 'econfig'];
+const GE_VIEWS = ['gcolab', 'gimpr', 'gpainel', 'gtipos', 'gimport'];
+const CF_VIEWS = ['cfgeral', 'cfconf', 'cfuso', 'cfescala', 'usuarios', 'perfis'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
-  ensureModulo(); aplicarSet(); rebuild();
+  { const antes = UI.modulo + '|' + UI.view; ensureModulo(); if (antes !== UI.modulo + '|' + UI.view && !TV) gravarUI(); } // levou para outro lugar: guarda no aparelho
+  aplicarSet(); rebuild();
   if (TV) { renderTV(); return; }
-  // RH: frequência e férias (administrativo.js) e fichas de acompanhamento (gestao.js)
-  if (UI.modulo === 'frequencia') { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : G_VIEWS.includes(UI.view) ? comModulo('GE', m => m.render(UI.view)) : comModulo('AD', m => m.render(UI.view))); afterRender(); return; }
-  if (UI.modulo === 'config' && !['plano', 'gerador', 'config'].includes(UI.view)) { renderNav(); renderTop(); pintar('view', UI.view === 'meudia' ? MD.view() : vConfigModulo(UI.view)); afterRender(); return; }
-  if (UI.modulo === 'equipamentos' || (UI.modulo === 'paineis' && (UI.view === 'epainel' || UI.view === 'gpainel'))) { renderNav(); renderTop(); pintar('view', UI.view === 'usuarios' ? vUsuarios() : UI.view === 'perfis' ? vPerfis() : UI.view === 'meudia' ? MD.view() : UI.view === 'gpainel' ? comModulo('GE', m => m.render(UI.view)) : comModulo('EQ', m => m.render(UI.view))); afterRender(); return; }
-  if (UI.view === 'meudia' || UI.view === 'perfis') { renderNav(); renderTop(); pintar('view', UI.view === 'perfis' ? vPerfis() : MD.view()); afterRender(); return; }
-  if (UI.modulo === 'paineis' && (UI.view === 'fpainel' || (UI.view === 'resumo' && !['ativ', 'he'].includes(resTipo())))) { renderNav(); renderTop(); pintar('view', UI.view === 'fpainel' ? comModulo('AD', m => m.painel()) : vResumoOutro()); afterRender(); return; }
+  // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo, sem recarregar.
+  if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
+  const v = UI.view;
+  const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
+  if (v === 'meudia') return tela(MD.view());
+  if (v === 'sgobra') return tela(vSeguranca());
+  if (v === 'tvmodo') return tela(vModoTV());
+  if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? vResumoOutro() : comModulo('AD', m => m.render(v)));
+  if (GE_VIEWS.includes(v)) return tela(comModulo('GE', m => m.render(v)));
+  if (EQ_VIEWS.includes(v)) return tela(comModulo('EQ', m => m.render(v)));
+  if (CF_VIEWS.includes(v)) return tela(vConfigModulo(v));
+  if (v === 'resumo' && !['ativ', 'he'].includes(resTipo())) return tela(vResumoOutro());
+  // Atividades (Pátio ou Bateria): Operação, Gestão e as configurações de rotas, plano e gerador.
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', vImportar()); return; }
   ensurePeriod();
-  const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
-  if (v.admin && !admMod()) UI.view = MODS[UI.modulo].inicio;
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe', 'esjus'].includes(UI.view);
+  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe', 'esjus'].includes(v);
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, usuarios: vUsuarios, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[UI.view];
-  pintar('view', fn());
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
+  pintar('view', fn ? fn() : MD.view());
   afterRender();
+}
+// Segurança: o módulo chega na fase 3. Por enquanto, quem tem o acesso vê o que vem por aí.
+function vSeguranca() {
+  const p = perfil('seguranca');
+  const oque = { registra: 'registrar interações e anomalias de segurança', trata: 'tratar as anomalias da sua área', gestor: 'acompanhar e encerrar todos os registros', leitor: 'consultar os registros', admin: 'acompanhar e encerrar todos os registros' }[p] || 'usar o módulo';
+  return `<div class="card"><div class="empty"><b>Módulo em construção</b><span>Aqui você vai ${oque}. O seu acesso já está pronto: quando o módulo chegar, ele aparece neste lugar, sem precisar fazer nada.</span></div></div>`;
+}
+// Modo TV: tela cheia para a sala de controle, numa janela nova (o link pode ficar salvo na TV).
+function vModoTV() {
+  const url = `?tv${DEMO ? '&demo' : ''}`;
+  return `<div class="card"><header><h2>Modo TV</h2><p>Tela cheia para a sala de controle: as cenas (hoje, rotas, semana, efetivo, equipamentos, atenção e causas) se revezam sozinhas.</p></header><div class="body stackcol">
+    <p class="muted small m0">Abra numa janela nova e deixe na TV. Dentro do Modo TV, a engrenagem escolhe as cenas, a área e o tempo de cada cena, e copia o link já configurado.</p>
+    <div class="row-gap"><a class="btn pri" href="${url}" target="_blank" rel="noopener">${I.tv} Abrir o Modo TV</a></div></div></div>`;
 }
 let raf = 0;
 // Atualizações de dados chegam em rajadas (várias coleções de uma vez): junta tudo num só desenho.
 export const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id && a.matches('input[type=search],input[type=text],input:not([type])') ? [a.id, a.selectionStart] : null; render(); if (keep) { const n = $(keep[0]); if (n && document.activeElement !== n) { n.focus(); try { n.setSelectionRange(keep[1], keep[1]); } catch (e) { /* ignora */ } } } }), 40); };
 
 function renderNav() {
-  const ge = UI.modulo === 'gestao', eqm = UI.modulo === 'equipamentos', rh = UI.modulo === 'frequencia';
+  const op = UI.modulo === 'operacao', ge = UI.modulo === 'gestao';
+  const ativOp = op && setsDe(ME, 'operacao').length > 0 && !!DB.cache.config;
   // Selo de Pendências: atrasadas dos últimos 60 dias na área da pessoa (a mesma janela de Pendências e do Meu dia).
-  const atr = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config ? atrasadasAll(myArea() || 'TODAS').length : 0;
-  const gb = rh ? (temFichas(ME) && GE ? GE.badge() : 0) : eqm && EQ ? EQ.badge() : 0; // selos aparecem quando a tela do módulo já chegou
-  const apv = !ge && !eqm && UI.modulo !== 'paineis' && UI.modulo !== 'config' && UI.modulo !== 'frequencia' && DB.cache.config && aprovador() ? listaAprov(areasAprov()).length : 0;
+  const atr = ativOp ? atrasadasAll(myArea() || 'TODAS').length : 0;
+  // selos aparecem quando a tela do módulo já chegou: fichas (Gestão) e paradas (Operação)
+  const gb = ge ? (temFichas(ME) && GE ? GE.badge() : 0) : op && temEquipEm(ME, 'operacao') && EQ ? EQ.badge() : 0;
+  const apv = ativOp && aprovador() ? listaAprov(areasAprov()).length : 0;
   const ms = modsMenu();
   const cur = MODS[UI.modulo];
   const linha = (m, atual) => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${atual ? MODS[m].sub : subMod(m)}</small></span>`; // no botão: o conjunto aberto; na lista: a área inteira
@@ -159,10 +174,8 @@ function renderNav() {
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
-  // Só o administrador vê a Administração do sistema: um botão leva para lá e outro volta para a Operação.
   // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
   { const w = $('who'); if (w && !w.querySelector('[data-painel]') && isAdmin()) w.insertAdjacentHTML('afterbegin', `<a class="btn rail-btn" data-painel href="${PAINEL_URL}" target="_blank" rel="noopener">${I.painel} Meu painel</a>`); }
-  { const w = $('who'); if (w && !w.querySelector('[data-act="irAcesso"]') && isAdmin()) { const k = UI.acesso === 'sistema' ? 'operacao' : 'sistema'; w.insertAdjacentHTML('afterbegin', `<button class="btn rail-btn trocaac" data-act="irAcesso">${ACESSO_IC[k] || ''} ${k === 'sistema' ? 'Administração do sistema' : 'Sair da Administração do sistema'}</button>`); } }
   const tb = barraDe();
   pintarBarra(tb, atr, gb, apv);
 }
@@ -172,7 +185,7 @@ function pintarBarra(tb, atr, gb, apv = 0) {
   const inMore = !tb.some(x => aqui(x[0]));
   const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
   const rot = (id, n) => (id === '__more' ? n : nomeCurto(VIEWS.find(v => v.id === id)) || n);
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && ME.papel !== 'leitor' ? 'big' : ''}" ${(aqui(id) || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && perfil('operacao') !== 'leitor' ? 'big' : ''}" ${(aqui(id) || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
 }
 export function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
@@ -200,15 +213,14 @@ function mudarFiltro(id, v) {
   render();
 }
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
-function filtroCompacto(comSet) {
+function filtroCompacto() {
   const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
-  const partes = [comSet ? SETS[SK].curto : '', UI.view === 'etiquetas' ? '' : ['causas', 'eshe', 'esjus'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
+  const partes = [UI.view === 'etiquetas' ? '' : ['causas', 'eshe', 'esjus'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 export function filtroSheet() {
   const L = $('layer');
-  const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
-  const corpo = () => `${comSet ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
+  const corpo = () => `${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -227,21 +239,21 @@ export function filtroSheet() {
 function indiceBusca() {
   const out = []; const ms = modsDe(ME);
   for (const v of viewsDoModulo()) out.push({ t: v.nome, d: `Tela · ${MODS[UI.modulo].nome}`, k: 'tela', ir: () => { UI.view = v.id; } });
-  for (const m of modsMenu()) if (!mesmoItem(m, UI.modulo)) out.push({ t: MODS[m].nome, d: `Área · ${subMod(m)}`, k: 'tela', ir: () => { trocarModulo(m); } });
-  if (UI.modulo === 'frequencia' && modsReais(ME).includes('frequencia')) { // RH: pessoas das folhas de frequência e das férias
+  for (const m of modsMenu()) if (!mesmoItem(m, UI.modulo)) out.push({ t: MODS[m].nome, d: `Módulo · ${subMod(m)}`, k: 'tela', ir: () => { trocarModulo(m); } });
+  if (UI.modulo === 'rh') { // RH: pessoas das folhas de frequência e das férias
     const vistos = new Set(); const A = DB.cache.adm || {};
     for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'aferias'; if (UI.a) { UI.a.fQ = f.nome; UI.a.fAba = 'todas'; } } }); }
     for (const [id, c] of Object.entries(A.comps || {})) if (c) for (const g of c.grupos || []) for (const p of g.pessoas) { const k = p.mat || p.nome; if (vistos.has('f' + k)) continue; vistos.add('f' + k); out.push({ t: title(p.nome), d: `Frequência · ${id.startsWith('bateria') ? 'Bateria' : 'Pátio'} · ${g.nome}`, k: 'pessoa', ir: () => { UI.view = 'afreq'; if (UI.a) { UI.a.conj = id.split('|')[0]; UI.a.q = p.nome; } } }); }
   }
   for (const k of setsDe(ME)) {
-    const st = DB.dados(k); if (!st || !st.config) continue;
-    for (const r of st.config.rotas || []) if (r.carga > 0 && (!myAreas().length || myAreas().includes(r.area))) out.push({ t: r.rota, d: `Rota · ${SETS[k].curto} · ${AREA_S[r.area]}`, k: 'rota', ir: () => { UI.modulo = SETS[k].mod; UI.view = 'apontar'; UI.area = r.area; UI.aRota = r.rota; } });
-    for (const a of Object.keys(st.colabs || {})) for (const c of st.colabs[a]) out.push({ t: title(c.nome), d: `Pessoas no turno · ${SETS[k].curto} · ${AREA_S[c.area] || c.area} · ${c.rota}`, k: 'pessoa', ir: () => { UI.modulo = 'gestao'; UI.view = 'esdia'; UI.esSet = k; UI.eRota = '*'; UI.eQ = title(c.nome); } });
+    const st = DB.dados(k); const opk = setsDe(ME, 'operacao').includes(k); if (!st || !st.config) continue;
+    for (const r of st.config.rotas || []) if (opk && r.carga > 0 && (!myAreas('operacao').length || myAreas('operacao').includes(r.area))) out.push({ t: r.rota, d: `Rota · ${SETS[k].curto} · ${AREA_S[r.area]}`, k: 'rota', ir: () => { UI.modulo = 'operacao'; UI.esSet = k; UI.view = 'apontar'; UI.area = r.area; UI.aRota = r.rota; } });
+    for (const a of Object.keys(st.colabs || {})) for (const c of st.colabs[a]) if (opk) out.push({ t: title(c.nome), d: `Presença · ${SETS[k].curto} · ${AREA_S[c.area] || c.area} · ${c.rota}`, k: 'pessoa', ir: () => { UI.modulo = 'operacao'; UI.view = 'esdia'; UI.esSet = k; UI.eRota = '*'; UI.eQ = title(c.nome); } });
   }
-  if (temFichas(ME)) for (const c of (DB.cache.g && DB.cache.g.colabs) || []) out.push({ t: title(c.nome), d: `Ficha (RH) · matrícula ${c.mat}`, k: 'pessoa', ir: () => { UI.modulo = 'frequencia'; UI.view = 'gcolab'; if (UI.g) UI.g.mat = c.mat; else UI.g = { mat: c.mat }; } });
-  if (ms.includes('equipamentos') && DB.cache.e && DB.cache.e.cad) {
-    for (const f of DB.cache.e.cad.frota || []) out.push({ t: f.id, d: `Equipamento · ${title(f.tipo || '')}`, k: 'eq', ir: () => { UI.modulo = 'equipamentos'; UI.view = 'eequipe'; } });
-    for (const o of DB.cache.e.cad.operadores || []) out.push({ t: title(o.nome), d: `Operador · ${title(o.funcao || '')}`, k: 'pessoa', ir: () => { UI.modulo = 'equipamentos'; UI.view = 'eequipe'; } });
+  if (temFichas(ME)) for (const c of (DB.cache.g && DB.cache.g.colabs) || []) out.push({ t: title(c.nome), d: `Ficha · matrícula ${c.mat}`, k: 'pessoa', ir: () => { UI.modulo = 'gestao'; UI.view = 'gcolab'; if (UI.g) UI.g.mat = c.mat; else UI.g = { mat: c.mat }; } });
+  if (temEquipEm(ME, 'operacao') && DB.cache.e && DB.cache.e.cad) {
+    for (const f of DB.cache.e.cad.frota || []) out.push({ t: f.id, d: `Equipamento · ${title(f.tipo || '')}`, k: 'eq', ir: () => { UI.modulo = 'operacao'; UI.view = 'eequipe'; } });
+    for (const o of DB.cache.e.cad.operadores || []) out.push({ t: title(o.nome), d: `Operador · ${title(o.funcao || '')}`, k: 'pessoa', ir: () => { UI.modulo = 'operacao'; UI.view = 'eequipe'; } });
   }
   return out.map(x => ({ ...x, n: semAcento(x.t + ' ' + x.d).toLowerCase() }));
 }
@@ -273,43 +285,43 @@ const BUSCA_BTN = '<button type="button" class="btn ghost buscabtn" data-act="bu
 function modTag() {
   const cur = MODS[UI.modulo]; if (!cur || !ME) return '';
   const pode = modsMenu().length > 1;
-  return `<button type="button" class="modtag" ${pode ? 'data-act="modsheet" aria-haspopup="dialog"' : 'aria-disabled="true" tabindex="-1"'} aria-label="Área: ${esc(cur.nome)}${pode ? '. Tocar para trocar de área' : ''}"><span class="mi">${MOD_IC[UI.modulo] || ''}</span><b>${esc(cur.curto)}</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
+  return `<button type="button" class="modtag" ${pode ? 'data-act="modsheet" aria-haspopup="dialog"' : 'aria-disabled="true" tabindex="-1"'} aria-label="Módulo: ${esc(cur.nome)}${pode ? '. Tocar para trocar de módulo' : ''}"><span class="mi">${MOD_IC[UI.modulo] || ''}</span><b>${esc(cur.curto)}</b><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 export function modSheet() {
   const ms = modsMenu();
   const ok = '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
-  sheet('Trocar de área', '', ms.map(m => ({ t: MODS[m].nome, d: subMod(m), m, cur: mesmoItem(m, UI.modulo), cls: 'mod', ic: `<span class="mi">${MOD_IC[m] || ''}</span>`, fim: mesmoItem(m, UI.modulo) ? ok : '' })), o => { if (!mesmoItem(o.m, UI.modulo)) trocarModulo(o.m); });
+  sheet('Trocar de módulo', '', ms.map(m => ({ t: MODS[m].nome, d: subMod(m), m, cur: mesmoItem(m, UI.modulo), cls: 'mod', ic: `<span class="mi">${MOD_IC[m] || ''}</span>`, fim: mesmoItem(m, UI.modulo) ? ok : '' })), o => { if (!mesmoItem(o.m, UI.modulo)) trocarModulo(o.m); });
 }
 // Topo: só título (1 linha), subtítulo (1 linha), Buscar e conexão. Os filtros vão para a barra logo abaixo (#fbarra).
 function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
+const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
-  const v = VIEWS.find(x => x.id === UI.view);
-  if (UI.modulo === 'config' && v.mod === 'cf') {
-    const sub = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, usuarios: 'Quem acessa o sistema e o que pode fazer', perfis: 'Quais abas cada perfil vê e o que pode fazer em cada uma' }[v.id] || '';
+  const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
+  if (UI.modulo === 'administracao') {
+    const sub = { ...SUB_ADM, config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport }[v.id] || '';
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintarTopo(v.nome, sub, sw); return;
   }
-  if (UI.modulo === 'frequencia') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todas as áreas' : SUB_A[v.id] || SUB_G[v.id] || '', v.id === 'meudia' || G_VIEWS.includes(v.id) || !AD ? '' : AD.topo(v.id)); return; }
+  if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
+  if (v.id === 'sgobra') { pintarTopo('Segurança', 'Registros de interação e de anomalia · em construção'); return; }
+  if (v.id === 'tvmodo') { pintarTopo(v.nome, 'Indicadores na tela da sala de controle'); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
-  if (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo())) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
-  if (UI.modulo === 'equipamentos' || v.mod === 'all' || v.id === 'epainel' || v.id === 'gpainel') { pintarTopo(v.nome, v.id === 'meudia' ? 'O que é seu hoje, em todas as áreas' : v.id === 'perfis' ? 'Quais abas cada perfil vê e o que pode fazer em cada uma' : SUB_G[v.id] || SUB_E[v.id] || 'Quem acessa o sistema e o que pode fazer'); return; }
-  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, escala: 'Disponíveis × necessários por rota', pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', plano: 'Modelo semanal usado pelo gerador', gerador: 'Cria as semanas do mês a partir do plano padrão', usuarios: 'Quem acessa o sistema e o que pode fazer', config: 'Efetivo padrão, carga e listas', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view];
+  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
+  if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', AD ? AD.topo(v.id) : ''); return; }
+  if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id]); return; }
+  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
-  const comSet = (ES_VIEWS.includes(UI.view) || (UI.modulo === 'paineis' && (UI.view === 'painel' || UI.view === 'resumo'))) && setsDe(ME).length > 1;
-  if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto(comSet)}</div>`;
-  else {
-    if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
-    if (comSet) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-esset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
-  }
-  // Atividades: seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular; troca o conjunto e fica na mesma aba.
-  const ativ = (UI.modulo === 'operacao' || UI.modulo === 'bateria') && v.mod === 'op';
-  if (ativ && modsDe(ME).includes('operacao') && modsDe(ME).includes('bateria')) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${[['operacao', 'patio'], ['bateria', 'bateria']].map(([m, k]) => `<button type="button" role="tab" data-atset="${m}" aria-selected="${UI.modulo === m}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
+  if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
+  else if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
+  // Seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular: troca o conjunto e fica na mesma aba.
+  const ss = setsDe(ME, UI.modulo);
+  if (SET_VIEWS.includes(v.id) && (v.id !== 'resumo' || ['ativ', 'he'].includes(resTipo())) && ss.length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${ss.map(k => `<button type="button" role="tab" data-atset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   // Programação: Folha do líder e Etiquetas QR abrem por botões no topo (saíram do menu); nelas, um botão volta para a Programação.
-  if (ativ && (UI.view === 'prog' || v.pai === 'prog')) {
+  if (UI.modulo === 'gestao' && (UI.view === 'prog' || v.pai === 'prog')) {
     const vs = viewsDoModulo();
     const bt = UI.view === 'prog' ? [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']].filter(([id]) => vs.some(x => x.id === id)) : vs.some(x => x.id === 'prog') ? [['prog', 'Programação', 'prog']] : [];
     if (bt.length) ctr += `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>`;

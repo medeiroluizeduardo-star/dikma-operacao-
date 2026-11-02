@@ -195,7 +195,7 @@ function novaAcaoSheet(causa) {
 let QR = null;
  const QR_SVG = new Map();
  // o desenho de cada código fica guardado: atualizar a tela não refaz os QR
-const linkRota = r => `${location.origin}${location.pathname}?m=${UI.modulo}&v=apontar&r=${encodeURIComponent(r.area + '|' + r.rota)}`;
+const linkRota = r => `${location.origin}${location.pathname}?m=operacao&v=apontar&r=${encodeURIComponent(r.area + '|' + r.rota)}`;
 export function vEtiquetas() {
   if (!QR) { import('../vendor/qrcode.js').then(m => { QR = m.default || m.qrcode; render(); }).catch(() => toast('Não foi possível carregar o gerador de QR Code')); return M.ESQUELETO; }
   const area = areaScope(); const rs = rotasDa(area).filter(r => r.carga > 0 || r.rota !== 'GESTÃO');

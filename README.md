@@ -166,68 +166,28 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 
 Observações: as rotinas agendadas do GitHub podem atrasar alguns minutos. Em repositório privado, o GitHub dá 2.000 minutos grátis por mês; esta rotina usa cerca de 500. Em repositório público, não há limite, mas o GitHub pausa rotinas agendadas depois de 60 dias sem nenhuma alteração no repositório (basta reativar em Actions).
 
-## Acessos: Operação e Administração do sistema
+## Os 5 módulos e o perfil em cada um
 
-Ao abrir o sistema aparece só a tela de usuário e senha, e todo mundo entra na **Operação**. A **Administração do sistema** só aparece para o administrador: lá dentro, o botão **Administração do sistema** (no menu lateral ou em **Mais**, no celular) abre os ajustes, e **Voltar para a Operação** volta. Os demais perfis nunca veem esse acesso.
+Ao abrir o sistema aparece só a tela de usuário e senha. Depois de entrar, o seletor de módulo (no topo do menu lateral; no celular, o botão com o nome do módulo) mostra só os módulos que a pessoa tem. Trocar de módulo não recarrega a página.
 
-| Acesso | O que tem | Quem entra |
+| Módulo | Abas | Perfis |
 |---|---|---|
-| **Operação** | os módulos marcados no usuário: Atividades Pátio, Atividades Bateria, Operação (equipamentos), Efetivo e **Frequência e férias**, mais o Meu dia | todos os usuários |
-| **Administração do sistema** | Visão geral, Conferência do cadastro, Uso do plano grátis, Escalas, configurações de cada módulo, Usuários e acessos, Perfis e permissões | só o administrador |
+| **Operação** | Meu dia · Apontar · Aprovação · Pendências · Equipamentos (Lançamentos, Equipe e frota, Inspeções) · Efetivo (Presença do dia, Horas extras, Justificativas). Seletor Pátio \| Bateria no topo | líder, supervisor, coordenador, gestor, somente leitura |
+| **Gestão** | Meu dia · Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos · Modo TV | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
+| **Segurança** | em construção (fase 3) | registra, trata, gestor, somente leitura |
+| **RH** | Meu dia · Frequência · Férias · Importar planilhas (só Administrativo) · Indicadores e resumo da frequência | administrativo, somente leitura |
+| **Administração** | Visão geral, Conferência, Uso do plano, Escalas e turnos, Rotas, Plano padrão, Gerador, Equipamentos, Tipos de ocorrência, Importar dados, Usuários e Perfis | Completa (administrador: tudo) ou Dos módulos (as configurações dos módulos em que a pessoa é Gestor) |
 
-- Em **Usuários e acessos**, marque os módulos de cada pessoa (inclusive **Frequência e férias**). Em **Perfis e permissões**, escolha o que cada perfil vê dentro de cada módulo, Frequência e férias inclusive (por exemplo, ligar **Importar planilhas** para o gestor).
-- O antigo acesso **Administrativo** virou o módulo Frequência e férias: quem tinha o acesso marcado continua entrando, agora pela Operação, e já fica com o módulo.
+- **Escopos** (Pátio, Bateria, Equipamentos) dizem quais conjuntos a pessoa vê na Operação e na Gestão. Áreas: líder 1, supervisor até 2, coordenador e gestor todas.
+- Cada tela usa o perfil **do módulo em que está**: quem é Líder na Operação e Somente leitura na Gestão aponta no Apontar, mas não altera nada na Programação. As regras do banco (`firestore.rules`) conferem o mesmo perfil por módulo.
+- Em **Usuários e acessos**, escolha o perfil em cada módulo, os escopos e as áreas. Em **Perfis e permissões**, escolha (módulo por módulo) o que cada perfil vê e pode fazer.
+- Links antigos, avisos do celular e o que ficou guardado no aparelho com os módulos de antes (Indicadores, Atividades, Pessoas no turno, Equipamentos, RH, Configurações, Administração do sistema) abrem a mesma tela no módulo novo.
 
-### Etiquetas QR, resumo da semana, banco de horas extras e check-in do turno
-- **Etiquetas QR das rotas** (Atividades › Acompanhar, supervisor e acima): uma etiqueta por rota para imprimir e colar no local. A câmera do celular lê o código e abre o Apontar de hoje já naquela rota (com o login feito).
-- **Resumo da semana:** a semana numa página (eficiência, por área, causas, aprovação, ações, ausências e horas extras), pronta para imprimir ou salvar em PDF. O aviso de segunda-feira abre o resumo da semana que passou.
-- **Banco de horas extras** (Efetivo › Escala e presença): dias de hora extra por pessoa no mês, por origem (Dikma, ArcelorMittal, sem origem), com horas estimadas (dias × horas por dia, 12 h no turno e 8 h no administrativo, ajustável) e limite de dias no mês. Exporta para Excel.
-- **Check-in do turno** (Efetivo diário, para líder e supervisor): a equipe do dia separada em turno diurno, noturno e administrativo; um toque marca presente, atraso ou falta, e **Confirmar** registra quem confirmou e a que horas. O Meu dia lembra o check-in que falta (o noturno a partir das 17h).
-
-### Causas e ações, prazo de aprovação, lembretes e modo TV
-- **Causas e ações** (Atividades › Acompanhar): Pareto das justificativas do mês (total e percentual acumulado), semana a semana, rotas com mais não realizadas e a causa principal de cada uma. Supervisor, coordenador, gestor e administrador criam uma **ação** para a causa (o que fazer, responsável, prazo), concluem ou retiram. Cada ação mostra o **efeito**: a média por semana da causa nas 4 semanas antes e depois.
-- **Prazo de aprovação:** o que o líder apontou num dia deve ser aprovado até o dia seguinte. A Aprovação mostra os mais antigos primeiro, com "fora do prazo · há N dias".
-- **Lembretes no celular:** o líder recebe na hora cada atividade devolvida (com o motivo); supervisor e acima recebem às 8h o que espera aprovação há mais de 1 dia. Dá para desligar no Meu dia.
-- **Dia e noite:** o Dimensionamento mostra, em rota de turno, quantos estão de dia (D) e de noite (N), em vermelho quando um turno fica sem ninguém. A Equipe e frota mostra "Trabalhando · dia/noite" para quem é 4x4.
-- **Modo TV:** botão **Modo TV** no Painel (computador) abre o Painel em tela cheia, sem menus, trocando de área sozinho a cada 30 segundos (endereço com `?tv`).
-
-### Tema claro ou escuro
-- Botão **Tema** no menu lateral (no celular, em **Mais › Tema da tela**) e na tela de entrada: **Automático** (segue o aparelho), **Claro** ou **Escuro**. Vale só naquele aparelho e já abre no tema certo, sem piscar.
-
-### Turno diurno e noturno
-- Em **Administração do sistema › Escalas e turnos**, cada turno em ciclo diz quais dias de trabalho são de **dia (D)** e de **noite (N)**. O padrão do 4x4 é 2 dias + 2 noites (DDNN) e o do 3x3 é DDN. Toque no dia para trocar e salve.
-- A noite conta no **dia em que começa** (a noite de segunda para terça é da segunda).
-- **Efetivo diário e Frequência:** cada presença de turno ganha a marca **D** (diurno) ou **N** (noturno). "Trabalham hoje" mostra as letras de dia e de noite. O quadro "Turno dia · noite" e o "x/y presentes hoje" de cada grupo separam os dois períodos.
-- **Agrupar por › Dia e noite:** separa as pessoas em Administrativo, Turno diurno, Turno noturno e Folga ou férias, com as letras de cada grupo.
-- Se duas letras estiverem no mesmo dia do ciclo (datas iguais ou equivalentes), Escalas e turnos avisa para conferir as datas.
-
-### Frequência e Efetivo diário: o mesmo jeito de lançar
-As duas telas têm o mesmo visual (grupos que recolhem, busca, filtro de grupo ou rota, legenda das siglas, ✓ = presente, rodapé com os presentes de cada dia) e o mesmo lançamento: toque no dia → escolha a situação → escolha até quando vale (só este dia, 3, 5, 7, 15 ou 30 dias, até domingo ou até o fim da competência). No Efetivo diário, depois de uma ausência num dia de trabalho, o sistema pergunta quem cobre; depois de uma hora extra, a pedido de quem.
-- **Líder com o nome escrito de jeitos diferentes** (KAUAN, KAUAN SOUZA, KAUAN SUZA): os grupos da Frequência viram um só e o Efetivo diário pode **agrupar por líder** com o mesmo nome. O reconhecimento usa o cadastro do RH: nome que é o começo de uma única pessoa, ou com uma letra trocada; quando o RH tem duas pessoas possíveis e a lista não desempata, não troca.
-
-### Dados em comum entre os módulos (nada é digitado duas vezes)
-- **Presença do dia.** Quem está nas Atividades tem uma presença só: o que o líder marca no Efetivo diário aparece na Frequência, e o que é corrigido na Frequência aparece no Efetivo diário. Quem não está nas Atividades (gestão, apoio) fica só na folha.
-- **Férias.** Marcadas em Frequência e férias, aparecem sozinhas como **FE** no Efetivo diário, no Dimensionamento, no Meu dia e nos avisos do celular (quem está de férias não conta como disponível).
-- **Escala.** A folga pela letra da turma (Escalas e turnos) também aparece na Frequência.
-- **Operação › Equipe e frota.** A situação de cada operador (férias, atestado, falta, folga lançada, desligado) vem da Frequência, do Efetivo diário e das Férias; a escala do mês e o painel usam essa situação. Faltas e atestados da Avaliação mensal vêm de lá quando não foram digitados. Operador que não está na folha continua com a situação do cadastro.
-- **Pessoas.** A folha liga cada nome à ficha do RH (matrícula) e às Atividades, aceitando acento, espaço a mais ou uma letra trocada.
-
-### Módulo Frequência e férias
-- **Frequência:** escolha Pátio ou Bateria e a competência (16 a 15). Toque no dia para lançar (presente, folga, falta, atestado, abono, hora extra, férias, afastado, treinamento, suspensão, desligado) e escolha até quando vale. Grupos recolhem; **Exportar Excel** baixa a folha. **Abrir a folha** da competência nova copia os grupos da anterior.
-- **Férias:** agora e próximos 60 dias, por mês (inclui as planejadas sem data), data limite (vencida ou nos próximos 90 dias sem férias marcadas) e todas. O término e o retorno são calculados pelo início e dias.
-- **Importar planilhas** (administrador; o gestor do módulo também, se ligado em Perfis): o administrador lê as planilhas de frequência do Pátio e da Bateria e a de férias que já estão no sistema, ou uma planilha nova em Excel. Mostra a conferência antes de gravar e, na presença do dia, só preenche o que ainda está vazio.
-- Códigos das planilhas: na folha de turno D e N são dias trabalhados e FO/Fg folga; nos grupos administrativos S e D são folga; **F na planilha é falta (FT)**; FE na planilha é feriado (folga); T é treinamento; X é ignorado.
-- Para gerar de novo os dados de importação a partir das planilhas originais (que não vão para o repositório): `node ferramentas/gerar-adm.mjs <frequencia-patio.xlsx> <frequencia-bateria.xlsx> <ferias.xlsx>`.
-
-## Módulo Atividades Bateria
-- Tem as mesmas telas do Atividades Pátio: Painel, Apontar, Escala e efetivo, Pendências, Folha do líder, Plano padrão, Gerador de meses e Rotas e configurações.
-- **Primeiro acesso:** entre como administrador, escolha **Atividades Bateria** e clique em **Importar e gerar a programação**. Isso carrega as 120 atividades do plano padrão, as 18 rotas das áreas Bateria 1, Bateria 2, Trilho e CDQ e os 55 colaboradores, e gera a programação do mês atual e dos dois seguintes.
-- Os dados ficam separados dos do Pátio (coleções com o prefixo `b_`).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
 
-## Administração do sistema
+## Módulo Administração
 
-Acesso especial, só do administrador. Junta as telas de ajuste de todos os módulos: **Visão geral** (resumo de cada módulo com atalhos), **Conferência do cadastro** (turmas sem data, pessoas de turno sem turma, nomes das Atividades sem ficha, fichas sem área, líderes sem área, folha não aberta, férias com limite vencido), **Uso do plano grátis** (documentos, tamanho estimado, fotos e contas, medido pela cópia de segurança diária), **Escalas e turnos**, Rotas e configurações, Plano padrão e Gerador de meses (botão Pátio | Bateria), Configurações da Operação, Tipos de ocorrência, Importar dados, Usuários e acessos e Perfis e permissões.
+Módulo comum (sem recarregar a página). O administrador vê tudo; o perfil "Dos módulos" vê só as configurações dos módulos em que é Gestor. Junta as telas de ajuste de todos os módulos: **Visão geral** (resumo de cada módulo com atalhos), **Conferência do cadastro** (turmas sem data, pessoas de turno sem turma, nomes das Atividades sem ficha, fichas sem área, líderes sem área, folha não aberta, férias com limite vencido), **Uso do plano grátis** (documentos, tamanho estimado, fotos e contas, medido pela cópia de segurança diária), **Escalas e turnos**, Rotas e configurações, Plano padrão e Gerador de meses (botão Pátio | Bateria), Configurações da Operação, Tipos de ocorrência, Importar dados, Usuários e acessos e Perfis e permissões.
 
 ### Escalas e turnos (fonte única)
 
@@ -397,7 +357,7 @@ public/
   permissoes.js       abas por perfil e exceção por pessoa
   busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
   escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
-  acessos.js          os acessos (Operação e, só para o administrador, Administração do sistema) e as férias em comum
+  acessos.js          o acesso por módulo (perfil em cada módulo, escopos) e as férias em comum
   aprovacao.js        aprovação dos apontamentos do líder pelo supervisor
   presenca.js         o jeito único de lançar presença (Frequência e Efetivo diário)
   administrativo.js   módulo Frequência e férias (frequência, férias, importar)
