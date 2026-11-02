@@ -1,7 +1,7 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
-import { podeAcesso } from './acessos.js';
+import { podeAcesso, acessoDoLegado, legadoDoAcesso } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
 
 export const isMock = true;
@@ -83,8 +83,21 @@ async function fresh() {
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'] },
     { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] },
     { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] },
+    ...usuariosSeguranca(),
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
-    { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }];
+    { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }].map(comAcesso);
+}
+// Acesso por módulo: os usuários de demonstração já vêm convertidos (como a rotina do GitHub faria), menos o
+// "Novo usuário", que fica no modelo antigo para mostrar o selo "a converter" na tela de usuários.
+const comAcesso = u => { if (u.acesso || u.uid === 'novo') return u; const r = acessoDoLegado(u); return { ...u, acesso: r.acesso, escopos: r.escopos }; };
+// Segurança (telas na fase 3): um técnico que registra e um supervisor de área que trata as anomalias.
+// Os campos antigos (papel, modulos, área) saem do acesso, como a tela de usuários grava.
+function usuariosSeguranca() {
+  const reg = { acesso: { seguranca: 'registra' }, escopos: [] };
+  const tra = { acesso: { operacao: 'supervisor', gestao: 'supervisor', seguranca: 'trata' }, escopos: ['patio'] };
+  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
+  return [{ uid: 'segr', nome: 'Técnico de Segurança', login: 'seguranca', senha: '123456', ...reg, ...leg(reg, {}) },
+    { uid: 'segt', nome: 'Supervisor da Preparação (Segurança)', login: 'seguranca.trata', senha: '123456', ...tra, ...leg(tra, { fichas: true, area: 'PREPARAÇÃO' }) }];
 }
 
 export async function start(callbacks) {
@@ -102,6 +115,7 @@ export async function start(callbacks) {
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   if (me && !cache.usuarios.some(u => u.uid === 'admv')) cache.usuarios.push({ uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] });
   if (me && !cache.usuarios.some(u => u.uid === 'adm1')) cache.usuarios.push({ uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] });
+  if (me) for (const u of usuariosSeguranca()) if (!cache.usuarios.some(x => x.uid === u.uid || x.login === u.login)) cache.usuarios.push(u);
   await iniciarAdm();
   emitAuth(); changed();
 }
@@ -131,12 +145,12 @@ export async function signIn(login, senha) {
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
 export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
-export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos, acessos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos, acessos, acesso, escopos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
   if (String(senha).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
-  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], trocarSenha: true }); changed();
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], ...(acesso ? { acesso, escopos: escopos || [] } : {}), trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');

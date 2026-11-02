@@ -50,6 +50,18 @@ service cloud.firestore {
     function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && 'equipamentos' in u.get('modulos', ['operacao']))); }
     function admGestaoU(u) { return u.papel == 'admin' || (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])); }
     function veOcorrU(u, o) { return todasFichasU(u) || (geU(u) && (minhaFichaU(u, o.area) || o.criadoPor == request.auth.uid || o.recolhe == u.get('nomeUp', '#'))); }
+    // ---- Acesso por módulo (fase 1 da divisão em 5 módulos; ainda NÃO usado pelas regras das coleções) ----
+    // usuarios/{uid}.acesso = { operacao, gestao, seguranca, rh: perfil do módulo; administracao: 'admin' | 'modulo' }
+    // usuarios/{uid}.escopos = parte de ['patio', 'bateria', 'equipamentos']. Só o administrador grava (match /usuarios).
+    // Na transição a tela Usuários grava também papel/modulos (public/acessos.js, legadoDoAcesso), que são o que as
+    // regras abaixo conferem. Na fase 2 as regras de cada coleção passam a usar estas funções.
+    function acessoU(u) { return u.get('acesso', {}); }
+    function perfilEmU(u, mod) { return acessoU(u).get(mod, null); }                  // perfil no módulo (null = sem acesso)
+    function temModU(u, mod) { return u.papel != 'bloqueado' && perfilEmU(u, mod) != null; }
+    function perfilEm(mod) { return perfilEmU(perfil(), mod); }
+    function temMod(mod) { return hasProfile() && temModU(perfil(), mod); }
+    function perfilEmEntre(mod, perfis) { return temMod(mod) && perfilEm(mod) in perfis; }
+    function temEscopo(e) { return hasProfile() && e in perfil().get('escopos', []); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
 
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
@@ -83,7 +95,8 @@ service cloud.firestore {
       allow create, update, delete: if admin();
     }
 
-    // Só o administrador cadastra pessoas.
+    // Só o administrador cadastra pessoas. A própria pessoa só grava trocarSenha e ultimoAcesso: papel, áreas, módulos,
+    // abas e o acesso por módulo (acesso, escopos) ficam só com o administrador.
     match /usuarios/{uid} {
       allow read: if signed() && (request.auth.uid == uid || admin());
       allow create: if admin();

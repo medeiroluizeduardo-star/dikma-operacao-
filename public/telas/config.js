@@ -1,12 +1,13 @@
 // Módulo Configurações: Visão geral, Escalas e turnos, Conferência, Uso do plano, Rotas, Plano padrão, Gerador,
 // Usuários, Perfis e permissões e o primeiro acesso (importar).
-import { SETS, SET_KEYS, AREA_S, DAYS, DL, PAPEIS, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../cal.js';
+import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../cal.js';
 import { competenciaDe, diasDaCompetencia } from '../planilhas-adm.js';
 import { semAcento, casa, caixaBusca } from '../busca.js';
+import { MODULOS_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso } from '../acessos.js';
 import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../escala.js';
 import { PERFIS_ABAS, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU } from '../permissoes.js';
 import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admMod, papelNome, MODS_MARCAVEIS, modsReais, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admMod, papelNome, modsReais, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
@@ -209,25 +210,96 @@ export function vGerador() {
 }
 
 /* ---------------- USUÁRIOS ---------------- */
+// Acesso por módulo (fase 1 da divisão em 5 módulos): uma linha por módulo com o perfil, os escopos e as áreas.
+// Ao salvar grava o modelo novo (acesso, escopos) E os campos antigos tirados dele (papel, modulos, áreas), que são o
+// que as telas e as regras ainda usam (gravação dupla; ver legadoDoAcesso em acessos.js).
+const areaSel = (attrs, v, vazio = '—') => `<select class="in" ${attrs}><option value="">${vazio}</option>${Object.values(SETS).map(st => `<optgroup label="${st.nome}">${st.areas.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select>`;
+const MOD_ANTIGO = { operacao: 'Atividades Pátio', bateria: 'Atividades Bateria', equipamentos: 'Equipamentos', gestao: 'Fichas', frequencia: 'Frequência e férias' };
+// px = prefixo dos ids (nu = novo usuário, ea = editar acesso), para os dois formulários não repetirem ids.
+export function formAcesso(px, st) {
+  const a = st.acesso || {}; const esc_ = new Set(st.escopos || []);
+  const linhas = MODULOS_ACESSO.map(m => `<div class="acm"><div class="minw"><b>${m.nome}</b><small class="muted">${m.sub}</small></div><select class="in" id="${px}M_${m.k}" data-acf="${px}" aria-label="Perfil em ${m.nome}"><option value="">Sem acesso</option>${m.perfis.map(p => `<option value="${p}" ${a[m.k] === p ? 'selected' : ''}>${perfilNome(m.k, p)}</option>`).join('')}</select>${m.k === 'gestao' ? `<label class="switch acfi"><input type="checkbox" id="${px}Fichas" data-acf="${px}" ${st.fichas !== false ? 'checked' : ''}><span class="small">Com as Fichas de acompanhamento</span></label>` : ''}</div>`).join('');
+  return `<div class="acf"><div class="acms">${linhas}</div>
+   <div class="ur r2"><div class="sel"><span>Escopos</span><div class="mchips">${ESCOPOS.map(([k, n]) => `<label class="mchip"><input type="checkbox" id="${px}E_${k}" data-acf="${px}" ${esc_.has(k) ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></div>
+   <label class="sel"><span>Área (líder e supervisor)</span>${areaSel(`id="${px}Area" data-acf="${px}"`, st.area)}</label>
+   <label class="sel"><span>2ª área (só supervisor)</span>${areaSel(`id="${px}Area2" data-acf="${px}"`, st.area2)}</label></div>
+   <p class="muted small m0 acres" id="${px}Res" aria-live="polite">${resumoAcesso(st)}</p></div>`;
+}
+export function lerAcesso(px) {
+  const acesso = {};
+  for (const m of MODULOS_ACESSO) { const v = $(px + 'M_' + m.k).value; if (v) acesso[m.k] = v; }
+  const bl = $(px + 'Bloq');
+  return { acesso, escopos: ESCOPOS.map(e => e[0]).filter(k => $(px + 'E_' + k).checked), fichas: $(px + 'Fichas').checked, area: $(px + 'Area').value || null, area2: $(px + 'Area2').value || null, bloqueado: !!(bl && bl.checked) };
+}
+// Como o acesso funciona HOJE (campos antigos), em uma linha, para o administrador conferir antes de salvar.
+export function resumoAcesso(st) {
+  const a = st.acesso || {};
+  if (!Object.keys(a).length) return 'Escolha o perfil em pelo menos um módulo.';
+  const v = legadoDoAcesso(a, st.escopos, st);
+  const perfis = new Set(['operacao', 'gestao', 'rh'].map(k => a[k]).filter(Boolean));
+  const mods = v.papel === 'admin' ? 'todos os módulos' : v.modulos.filter(m => MOD_ANTIGO[m]).map(m => MOD_ANTIGO[m]).join(', ') || 'nenhum módulo de hoje (Segurança chega na fase 3)';
+  return `Enquanto a divisão não termina, o sistema usa um perfil só: <b>${esc(papelNome(v.papel))}</b> · ${esc(mods)}.${perfis.size > 1 ? ' Os perfis diferentes por módulo passam a valer na próxima fase.' : ''}${(st.area || st.area2) && !v.area ? ' A área não se aplica a este perfil (vê todas ou nenhuma).' : ''}`;
+}
+// Confere o formulário e devolve os campos para gravar (modelo novo + antigos). uid = quem está sendo editado.
+export function validarAcesso(st, uid) {
+  const a = st.acesso;
+  if (!Object.keys(a).length) throw new Error('Escolha o perfil em pelo menos um módulo.');
+  if (a.operacao && !st.escopos.length) throw new Error('A Operação precisa de pelo menos um escopo: Pátio, Bateria ou Equipamentos.');
+  const v = legadoDoAcesso(a, st.escopos, st);
+  const ativ = v.modulos.includes('operacao') || v.modulos.includes('bateria');
+  if (ativ && ['lider', 'supervisor'].includes(v.papel) && !v.area) throw new Error('Escolha a área do líder ou supervisor.');
+  if (v.area && ativ) { const k = setDaArea(v.area); if (k && !st.escopos.includes(k)) throw new Error(`A área ${AREA_S[v.area]} é do escopo ${SETS[k].curto}. Marque esse escopo.`); }
+  if (v.area2 && v.area2 === v.area) throw new Error('A 2ª área precisa ser diferente da primeira.');
+  if (v.area2 && !v.area) throw new Error('Escolha a primeira área antes da segunda.');
+  if (v.area2) { const k = setDaArea(v.area2); if (k && !st.escopos.includes(k)) throw new Error(`A área ${AREA_S[v.area2]} é do escopo ${SETS[k].curto}. Marque esse escopo.`); }
+  if (uid && uid === ME.uid) {
+    if (st.bloqueado) throw new Error('Você não pode bloquear o seu próprio usuário.');
+    const admins = DB.cache.usuarios.filter(u => u.papel === 'admin').length;
+    if (ME.papel === 'admin' && v.papel !== 'admin' && admins < 2) throw new Error('Antes, deixe outra pessoa como administrador.');
+  }
+  return { acesso: a, escopos: st.escopos, papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 };
+}
+export const textoAcesso = a => selosAcesso(a).map(([m, p]) => `${m} · ${p}`).join(', ') || 'sem acesso';
+function selosDe(u) {
+  const r = acessoDe(u);
+  // Administrador: um selo só (tem todos os módulos).
+  const selos = r.acesso.administracao === 'admin' ? ['<span class="pill neu selo"><b>Administrador</b> · todos os módulos</span>'] : selosAcesso(r.acesso).map(([m, p, k]) => `<span class="pill neu selo" data-mod="${k}"><b>${m}</b> · ${esc(p)}${k === 'gestao' && !r.fichas && u.papel !== 'admin' ? ' <small>(sem fichas)</small>' : ''}</span>`);
+  const esc_ = r.escopos.length && r.acesso.administracao !== 'admin' ? `<span class="small muted esc">${r.escopos.map(e => ESCOPOS.find(x => x[0] === e)[1]).join(' · ')}</span>` : '';
+  const tags = [u.papel === 'bloqueado' ? '<span class="pill bad">Bloqueado</span>' : '', r.convertido ? '' : '<span class="pill warn" title="Cadastro ainda no modelo antigo: estes são os módulos que a conversão vai gravar">a converter</span>'].join('');
+  return `<div class="selos">${tags}${selos.join('') || '<span class="muted small">Sem acesso</span>'}${esc_}</div>`;
+}
+const areaTxt = u => (u.papel === 'admin' || u.papel === 'gestor' || u.papel === 'coordenador' ? '<span class="muted small">Todas</span>' : [u.area, u.papel === 'supervisor' ? u.area2 : null].filter(Boolean).map(a => AREA_S[a] || a).join(' · ') || '<span class="muted">—</span>');
 export function vUsuarios() {
   const us = DB.cache.usuarios.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
   const ativos = us.filter(u => u.papel !== 'bloqueado').length;
-  const areaSel = (id, v, dis) => `<select class="in" ${id} ${dis ? 'disabled' : ''}><option value="">—</option>${Object.values(SETS).map(st => `<optgroup label="${st.nome}">${st.areas.map(a => `<option value="${a}" ${v === a ? 'selected' : ''}>${AREA_S[a]}</option>`).join('')}</optgroup>`).join('')}</select>`;
-  return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div></div>
-  <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso.</p></header><div class="body"><form id="fNovoUser" class="uform" novalidate>
+  const aConverter = us.filter(u => !acessoDe(u).convertido).length;
+  if (!UI.nuAcesso) UI.nuAcesso = { acesso: { operacao: 'lider' }, escopos: ['patio'], fichas: true };
+  return `<div class="mini"><div><b class="num">${ativos}</b><span>Ativos</span></div><div><b class="num">${us.length - ativos}</b><span>Bloqueados</span></div><div><b class="num">${aConverter}</b><span>A converter</span></div></div>
+  <div class="card"><header><h2>Novo usuário</h2><p>A pessoa entra com o usuário e a senha provisória e cria a própria senha no primeiro acesso. Escolha o perfil em cada módulo que ela usa.</p></header><div class="body"><form id="fNovoUser" class="uform" novalidate>
    <div class="ur r1"><label class="sel"><span>Nome</span><input class="in" id="nuNome" required placeholder="Ex.: Maria Aparecida Souza"></label>
    <label class="sel"><span>Usuário</span><input class="in" id="nuLogin" required autocapitalize="none" spellcheck="false" placeholder="ex.: maria.souza"></label>
    <label class="sel"><span>Senha provisória</span><input class="in" id="nuSenha" required minlength="8" value="${esc(UI.senhaSug || (UI.senhaSug = senhaAleatoria()))}"></label></div>
-   <div class="ur r2"><label class="sel"><span>Perfil</span><select class="in" id="nuPapel">${PAPEIS.filter(p => p[0] !== 'bloqueado').map(([v, n]) => `<option value="${v}" ${v === 'lider' ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-   <label class="sel"><span>Área (líder e supervisor)</span>${areaSel('id="nuArea"', '', false)}</label>
-   <label class="sel"><span>2ª área (só supervisor)</span>${areaSel('id="nuArea2"', '', true)}</label></div>
-   <div class="ur r3"><div class="sel"><span>Módulos</span><div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" id="nuM_${m}" ${m === 'operacao' ? 'checked' : ''}><span>${MOD_MARCA[m].nome}</span></label>`).join('')}</div></div>
-   <button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
+   ${formAcesso('nu', UI.nuAcesso)}
+   <div class="row-gap"><button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></div>
-  <div class="card"><header><h2>Acessos</h2><p><b>Gestor:</b> todas as áreas e a administração dos módulos marcados (menos usuários). <b>Coordenador:</b> aponta em todas as áreas dos módulos marcados. <b>Supervisor:</b> até 2 áreas. <b>Líder:</b> 1 área. <b>Administrativo:</b> Frequência e férias e as fichas do Efetivo (ocorrências, assinaturas e impressão); vê as Atividades sem apontar. <b>Somente leitura</b> vê tudo e não altera nada. <b>Bloqueado</b> não entra. Cada pessoa vê só os <b>módulos</b> marcados (Frequência e férias inclusive); a Administração do sistema é só do administrador. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></header><div class="tw"><table><thead><tr><th>Pessoa</th><th>Usuário</th><th>Perfil</th><th>Área</th><th>Módulos</th><th>Abas</th><th></th></tr></thead><tbody>
-  ${us.map(u => `<tr><td><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td><select class="in" data-upapel="${u.uid}" aria-label="Perfil de ${esc(u.nome)}">${PAPEIS.map(([v, n]) => `<option value="${v}" ${u.papel === v ? 'selected' : ''}>${n}</option>`).join('')}</select></td><td><div class="areas2">${areaSel(`data-uarea="${u.uid}" aria-label="Área de ${esc(u.nome)}"`, u.area, !['lider', 'supervisor'].includes(u.papel))}${u.papel === 'supervisor' ? areaSel(`data-uarea2="${u.uid}" aria-label="Segunda área de ${esc(u.nome)}"`, u.area2, false).replace('<option value="">—</option>', '<option value="">+ 2ª área</option>') : ''}</div></td><td>${u.papel === 'admin' ? '<span class="muted small">Todos os módulos</span>' : `<div class="mchips">${MODS_MARCAVEIS.map(m => `<label class="mchip"><input type="checkbox" data-umod="${u.uid}|${m}" ${modsReais(u).includes(m) ? 'checked' : ''}><span>${MOD_MARCA[m].curto}</span></label>`).join('')}</div>`}</td><td>${celulaAbas(u)}</td><td class="uacts">${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
+  <div class="card"><header><h2>Acessos</h2><p>Cada pessoa tem um perfil em cada módulo que usa. <b>Operação</b> e <b>Gestão</b>: líder (1 área), supervisor (até 2 áreas), coordenador e gestor (todas as áreas), somente leitura; a Gestão tem também o Administrativo. <b>Segurança</b>: registra, trata, gestor ou somente leitura (as telas chegam na fase 3). <b>RH</b>: Administrativo ou somente leitura. <b>Administração</b>: completa (administrador) ou só a dos módulos da pessoa (como o gestor faz hoje). Os escopos (Pátio, Bateria e Equipamentos) dizem quais conjuntos a pessoa vê. <b>a converter</b> = cadastro ainda no modelo antigo; o selo mostra o que a conversão vai gravar. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></header><div class="tw"><table class="tcard utab"><thead><tr><th>Pessoa</th><th>Usuário</th><th>Acesso por módulo</th><th>Área</th><th>Abas</th><th></th></tr></thead><tbody>
+  ${us.map(u => `<tr${u.papel === 'bloqueado' ? ' class="ubloq"' : ''}><td class="tc-t"><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono tc-s">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td class="tc-full" data-l="Acesso por módulo">${selosDe(u)}</td><td data-l="Área">${areaTxt(u)}</td><td class="tc-full" data-l="Abas">${celulaAbas(u)}</td><td class="uacts tc-acao"><button class="btn sm" data-uacesso="${u.uid}" aria-label="Editar o acesso de ${esc(u.login || u.nome)}">${I.users} Acesso</button>${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>`;
+}
+// Editar o acesso de uma pessoa (mesmo formulário do novo usuário, mais o bloqueio).
+export function editarAcessoSheet(uid) {
+  const u = DB.cache.usuarios.find(x => x.uid === uid); if (!u) return;
+  const r = acessoDe(u);
+  const st = { ...r, area: u.area || null, area2: u.area2 || null, bloqueado: u.papel === 'bloqueado' };
+  const html = `${r.convertido ? '' : '<p class="small m0 acaviso">Cadastro ainda no modelo antigo. Abaixo está o que a conversão faria; ao salvar, ele já fica convertido.</p>'}${formAcesso('ea', st)}
+   ${uid !== ME.uid ? `<label class="switch"><input type="checkbox" id="eaBloq" data-acf="ea" ${st.bloqueado ? 'checked' : ''}><span class="small">Bloqueado: não entra no sistema (o acesso acima fica guardado para quando desbloquear)</span></label>` : ''}`;
+  formSheet('Acesso de ' + title(u.nome), u.login ? `<span class="mono">${esc(u.login)}</span>` : 'conta Google', html, 'Salvar acesso', async () => {
+    const patch = validarAcesso(lerAcesso('ea'), uid);
+    await DB.setUsuario(uid, patch);
+    DB.log(`Acesso de ${u.login || u.nome}: ${patch.papel === 'bloqueado' ? 'bloqueado · ' : ''}${textoAcesso(patch.acesso)}`);
+    toast('Acesso atualizado');
+  });
 }
 // Abas que a pessoa pode ter, conforme os módulos dela (Pátio e Bateria contam como um grupo só).
 const KEY_MOD = { paineis: 'pn', operacao: 'op', bateria: 'op', config: 'cf', equipamentos: 'eq', gestao: 'ge', frequencia: 'ad' };
