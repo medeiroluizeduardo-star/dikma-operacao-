@@ -936,6 +936,26 @@ td.uacts{white-space:nowrap;text-align:right}
 td.uacts .btn+.btn{margin-left:4px}
 .btn.sm{min-height:30px;padding:4px 10px;font-size:12.5px}.btn.sm svg{width:14px;height:14px}
 @media (max-width:860px){.ur.r1,.ur.r2,.ur.r3{grid-template-columns:minmax(0,1fr)}}
+/* acesso por módulo: uma linha por módulo (perfil), escopos e áreas */
+.acf{display:flex;flex-direction:column;gap:12px}
+.acms{border:1px solid var(--line);border-radius:12px;padding:2px 12px;background:var(--surface)}
+.acm{display:grid;grid-template-columns:minmax(0,1fr) minmax(170px,230px);gap:6px 14px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.acm:first-child{border-top:0}
+.acm b{display:block;font-size:13.5px}
+.acm small{display:block;font-size:11.5px;line-height:1.35}
+.acm .in{width:100%}
+.acm .acfi{grid-column:1/-1;align-items:center;gap:8px}
+.acm .acfi input{width:16px;height:16px;margin:0}
+.acres{line-height:1.45}
+.acaviso{color:var(--st-atr)}
+.sheet:has(.acf){width:min(600px,100%)}
+.sheet .acf .ur.r2{grid-template-columns:minmax(0,1fr)}
+.selos{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:360px}
+.selos .esc{flex-basis:100%}
+.pill.selo{font-weight:500}.pill.selo b{font-weight:700}.pill.selo small{font-weight:500;color:var(--ink-3)}
+table.utab tr.ubloq td{color:var(--ink-3)}
+@media (max-width:600px){.acm{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:820px){table.tcard.utab td.uacts{display:flex;flex-wrap:wrap;align-items:center;gap:6px}table.tcard.utab td.uacts .btn{width:auto;flex:1 1 auto}table.tcard.utab td.uacts .btn+.btn{margin-left:0}.selos{max-width:none}}
 /* meu dia */
 .md-hero h2{font-family:var(--f-display);font-size:34px;font-weight:700;letter-spacing:.01em;line-height:1.05}
 .md-hero p{margin:4px 0 0;color:var(--ink-3);font-size:14px}

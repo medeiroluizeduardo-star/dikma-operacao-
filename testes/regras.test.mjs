@@ -35,7 +35,10 @@ const USUARIOS = {
   freqSo: { papel: 'supervisor', modulos: ['frequencia'] },
   freqLeitor: { papel: 'leitor', modulos: ['operacao', 'frequencia'] },
   admv: { papel: 'administrativo', modulos: ['operacao', 'gestao'], nome: 'Assistente Adm' },
-  admvSo: { papel: 'administrativo', modulos: [] }
+  admvSo: { papel: 'administrativo', modulos: [] },
+  // Já com o acesso por módulo (fase 1): os campos antigos gravados junto (legadoDoAcesso) continuam valendo.
+  liderNovo: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'], nome: 'Líder Novo' },
+  segReg: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
@@ -349,6 +352,29 @@ test('acesso Administrativo somente leitura: consulta e não altera', async () =
 test('acesso: líder com Operação e Administrativo entra nos dois', async () => {
   await assertSucceeds(getDoc(doc(db('liderAmbos'), 'semanas', SEM)));
   await assertSucceeds(getDocs(collection(db('liderAmbos'), 'ferias')));
+});
+test('acesso por módulo: ninguém muda o próprio acesso nem os escopos; só o administrador grava', async () => {
+  await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { acesso: { operacao: 'gestor', gestao: 'gestor', administracao: 'admin' } }));
+  await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { escopos: ['patio', 'bateria', 'equipamentos'] }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'usuarios', 'liderRec'), { acesso: { operacao: 'lider' }, escopos: ['patio'] }), 'nem quem ainda não foi convertido');
+  await assertFails(updateDoc(doc(db('segReg'), 'usuarios', 'segReg'), { acesso: { seguranca: 'gestor' } }));
+  await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { acesso: { operacao: 'lider' }, ultimoAcesso: serverTimestamp() }), 'nem junto com o último acesso');
+  await assertSucceeds(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { ultimoAcesso: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db('gestorP'), 'usuarios', 'liderRec'), { acesso: { operacao: 'lider' } }), 'gestor não grava usuários');
+  await assertSucceeds(updateDoc(doc(db('admin'), 'usuarios', 'segReg'), { acesso: { seguranca: 'registra', operacao: 'leitor' }, escopos: ['patio'] }));
+  await assertSucceeds(updateDoc(doc(db('admin'), 'usuarios', 'segReg'), { acesso: { seguranca: 'registra' }, escopos: [] }));
+  await assertSucceeds(setDoc(doc(db('admin'), 'usuarios', 'novo2'), { papel: 'lider', nome: 'x', login: 'x', modulos: ['operacao'], acesso: { operacao: 'lider' }, escopos: ['patio'] }));
+});
+test('acesso por módulo (transição): quem já foi convertido continua com as mesmas permissões dos campos antigos', async () => {
+  await assertSucceeds(getDoc(doc(db('liderNovo'), 'semanas', SEM)));
+  await assertSucceeds(updateDoc(doc(db('liderNovo'), 'semanas', SEM), { s: { 'REC-001': 'R______' } }));
+  await assertFails(updateDoc(doc(db('liderNovo'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }), 'fora da área dele');
+  await assertSucceeds(getDoc(doc(db('liderNovo'), 'gcolab', 'RECEBIMENTO')));
+  await assertFails(getDoc(doc(db('liderNovo'), 'b_semanas', SEM_B1)), 'sem o escopo Bateria');
+  // Só Segurança (fase 3): não abre nada do que existe hoje.
+  for (const [c, id] of [['semanas', SEM], ['b_semanas', SEM_B1], ['gcolab', 'RECEBIMENTO'], ['config', 'sistema'], ['eq', 'cadastro'], ['gestao', 'colaboradores']]) await assertFails(getDoc(doc(db('segReg'), c, id)), `Segurança não lê ${c}`);
+  await assertFails(getDocs(collection(db('segReg'), 'ferias')));
+  await assertSucceeds(getDoc(doc(db('segReg'), 'usuarios', 'segReg')));
 });
 test('acesso: ninguém muda os próprios acessos; só o administrador', async () => {
   await assertFails(updateDoc(doc(db('liderRec'), 'usuarios', 'liderRec'), { acessos: ['operacao', 'administrativo'] }));

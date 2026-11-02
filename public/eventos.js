@@ -1,11 +1,11 @@
 // Eventos da página: cliques (data-*), envio de formulários, mudança de campos, teclado, Voltar e avisos de saída.
 // Botões com data-act chamam a ação registrada em acoes (nucleo/acoes.js); cada tela registra as suas.
-import { SETS, setDaArea, AREA_S, AUSENCIA, add, ddmm, today } from './cal.js';
+import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './cal.js';
 import { pedirJus } from './presenca.js';
-import { ACESSO, acessosDe } from './acessos.js';
+import { ACESSO } from './acessos.js';
 import { letra, periodosDe } from './escala.js';
 import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './nucleo/base.js';
-import { AUTH, ME, PL, COLABS, SK, UI, salvarAcesso, salvarUI, rotas, isAdmin, podeItem, admMod, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, MODS_MARCAVEIS, modsReais, modsDe, setsDe, aplicarSet } from './nucleo/estado.js';
+import { AUTH, ME, PL, COLABS, SK, UI, salvarAcesso, salvarUI, rotas, isAdmin, podeItem, admMod, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, MODS_MARCAVEIS, modsDe, setsDe, aplicarSet } from './nucleo/estado.js';
 import { acoes } from './nucleo/acoes.js';
 import { I, MOD_IC, ACESSO_IC } from './ui/icones.js';
 import { setSt, tirarFora } from './calc/atividades.js';
@@ -16,7 +16,7 @@ import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, irAcesso, render, sy
 import { apArea, cellMenu, pedirJustificativa, apply } from './telas/apontar.js';
 import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from './telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from './telas/horas-justificativas.js';
-import { rascEsc, abasPessoaSheet, rascunhoPerm, problemaSenha, senhaAleatoria } from './telas/config.js';
+import { rascEsc, abasPessoaSheet, rascunhoPerm, problemaSenha, senhaAleatoria, lerAcesso, validarAcesso, resumoAcesso, editarAcessoSheet, textoAcesso } from './telas/config.js';
 import { MD } from './nucleo/modulos.js';
 
 // Botão Voltar (celular e navegador): fecha a janela aberta ou volta para a tela anterior, em vez de sair do sistema.
@@ -150,6 +150,7 @@ document.addEventListener('click', async e => {
     });
   }
   if (d.uabas) { abasPessoaSheet(d.uabas); return; }
+  if (d.uacesso) { editarAcessoSheet(d.uacesso); return; }
   if (d.udel) {
     const u = DB.cache.usuarios.find(x => x.uid === d.udel); if (!u) return;
     if (u.papel === 'admin' && DB.cache.usuarios.filter(x => x.papel === 'admin').length < 2) { toast('Não dá para apagar o único administrador'); return; }
@@ -180,22 +181,16 @@ document.addEventListener('submit', async e => {
       await DB.definirNovaSenha(n); toast('Senha criada'); return;
     }
     if (f.id === 'fNovoUser') {
-      const nome = $('nuNome').value.trim(), login = DB.normLogin($('nuLogin').value), senha = $('nuSenha').value.trim(), papel = $('nuPapel').value, area = $('nuArea').value || null;
-      const area2 = papel === 'supervisor' ? ($('nuArea2').value || null) : null;
-      if (area2 && area2 === area) throw new Error('A 2ª área precisa ser diferente da primeira.');
-      if (area2 && !area) throw new Error('Escolha a primeira área antes da segunda.');
+      const nome = $('nuNome').value.trim(), login = DB.normLogin($('nuLogin').value), senha = $('nuSenha').value.trim();
       if (!nome) throw new Error('Informe o nome.');
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 8) throw new Error('A senha provisória precisa ter pelo menos 8 caracteres.');
-      const acessos = ['operacao'];
-      const modulos = MODS_MARCAVEIS.filter(m => $('nuM_' + m).checked);
-      if (!modulos.length && papel !== 'admin') throw new Error('Marque pelo menos um módulo.');
-      if ((modulos.includes('operacao') || modulos.includes('bateria')) && ['lider', 'supervisor'].includes(papel) && !area) throw new Error('Escolha a área do líder ou supervisor (Atividades Pátio ou Bateria).');
-      if (area && ['lider', 'supervisor'].includes(papel) && !modulos.includes(SETS[setDaArea(area)].mod)) throw new Error(`A área ${AREA_S[area]} é do módulo ${SETS[setDaArea(area)].nome}. Marque esse módulo.`);
+      // Acesso por módulo: grava o modelo novo e os campos antigos tirados dele (gravação dupla da transição).
+      const ac = validarAcesso(lerAcesso('nu'), null);
       UI.busy = true;
-      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, papel, area: ['lider', 'supervisor'].includes(papel) ? area : null, area2, modulos: papel === 'admin' ? MODS_MARCAVEIS : modulos, acessos });
-      DB.log(`Cadastrou o usuário ${login} (${papelNome(papel)})`);
-      UI.busy = false; UI.senhaSug = null; render();
+      await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, ...ac });
+      DB.log(`Cadastrou o usuário ${login} (${textoAcesso(ac.acesso)})`);
+      UI.busy = false; UI.senhaSug = null; UI.nuAcesso = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
       return;
     }
@@ -216,32 +211,8 @@ document.addEventListener('change', e => {
   if (t.dataset.perm) { const [p, id] = t.dataset.perm.split('|'); rascunhoPerm()[p][id] = t.checked; render(); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
-  if (t.dataset.upapel) {
-    const uid = t.dataset.upapel; const admins = DB.cache.usuarios.filter(u => u.papel === 'admin').length;
-    if (uid === ME.uid && t.value !== 'admin' && admins < 2) { toast('Antes, deixe outra pessoa como administrador'); t.value = 'admin'; return; }
-    const patch = { papel: t.value }; if (!['lider', 'supervisor'].includes(t.value)) patch.area = null; if (t.value !== 'supervisor') patch.area2 = null;
-    // Administrativo: Frequência e férias e as fichas do Efetivo vêm marcados (dá para desmarcar depois)
-    if (t.value === 'administrativo') { const u = DB.cache.usuarios.find(x => x.uid === uid); const m = modsReais(u); patch.modulos = [...new Set([...m, 'gestao', 'frequencia'])]; }
-    DB.setUsuario(uid, patch); toast('Perfil atualizado');
-  }
-  if (t.dataset.umod) {
-    const [uid, m] = t.dataset.umod.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
-    const atual = modsReais(u); const novo = t.checked ? [...new Set([...atual, m])] : atual.filter(x => x !== m);
-    if (!novo.length) { t.checked = true; toast('Deixe pelo menos um módulo'); return; }
-    DB.setUsuario(uid, { modulos: novo, acessos: ['operacao'] }); toast('Módulos atualizados'); // acessos antigo (Administrativo) vira o módulo
-  }
-  if (t.dataset.uac) {
-    const [uid, k] = t.dataset.uac.split('|'); const u = DB.cache.usuarios.find(x => x.uid === uid);
-    const atual = acessosDe(u); const novo = t.checked ? [...new Set([...atual, k])] : atual.filter(x => x !== k);
-    if (!novo.length) { t.checked = true; toast('Deixe pelo menos um acesso'); return; }
-    DB.setUsuario(uid, { acessos: novo }); DB.log(`Acessos de ${u.login || u.nome}: ${novo.map(x => ACESSO[x].nome).join(', ')}`); toast('Acessos atualizados');
-  }
-  if (t.dataset.uarea) { DB.setUsuario(t.dataset.uarea, { area: t.value || null }); toast('Área atualizada'); }
-  if (t.dataset.uarea2) {
-    const u = DB.cache.usuarios.find(x => x.uid === t.dataset.uarea2);
-    if (t.value && u && t.value === u.area) { toast('A 2ª área precisa ser diferente da primeira'); t.value = u.area2 || ''; return; }
-    DB.setUsuario(t.dataset.uarea2, { area2: t.value || null }); toast(t.value ? '2ª área atualizada' : '2ª área removida');
-  }
+  // Formulário de acesso por módulo (novo usuário e editar acesso): atualiza o resumo de como fica hoje.
+  if (t.dataset.acf) { const px = t.dataset.acf; const st = lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = resumoAcesso(st); return; }
   // Plano padrão: rota, local, atividade e tipo editáveis na própria linha
   if (t.dataset.prota || t.dataset.pcampo) {
     if (!admMod()) return;
@@ -266,7 +237,6 @@ document.addEventListener('change', e => {
     rebuild(); DB.log(`Rota renomeada: ${velho} → ${novo} (${AREA_S[r.area]})`); toast(`Rota renomeada para ${novo}`); render(); return;
   }
   if (t.dataset.hecfg) { if (!admMod()) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
-  if (t.id === 'nuPapel') { const p = t.value; $('nuArea').disabled = !['lider', 'supervisor'].includes(p); $('nuArea2').disabled = p !== 'supervisor'; if (p !== 'supervisor') $('nuArea2').value = ''; if (p === 'administrativo') for (const m of ['operacao', 'gestao', 'frequencia']) { const c = $('nuM_' + m); if (c) c.checked = true; } }
 });
 // Atalho: "/" leva para a busca da tela (quando não está digitando em outro campo).
 document.addEventListener('keydown', e => {
