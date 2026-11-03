@@ -67,6 +67,8 @@ async function fresh() {
   for (const k of SET_KEYS) await freshSet(k);
   const sg = await seed_('seed-gestao.json');
   cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o, assinaturaId: null, metodo: null })) };
+  // líder imediato de cada ficha: o da lista do RH de exemplo (como depois de Importar › Planilha EFETIVO)
+  try { const ef = await seed_('seed-efetivo.json'); const lid = new Map(ef.linhas.filter(l => l[7]).map(l => [String(l[0]), String(l[7]).toUpperCase()])); cache.g.colabs = cache.g.colabs.map(c => (!c.lider && lid.has(String(c.mat)) ? { ...c, lider: lid.get(String(c.mat)) } : c)); } catch (e) { /* sem a lista de exemplo */ }
   cache.gAssin = {};
   await carregarE(null);
   const lideres = SET_KEYS.flatMap(k => Object.values(S[k].colabs).flat().filter(c => c.funcao === 'LÍDER' || c.funcao === 'SUPERVISOR').map(c => ({ ...c, set: k })));
