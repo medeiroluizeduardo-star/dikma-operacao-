@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
 import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
+import { casaParte, lideresDasFichas, trocarNasFichas, moverNaFolha } from '../public/lideres.js';
 import { indiceFerias, perfilDe, editaAdm, modulosDe, temFreq } from '../public/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
@@ -114,4 +115,52 @@ test('líder com o nome escrito de jeitos diferentes vira um grupo só (como Kau
   assert.equal(c('Talison'), 'TALISON MOURA');
   assert.equal(c('Otavio'), 'OTAVIO', 'dois Otávios no RH: não troca');
   assert.equal(unirGrupos([g('LIDER TALISON - SUPERVISÃO X'), g('LIDER TALISON MOURA - SUPERVISÃO X')], [])[0].nome, 'LIDER TALISON MOURA - SUPERVISÃO X', 'sem o RH, o nome curto vira o único nome maior');
+});
+
+// Caso real (nomes trocados): três pessoas com o mesmo primeiro nome no RH, uma delas cadastrada como "líder de turma",
+// e o líder de fato (Kauan) cadastrado como ajudante. Nenhum jeito de escrever o líder pode virar outra pessoa.
+test('líder não vira outra pessoa do RH: primeiro nome igual a vários, letra trocada e função no RH', () => {
+  const rh = [{ nome: 'BRENO FERREIRA ALMEIDA', funcao: 'AJUDANTE' }, { nome: 'BRENO ANDRADE DOS SANTOS', funcao: 'LIDER DE TURMA' },
+    { nome: 'BRENO ALVES SANTOS', funcao: 'AJUDANTE' }, { nome: 'BRUNO SANTOS LIMA', funcao: 'AJUDANTE' }, { nome: 'KAUAN SOUZA DOS SANTOS', funcao: 'AJUDANTE' }];
+  const todos = ['BRENO', 'BRENO A', 'BRENO ALVES', 'KAUAN', 'KAUAN SOUZA'];
+  const c = canonLideres(todos, rh);
+  assert.deepEqual(todos.map(c), ['BRENO ALVES', 'BRENO A', 'BRENO ALVES', 'KAUAN SOUZA', 'KAUAN SOUZA'], 'BRENO só vira BRENO ALVES porque ele já é líder na lista');
+  for (const lista of [['BRENO'], ['BRENO A'], ['BRENO', 'KAUAN'], ['BRENO AN'], ['BRENO SANTOS'], ['BRENO DOS SANTOS']]) {
+    const f = canonLideres(lista, rh);
+    for (const n of lista) assert.ok(!/ANDRADE|BRUNO/.test(f(n)), `${n} (em ${lista.join(', ')}) virou ${f(n)}`);
+  }
+  assert.equal(canonLideres(['BRENO'], rh)('BRENO'), 'BRENO', 'três Brenos no RH: fica como está, mesmo um sendo "líder de turma"');
+  assert.equal(canonLideres(['BRENO SANTOS'], rh)('BRENO SANTOS'), 'BRENO SANTOS', 'não troca BRENO por BRUNO: existe gente chamada BRENO');
+  assert.equal(canonLideres(['BRUNO ANDRADE'], rh)('BRUNO ANDRADE'), 'BRUNO ANDRADE', 'não troca BRUNO por BRENO');
+  assert.equal(canonLideres(['KAUN'], rh)('KAUN'), 'KAUAN SOUZA', 'primeiro nome que ninguém tem: aceita uma letra trocada');
+  assert.equal(canonLideres(['KAUAN SUZA'], rh)('KAUAN SUZA'), 'KAUAN SOUZA');
+  const g = (nome, ...ps) => ({ nome, pessoas: ps.map(n => ({ k: n, nome: n })) });
+  const u = unirGrupos([g('LIDER BRENO - SUPERVISÃO KAROL', 'A'), g('LIDER KAUAN - SUPERVISÃO KAROL', 'B'), g('LIDER KAUAN SOUZA- SUPERVISÃO KAROL', 'C')], rh);
+  assert.deepEqual(u.map(x => x.nome), ['LIDER BRENO - SUPERVISÃO KAROL', 'LIDER KAUAN SOUZA - SUPERVISÃO KAROL']);
+});
+
+test('trocar líder: parte do nome, fichas e grupos da folha (move as pessoas e mantém a supervisão do destino)', () => {
+  assert.ok(casaParte('breno and', 'BRENO ANDRADE')); assert.ok(casaParte('ANDRADE', 'Breno Andrade dos Santos'));
+  assert.ok(!casaParte('breno and', 'BRENO ALVES')); assert.ok(casaParte('kauan', 'KAUAN SOUZA')); assert.ok(!casaParte('kauan souza', 'KAUAN'));
+  const fichas = [{ mat: '1', nome: 'ANA', lider: 'Breno Andrade' }, { mat: '2', nome: 'BIA', lider: 'BRENO ANDRADE' }, { mat: '3', nome: 'CAIO', lider: 'KAUAN' },
+    { mat: '4', nome: 'DANI', lider: 'BRENO ALVES' }, { mat: '5', nome: 'EVA', lider: 'BRENO ANDRADE', dem: '2026-01-10' }, { mat: '6', nome: 'FABI', lider: '' }];
+  const L = lideresDasFichas(fichas, '2026-11-03');
+  assert.deepEqual(L.map(x => [x.nome, x.ativos, x.desligados]), [['BRENO ALVES', 1, 0], ['BRENO ANDRADE', 2, 1], ['KAUAN', 1, 0]]);
+  const r = trocarNasFichas(fichas, n => casaParte('breno andrade', n), 'Kauan');
+  assert.deepEqual(r.mudou.map(x => x.mat), ['1', '2', '5']);
+  assert.deepEqual(r.itens.map(x => x.lider), ['KAUAN', 'KAUAN', 'KAUAN', 'BRENO ALVES', 'KAUAN', '']);
+  assert.equal(fichas[0].lider, 'Breno Andrade', 'não altera a lista original');
+
+  const g = (nome, ...ps) => ({ nome, turno: false, pessoas: ps.map(n => ({ k: n, nome: n })) });
+  const grupos = [g('GESTÃO', 'Z'), g('LIDER BRENO ANDRADE - SUPERVISÃO KAROL', 'B', 'A'), g('LIDER KAUAN SOUZA - SUPERVISÃO ANEILTON', 'C', 'A'), g('GÁS - LIDER BRENO ANDRADE - SUPERVISÃO KAROL', 'D')];
+  const m = moverNaFolha(grupos, n => casaParte('breno andrade', n), 'KAUAN');
+  assert.deepEqual(m.grupos.map(x => [x.nome, x.pessoas.map(p => p.nome).join('')]), [['GESTÃO', 'Z'], ['LIDER KAUAN SOUZA - SUPERVISÃO ANEILTON', 'ABC'], ['GÁS - LIDER KAUAN - SUPERVISÃO KAROL', 'D']],
+    'sem repetir quem já estava no destino; GÁS ganha grupo novo com a supervisão do antigo');
+  assert.deepEqual(m.acoes.map(a => [a.movidas, a.criado]), [[1, false], [1, true]]);
+  assert.equal(grupos[1].pessoas.length, 2, 'não altera a lista original');
+  const nada = moverNaFolha(grupos, n => casaParte('ninguem', n), 'KAUAN');
+  assert.equal(nada.mudou, false); assert.equal(nada.grupos, grupos);
+  // sem nenhum grupo do líder novo: cria no lugar do antigo
+  const c = moverNaFolha([g('A'), g('LIDER BRENO ANDRADE - SUPERVISÃO KAROL', 'X'), g('B')], n => casaParte('breno andrade', n), 'Kauan Souza');
+  assert.deepEqual(c.grupos.map(x => x.nome), ['A', 'LIDER KAUAN SOUZA - SUPERVISÃO KAROL', 'B']);
 });

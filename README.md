@@ -103,6 +103,12 @@ Botão **Exportar** (computador) em: Folha do líder (a programação da semana)
 
 Quando a senha de alguém é redefinida pelo site, a conta de login antiga fica sem uso. A rotina **Limpar contas sem usuário** (GitHub › Actions) roda todo dia 1 e apaga as que não têm usuário, não estão ligadas a nenhum login e estão há mais de 30 dias sem uso. Pelo botão Run workflow dá para só listar.
 
+## Líder errado ou escrito de jeitos diferentes
+
+- **No sistema:** Gestão › Colaboradores › botão **Líderes** (quem administra as fichas). Mostra cada líder com quantas pessoas tem; **Trocar por…** passa todas as pessoas para outro líder (mostra quantas e quais antes de gravar, e dá para desfazer); **Renomear** corrige a grafia. Na ficha (Editar), o campo Líder imediato é uma lista com busca dos líderes que já existem (dá para digitar um novo).
+- **Na folha de frequência:** RH › Frequência. Toque no nome da pessoa › **Mover para** outro grupo; no título do grupo, **Renomear** (nome igual ao de outro grupo junta os dois; grupo vazio pode ser apagado).
+- **Rotina Trocar líder** (GitHub › Actions › Run workflow): `simular` lista todos os líderes (fichas, folha da competência atual e futuras, ocorrências abertas, cadastro da Operação) e o que mudaria; `gravar` faz a cópia dos documentos e troca nas fichas, move as pessoas na folha e troca nas ocorrências abertas. Competências passadas e ocorrências assinadas ficam como estão.
+
 ## Cópia de segurança
 Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3h:
 - **Diária:** todas as coleções, menos o histórico e as fotos. Fica guardada 30 dias.

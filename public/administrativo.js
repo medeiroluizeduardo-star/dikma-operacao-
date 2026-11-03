@@ -118,7 +118,7 @@ export function criarAdministrativo(X) {
     const q = normNome(U.q || ''); const ed = pode();
     if (U.grp == null || (U.grp !== '*' && !doc.grupos[+U.grp])) U.grp = '*';
     const todos = U.grp === '*' || !!q;
-    const vis = doc.grupos.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q))) })).filter(x => x.ps.length && (todos || String(x.gi) === String(U.grp)));
+    const vis = doc.grupos.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q))) })).filter(x => (x.ps.length || (ed && !q)) && (todos || String(x.gi) === String(U.grp))); // grupo vazio: só quem edita vê (para incluir, renomear ou apagar)
     const recolhe = todos && !q && vis.length > 4;
     const ab = new Set(U.abertos);
     const hojeNa = datas.includes(TODAY);
@@ -134,7 +134,7 @@ export function criarAdministrativo(X) {
       const ctH = hojeNa ? contar(cods.map(l => l[iH])) : null;
       const ph = ctH ? ctH.presentes : null, eh = ctH ? ctH.escalados : null;
       const aberto = !recolhe || ab.has(String(gi));
-      if (todos) corpo += `<tr class="grp-row"><th colspan="${ncol}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${(() => { const pp = { D: 0, N: 0 }; cods.forEach(l => { const c = l[iH]; if (presente(c.v) && c.per) pp[c.per]++; }); return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      if (todos) corpo += `<tr class="grp-row"><th colspan="${ncol}">${recolhe ? `<button type="button" class="efg${aberto ? ' on' : ''}" data-a="grupo" data-v="${gi}" aria-expanded="${aberto}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(g.nome)}</b></button>` : `<button class="btn ghost link" data-a="soGrupo" data-v="${gi}">${esc(g.nome)}</button>`}${ed ? ` <button class="btn ghost sm" data-a="addPessoa" data-v="${gi}">${I.plus} Pessoa</button><button class="btn ghost sm" data-a="renGrupo" data-v="${gi}" aria-label="Renomear o grupo ${esc(g.nome)}">Renomear</button>` : ''}<span class="gcount">${ph != null ? `${ph}/${eh} presentes hoje${(() => { const pp = { D: 0, N: 0 }; cods.forEach(l => { const c = l[iH]; if (presente(c.v) && c.per) pp[c.per]++; }); return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${ps.length > eh ? ` · ${ps.length - eh} de folga` : ''}` : `${ps.length} pessoa${ps.length > 1 ? 's' : ''}`}</span></th></tr>`;
       if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
@@ -224,6 +224,32 @@ export function criarAdministrativo(X) {
         if (o.v.startsWith('mv:')) { const i = +o.v.slice(3); grupos[i] = { ...grupos[i], pessoas: [...grupos[i].pessoas, p].sort((a, b) => a.nome.localeCompare(b.nome)) }; }
         doc.grupos = grupos; await DB.admSalvarGrupos(conj, comp, grupos); toast(o.v === 'rm' ? 'Tirado da folha' : 'Mudou de grupo'); render();
       });
+  }
+  // Renomear o grupo (ex.: trocar o líder ou a supervisão no nome). Nome igual ao de outro grupo, ou do mesmo líder
+  // escrito de outro jeito, junta os dois. Grupo vazio pode ser apagado. Mover uma pessoa: toque no nome dela.
+  function renomearGrupo(gi) {
+    const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
+    const g = doc.grupos[+gi]; if (!g) return;
+    const vazio = !g.pessoas.length;
+    formSheet('Renomear grupo', `${SETS[conj].curto} · ${periodoComp(comp)} · ${g.pessoas.length} pessoa${g.pessoas.length === 1 ? '' : 's'}`, `<label class="sel"><span>Nome do grupo</span><input class="in" id="rgNome" value="${esc(g.nome)}" required style="text-transform:uppercase" autocomplete="off"></label>
+      <p class="m0 small muted">Formato: LIDER NOME - SUPERVISÃO NOME (com GÁS -, PREPARACAO -… na frente, se for o caso). Se ficar igual a outro grupo, os dois viram um só.</p>
+      <label class="mchip"><input type="checkbox" id="rgTurno" ${g.turno ? 'checked' : ''}><span>Grupo de turno (D e N são dias trabalhados)</span></label>
+      ${vazio ? '<label class="mchip"><input type="checkbox" id="rgApagar"><span>Apagar este grupo (está vazio)</span></label>' : ''}`, 'Salvar', async () => {
+      let grupos; const apagar = vazio && $('rgApagar') && $('rgApagar').checked;
+      if (apagar) grupos = doc.grupos.filter((_, i) => i !== +gi);
+      else {
+        const nome = $('rgNome').value.trim().toUpperCase().replace(/\s+/g, ' '); if (!nome) throw new Error('Informe o nome.');
+        const igual = doc.grupos.findIndex((x, i) => i !== +gi && normNome(x.nome) === normNome(nome));
+        if (igual >= 0) { // junta no grupo que já tem esse nome
+          const ks = new Set(doc.grupos[igual].pessoas.map(p => p.k));
+          grupos = doc.grupos.map((x, i) => (i === igual ? { ...x, pessoas: [...x.pessoas, ...g.pessoas.filter(p => !ks.has(p.k))].sort((a, b) => a.nome.localeCompare(b.nome)) } : x)).filter((_, i) => i !== +gi);
+        } else grupos = unirGrupos(doc.grupos.map((x, i) => (i === +gi ? { ...x, nome, turno: $('rgTurno').checked } : x)), A().rh || []);
+      }
+      const juntou = doc.grupos.length - grupos.length;
+      doc.grupos = grupos; U.grp = '*'; await DB.admSalvarGrupos(conj, comp, grupos);
+      DB.log(`Frequência: grupo "${g.nome}" ${apagar ? 'apagado' : juntou ? 'juntado a outro' : 'renomeado'} (${SETS[conj].curto} ${periodoComp(comp)})`);
+      toast(apagar ? 'Grupo apagado' : juntou ? 'Grupo renomeado e juntado ao de mesmo nome' : 'Grupo renomeado'); render();
+    });
   }
   function exportar() {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
@@ -476,6 +502,7 @@ export function criarAdministrativo(X) {
     else if (a === 'cel') lancar(t.dataset.g, t.dataset.p, t.dataset.dt);
     else if (a === 'pessoa') menuPessoa(t.dataset.g, t.dataset.p);
     else if (a === 'addPessoa') addPessoa(v);
+    else if (a === 'renGrupo') renomearGrupo(v);
     else if (a === 'novoGrupo') {
       const doc = A().comps[U.conj + '|' + U.comp]; if (!doc) return;
       formSheet('Novo grupo', `${SETS[U.conj].curto} · ${periodoComp(U.comp)}`, '<label class="sel"><span>Nome do grupo</span><input class="in" id="agNome" required placeholder="Ex.: LIDER FULANO - SUPERVISÃO CICLANO"></label><label class="mchip"><input type="checkbox" id="agTurno"><span>Grupo de turno (D e N são dias trabalhados)</span></label>', 'Criar', async () => {
