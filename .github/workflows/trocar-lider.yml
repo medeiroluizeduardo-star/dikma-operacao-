@@ -1,0 +1,66 @@
+name: Trocar líder
+
+# Corrige o nome do líder gravado nas fichas, na folha de frequência e nas ocorrências abertas
+# (ex.: as pessoas de um líder que não existe passam para o líder certo). Só manual (Run workflow).
+#   simular (padrão): só mostra, no resumo desta execução, todos os líderes encontrados (com quantas pessoas
+#                     cada um tem) e o que mudaria. Deixe "de" vazio para ver só a lista.
+#   gravar: faz uma cópia dos documentos que vão mudar (arquivo desta execução + coleção backups) e troca:
+#           fichas, grupos da folha da competência atual e das futuras (move as pessoas para o grupo do líder
+#           novo e apaga o antigo) e ocorrências aguardando assinatura. Competências passadas e ocorrências
+#           assinadas ficam como estão.
+# No dia a dia, a mesma troca é feita na tela Gestão › Fichas › Líderes.
+on:
+  workflow_dispatch:
+    inputs:
+      de:
+        description: 'Líder que sai (parte do nome serve, sem acento: ex. fulano de tal)'
+        type: string
+        required: false
+      para:
+        description: 'Líder que entra (ex. ciclano)'
+        type: string
+        required: false
+      modo:
+        description: 'simular (só mostra) ou gravar'
+        type: choice
+        options: [simular, gravar]
+        default: simular
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  trocar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Trocar líder (${{ inputs.modo }})
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_PASTA: copia-lider
+          # os nomes vão por variável (nunca colados no comando)
+          LIDER_DE: ${{ inputs.de }}
+          LIDER_PARA: ${{ inputs.para }}
+          LIDER_MODO: ${{ inputs.modo }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/trocar-lider.mjs
+
+      - name: Guardar a cópia dos documentos
+        if: inputs.modo == 'gravar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: antes-de-trocar-lider-${{ github.run_id }}
+          path: copia-lider/
+          retention-days: 90
+          if-no-files-found: ignore

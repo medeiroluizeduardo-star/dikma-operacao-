@@ -7,6 +7,8 @@ import { criarImportador } from './importar.js';
 import { REGIMES_PADRAO, normRegime } from './escala.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
+import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from './lideres.js';
+import { canonLideres } from './planilhas-adm.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
@@ -167,7 +169,7 @@ export function criarGestao(X) {
       ${selArea('gFaC')}
       ${!framed && !matchMedia('(max-width:860px)').matches ? `<button class="btn" data-g="expOc" style="align-self:flex-end" title="Ocorrências de quem está na lista">${I.dl} Exportar ocorrências</button>` : ''}
       ${podeEditar() ? `<button class="btn" data-g="novaOc" style="align-self:flex-end">${I.plus} Ocorrência</button>` : ''}
-      ${isAdmin() ? `<button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Colaborador</button>` : ''}</div>
+      ${isAdmin() ? `<button class="btn" data-g="lideres" style="align-self:flex-end" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button><button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Colaborador</button>` : ''}</div>
       <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k === 'ativos' || U.filtro === k || (k === 'todos' ? n('todos') !== n('ativos') : n(k) > 0)).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
     if (adm && SEL.size) h += `<div class="selbar" role="region" aria-label="Selecionados"><b>${SEL.size} selecionado(s)</b><button class="btn danger" data-g="excluirSel">Excluir selecionados</button><button class="btn" data-g="limparSel">Limpar seleção</button></div>`;
     if (!lista.length) return h + '<div class="card"><div class="empty">Ninguém com esse filtro.</div></div>';
@@ -362,10 +364,10 @@ export function criarGestao(X) {
       ${PES.temOp() ? `<label class="switch" id="ncOpLbl"><input type="checkbox" id="ncOp" ${L.op ? 'checked' : ''}><span>Opera equipamentos (equipe da área Equipamentos)</span></label>
       <div class="row2" id="ncOpBox"><label class="sel"><span>Escala (Equipamentos)</span><select class="in" id="ncEsc">${opt(['ADM', '4x4'], (L.op && L.op.escala) || 'ADM')}</select></label><label class="sel"><span>Turma 4x4</span><select class="in" id="ncTurOp"><option value="">—</option>${opt(Object.keys(eqc.turmas || {}), (L.op && L.op.turma) || '')}</select></label></div>` : ''}
       <label class="sel"><span>Função</span><input class="in" id="ncFun" list="dlFun" autocomplete="off" value="${esc(c.funcao || (L.patio && L.patio.funcao) || (L.op && L.op.funcao) || '')}" placeholder="Escolha da lista ou digite"><datalist id="dlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>
-      <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><label class="sel"><span>Líder imediato</span><input class="in" id="ncLid" value="${esc(c.lider || '')}"></label></div>
+      <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('ncLid', nomeLider(c.lider), opcoesLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
       <label class="sel"><span>Demissão</span><input class="in" type="date" id="ncDem" value="${c.dem || ''}"></label>
       <label class="switch"><input type="checkbox" id="ncAnt" ${c.intAnt ? 'checked' : ''}><span>Integração feita antes do sistema ("Anterior")</span></label>`, 'Salvar', async () => {
-      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: $('ncLid').value.trim().toUpperCase(), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim() };
+      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim() };
       if (!n.mat || !n.nome) throw new Error('Informe matrícula e nome.');
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '' };
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
@@ -390,6 +392,76 @@ export function criarGestao(X) {
       if (op) { if (a === AREA_OP) { op.checked = true; op.disabled = true; } else op.disabled = false; $('ncOpBox').hidden = !op.checked; }
     };
     ar.onchange = atualizar; if (op) op.onchange = atualizar; atualizar();
+  }
+
+  /* ---------- líderes: trocar e renomear de uma vez (Gestão › Fichas › Líderes) ---------- */
+  // Um líder por grafia (sem acento e maiúsculas). A Presença do dia (Agrupar por: Líder) junta grafias parecidas;
+  // aqui elas aparecem separadas para dar para corrigir. Muda só as fichas: a folha de frequência fica no RH.
+  const lideres = () => lideresDasFichas(G().colabs, TODAY);
+  const opcoesLider = () => lideres().map(l => ({ v: l.nome, t: title(l.nome), d: `${l.ativos} pessoa${l.ativos === 1 ? '' : 's'}` }));
+  const pessoasTxt = n => `${n} pessoa${n === 1 ? '' : 's'}`;
+  function lideresSheet() {
+    const L = lideres(); const lay = $('layer');
+    const canon = canonLideres(L.map(l => l.nome), G().colabs);
+    const junto = l => L.filter(o => o !== l && canon(o.nome) === canon(l.nome)).map(o => title(o.nome));
+    const close = () => { lay.innerHTML = ''; document.removeEventListener('keydown', kd); };
+    const kd = e => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', kd);
+    lay.innerHTML = `<div class="scrim" id="scrim"><div class="sheet wide" role="dialog" aria-modal="true" aria-label="Líderes"><h3>Líderes</h3><div class="sub">${L.length} líder${L.length === 1 ? '' : 'es'} nas fichas · é daqui que vem o "Agrupar por: Líder" da Presença do dia</div>
+      ${L.length ? `<div class="plist" id="ldLista">${L.map((l, i) => { const j = junto(l); return `<div class="pitem"><div class="minw"><div class="t">${esc(title(l.nome))}</div><div class="l">${pessoasTxt(l.ativos)}${l.desligados ? ` · +${l.desligados} desligado${l.desligados === 1 ? '' : 's'}` : ''}${j.length ? ` · <span class="warn-t">na Presença fica junto com ${esc(j.join(', '))}</span>` : ''}</div>
+        <details style="margin-top:2px"><summary class="small muted" style="cursor:pointer">Ver quem</summary><div class="small" style="padding:4px 0 2px">${l.pessoas.map(c => esc(title(c.nome)) + (c.dem && c.dem <= TODAY ? ' <span class="muted">(desligado)</span>' : '')).join(', ')}</div></details></div>
+        <div class="row-gap"><button type="button" class="btn sm" data-ld="trocar" data-i="${i}">Trocar por…</button><button type="button" class="btn sm ghost" data-ld="renomear" data-i="${i}">Renomear</button></div></div>`; }).join('')}</div>` : '<div class="empty">Nenhuma ficha tem líder imediato. Preencha em Editar, na ficha de cada pessoa.</div>'}
+      <p class="small muted m0">Trocar move <b>todas</b> as pessoas do líder para outro. Renomear corrige a grafia (se o nome novo já existir, os dois viram um só). Os grupos da folha de frequência são mudados em RH › Frequência.</p>
+      <button type="button" class="btn center" data-ld="fechar">Fechar</button></div></div>`;
+    $('scrim').onclick = e => {
+      e.stopPropagation();
+      const b = e.target.closest('[data-ld]');
+      if (e.target.id === 'scrim' || (b && b.dataset.ld === 'fechar')) return close();
+      if (!b) return;
+      const l = L[+b.dataset.i]; if (!l) return;
+      close();
+      if (b.dataset.ld === 'trocar') trocarLider(l); else renomearLider(l);
+    };
+    const f = lay.querySelector('[data-ld]'); if (f) f.focus();
+  }
+  function trocarLider(l) {
+    const outros = () => lideres().filter(o => o.chave !== l.chave).map(o => ({ v: o.nome, t: title(o.nome), d: pessoasTxt(o.ativos) }));
+    formSheet('Trocar líder', `${esc(title(l.nome))} · ${pessoasTxt(l.total)}`, `<p class="m0 small">Todas as pessoas de <b>${esc(title(l.nome))}</b> passam para o líder escolhido.</p>
+      <div class="sel"><span>Novo líder</span>${campoBusca('ldPara', '', outros, { livre: true, maiusculas: true, placeholder: 'Escolha da lista ou digite um nome' })}</div>`, 'Continuar', async () => {
+      const para = nomeLider($('ldPara').value); if (!para) throw new Error('Escolha ou digite o novo líder.');
+      if (chaveLider(para) === l.chave) throw new Error('Escolha um líder diferente.');
+      setTimeout(() => confirmarTroca(l, para, 'trocar'), 0);
+    }, { aoCancelar: () => setTimeout(lideresSheet, 0) });
+  }
+  function renomearLider(l) {
+    formSheet('Renomear líder', `${esc(title(l.nome))} · ${pessoasTxt(l.total)}`, `<label class="sel"><span>Nome do líder</span><input class="in" id="ldNome" value="${esc(l.nome)}" style="text-transform:uppercase" autocomplete="off"></label>
+      <p class="m0 small muted">Corrige a grafia nas ${pessoasTxt(l.total)}. Se o nome já for de outro líder, os dois viram um só.</p>`, 'Continuar', async () => {
+      const para = nomeLider($('ldNome').value); if (!para) throw new Error('Informe o nome.');
+      if (para === l.nome) throw new Error('O nome está igual.');
+      setTimeout(() => confirmarTroca(l, para, 'renomear'), 0);
+    }, { aoCancelar: () => setTimeout(lideresSheet, 0) });
+  }
+  // Confirmação: quantas pessoas e quais. Depois de gravar dá para desfazer pelo aviso.
+  function confirmarTroca(l, para, modo) {
+    const r = trocarNasFichas(G().colabs, n => chaveLider(n) === l.chave, para);
+    const destino = lideres().find(o => o.chave === chaveLider(para) && o.chave !== l.chave);
+    const nomes = r.mudou.map(m => title(m.nome));
+    formSheet(modo === 'trocar' ? 'Confirmar a troca' : 'Confirmar o novo nome', `${esc(title(l.nome))} → ${esc(title(para))}`, `
+      <p class="m0">${modo === 'trocar' ? `<b>${pessoasTxt(r.mudou.length)}</b> passam de <b>${esc(title(l.nome))}</b> para <b>${esc(title(para))}</b>${destino ? ` (que já tem ${pessoasTxt(destino.ativos)})` : ' (líder novo)'}:` : `O líder de <b>${pessoasTxt(r.mudou.length)}</b> passa a ser escrito <b>${esc(para)}</b>${destino ? ` e se junta às ${pessoasTxt(destino.ativos)} que já estão com esse nome` : ''}:`}</p>
+      <div class="small" style="max-height:220px;overflow:auto;border:1px solid var(--line-2);border-radius:8px;padding:8px 10px">${nomes.map(esc).join('<br>')}</div>
+      <p class="m0 small muted">Muda nas fichas e, com isso, na Presença do dia (Agrupar por: Líder) e na sugestão de quem recolhe a assinatura.</p>`,
+    modo === 'trocar' ? `Trocar ${pessoasTxt(r.mudou.length)}` : 'Salvar o nome', async () => {
+      const antes = new Map(r.mudou.map(m => [String(m.mat), m.antes]));
+      const atual = trocarNasFichas(G().colabs, n => chaveLider(n) === l.chave, para); // conta de novo com a lista de agora
+      if (!atual.mudou.length) throw new Error('Ninguém mais está com esse líder.');
+      DB.gSalvarColabs(atual.itens);
+      DB.log(`Efetivo: ${modo === 'trocar' ? 'trocou o líder' : 'renomeou o líder'} ${title(l.nome)} → ${title(para)} (${pessoasTxt(atual.mudou.length)})`);
+      toast(`${pessoasTxt(atual.mudou.length)} com o líder ${title(para)}`, { desfazer: () => {
+        DB.gSalvarColabs(G().colabs.map(c => (antes.has(String(c.mat)) && nomeLider(c.lider) === nomeLider(para) ? { ...c, lider: antes.get(String(c.mat)) } : c)));
+        DB.log(`Efetivo: desfez a troca de líder ${title(l.nome)} → ${title(para)}`); toast('Troca desfeita'); render();
+      } });
+      render(); setTimeout(lideresSheet, 0);
+    }, { aoCancelar: () => setTimeout(lideresSheet, 0) });
   }
 
   /* ---------- exclusão ---------- */
@@ -545,6 +617,7 @@ export function criarGestao(X) {
       case 'verAss': verAssinatura(d.id); break;
       case 'imprimir': UI.view = 'gimpr'; U.impMat = d.mat; U.impDoc = indice().get(d.mat).pend.length ? 'via' : 'ficha'; render(); scrollTo(0, 0); break;
       case 'novoColab': colabForm(null); break;
+      case 'lideres': if (isAdmin()) lideresSheet(); break;
       case 'sel': { const m = d.mat; if (SEL.has(m)) SEL.delete(m); else SEL.add(m); render(); break; }
       case 'selTodos': { const fa = filtroArea(); const F = { ativos: x => x.ativo, exp: x => x.exp, integ: x => x.ativo && !x.intOk, pend: x => x.pend.length, desl: x => !x.ativo, todos: () => true }; const q = U.q.trim().toLowerCase();
         const l = [...indice().values()].filter(x => fa(x.c)).filter(F[U.filtro] || F.todos).filter(x => !q || (x.c.mat + ' ' + x.c.nome + ' ' + (x.c.funcao || '')).toLowerCase().includes(q)).sort((a, b) => a.c.nome.localeCompare(b.c.nome)).slice(0, 500);

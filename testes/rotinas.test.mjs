@@ -217,3 +217,42 @@ test('converter acessos: simular não grava; gravar faz a cópia e grava só ace
   const de_novo = rodar('converter-acessos.mjs', { CONVERTER_MODO: 'gravar', BACKUP_PASTA: 'copia-usuarios' });
   assert.match(de_novo, /0 a converter/);
 });
+
+// Nomes inventados. Caso: o líder "Bento Andrade" não existe; as pessoas dele são do líder Kauê.
+test('trocar líder: simular lista todos os líderes e não grava; gravar faz a cópia, troca fichas, folha atual e futura e ocorrências abertas', async () => {
+  const env = { HOJE: '2026-11-03', BACKUP_PASTA: 'copia-lider' };
+  await db.doc('gcolab/RECEBIMENTO').set({ itens: [
+    { mat: '901', nome: 'ANA TESTE UM', lider: 'BENTO ANDRADE' }, { mat: '902', nome: 'BIA TESTE DOIS', lider: 'Bento Andrade' },
+    { mat: '903', nome: 'CAIO TESTE TRES', lider: 'KAUE' }, { mat: '904', nome: 'DANI TESTE QUATRO', lider: 'BENTO ALVES' }] });
+  await db.doc('gcolab/GERAL').set({ itens: [{ mat: '905', nome: 'EVA TESTE CINCO', lider: '' }] });
+  const g = (nome, ...ps) => ({ nome, turno: false, pessoas: ps.map(n => ({ k: 'n:' + n, nome: n })) });
+  const grupos = [g('GESTÃO', 'ZECA'), g('LIDER BENTO ANDRADE - SUPERVISÃO KARLA', 'ANA TESTE UM', 'BIA TESTE DOIS'), g('LIDER KAUE SOUSA - SUPERVISÃO ANTONIO', 'CAIO TESTE TRES')];
+  for (const c of ['2026-10', '2026-11', '2026-12']) await db.doc(`freqcomp/patio|${c}`).set({ conj: 'patio', competencia: c, grupos, d: {} });
+  await db.doc('gocorr/ocAberta').set({ data: '2026-11-01', mat: '901', nome: 'ANA TESTE UM', tipo: 'Outro', lider: 'BENTO ANDRADE', recolhe: 'BENTO ANDRADE', status: 'pendente' });
+  await db.doc('gocorr/ocAssinada').set({ data: '2026-10-01', mat: '902', nome: 'BIA TESTE DOIS', tipo: 'Outro', lider: 'BENTO ANDRADE', recolhe: 'BENTO ANDRADE', status: 'assinada' });
+
+  const sim = rodar('trocar-lider.mjs', { ...env, LIDER_DE: 'bento andrade', LIDER_PARA: 'kaue' });
+  assert.match(sim, /simulação \(nada foi gravado\)/);
+  assert.match(sim, /⟵ BENTO ANDRADE \| 2 \| Pátio\/2026-11: 2, Pátio\/2026-12: 2 \| 1 \|/);
+  assert.match(sim, /⟶ KAUE \| 1 \|/); assert.match(sim, /BENTO ALVES \| 1 \|/);
+  assert.match(sim, /Fichas: 2 pessoa\(s\) passam para KAUE/);
+  assert.match(sim, /sem campo de líder/);
+  assert.equal((await db.doc('gcolab/RECEBIMENTO').get()).get('itens')[0].lider, 'BENTO ANDRADE', 'simular não grava');
+  // nome que casa com dois líderes diferentes: não grava
+  assert.throws(() => rodar('trocar-lider.mjs', { ...env, LIDER_DE: 'bento', LIDER_PARA: 'kaue', LIDER_MODO: 'gravar' }), /líderes diferentes/);
+
+  const gr = rodar('trocar-lider.mjs', { ...env, LIDER_DE: 'bento andrade', LIDER_PARA: 'kaue', LIDER_MODO: 'gravar' });
+  assert.match(gr, /Gravado: 2 ficha\(s\), 2 grupo\(s\) da folha movido\(s\), 1 ocorrência/);
+  assert.deepEqual((await db.doc('gcolab/RECEBIMENTO').get()).get('itens').map(c => c.lider), ['KAUE', 'KAUE', 'KAUE', 'BENTO ALVES']);
+  for (const c of ['2026-11', '2026-12']) {
+    const gs = (await db.doc(`freqcomp/patio|${c}`).get()).get('grupos');
+    assert.deepEqual(gs.map(x => [x.nome, x.pessoas.map(p => p.nome)]), [['GESTÃO', ['ZECA']], ['LIDER KAUE SOUSA - SUPERVISÃO ANTONIO', ['ANA TESTE UM', 'BIA TESTE DOIS', 'CAIO TESTE TRES']]], 'move para o grupo do líder novo e apaga o antigo');
+  }
+  assert.equal((await db.doc('freqcomp/patio|2026-10').get()).get('grupos').length, 3, 'competência passada fica como está');
+  const ab = (await db.doc('gocorr/ocAberta').get()).data(); assert.equal(ab.recolhe, 'KAUE'); assert.equal(ab.lider, 'KAUE');
+  assert.equal((await db.doc('gocorr/ocAssinada').get()).get('recolhe'), 'BENTO ANDRADE', 'ocorrência assinada fica como está');
+  const bk = (await db.collection('backups').get()).docs.find(d => d.id.startsWith('antes-trocar-lider-'));
+  assert.ok(bk && JSON.parse(bk.get('json'))['gcolab/RECEBIMENTO'], 'cópia dos documentos no banco');
+  assert.ok(fs.readdirSync(path.join(tmp, 'copia-lider')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
+  assert.match(rodar('trocar-lider.mjs', { ...env, LIDER_DE: 'bento andrade', LIDER_PARA: 'kaue', LIDER_MODO: 'gravar' }), /Nada a mudar/, 'rodar de novo não muda nada');
+});

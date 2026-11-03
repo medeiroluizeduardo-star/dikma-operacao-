@@ -229,15 +229,25 @@ export function criarBusca(lista, nomeDe = x => x.nome) {
 // 1) procura no cadastro do RH (pessoas) uma única pessoa cujo nome começa com as palavras do líder, aceitando
 //    uma letra trocada em cada palavra (KAUN ≈ KAUAN, SUZA ≈ SOUZA) → o líder vira "PRIMEIRO SEGUNDO" nome dela;
 // 2) sem isso, dentro da própria lista: um nome que é o começo de um único outro (KAUAN → KAUAN SOUZA).
+// Cuidados (para um líder nunca virar outra pessoa):
+// - a letra trocada só vale no PRIMEIRO nome quando ninguém no RH tem aquele primeiro nome exato
+//   (TALSON vira TALISON se ninguém se chama TALSON, mas OTAVIA LIMA não vira OTAVIO LIMA se existe alguém chamado OTAVIA);
+// - mais de uma pessoa possível = ambíguo: fica como está escrito (FULANO não vira FULANO DE TAL nem FULANO SILVA),
+//   a não ser que só um dos candidatos já seja líder na própria lista;
+// - a função no RH NÃO decide: o líder de fato pode estar cadastrado como ajudante e outro como "líder de turma".
 const palavraParecida = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && distancia(a, b) <= 1);
 export function canonLideres(nomes, pessoas = []) {
   const P = [...new Set((pessoas || []).map(x => normNome(typeof x === 'string' ? x : x.nome)).filter(Boolean))].map(n => n.split(' '));
   const lista = [...new Set((nomes || []).map(n => normNome(n)).filter(Boolean))];
+  const primeiros = new Set(P.map(p => p[0]));
+  // primeiro nome com letra trocada só quando não existe ninguém com esse primeiro nome escrito assim
+  const parecida = (w0, igual) => (x, y, i) => (i === 0 && primeiros.has(w0) ? x === y : igual(x, y));
   // primeiro com as palavras iguais; só se ninguém bater, aceita uma letra trocada. Mais de uma pessoa = ambíguo (não troca).
   const doRH = n => {
     const w = n.split(' '); if (!w.length || w[0].length < 3) return null;
     for (const igual of [(a, b) => a === b, palavraParecida]) {
-      const ach = [...new Set(P.filter(p => p.length >= w.length && w.every((x, i) => igual(x, p[i]))).map(p => p.slice(0, Math.max(2, w.length)).join(' ')))];
+      const ig = parecida(w[0], igual);
+      const ach = [...new Set(P.filter(p => p.length >= w.length && w.every((x, i) => ig(x, p[i], i))).map(p => p.slice(0, Math.max(2, w.length)).join(' ')))];
       if (ach.length === 1) return ach[0];
       if (ach.length > 1) return ach; // ambíguo: decide depois, se só um dos candidatos é líder nesta lista
     }
@@ -252,7 +262,7 @@ export function canonLideres(nomes, pessoas = []) {
     let c = mapa.get(n); if (c !== n) continue;
     const maiores = canon.filter(m => m !== c && m.startsWith(c + ' '));
     if (maiores.length === 1) c = maiores[0]; // vale também quando o RH tem mais de um com esse nome: entre os líderes da lista só há um
-    else if (!maiores.length && !ambiguo.has(n)) { const w = c.split(' '); const perto = canon.filter(m => m !== c && m.length > c.length && m.split(' ').length >= w.length && w.every((x, i) => palavraParecida(x, m.split(' ')[i]))); if (perto.length === 1) c = perto[0]; }
+    else if (!maiores.length && !ambiguo.has(n)) { const w = c.split(' '); const ig = parecida(w[0], palavraParecida); const perto = canon.filter(m => m !== c && m.length > c.length && m.split(' ').length >= w.length && w.every((x, i) => ig(x, m.split(' ')[i], i))); if (perto.length === 1) c = perto[0]; }
     mapa.set(n, c);
   }
   const f = n => { const k = normNome(n); if (mapa.has(k)) return mapa.get(k); const r = doRH(k); return typeof r === 'string' ? r : k; };
