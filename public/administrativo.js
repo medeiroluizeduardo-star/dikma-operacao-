@@ -387,10 +387,12 @@ export function criarAdministrativo(X) {
   // soArea: só quem está nas áreas do conjunto (ligado às Atividades do Pátio de Carvão ou da Bateria) — usado nos resumos.
   function levantar(conj, datas, soArea = false) {
     const cmap = colabPorId(conj); const pessoas = new Map(); let carregando = false;
+    const naFolha = new Set(); // todos da folha deste conjunto (matrícula e nome), para filtrar as férias pelo conjunto
     for (const dt of datas) {
       const comp = competenciaDe(dt); const doc = compDoc(conj, comp);
       if (doc === undefined) { carregando = true; continue; } if (!doc) continue;
       for (const g of doc.grupos || []) for (const p of g.pessoas || []) {
+        if (p.mat) naFolha.add('m' + p.mat); naFolha.add('n' + normNome(p.nome));
         if (soArea && !(p.ativ && cmap.get(p.ativ))) continue;
         const key = p.mat ? 'm' + p.mat : 'n' + normNome(p.nome);
         let x = pessoas.get(key); if (!x) { x = { nome: p.nome, grupo: g.nome, c: {} }; pessoas.set(key, x); }
@@ -398,8 +400,10 @@ export function criarAdministrativo(X) {
         const ju = jusDe(conj, doc, p, dt); if (ju) (x.j ||= {})[dt] = ju;
       }
     }
-    return { carregando, pessoas: [...pessoas.values()] };
+    return { carregando, pessoas: [...pessoas.values()], naFolha };
   }
+  // Férias só de quem está na folha do conjunto escolhido (Pátio ou Bateria).
+  const feriasDoConj = (lista, lev) => (lista || []).filter(f => (f.mat && lev.naFolha.has('m' + f.mat)) || lev.naFolha.has('n' + normNome(f.nome)));
   // Fora da conta de presença: desligado, folga (da escala ou lançada) e férias — férias e folga não são ausência.
   const NAOCONTA = c => !c || !c.v || c.v === 'DS' || c.v === 'F' || c.v === 'FE' || (c.auto && c.por === 'escala');
   function indicadores(lev, datas) {
@@ -418,14 +422,14 @@ export function criarAdministrativo(X) {
     return { t, dia, ate, grupos: [...grupos.values()], pres: Q ? P / Q : 0, P, Q };
   }
   const pc = v => `${Math.round(v * 1000) / 10}`.replace('.', ',') + '%';
-  const feriasProximas = () => { const l = A().ferias || []; const em30 = add(TODAY, 30), em7 = add(TODAY, 7);
+  const feriasProximas = lev => { const l = lev ? feriasDoConj(A().ferias, lev) : (A().ferias || []); const em30 = add(TODAY, 30), em7 = add(TODAY, 7);
     return { agora: l.filter(f => f.inicio && f.inicio <= TODAY && (f.termino || f.inicio) >= TODAY), saem: l.filter(f => f.inicio > TODAY && f.inicio <= em30).sort((a, b) => (a.inicio < b.inicio ? -1 : 1)), voltam: l.filter(f => f.retorno && f.retorno > TODAY && f.retorno <= em7) }; };
   function vPainelFreq() {
     const conj = U.conj, comp = U.comp, datas = diasDaCompetencia(comp);
     const lev = levantar(conj, datas);
     if (lev.carregando && !lev.pessoas.length) return '<div class="card skel"><i></i><i></i><i></i></div>';
     if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em RH › Frequência.</div></div>`;
-    const k = indicadores(lev, datas); const fe = feriasProximas();
+    const k = indicadores(lev, datas); const fe = feriasProximas(lev);
     const hojeI = k.ate.indexOf(TODAY); const hj = hojeI >= 0 ? k.dia[hojeI] : null;
     const kp = (l, v, sub, cor) => `<div class="kpi"><span class="lbl">${cor ? `<i class="dot" style="background:${cor}"></i>` : ''}${l}</span><span class="v num">${v}</span><span class="s">${sub}</span></div>`;
     let h = `<div class="kpis k8">
@@ -446,7 +450,7 @@ export function criarAdministrativo(X) {
     const peso = x => x.t.FT * 3 + x.t.ATR * 2 + x.t.SA * 2 + x.t.SP * 3 + x.t.AT; // falta e suspensão pesam mais; atraso repetido aparece
     const oc = lev.pessoas.filter(x => x.t.FT + x.t.ATR + x.t.SA + x.t.AT + x.t.SP > 0).sort((a, b) => peso(b) - peso(a) || a.nome.localeCompare(b.nome)).slice(0, 12);
     h += `<div class="grid2"><div class="card"><header><h2>Quem mais falta e atrasa</h2><p>Faltas, atrasos, atestados e suspensões no período · os que repetem aparecem primeiro</p></header><div class="tw"><table><thead><tr><th>Colaborador</th><th>Grupo</th><th class="r">Faltas</th><th class="r">Atrasos</th><th class="r">Saídas antecip.</th><th class="r">Atestados</th><th class="r">Suspensões</th><th class="r">Sem justificativa</th></tr></thead><tbody>${oc.map(x => `<tr><td><b>${esc(title(x.nome))}</b></td><td class="muted">${esc(title(x.grupo))}</td><td class="r num">${x.t.FT || ''}</td><td class="r num">${x.t.ATR ? `<b${x.t.ATR >= 3 ? ' style="color:var(--st-nreal)"' : ''}>${x.t.ATR}</b>` : ''}</td><td class="r num">${x.t.SA || ''}</td><td class="r num">${x.t.AT || ''}</td><td class="r num">${x.t.SP || ''}</td><td class="r num">${x.t.semJ ? `<span class="pill warn">${x.t.semJ}</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="empty">Nenhuma ocorrência no período.</td></tr>'}</tbody></table></div></div>
-      <div class="card"><header><h2>Férias</h2><p>Hoje e nos próximos dias · todos os conjuntos</p></header><div class="tw"><table><tbody>
+      <div class="card"><header><h2>Férias</h2><p>Hoje e nos próximos dias · ${SETS[conj].curto}</p></header><div class="tw"><table><tbody>
         ${fe.saem.slice(0, 8).map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>sai ${dBR(f.inicio)}</td><td class="r num">${f.dias || ''} dias</td></tr>`).join('')}
         ${fe.voltam.map(f => `<tr><td><b>${esc(title(f.nome))}</b><div class="muted small">${esc(f.setor || '')}</div></td><td>volta ${dBR(f.retorno)}</td><td></td></tr>`).join('')}
         ${!fe.saem.length && !fe.voltam.length ? `<tr><td class="empty">${fe.agora.length} em férias hoje · ninguém sai nos próximos 30 dias.</td></tr>` : ''}
@@ -457,7 +461,7 @@ export function criarAdministrativo(X) {
   function resumoSemana(ini, conj) {
     const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = levantar(conj, datas, true);
     if (lev.carregando && !lev.pessoas.length) return null;
-    const k = indicadores(lev, datas); const fe = A().ferias || [];
+    const k = indicadores(lev, datas); const fe = feriasDoConj(A().ferias, lev);
     const DL7 = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
     const oc = lev.pessoas.map(x => ({ x, l: datas.filter(dt => dt <= TODAY && x.c[dt] && ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(x.c[dt].v)).map(dt => `${DL7[datas.indexOf(dt)]} ${NOMES_CODIGO[x.c[dt].v].toLowerCase()}`) })).filter(o => o.l.length).sort((a, b) => b.l.length - a.l.length);
     const sai = fe.filter(f => f.inicio >= ini && f.inicio <= datas[6]), volta = fe.filter(f => f.retorno >= ini && f.retorno <= datas[6]);
@@ -473,7 +477,7 @@ export function criarAdministrativo(X) {
   // Resumo de um dia: presença por grupo, quem faltou ou está fora e quem fez hora extra.
   function resumoDia(dt, conj) {
     const lev = levantar(conj, [dt], true); if (lev.carregando && !lev.pessoas.length) return null;
-    const k = indicadores(lev, [dt]); const fe = A().ferias || [];
+    const k = indicadores(lev, [dt]); const fe = feriasDoConj(A().ferias, lev);
     const cod = x => x.c[dt] && x.c[dt].v;
     const oc = lev.pessoas.filter(x => ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(cod(x))).sort((a, b) => cod(a).localeCompare(cod(b)) || a.nome.localeCompare(b.nome));
     const he = lev.pessoas.filter(x => cod(x) === 'HE').sort((a, b) => a.nome.localeCompare(b.nome));
