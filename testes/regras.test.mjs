@@ -665,9 +665,10 @@ test('Segurança: o supervisor da área lê e trata as anomalias da área dele; 
   await assertSucceeds(updateDoc(doc(db('supPatio'), 'seganom', 'a1'), acomp('supPatio', 'aberta')), 'assume (define o responsável) sem mudar a situação');
   await assertFails(updateDoc(doc(db('supPatio'), 'seganom', 'a2'), acomp('supPatio', 'tratamento')), 'não trata a de outra área');
   await assertFails(updateDoc(doc(db('supPatio'), 'seganom', 'a1'), { desc: 'mudou' }), 'não muda o que foi registrado');
-  const b = writeBatch(db('supBat'));
-  b.set(doc(db('supBat'), 'segfotos', 'fd1'), { reg: 'a2', col: 'seganom', tipo: 'depois', autor: 'segReg2', por: 'supBat', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
-  b.update(doc(db('supBat'), 'seganom', 'a2'), acomp('supBat', 'concluida', { fotoDepois: 'fd1', miniDepois: 'm' }));
+  const dbB = db('supBat'); // a mesma instância para o lote e as referências
+  const b = writeBatch(dbB);
+  b.set(doc(dbB, 'segfotos', 'fd1'), { reg: 'a2', col: 'seganom', tipo: 'depois', autor: 'segReg2', por: 'supBat', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
+  b.update(doc(dbB, 'seganom', 'a2'), acomp('supBat', 'concluida', { fotoDepois: 'fd1', miniDepois: 'm' }));
   await assertSucceeds(b.commit());
 });
 test('Segurança: acompanhamento só por quem trata, só nos campos do tratamento e concluir pede a foto do depois', async () => {
