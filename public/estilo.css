@@ -1749,3 +1749,4 @@ label.btn.dis{opacity:.45;pointer-events:none}
 @media (max-width:860px){.sgsvg .sgsv-n,.sgsvg .sgsv-x{font-size:20px}}
 .sgsheet textarea.in{font:inherit;font-size:15px;line-height:1.4}
 @media (min-width:700px){.sgsheet .sgdet{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}}
+@media (max-width:860px){.sgsit{flex-wrap:wrap;width:100%}.sgsit button{flex:1 1 auto;justify-content:center;padding:7px 8px}}
