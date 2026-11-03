@@ -29,7 +29,7 @@ export const modulosDe = u => {
 export const MODULOS_ACESSO = [
   { k: 'operacao', nome: 'Operação', sub: 'Apontar, Aprovação, Pendências, Equipamentos e Efetivo', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'leitor'] },
   { k: 'gestao', nome: 'Gestão', sub: 'Programação, Fichas, Dimensionamento, Indicadores e Resumos', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'administrativo', 'leitor'] },
-  { k: 'seguranca', nome: 'Segurança', sub: 'Registros de interação e de anomalia (em construção)', perfis: ['registra', 'trata', 'gestor', 'leitor'] },
+  { k: 'seguranca', nome: 'Segurança', sub: 'Registros de interação e de anomalia, fila de anomalias e painel', perfis: ['registra', 'trata', 'gestor', 'leitor'] },
   { k: 'rh', nome: 'RH', sub: 'Frequência, Férias e Importar planilhas', perfis: ['administrativo', 'leitor'] },
   { k: 'administracao', nome: 'Administração', sub: 'Configurações, Usuários e Perfis', perfis: ['admin', 'modulo'] }
 ];

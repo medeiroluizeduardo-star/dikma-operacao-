@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -50,6 +50,15 @@ const USUARIOS = {
   eqGeLeitor: { papel: 'leitor', modulos: ['equipamentos'], acesso: { gestao: 'leitor' }, escopos: ['equipamentos'] },
   eqGeSup: { papel: 'supervisor', modulos: ['equipamentos'], acesso: { gestao: 'supervisor' }, escopos: ['equipamentos'] },
   eqOpLider: { papel: 'lider', modulos: ['equipamentos'], acesso: { operacao: 'lider' }, escopos: ['equipamentos'] },
+  // Fase 3 (Segurança): perfis da Segurança e supervisores de área (Operação · Supervisor) sem perfil na Segurança.
+  segReg2: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] },
+  segTrata: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'trata' }, escopos: [] },
+  segGestor: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'gestor' }, escopos: [] },
+  segLeitor: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'leitor' }, escopos: [] },
+  supPatio: { papel: 'supervisor', area: 'PREPARAÇÃO', area2: null, modulos: ['operacao', 'gestao'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio'] },
+  supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
+  supSemArea: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['operacao'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
+  admModSeg: { papel: 'gestor', modulos: ['seguranca'], acesso: { seguranca: 'gestor', administracao: 'modulo' }, escopos: [] },
   bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] }
 };
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
@@ -92,6 +101,7 @@ before(async () => {
     await setDoc(doc(d, 'integracao', 'senior'), { registros: [] });
     await setDoc(doc(d, 'avisos', 'liderRec'), { tokens: [] });
     await setDoc(doc(d, 'historico', 'h1'), { t: 'x' });
+    await semearSeguranca(d);
   });
 });
 after(async () => { if (env) await env.cleanup(); });
@@ -566,4 +576,122 @@ test('bloqueado com acesso por módulo guardado: não lê nem grava nada', async
   for (const [c, id] of [['semanas', SEM], ['config', 'sistema'], ['eq', 'cadastro'], ['gcolab', 'RECEBIMENTO'], ['freqcomp', 'patio|2026-10'], ['usuarios', 'liderRec']]) await assertFails(getDoc(doc(db('bloqNovo'), c, id)));
   await assertFails(setDoc(doc(db('bloqNovo'), 'plano', 'RECEBIMENTO'), { itens: [] }));
   await assertFails(setDoc(doc(db('bloqNovo'), 'usuarios', 'novo4'), { papel: 'admin', nome: 'x', login: 'x' }));
+});
+
+// ---------------- Segurança (fase 3): interações, anomalias e fotos ----------------
+// Registros de exemplo (gravados sem regras): i = interação, a = anomalia. segReg é o autor do Pátio; segReg2, da Bateria.
+const SEG_BASE = { data: '2026-11-02', mes: '2026-11', local: 'CORREIA C1', mat: '123', fotos: [], minis: [], porNome: 'X' };
+const INTER_X = { tipoAtiv: 'ROTINA', risco: '', desvios: ['EPI'], desvioOutro: '', desc: 'd', acao: 'a', resp: 'Fulano' };
+const ANOM_X = { hora: '08:30', regime: 'ADM', desc: 'd', conseq: 'c', acao: 'a', causas: 'c', sugest: 's', comunic: 'Fulano', status: 'aberta' };
+const PAT = { area: 'PÁTIO DE CARVÃO', conj: 'patio' }, BAT = { area: 'BATERIA', conj: 'bateria' };
+async function semearSeguranca(d) {
+  const agora = Timestamp.now(), velho = Timestamp.fromMillis(Date.now() - 2 * 864e5);
+  await setDoc(doc(d, 'seginter', 'i1'), { ...SEG_BASE, ...INTER_X, ...PAT, por: 'segReg', em: agora });
+  await setDoc(doc(d, 'seginter', 'i2'), { ...SEG_BASE, ...INTER_X, ...BAT, por: 'segReg2', em: agora });
+  await setDoc(doc(d, 'seginter', 'i3'), { ...SEG_BASE, ...INTER_X, ...PAT, por: 'segReg', em: velho });
+  await setDoc(doc(d, 'seganom', 'a1'), { ...SEG_BASE, ...ANOM_X, ...PAT, por: 'segReg', em: agora });
+  await setDoc(doc(d, 'seganom', 'a2'), { ...SEG_BASE, ...ANOM_X, ...BAT, por: 'segReg2', em: agora });
+  await setDoc(doc(d, 'seganom', 'a3'), { ...SEG_BASE, ...ANOM_X, ...PAT, por: 'segReg', em: velho });
+  await setDoc(doc(d, 'seganom', 'a4'), { ...SEG_BASE, ...ANOM_X, ...PAT, por: 'segReg', em: agora, status: 'tratamento', trat: { resp: 'Fulano', respUid: '', prazo: '2026-11-10', coment: '', fotoDepois: '', miniDepois: '', hist: [] }, conclEm: '' });
+  await setDoc(doc(d, 'segfotos', 'f1'), { reg: 'a1', col: 'seganom', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
+  await setDoc(doc(d, 'segfotos', 'f2'), { reg: 'a2', col: 'seganom', tipo: 'antes', autor: 'segReg2', por: 'segReg2', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
+}
+const novaInter = (por, extra = {}) => ({ ...SEG_BASE, ...INTER_X, ...PAT, por, em: serverTimestamp(), ...extra });
+const novaAnom = (por, extra = {}) => ({ ...SEG_BASE, ...ANOM_X, ...PAT, por, em: serverTimestamp(), ...extra });
+const acomp = (uid, status, t = {}) => ({ status, trat: { resp: 'Fulano', respUid: uid, prazo: '2026-11-10', coment: 'em andamento', fotoDepois: '', miniDepois: '', hist: [{ em: '2026-11-03T10:00:00.000Z', por: uid, nome: 'X', t: 'Situação' }], ...t }, conclEm: status === 'concluida' ? '2026-11-03T10:00:00.000Z' : '', atualizadoEm: serverTimestamp(), atualizadoPor: uid });
+const qSeg = (uid, col, ...f) => getDocs(query(collection(db(uid), col), where('mes', '==', '2026-11'), ...f));
+
+test('Segurança: só registra quem tem registra, trata ou gestor, em nome próprio e com as perguntas obrigatórias', async () => {
+  await assertSucceeds(setDoc(doc(db('segReg'), 'seginter', 'n1'), novaInter('segReg')));
+  await assertSucceeds(setDoc(doc(db('segTrata'), 'seganom', 'n2'), novaAnom('segTrata')));
+  await assertSucceeds(setDoc(doc(db('segGestor'), 'seginter', 'n3'), novaInter('segGestor', BAT)));
+  await assertSucceeds(setDoc(doc(db('admin'), 'seganom', 'n4'), novaAnom('admin')));
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n5'), novaInter('segReg2')), 'não registra em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('segLeitor'), 'seginter', 'n6'), novaInter('segLeitor')), 'somente leitura não registra');
+  await assertFails(setDoc(doc(db('supPatio'), 'seganom', 'n7'), novaAnom('supPatio')), 'supervisor da área sem perfil na Segurança não registra');
+  await assertFails(setDoc(doc(db('liderRec'), 'seginter', 'n8'), novaInter('liderRec')), 'sem a Segurança');
+  await assertFails(setDoc(doc(db('bloqNovo'), 'seginter', 'n9'), novaInter('bloqNovo')));
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n10'), novaInter('segReg', { resp: '' })), 'RESPONSÁVEL é obrigatório');
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n11'), novaInter('segReg', { mat: '' })), 'MATRÍCULA é obrigatória');
+  await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n12'), novaAnom('segReg', { causas: '' })), 'POSSÍVEIS CAUSAS é obrigatória');
+  await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n13'), novaAnom('segReg', { hora: '' })), 'HORA é obrigatória');
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n14'), novaInter('segReg', { desc: 'x'.repeat(3001) })), 'texto longo demais');
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n15'), novaInter('segReg', { mes: '2026-10' })), 'mês diferente da data');
+  await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n16'), novaAnom('segReg', { status: 'concluida' })), 'anomalia nasce aberta');
+  await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n17'), novaAnom('segReg', { trat: { resp: 'eu' } })), 'quem registra não define o tratamento');
+  await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n18'), novaInter('segReg', { extra: 1 })), 'só os campos do formulário');
+});
+test('Segurança: registro com fotos num lote só; a foto segue o registro e tem limite de tamanho', async () => {
+  const d = db('segReg'); const b = writeBatch(d);
+  b.set(doc(d, 'seganom', 'nf1'), novaAnom('segReg', { fotos: ['ff1'], minis: ['m'] }));
+  b.set(doc(d, 'segfotos', 'ff1'), { reg: 'nf1', col: 'seganom', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0, em: serverTimestamp() });
+  await assertSucceeds(b.commit());
+  const foto = (reg, extra = {}) => ({ reg, col: 'seganom', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-11', mini: 'm', dados: 'd', ordem: 1, ...extra });
+  await assertSucceeds(setDoc(doc(d, 'segfotos', 'ff2'), foto('a1')));
+  await assertFails(setDoc(doc(d, 'segfotos', 'ff3'), foto('a2', { conj: 'bateria' })), 'não põe foto no registro de outra pessoa');
+  await assertFails(setDoc(doc(d, 'segfotos', 'ff4'), foto('a1', { dados: 'x'.repeat(700001) })), 'foto grande demais');
+  await assertFails(setDoc(doc(d, 'segfotos', 'ff5'), foto('a1', { conj: 'bateria' })), 'conjunto diferente do registro');
+  await assertFails(setDoc(doc(db('segLeitor'), 'segfotos', 'ff6'), foto('a1', { autor: 'segLeitor', por: 'segLeitor' })));
+  await assertFails(updateDoc(doc(d, 'segfotos', 'ff2'), { dados: 'y' }), 'foto não muda');
+  await assertFails(deleteDoc(doc(d, 'segfotos', 'ff2')), 'só o administrador apaga');
+});
+test('Segurança: quem só registra lê só os próprios registros e fotos; trata, gestor e leitura leem tudo', async () => {
+  await assertSucceeds(getDoc(doc(db('segReg'), 'seginter', 'i1')));
+  await assertFails(getDoc(doc(db('segReg'), 'seginter', 'i2')), 'registro de outra pessoa');
+  await assertSucceeds(getDoc(doc(db('segReg'), 'seganom', 'a1')));
+  await assertFails(getDoc(doc(db('segReg'), 'seganom', 'a2')));
+  await assertSucceeds(qSeg('segReg', 'seganom', where('por', '==', 'segReg')));
+  await assertSucceeds(getDocs(query(collection(db('segReg'), 'seganom'), where('status', '==', 'aberta'), where('por', '==', 'segReg'))));
+  await assertFails(qSeg('segReg', 'seganom'), 'sem o filtro dos próprios, a lista é negada');
+  await assertSucceeds(getDoc(doc(db('segReg'), 'segfotos', 'f1')));
+  await assertFails(getDoc(doc(db('segReg'), 'segfotos', 'f2')));
+  for (const u of ['segTrata', 'segGestor', 'segLeitor', 'admin']) {
+    await assertSucceeds(qSeg(u, 'seginter'), u); await assertSucceeds(qSeg(u, 'seganom'), u);
+    await assertSucceeds(getDoc(doc(db(u), 'segfotos', 'f2')), u);
+  }
+  for (const u of ['liderRec', 'coord', 'gestorP', 'admv', 'bloqNovo', 'rhSo']) await assertFails(getDoc(doc(db(u), 'seganom', 'a1')), u);
+});
+test('Segurança: o supervisor da área lê e trata as anomalias da área dele; as de outra área, não', async () => {
+  await assertSucceeds(getDoc(doc(db('supPatio'), 'seganom', 'a1')));
+  await assertSucceeds(getDoc(doc(db('supPatio'), 'seginter', 'i1')));
+  await assertSucceeds(getDoc(doc(db('supPatio'), 'segfotos', 'f1')));
+  await assertFails(getDoc(doc(db('supPatio'), 'seganom', 'a2')), 'Bateria não é a área dele');
+  await assertSucceeds(qSeg('supPatio', 'seganom', where('conj', '==', 'patio')));
+  await assertFails(qSeg('supPatio', 'seganom', where('conj', '==', 'bateria')));
+  await assertSucceeds(getDoc(doc(db('supBat'), 'seganom', 'a2')));
+  await assertFails(getDoc(doc(db('supBat'), 'seganom', 'a1')));
+  await assertFails(getDoc(doc(db('supSemArea'), 'seganom', 'a1')), 'escopo Pátio, mas a área dele é da Bateria');
+  await assertSucceeds(getDoc(doc(db('sup'), 'seganom', 'a2')), 'cadastro antigo: supervisor da Bateria 1 também');
+  await assertSucceeds(updateDoc(doc(db('supPatio'), 'seganom', 'a1'), acomp('supPatio', 'aberta')), 'assume (define o responsável) sem mudar a situação');
+  await assertFails(updateDoc(doc(db('supPatio'), 'seganom', 'a2'), acomp('supPatio', 'tratamento')), 'não trata a de outra área');
+  await assertFails(updateDoc(doc(db('supPatio'), 'seganom', 'a1'), { desc: 'mudou' }), 'não muda o que foi registrado');
+  const b = writeBatch(db('supBat'));
+  b.set(doc(db('supBat'), 'segfotos', 'fd1'), { reg: 'a2', col: 'seganom', tipo: 'depois', autor: 'segReg2', por: 'supBat', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
+  b.update(doc(db('supBat'), 'seganom', 'a2'), acomp('supBat', 'concluida', { fotoDepois: 'fd1', miniDepois: 'm' }));
+  await assertSucceeds(b.commit());
+});
+test('Segurança: acompanhamento só por quem trata, só nos campos do tratamento e concluir pede a foto do depois', async () => {
+  await assertSucceeds(updateDoc(doc(db('segTrata'), 'seganom', 'a4'), acomp('segTrata', 'tratamento')));
+  await assertFails(updateDoc(doc(db('segTrata'), 'seganom', 'a4'), acomp('segTrata', 'concluida')), 'sem a foto do depois');
+  await assertSucceeds(updateDoc(doc(db('segGestor'), 'seganom', 'a4'), acomp('segGestor', 'concluida', { fotoDepois: 'fx', miniDepois: 'm' })));
+  await assertFails(updateDoc(doc(db('segTrata'), 'seganom', 'a4'), { ...acomp('segTrata', 'tratamento'), local: 'OUTRO' }), 'não muda o registro');
+  await assertFails(updateDoc(doc(db('segTrata'), 'seganom', 'a4'), acomp('segTrata', 'perdida')), 'situação inválida');
+  for (const u of ['segReg', 'segLeitor', 'liderRec']) await assertFails(updateDoc(doc(db(u), 'seganom', 'a1'), acomp(u, 'tratamento')), u);
+  await assertFails(deleteDoc(doc(db('segTrata'), 'seganom', 'a1')), 'só o administrador apaga');
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'seginter', 'i3')));
+});
+test('Segurança: o autor corrige o próprio registro por 24 h e a anomalia só enquanto está aberta', async () => {
+  await assertSucceeds(updateDoc(doc(db('segReg'), 'seganom', 'a1'), { desc: 'corrigida', atualizadoEm: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db('segReg'), 'seginter', 'i1'), { resp: 'Outro Nome', atualizadoEm: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a3'), { desc: 'tarde demais' }), 'passou de 24 horas');
+  await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a4'), { desc: 'já está em tratamento' }));
+  await assertFails(updateDoc(doc(db('segReg2'), 'seganom', 'a1'), { desc: 'não é meu' }));
+  await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a1'), { por: 'segReg2' }), 'autor não muda');
+  await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a1'), { status: 'concluida' }), 'quem registra não trata');
+});
+test('Segurança: listas dos formulários — todos os ativos leem; administrador e o gestor da Segurança (Dos módulos) alteram', async () => {
+  for (const u of ['segReg', 'supPatio', 'liderRec']) await assertSucceeds(getDoc(doc(db(u), 'config', 'seguranca')), u);
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'seguranca'), { tipos: ['ROTINA'] }));
+  await assertSucceeds(setDoc(doc(db('admModSeg'), 'config', 'seguranca'), { tipos: ['ROTINA', 'PARADA'] }));
+  for (const u of ['segGestor', 'segTrata', 'admModulo']) await assertFails(setDoc(doc(db(u), 'config', 'seguranca'), { tipos: [] }), u);
 });

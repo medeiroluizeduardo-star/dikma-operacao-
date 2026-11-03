@@ -5,11 +5,13 @@ import { editaAdm } from './acessos.js';
 import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './nucleo/estado.js';
 import { aprovador, acompanha } from './calc/atividades.js';
 import { trocarTela } from './ui/shell.js';
+import { supConjs } from './segcalc.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
 // mod: all (Meu dia, em todos menos a Administração) · operacao · gestao · seguranca · rh · administracao
 // req(): condição pelo usuário logado · reqU(u): condição pelo usuário · ord: ordem na Administração.
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
+// sup: aba da Segurança que o supervisor da área vê mesmo sem perfil na Segurança (ele trata as anomalias da área).
 // As telas de Equipamentos, fichas e Frequência ficam em equip.js, gestao.js e administrativo.js, carregados quando precisa.
 // Pátio e Bateria: o seletor no topo da Operação e da Gestão troca o conjunto (UI.esSet) e mantém a aba.
 const opSets = () => setsDe(ME, 'operacao').length > 0;
@@ -18,7 +20,7 @@ const opEq = () => temEquipEm(ME, 'operacao');
 const geEq = () => temEquipEm(ME, 'gestao');
 const temRH = () => !!perfil('rh');
 export const VIEWS = [
-  { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all' },
+  { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all', sup: true },
   // ---- Operação: o dia a dia no campo ----
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets },
   { id: 'aprovar', nome: 'Aprovação', ic: 'aprov', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao') },
@@ -45,8 +47,10 @@ export const VIEWS = [
   { id: 'gpainel', nome: 'Fichas', ic: 'users', grp: 'Indicadores', mod: 'gestao', req: () => temFichas(ME) },
   { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Para imprimir', mod: 'gestao', req: () => geSets() || geEq() },
   { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Para imprimir', mod: 'gestao', req: geSets },
-  // ---- Segurança (fase 3) ----
-  { id: 'sgobra', nome: 'Segurança', ic: 'escudo', grp: 'Segurança', mod: 'seguranca' },
+  // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
+  { id: 'sginter', nome: 'Interações', ic: 'plano', grp: 'Registros', mod: 'seguranca', sup: true },
+  { id: 'sganom', nome: 'Anomalias', ic: 'pend', grp: 'Registros', mod: 'seguranca', sup: true },
+  { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'painel', grp: 'Indicadores', mod: 'seguranca', sup: true },
   // ---- RH: frequência e férias (administrativo.js) ----
   { id: 'afreq', nome: 'Frequência', ic: 'prog', grp: 'Frequência e férias', mod: 'rh', req: temRH },
   { id: 'aferias', nome: 'Férias', ic: 'sol', grp: 'Frequência e férias', mod: 'rh', req: temRH },
@@ -63,6 +67,7 @@ export const VIEWS = [
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Atividades', mod: 'administracao', ord: 5, req: () => admDe('ativ') },
   { id: 'econfig', nome: 'Equipamentos', ic: 'config', grp: 'Equipamentos', mod: 'administracao', ord: 6, req: () => admDe('equip') },
   { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'config', grp: 'Fichas', mod: 'administracao', ord: 7, req: () => admDe('fichas') },
+  { id: 'sgconfig', nome: 'Segurança', ic: 'escudo', grp: 'Segurança', mod: 'administracao', ord: 8.5, req: () => admDe('seg') },
   { id: 'gimport', nome: 'Importar dados das fichas', ic: 'dl', grp: 'Fichas', mod: 'administracao', ord: 8, req: () => isAdmin() },
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Acesso', mod: 'administracao', ord: 9, req: () => isAdmin() },
   { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Acesso', mod: 'administracao', ord: 10, req: () => isAdmin() }
@@ -85,14 +90,20 @@ export const SUB_A = {
   aferias: 'Planejamento, quem está de férias e data limite',
   aimport: 'Planilhas de frequência e de férias'
 };
+export const SUB_S = {
+  sginter: 'Registros de interação: riscos e desvios vistos em campo',
+  sganom: 'Fila das anomalias: situação, responsável e prazo',
+  sgpainel: 'Interações, desvios e anomalias do mês',
+  sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
+};
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', sgobra: 'Em construção', fresumo: 'Resumo', fpainel: 'Indicadores' };
+const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores' };
 export const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
   operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos e Efetivo', key: 'operacao', inicio: 'apontar' },
   gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Fichas, Indicadores e Resumos', key: 'gestao', inicio: 'prog' },
-  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interação e anomalias (em construção)', key: 'seguranca', inicio: 'sgobra' },
+  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias e indicadores', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Frequência, férias e planilhas', key: 'rh', inicio: 'afreq' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
@@ -103,13 +114,15 @@ export const subMod = m => MODS[m].sub;
 // Abas do módulo aberto que esta pessoa vê (Meu dia vale em todos, menos na Administração).
 export const viewsDoModulo = () => {
   const m = UI.modulo;
-  const l = VIEWS.filter(v => (v.mod === m || (v.mod === 'all' && m !== 'administracao')) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && podeVer(ME, v, permCfg(), m));
+  // Supervisor da área sem perfil na Segurança: vê as abas marcadas com sup (as anomalias e interações da área dele).
+  const supSeg = m === 'seguranca' && !perfil('seguranca') && supConjs(ME).length > 0;
+  const l = VIEWS.filter(v => (v.mod === m || (v.mod === 'all' && m !== 'administracao')) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : podeVer(ME, v, permCfg(), m)));
   return m === 'administracao' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l;
 };
 // Abas que aparecem no menu (sem as que abrem por botão de outra aba).
 export const abasDoMenu = () => viewsDoModulo().filter(v => !v.fora);
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab' };
+const VIEW_NOVA = { sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
@@ -142,7 +155,7 @@ export function barraDe() {
   const m = UI.modulo;
   const tb = m === 'operacao' ? (aprovador() && !isAdmin() ? [['meudia', 'sol'], ['apontar', 'apontar'], ['aprovar', 'aprov'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar']] : [['meudia', 'sol'], ['apontar', 'apontar'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar'], ['eequipe', 'users'], ['einsp', 'plano']])
     : m === 'gestao' ? [['meudia', 'sol'], ['prog', 'prog'], ['painel', 'painel'], ['causas', 'causas'], ['gcolab', 'users'], ['eaval', 'users'], ['gpainel', 'users'], ['epainel', 'painel']]
-    : m === 'seguranca' ? [['meudia', 'sol'], ['sgobra', 'escudo']]
+    : m === 'seguranca' ? [['meudia', 'sol'], ['sganom', 'pend'], ['sginter', 'plano'], ['sgpainel', 'painel']]
     : m === 'rh' ? [['meudia', 'sol'], ['afreq', 'prog'], ['aferias', 'sol'], ['fpainel', 'painel'], ['aimport', 'dl']]
     : [['cfgeral', 'painel'], ['cfconf', 'pend'], ['cfescala', 'escala'], ['usuarios', 'users'], ['config', 'config'], ['plano', 'plano'], ['econfig', 'config'], ['gtipos', 'config']];
   const ok = new Set(abasDoMenu().map(v => v.id));

@@ -174,15 +174,16 @@ Ao abrir o sistema aparece só a tela de usuário e senha. Depois de entrar, o s
 |---|---|---|
 | **Operação** | Meu dia · Apontar · Aprovação · Pendências · Equipamentos (Lançamentos, Equipe e frota, Inspeções) · Efetivo (Presença do dia, Horas extras, Justificativas). Seletor Pátio \| Bateria no topo | líder, supervisor, coordenador, gestor, somente leitura |
 | **Gestão** | Meu dia · Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos · Modo TV | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
-| **Segurança** | em construção (fase 3) | registra, trata, gestor, somente leitura |
+| **Segurança** | Meu dia · Interações · Anomalias (fila com acompanhamento) · Painel · Exportar para o Excel | registra (vê só o que registrou), trata e gestor (veem e tratam tudo), somente leitura; o supervisor da área (Operação · Supervisor) vê e trata as anomalias da área dele |
 | **RH** | Meu dia · Frequência · Férias · Importar planilhas (só Administrativo) · Indicadores e resumo da frequência | administrativo, somente leitura |
-| **Administração** | Visão geral, Conferência, Uso do plano, Escalas e turnos, Rotas, Plano padrão, Gerador, Equipamentos, Tipos de ocorrência, Importar dados, Usuários e Perfis | Completa (administrador: tudo) ou Dos módulos (as configurações dos módulos em que a pessoa é Gestor) |
+| **Administração** | Visão geral, Conferência, Uso do plano, Escalas e turnos, Rotas, Plano padrão, Gerador, Equipamentos, Tipos de ocorrência, Segurança (listas dos formulários), Importar dados, Usuários e Perfis | Completa (administrador: tudo) ou Dos módulos (as configurações dos módulos em que a pessoa é Gestor) |
 
 - **Escopos** (Pátio, Bateria, Equipamentos) dizem quais conjuntos a pessoa vê na Operação e na Gestão. Áreas: líder 1, supervisor até 2, coordenador e gestor todas.
 - Cada tela usa o perfil **do módulo em que está**: quem é Líder na Operação e Somente leitura na Gestão aponta no Apontar, mas não altera nada na Programação. As regras do banco (`firestore.rules`) conferem o mesmo perfil por módulo.
 - Em **Usuários e acessos**, escolha o perfil em cada módulo, os escopos e as áreas. Em **Perfis e permissões**, escolha (módulo por módulo) o que cada perfil vê e pode fazer.
 - Links antigos, avisos do celular e o que ficou guardado no aparelho com os módulos de antes (Indicadores, Atividades, Pessoas no turno, Equipamentos, RH, Configurações, Administração do sistema) abrem a mesma tela no módulo novo.
 
+- **Segurança**: os formulários de *Registro de interação* e *Registro de anomalia* têm as mesmas perguntas dos Google Forms. No celular abrem em tela cheia, guardam o rascunho no aparelho e funcionam sem sinal (o registro e as fotos sobem quando a conexão voltar). As fotos são reduzidas no aparelho e ficam uma por documento (`segfotos`); a lista carrega só as miniaturas. A anomalia passa por Aberta → Em tratamento → Concluída (foto do depois obrigatória), com responsável, prazo, comentário e histórico. As listas (áreas, tipos de atividade, regimes e desvios) ficam em Administração › Segurança. Avisos no celular: anomalia nova na área (quem trata e o supervisor da área) e prazo do tratamento amanhã ou vencido (o responsável).
 - Para um líder ou supervisor da Bateria: em **Usuários e acessos**, marque o módulo **Atividades Bateria** e escolha a área dele (Bateria 1, Bateria 2, Trilho ou CDQ).
 
 ## Módulo Administração

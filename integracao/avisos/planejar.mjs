@@ -5,9 +5,10 @@ import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } 
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 import { JUS_CODS, CODIGOS } from './lib/situacao.mjs';
+import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true };
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -21,7 +22,8 @@ function areasDe(u, k) {
   return [...new Set([u.area, u.papel === 'supervisor' ? u.area2 : null].filter(a => a && SETS[k].areas.includes(a)))];
 }
 
-// d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date }
+// d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date,
+//       seg: { anom[] } (anomalias da Segurança em aberto, com em em milissegundos) }
 export function planejar(d) {
   const agora = d.agora || new Date(); const hoje = d.hoje || today(); const hora = agora.getHours();
   const msgs = [], marcar = new Set();
@@ -205,6 +207,30 @@ export function planejar(d) {
         }
         marcar.add(ct);
       }
+    }
+  }
+  // 9) Segurança: anomalia nova na área (até 24 h depois do registro, uma vez por anomalia) → quem trata (Segurança ·
+  //    trata ou gestor) e o supervisor da área; prazo do tratamento amanhã e prazo vencido (das 7h em diante, uma vez por
+  //    prazo) → o responsável pelo tratamento. Mostra o local e a área, nunca nomes de colaboradores.
+  if (d.seg && (d.seg.anom || []).length) {
+    const comAviso = new Map(alvo.filter(x => x.prefs.seguranca).map(x => [x.uid, x]));
+    const amanha = add(hoje, 1);
+    const l = avisosSeg({ anom: d.seg.anom, usuarios: Object.fromEntries(Object.entries(d.usuarios).map(([uid, u]) => [uid, { ...u, uid }])), agoraMs: agora.getTime(), hoje, amanha });
+    const porPessoa = new Map();
+    for (const x of l) {
+      if (d.enviados[x.chave] || (x.tipo !== 'nova' && hora < 7)) continue;
+      marcar.add(x.chave);
+      if (!comAviso.has(x.uid)) continue;
+      const k = x.uid + '|' + x.tipo; if (!porPessoa.has(k)) porPessoa.set(k, { uid: x.uid, tipo: x.tipo, l: [] });
+      if (!porPessoa.get(k).l.some(a => a.id === x.a.id)) porPessoa.get(k).l.push(x.a);
+    }
+    const onde = a => `${a.local} (${String(a.area || '').toLowerCase()})`;
+    for (const { uid, tipo, l: as } of porPessoa.values()) {
+      const n = as.length, s = n > 1 ? 's' : '';
+      const titulo = tipo === 'nova' ? (n === 1 ? `Anomalia nova: ${as[0].local}` : `${n} anomalias novas na sua área`)
+        : tipo === 'amanha' ? `Prazo amanhã: ${n} anomalia${s} com você` : `Prazo vencido: ${n} anomalia${s} com você`;
+      const corpo = as.slice(0, 3).map(a => tipo === 'nova' ? `${onde(a)} · ${String(a.desc || '').slice(0, 60)}` : `${onde(a)} · ${STATUS_SEG[a.status] || a.status} · prazo ${a.trat.prazo.slice(8)}/${a.trat.prazo.slice(5, 7)}`).join('\n') + (n > 3 ? `\n+ ${n - 3}` : '');
+      msgs.push({ uid, titulo, corpo, tag: 'seguranca', url: `/?m=seguranca&v=sganom` });
     }
   }
   return { msgs, marcar: [...marcar] };

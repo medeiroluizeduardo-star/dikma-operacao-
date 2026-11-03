@@ -13,7 +13,7 @@ const aqui = path.dirname(fileURLToPath(import.meta.url));
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
 fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm']) {
+for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc']) {
   const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");
   fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
 }
@@ -109,7 +109,10 @@ const painel = {};
     if (tasks.length || regs.length) painel[uid] = { tasks, regs };
   }
 }
-const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, agora: new Date() });
+// Segurança: anomalias em aberto (aberta ou em tratamento), para a anomalia nova e os prazos do tratamento.
+const segAnom = [];
+for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where('status', '==', st).get()).forEach(x => { const a = x.data(); segAnom.push({ ...a, id: x.id, em: a.em && a.em.toMillis ? a.em.toMillis() : +a.em || 0 }); });
+const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

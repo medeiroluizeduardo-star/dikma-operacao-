@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { acessoDoLegado, legadoDoAcesso, acessoDe, modulosDe, selosAcesso, MODULOS_ACESSO } from '../public/acessos.js';
+import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/segcalc.js';
 
 const ord = l => [...l].sort();
 // Ida e volta: o que as telas e as regras de hoje enxergam (papel e módulos efetivos) não muda.
@@ -180,4 +181,41 @@ test('permissões por módulo: a configuração antiga (por perfil) vale para o 
   assert.equal(podeItemU(misto, 'i_exportar', { 'gestao|leitor': { i_exportar_gestao: false } }, 'gestao'), false);
   assert.equal(podeItemU(misto, 'i_exportar', { 'gestao|leitor': { i_exportar_gestao: false } }, 'operacao'), true);
   assert.equal(podeItemU(misto, 'i_exportar', { leitor: { i_exportar: false } }, 'gestao'), false, 'item antigo lido no módulo');
+});
+
+// ---------------- Segurança (public/segcalc.js): as mesmas contas das regras ----------------
+test('Segurança: quem vê e quem trata cada registro', () => {
+  const reg = { uid: 'r', papel: 'leitor', acesso: { seguranca: 'registra' }, escopos: [] };
+  const tra = { uid: 't', papel: 'leitor', acesso: { seguranca: 'trata' }, escopos: [] };
+  const lei = { uid: 'l', papel: 'leitor', acesso: { seguranca: 'leitor' }, escopos: [] };
+  const sup = { uid: 's', papel: 'supervisor', area: 'PREPARAÇÃO', acesso: { operacao: 'supervisor' }, escopos: ['patio'] };
+  const supAntigo = { uid: 's2', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'BATERIA 1', modulos: ['operacao', 'bateria'] };
+  const lider = { uid: 'd', papel: 'lider', area: 'PREPARAÇÃO', acesso: { operacao: 'lider' }, escopos: ['patio'] };
+  assert.deepEqual(supConjs(sup), ['patio']); assert.deepEqual(supConjs(supAntigo), ['patio', 'bateria']); assert.deepEqual(supConjs(lider), []);
+  assert.ok(temSeg(sup) && temSeg(reg) && !temSeg(lider));
+  const a = { por: 'r', conj: 'patio', status: 'aberta', em: 1000 }, b = { por: 'x', conj: 'bateria', status: 'aberta', em: 1000 };
+  assert.ok(veRegSeg(reg, a) && !veRegSeg(reg, b), 'quem registra vê só os próprios');
+  assert.ok(veRegSeg(tra, b) && veRegSeg(lei, b));
+  assert.ok(veRegSeg(sup, a) && !veRegSeg(sup, b), 'supervisor: só a área dele');
+  assert.ok(trataAnom(tra, b) && trataAnom(sup, a) && !trataAnom(sup, b) && !trataAnom(lei, a) && !trataAnom(reg, a));
+  assert.ok(registraSeg(tra) && !registraSeg(lei) && !registraSeg(sup));
+  assert.ok(editaProprio(reg, a, 1000 + 23 * 36e5, true) && !editaProprio(reg, a, 1000 + 25 * 36e5, true), '24 horas');
+  assert.ok(!editaProprio(reg, { ...a, status: 'tratamento' }, 2000, true), 'anomalia só enquanto aberta');
+  assert.ok(comigoSeg({ uid: 'z', nome: 'José da Silva' }, { trat: { resp: 'JOSE DA SILVA' } }), 'pelo nome, sem acento');
+  assert.ok(vencidaSeg({ status: 'tratamento', trat: { prazo: '2026-10-01' } }, '2026-10-02') && !vencidaSeg({ status: 'concluida', trat: { prazo: '2026-10-01' } }, '2026-10-02'));
+});
+test('Segurança: listas padrão dos formulários e contas do painel', () => {
+  const l = listasSeg(null);
+  assert.deepEqual(l.areas.map(a => a.nome), ['PÁTIO DE CARVÃO', 'BATERIA']); assert.deepEqual(l.tipos, ['ROTINA', 'PARADA']); assert.deepEqual(l.regimes, ['ADM', 'TURNO']);
+  assert.equal(l.desvios.length, 18); assert.equal(l.desvios[l.desvios.length - 1], 'OUTROS');
+  assert.equal(listasSeg({ desvios: ['outros', 'epi'] }).desvios.join(), 'EPI,OUTROS', 'OUTROS sempre por último');
+  const inter = [{ mes: '2026-10', resp: 'Ana', desvios: ['EPI', 'GÁS'], area: 'BATERIA' }, { mes: '2026-10', resp: 'ANA', desvios: ['EPI'], area: 'BATERIA' }, { mes: '2026-09', resp: 'Beto', desvios: [] }];
+  const em = Date.parse('2026-10-01T08:00:00');
+  const anom = [{ mes: '2026-10', status: 'concluida', em, conclEm: '2026-10-03T08:00:00', area: 'BATERIA' }, { mes: '2026-10', status: 'aberta', em, area: 'BATERIA', trat: { prazo: '2026-10-05' } }];
+  const r = indicadoresSeg({ inter, anom, mes: '2026-10', meses: ['2026-09', '2026-10'], hoje: '2026-10-10', areas: ['BATERIA'] });
+  assert.equal(r.interMes, 2); assert.equal(r.comDesvio, 2); assert.deepEqual(r.desvios[0], ['EPI', 2]);
+  assert.deepEqual(r.porPessoa, [['Ana', 2]], 'mesmo nome com grafias diferentes');
+  assert.equal(r.anomMes, 2); assert.equal(r.concluidasNoMes, 1); assert.equal(r.vencidas, 1); assert.equal(Math.round(r.tempoMedio), 2);
+  assert.deepEqual(r.porMes.map(x => x.inter), [1, 2]);
+  assert.deepEqual(r.porArea[0], { area: 'BATERIA', inter: 2, abertas: 1, concluidas: 1 });
 });

@@ -6,7 +6,7 @@ import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '..
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -16,6 +16,9 @@ import { resTipo, rConj, vResumoOutro, vResumo } from '../telas/relatorios.js';
 import { vConfigModulo, vPlano, vGerador, vUsuarios, vPerfis, problemaSenha, vConfig, vImportar } from '../telas/config.js';
 import { renderTV } from '../tv.js';
 import { MD, EQ, AD, GE, comModulo } from '../nucleo/modulos.js';
+
+// Telas da Segurança (telas/seguranca.js, carregado sob demanda); sgconfig fica na Administração.
+const SG_VIEWS = ['sginter', 'sganom', 'sgpainel', 'sgconfig'];
 
 export function menuModulos(abrir) {
   UI.modOpen = abrir;
@@ -113,7 +116,7 @@ function renderTela() {
   const v = UI.view;
   const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
   if (v === 'meudia') return tela(MD.view());
-  if (v === 'sgobra') return tela(vSeguranca());
+  if (SG_VIEWS.includes(v)) return tela(comModulo('SG', m => m.render(v)));
   if (v === 'tvmodo') return tela(vModoTV());
   if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? vResumoOutro() : comModulo('AD', m => m.render(v)));
   if (GE_VIEWS.includes(v)) return tela(comModulo('GE', m => m.render(v)));
@@ -130,12 +133,6 @@ function renderTela() {
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
   pintar('view', fn ? fn() : MD.view());
   afterRender();
-}
-// Segurança: o módulo chega na fase 3. Por enquanto, quem tem o acesso vê o que vem por aí.
-function vSeguranca() {
-  const p = perfil('seguranca');
-  const oque = { registra: 'registrar interações e anomalias de segurança', trata: 'tratar as anomalias da sua área', gestor: 'acompanhar e encerrar todos os registros', leitor: 'consultar os registros', admin: 'acompanhar e encerrar todos os registros' }[p] || 'usar o módulo';
-  return `<div class="card"><div class="empty"><b>Módulo em construção</b><span>Aqui você vai ${oque}. O seu acesso já está pronto: quando o módulo chegar, ele aparece neste lugar, sem precisar fazer nada.</span></div></div>`;
 }
 // Modo TV: tela cheia para a sala de controle, numa janela nova (o link pode ficar salvo na TV).
 function vModoTV() {
@@ -301,12 +298,12 @@ const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {
-    const sub = { ...SUB_ADM, config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport }[v.id] || '';
+    const sub = { ...SUB_ADM, config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, sgconfig: SUB_S.sgconfig }[v.id] || '';
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintarTopo(v.nome, sub, sw); return;
   }
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
-  if (v.id === 'sgobra') { pintarTopo('Segurança', 'Registros de interação e de anomalia · em construção'); return; }
+  if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id]); return; }
   if (v.id === 'tvmodo') { pintarTopo(v.nome, 'Indicadores na tela da sala de controle'); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }

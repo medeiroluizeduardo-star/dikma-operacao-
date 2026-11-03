@@ -5,6 +5,7 @@ import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../cal.js';
 import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm } from '../acessos.js';
 import { podeItemU } from '../permissoes.js';
 import { competenciaDe } from '../planilhas-adm.js';
+import { temSeg } from '../segcalc.js';
 import { TV, DB, TODAY, CUR_WEEK, CUR_MONTH } from './base.js';
 
 
@@ -46,6 +47,8 @@ if (TV) { document.body.classList.add('tv'); UI.view = 'painel'; UI.modulo = 'ge
 // dessas telas, porque eles chegam depois (sob demanda) e a busca e o Meu dia já mexem nela antes (ex.: abrir uma ficha).
 UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null };
 UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' };
+// Segurança (telas/seguranca.js): mês e filtros das listas, situação da fila de anomalias e mês do painel.
+UI.sg = { mes: TODAY.slice(0, 7), area: '', sit: 'abertas', q: '', pMes: TODAY.slice(0, 7) };
 UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' };
 export const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 // gravarUI: só a memória do aparelho · salvarUI: memória + histórico (botão Voltar).
@@ -74,7 +77,7 @@ export const meEm = mod => usuarioEm(ME, mod);
 export const podeItem = (id, mod = modAqui()) => podeItemU(ME, id, permCfg(), mod);
 // Administração "Dos módulos" (o gestor de hoje): cuida das configurações dos módulos em que é Gestor.
 // alvo: ativ (rotas, plano, gerador e horas extras de Pátio/Bateria) · equip (Equipamentos) · fichas (tipos de
-// ocorrência) · escala (Escalas e turnos).
+// ocorrência) · escala (Escalas e turnos) · seg (listas dos formulários da Segurança: Gestor da Segurança).
 export function gerencia(alvo, u = ME) {
   if (ehAdminU(u)) return true;
   if (perfilDe(u, 'administracao') !== 'modulo') return false;
@@ -83,6 +86,7 @@ export function gerencia(alvo, u = ME) {
   if (alvo === 'equip') return (ge || op) && esc.includes('equipamentos');
   if (alvo === 'fichas') return ge && temFichasU(u);
   if (alvo === 'escala') return ge || op;
+  if (alvo === 'seg') return perfilDe(u, 'seguranca') === 'gestor';
   return false;
 }
 export const admDe = alvo => gerencia(alvo);
@@ -135,9 +139,10 @@ export const modsDe = u => {
   const l = [];
   if (setsDe(u, 'operacao').length || temEquipEm(u, 'operacao')) l.push('operacao');
   if (setsDe(u, 'gestao').length || temEquipEm(u, 'gestao') || temFichasU(u)) l.push('gestao');
-  if (perfilDe(u, 'seguranca')) l.push('seguranca');
+  // Segurança: quem tem perfil no módulo e o supervisor da área (trata as anomalias da área dele).
+  if (temSeg(u)) l.push('seguranca');
   if (perfilDe(u, 'rh')) l.push('rh');
-  if (ehAdminU(u) || (perfilDe(u, 'administracao') === 'modulo' && ['ativ', 'equip', 'fichas', 'escala'].some(a => gerencia(a, u)))) l.push('administracao');
+  if (ehAdminU(u) || (perfilDe(u, 'administracao') === 'modulo' && ['ativ', 'equip', 'fichas', 'escala', 'seg'].some(a => gerencia(a, u)))) l.push('administracao');
   return l;
 };
 export const permCfg = () => DB.cache.permissoes || {};
