@@ -8,12 +8,12 @@ import { MESES_L, SETS, add, addMonth, today } from '../cal.js';
 import { campoBusca } from '../busca.js';
 import { baixarExcel, dataBR } from '../exportar.js';
 import { ESQUELETO } from '../movimento.js';
-import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H } from '../segcalc.js';
+import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg } from '../segcalc.js';
 import { DB, framed, esc, title, $ } from '../nucleo/base.js';
-import { ME, UI } from '../nucleo/estado.js';
+import { ME, UI, isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
-import { toast } from '../ui/janelas.js';
+import { toast, formSheet } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
 
 // ---- Perguntas dos formulários (ordem, textos e obrigatórias iguais aos do Google) ----
@@ -279,8 +279,24 @@ export function criarSeguranca() {
       if (trataAnom(ME, r)) botoes += `<button type="button" class="btn pri" data-sgf="tratar">${r.status === 'concluida' ? 'Reabrir ou ajustar' : 'Acompanhar'}</button>`;
     }
     if (editaProprio(ME, r, Date.now(), tipo === 'anom')) botoes += `<button type="button" class="btn" data-sgf="editar">Corrigir</button>`;
+    // Apagar: só o administrador (as regras também conferem). Leva as fotos do registro junto.
+    if (isAdmin()) botoes += `<button type="button" class="btn danger" data-sgf="excluir">Excluir</button>`;
     const fo = folha({ titulo: tipo === 'anom' ? 'Anomalia' : 'Interação', sub: `${dBR(r.data)}${r.hora ? ' às ' + esc(r.hora) : ''} · ${esc(r.area)} · ${esc(r.local)}`, corpo, rodape: `<div class="row-gap">${botoes}<button type="button" class="btn" data-sgclose>Fechar</button></div>` });
-    folhaAcao = b => { if (b.dataset.sgf === 'tratar') { fo.fechar(); abrirTratar(r.id); } if (b.dataset.sgf === 'editar') { fo.fechar(); abrirForm(tipo, r); } };
+    folhaAcao = b => { if (b.dataset.sgf === 'tratar') { fo.fechar(); abrirTratar(r.id); } if (b.dataset.sgf === 'editar') { fo.fechar(); abrirForm(tipo, r); } if (b.dataset.sgf === 'excluir') { fo.fechar(); confirmarExclusao(col, r); } };
+  }
+  // Confirmação clara antes de apagar o registro e as fotos dele (não dá para desfazer).
+  function confirmarExclusao(col, r) {
+    if (!isAdmin()) return;
+    const anom = col === 'seganom'; const n = fotosDoReg(r).length; const nome = anom ? 'esta anomalia' : 'esta interação';
+    const fotos = n ? ` e ${n === 1 ? 'a foto' : `as ${n} fotos`}` : '';
+    formSheet(anom ? 'Excluir anomalia' : 'Excluir interação', `${dBR(r.data)} · ${esc(r.area)} · ${esc(r.local)}`,
+      `<p class="m0"><b>Excluir ${nome}${fotos}?</b> Não dá para desfazer.</p>${anom && abertaSeg(r) ? '<p class="muted small m0">Ela ainda está em aberto: some da fila e dos indicadores.</p>' : ''}`,
+      'Excluir', async () => {
+        await DB.segExcluir(col, r);
+        DB.log(`Segurança: excluiu ${anom ? 'uma anomalia' : 'uma interação'} de ${dBR(r.data)}${n ? ` (${n} foto${n > 1 ? 's' : ''})` : ''}`);
+        toast(`${anom ? 'Anomalia excluída' : 'Interação excluída'}${n ? ` com ${n === 1 ? 'a foto' : `as ${n} fotos`}` : ''}`); render();
+      });
+    const b = document.querySelector('#fSheet [type=submit]'); if (b) { b.classList.remove('pri'); b.classList.add('perigo'); }
   }
   const fmtDias = d => (d < 1 ? 'menos de 1 dia' : `${Math.round(d).toLocaleString('pt-BR')} dia${Math.round(d) === 1 ? '' : 's'}`);
 

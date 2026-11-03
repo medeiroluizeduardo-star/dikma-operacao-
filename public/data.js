@@ -10,7 +10,8 @@
 //   plano/{ÁREA}              { itens: [ {id, area, rota, local, ativ, tipo, dias:"1111100", ativo} ] }
 //   colaboradores/{ÁREA}      { itens: [ {id, area, rota, nome, funcao, regime} ] }
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
-//   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" } }
+//   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" },
+//                             dx: { "REC-001|3": "AAAA-MM-DD" } }  dx = pendência dispensada na Limpeza de dados (a célula fica "_")
 //   historico/{auto}          { at, uid, nome, t }
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
 //   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
@@ -48,7 +49,7 @@ import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaA
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs } from './segcalc.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './segcalc.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -884,4 +885,40 @@ export function segTratar(a, patch, foto) {
 }
 // Foto grande (só ao tocar na miniatura).
 export async function segFoto(id) { const s = await getDoc(doc(db, 'segfotos', id)); return s.exists() ? s.data().dados : null; }
+// Apagar um registro (só o administrador; as regras conferem): o registro e as fotos dele, num lote só.
+export function segExcluir(col, r) {
+  const b = writeBatch(db); b.delete(doc(db, col, r.id));
+  for (const f of fotosDoReg(r)) b.delete(doc(db, 'segfotos', f));
+  return track(b.commit());
+}
 export const segSalvarCfg = cfg => track(setDoc(doc(db, 'config', 'seguranca'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+
+// ---------- Limpeza de dados (Administração › Limpeza de dados, só o administrador) ----------
+// A tela lê do servidor o que vai sair (para a prévia e a cópia de segurança) e grava em lotes de até 400.
+// Datas do banco (Timestamp) viram texto ISO na cópia.
+const cru = v => (v && typeof v.toDate === 'function' ? v.toDate().toISOString() : Array.isArray(v) ? v.map(cru) : v && typeof v === 'object' && !(v instanceof FieldPath) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cru(x)])) : v);
+// conds: [[campo, operador, valor]] (ex.: [['mes', '==', '2026-08']] ou [['at', '<', new Date(...)]])
+export async function limpezaLer(col, conds = []) {
+  const qs = await getDocs(query(collection(db, col), ...conds.map(([c, o, v]) => where(c, o, v))));
+  return qs.docs.map(d => ({ id: d.id, ...cru(d.data()) }));
+}
+export async function limpezaLerIds(col, ids) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += 20) {
+    const l = await Promise.all(ids.slice(i, i + 20).map(id => getDoc(doc(db, col, id))));
+    for (const s of l) if (s.exists()) out.push({ id: s.id, ...cru(s.data()) });
+  }
+  return out;
+}
+// Um lote: { tipo: 'apagar' | 'alterar', col, id, campos: [[caminho[], valor]] } (valor null apaga o campo).
+// Espera o servidor confirmar (sem sinal, a tela nem começa): um erro no meio para a limpeza e mostra o que faltou.
+export async function limpezaGravar(ops) {
+  const b = writeBatch(db);
+  for (const o of ops) {
+    const r = doc(db, o.col, o.id);
+    if (o.tipo === 'apagar') b.delete(r);
+    else { const a = []; for (const [p, v] of o.campos) a.push(new FieldPath(...p), v === null ? deleteField() : v); b.update(r, ...a); }
+  }
+  pending++; syncMudou();
+  try { await b.commit(); } finally { pending--; syncMudou(); }
+}

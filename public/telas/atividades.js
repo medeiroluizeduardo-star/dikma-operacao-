@@ -221,7 +221,7 @@ export function vProg() {
    ${!framed && !cel ? `<button class="btn" data-act="csv" style="align-self:flex-end">${I.dl} Exportar Excel</button>` : ''}
   </div>${cel ? `<details class="legdet"${UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' open' : ''}><summary>Filtrar por rota ou tipo</summary><div class="filters">${selRota}</div></details>` : ''}
   <div class="mini"><div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
-  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span><span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
+  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span>${docs.some(d => d.dx && Object.keys(d.dx).length) ? `<span><span class="chip sm D">${CHIP.D}</span>${ST_NOME.D}</span>` : ''}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
   const q = UI.q.trim().toLowerCase();
   const rows = [];
   for (const doc of docs) doc.ids.forEach((id, i) => {
@@ -235,7 +235,7 @@ export function vProg() {
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
   // Rotas recolhidas: cada rota mostra o resumo; o detalhe abre ao tocar. Com busca ou uma rota escolhida, abre tudo.
   const grupos = new Map();
-  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
+  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X' || c === 'D') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
   const tudoAberto = !!q || UI.rota !== 'TODAS' || grupos.size === 1;
   const abertas = new Set(UI.progAbertas || []);
   const aberto = key => tudoAberto || abertas.has(key);

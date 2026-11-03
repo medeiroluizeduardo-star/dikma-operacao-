@@ -17,6 +17,7 @@ import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
 import { listasSeg } from '../segcalc.js';
+import { vLimpeza } from './limpeza.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
@@ -159,6 +160,7 @@ function vCfUso() {
 export function vConfigModulo(view) {
   if (view === 'cfconf') return vCfConf();
   if (view === 'cfuso') return vCfUso();
+  if (view === 'cflimpa') return vLimpeza();
   if (view === 'cfescala') return vCfEscala();
   if (view === 'usuarios') return vUsuarios();
   if (view === 'perfis') return vPerfis();

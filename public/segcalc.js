@@ -63,6 +63,8 @@ export const normNomeSeg = s => String(s || '').normalize('NFD').replace(/[̀-ͯ
 // A anomalia está com a pessoa (responsável pelo tratamento): pelo usuário escolhido ou pelo nome digitado.
 export const comigoSeg = (u, a) => !!u && !!a && !!a.trat && ((!!a.trat.respUid && a.trat.respUid === u.uid) || (!!a.trat.resp && normNomeSeg(a.trat.resp) === normNomeSeg(u.nome)));
 // Dias corridos entre o registro e a conclusão (tempo de tratamento).
+// Fotos guardadas (segfotos) de um registro: as do registro e a do depois do tratamento. Vão junto quando ele é apagado.
+export const fotosDoReg = r => [...new Set([...((r && r.fotos) || []), ...(r && r.trat && r.trat.fotoDepois ? [r.trat.fotoDepois] : [])].filter(Boolean))];
 export const diasTratamento = a => (a && a.status === 'concluida' && a.conclEm && a.em ? Math.max(0, (Date.parse(a.conclEm) - (+a.em)) / 864e5) : null);
 
 // ---- Painel ----

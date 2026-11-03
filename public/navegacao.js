@@ -61,6 +61,7 @@ export const VIEWS = [
   { id: 'cfgeral', nome: 'Visão geral', ic: 'painel', grp: 'Geral', mod: 'administracao', ord: 1, req: () => isAdmin() },
   { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'pend', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin() },
   { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'prog', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin() },
+  { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin() },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'escala', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala') },
   { id: 'config', nome: 'Rotas e configurações', ic: 'config', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Atividades', mod: 'administracao', ord: 4, req: () => admDe('ativ') },
@@ -97,7 +98,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores' };
+const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores' };
 export const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {

@@ -12,6 +12,9 @@ rules_version = '2';
 //   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas.
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
 //   - Usuários, config/permissoes = Administração completa (administrador).
+//   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
+//     administrador; Segurança (seginter, seganom, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp) seguem como
+//     antes: quem lança na Operação apaga o próprio lançamento um a um (o administrador também).
 //   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
@@ -161,9 +164,12 @@ service cloud.firestore {
       allow write: if lancaSit('patio');
     }
 
+    // Apagar semanas e aprovações (Limpeza de dados) e o histórico: só o administrador. A dispensa das pendências
+    // antigas (célula volta a '_' e a marca vai em dx) é uma alteração: o administrador já altera a semana inteira.
     match /semanas/{id} {
       allow read: if op();
-      allow create, delete: if admMod('operacao');
+      allow create: if admMod('operacao');
+      allow delete: if admin();
       allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
         || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
@@ -180,7 +186,7 @@ service cloud.firestore {
     match /aprov/{id} {
       allow read: if op();
       allow create, update: if aprovaDa(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
-      allow delete: if admMod('operacao');
+      allow delete: if admin();
     }
 
     // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
@@ -238,7 +244,8 @@ service cloud.firestore {
     }
     match /b_semanas/{id} {
       allow read: if ba();
-      allow create, delete: if admMod('bateria');
+      allow create: if admMod('bateria');
+      allow delete: if admin();
       allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
         || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
@@ -248,7 +255,7 @@ service cloud.firestore {
     match /b_aprov/{id} {
       allow read: if ba();
       allow create, update: if aprovaDaB(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
-      allow delete: if admMod('bateria');
+      allow delete: if admin();
     }
     match /b_evidencias/{id} {
       allow read: if ba();
@@ -472,7 +479,8 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['at', 'uid', 'nome', 't'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.at == request.time;
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if admin();   // Limpeza de dados (histórico antigo)
     }
   }
 }

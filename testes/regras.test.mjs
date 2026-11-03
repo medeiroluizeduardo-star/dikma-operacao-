@@ -236,11 +236,12 @@ test('Atividades: foto só na própria área, em nome próprio, e no máximo 6 p
 });
 
 // ---------------- histórico, integração e avisos ----------------
-test('histórico: cada um registra só em nome próprio e ninguém altera', async () => {
+test('histórico: cada um registra só em nome próprio, ninguém altera e só o administrador apaga (Limpeza de dados)', async () => {
   await assertSucceeds(setDoc(doc(db('liderRec'), 'historico', 'h2'), { at: serverTimestamp(), uid: 'liderRec', nome: 'x', t: 'y' }));
   await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), { at: serverTimestamp(), uid: 'admin', nome: 'x', t: 'y' }));
   await assertFails(updateDoc(doc(db('admin'), 'historico', 'h1'), { t: 'z' }));
-  await assertFails(deleteDoc(doc(db('admin'), 'historico', 'h1')));
+  for (const u of ['liderRec', 'gestorP', 'gestorG', 'coord', 'sup', 'admModulo', 'segGestor']) await assertFails(deleteDoc(doc(db(u), 'historico', 'h1')), u);
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'historico', 'h1')));
 });
 test('integração com o Senior: só o administrador lê', async () => {
   await assertFails(getDoc(doc(db('gestorG'), 'integracao', 'senior')));
@@ -695,4 +696,57 @@ test('Segurança: listas dos formulários — todos os ativos leem; administrado
   await assertSucceeds(setDoc(doc(db('admin'), 'config', 'seguranca'), { tipos: ['ROTINA'] }));
   await assertSucceeds(setDoc(doc(db('admModSeg'), 'config', 'seguranca'), { tipos: ['ROTINA', 'PARADA'] }));
   for (const u of ['segGestor', 'segTrata', 'admModulo']) await assertFails(setDoc(doc(db(u), 'config', 'seguranca'), { tipos: [] }), u);
+});
+
+// ---------------- Limpeza de dados (Administração, só o administrador) ----------------
+test('Limpeza de dados: o administrador apaga semanas, aprovações, Segurança, equipamentos e histórico e tira o mês da lista', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const d = ctx.firestore();
+    for (const a of ['RECEBIMENTO', 'PREPARAÇÃO']) { await setDoc(doc(d, 'semanas', a + '|2026-01-05'), { area: a, mes: '2026-01', ini: '2026-01-05', ids: ['X1'], s: { X1: 'PPRN___' }, ev: {} }); await setDoc(doc(d, 'aprov', a + '|2026-01-05'), { area: a, mes: '2026-01', v: {} }); }
+    await setDoc(doc(d, 'b_semanas', 'BATERIA 1|2026-01-05'), { area: 'BATERIA 1', mes: '2026-01', s: {}, ev: {} });
+    await setDoc(doc(d, 'b_aprov', 'BATERIA 1|2026-01-05'), { area: 'BATERIA 1', mes: '2026-01', v: {} });
+    await setDoc(doc(d, 'b_config', 'sistema'), { rotas: [], meses: ['2026-01', '2026-11'] });
+    await setDoc(doc(d, 'config', 'sistema'), { rotas: [], meses: ['2026-01', '2026-11'] }, { merge: true });
+    for (const c of ['eqlanc', 'eqpar', 'eqinsp']) for (const id of ['lp1', 'lp2']) await setDoc(doc(d, c, id), { mes: '2026-01' });
+    for (const id of ['lh1', 'lh2']) await setDoc(doc(d, 'historico', id), { t: 'antigo' });
+    await setDoc(doc(d, 'seginter', 'lpi'), { ...SEG_BASE, ...INTER_X, ...PAT, mes: '2026-01', data: '2026-01-10', por: 'segReg', em: Timestamp.now() });
+    await setDoc(doc(d, 'seganom', 'lpa'), { ...SEG_BASE, ...ANOM_X, ...PAT, mes: '2026-01', data: '2026-01-10', por: 'segReg', em: Timestamp.now(), fotos: ['lpf'] });
+    await setDoc(doc(d, 'segfotos', 'lpf'), { reg: 'lpa', col: 'seganom', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-01', mini: 'm', dados: 'd', ordem: 0 });
+  });
+  // ninguém além do administrador apaga semanas, aprovações, registros da Segurança e fotos
+  const quem = ['gestorP', 'admModulo', 'coord', 'sup', 'liderRec', 'gestorG', 'segGestor', 'segTrata', 'supPatio', 'admv'];
+  for (const u of quem) {
+    await assertFails(deleteDoc(doc(db(u), 'semanas', 'RECEBIMENTO|2026-01-05')), `${u} não apaga semana`);
+    await assertFails(deleteDoc(doc(db(u), 'aprov', 'RECEBIMENTO|2026-01-05')), `${u} não apaga aprovação`);
+    await assertFails(deleteDoc(doc(db(u), 'b_semanas', 'BATERIA 1|2026-01-05')), `${u} não apaga semana da Bateria`);
+    await assertFails(deleteDoc(doc(db(u), 'b_aprov', 'BATERIA 1|2026-01-05')), `${u} não apaga aprovação da Bateria`);
+    await assertFails(deleteDoc(doc(db(u), 'seganom', 'lpa')), `${u} não apaga anomalia`);
+    await assertFails(deleteDoc(doc(db(u), 'seginter', 'lpi')), `${u} não apaga interação`);
+    await assertFails(deleteDoc(doc(db(u), 'segfotos', 'lpf')), `${u} não apaga foto`);
+  }
+  // equipamentos: sem o escopo Equipamentos ninguém apaga; quem lança na Operação continua apagando o lançamento (como antes)
+  for (const u of ['gestorP', 'coord', 'sup', 'liderRec', 'admModulo', 'eqGeLeitor', 'eqGeSup']) for (const c of ['eqlanc', 'eqpar', 'eqinsp']) await assertFails(deleteDoc(doc(db(u), c, 'lp1')), `${u} ${c}`);
+  await assertSucceeds(deleteDoc(doc(db('eqOpLider'), 'eqlanc', 'lp2')), 'edição de sempre: quem lança apaga o lançamento');
+  // líder não marca a dispensa (dx) nem mexe na lista de meses
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', 'RECEBIMENTO|2026-01-05'), { 's.X1': '__RN___', 'dx.X1|0': '2026-11-03' }), 'líder não dispensa');
+  await assertFails(updateDoc(doc(db('sup'), 'semanas', 'RECEBIMENTO|2026-01-05'), { 'dx.X1|0': '2026-11-03' }), 'supervisor não dispensa');
+  await assertFails(updateDoc(doc(db('liderRec'), 'config', 'sistema'), { meses: ['2026-11'] }));
+  // administrador: dispensa (alteração da semana), apaga tudo num lote só e tira o mês da lista
+  const a = db('admin');
+  await assertSucceeds(updateDoc(doc(a, 'semanas', 'PREPARAÇÃO|2026-01-05'), { 's.X1': '__RN___', 'dx.X1|0': '2026-11-03', 'dx.X1|1': '2026-11-03' }));
+  const b = writeBatch(a);
+  b.delete(doc(a, 'semanas', 'RECEBIMENTO|2026-01-05')); b.delete(doc(a, 'aprov', 'RECEBIMENTO|2026-01-05'));
+  b.delete(doc(a, 'b_semanas', 'BATERIA 1|2026-01-05')); b.delete(doc(a, 'b_aprov', 'BATERIA 1|2026-01-05'));
+  for (const c of ['eqlanc', 'eqpar', 'eqinsp']) b.delete(doc(a, c, 'lp1'));
+  b.delete(doc(a, 'segfotos', 'lpf')); b.delete(doc(a, 'seganom', 'lpa')); b.delete(doc(a, 'seginter', 'lpi'));
+  b.delete(doc(a, 'historico', 'lh1'));
+  b.update(doc(a, 'config', 'sistema'), { meses: ['2026-11'] }); b.update(doc(a, 'b_config', 'sistema'), { meses: ['2026-11'] });
+  await assertSucceeds(b.commit());
+  await assertSucceeds(getDocs(query(collection(a, 'historico'), where('at', '<', new Date('2026-06-01T00:00:00')))), 'lê o histórico antigo para a prévia');
+});
+test('Limpeza de dados: a Administração Dos módulos continua gerando meses, mas não apaga semanas', async () => {
+  const d = db('admModulo');
+  await assertSucceeds(setDoc(doc(d, 'semanas', 'RECEBIMENTO|2027-03-01'), { area: 'RECEBIMENTO', mes: '2027-03', ini: '2027-03-01', ids: [], s: {}, m: {} }));
+  await assertFails(deleteDoc(doc(d, 'semanas', 'RECEBIMENTO|2027-03-01')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'semanas', 'RECEBIMENTO|2027-03-01')));
 });
