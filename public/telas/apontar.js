@@ -68,6 +68,7 @@ export function cellMenu(doc, i, k) {
   const fp = doc.fp && doc.fp[p.id + '|' + k]; const pf = podeForaProg(doc.area);
   // Dia sem programação: coordenador e supervisor podem incluir a atividade fora da programação.
   if (raw === '_') {
+    if (c === 'D') { toast('Dispensada na limpeza de dados: não conta como programada nem como pendência'); return; }
     if (pf) return sheet(p.ativ, sub, [{ t: 'Incluir fora da programação', d: 'Entra no dia como "a fazer"; o líder aponta se foi feita', v: 'FP', ic: chipIc('P') }], () => incluirFora(doc, i, k));
     toast('Não programada neste dia'); return;
   }

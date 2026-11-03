@@ -78,6 +78,7 @@ input.in{min-width:180px}
 .btn.dark{background:var(--ink);color:var(--surface);border-color:var(--ink)}
 .btn.ghost{background:none;border-color:transparent}
 .btn.danger{color:var(--st-nreal)}
+.btn.perigo{background:var(--st-nreal);color:#fff;border-color:var(--st-nreal);font-weight:600}
 .btn svg{width:16px;height:16px}
 .wrap{padding:20px 28px;display:flex;flex-direction:column;gap:20px}
 .demo{margin:14px 28px 0;display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center;padding:10px 14px;border:1px dashed var(--line);border-radius:var(--r);background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
@@ -149,6 +150,7 @@ td.today{background:color-mix(in srgb,var(--focus) 6%,transparent)}
 .chip.A{border-color:var(--st-atr);color:var(--st-atr);background:color-mix(in srgb,var(--st-atr) 12%,transparent)}
 .chip.X{color:var(--line);font-size:18px}
 .chip.X:hover{color:var(--ink-3);border-color:var(--line)}
+.chip.D{color:var(--ink-3);border-style:dashed;border-color:var(--line);font-weight:700}
 .chip:hover{filter:brightness(1.08)}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border-radius:20px;padding:2px 9px;white-space:nowrap}
 .pill.ok{background:color-mix(in srgb,var(--st-real) 14%,transparent);color:var(--st-real)}
@@ -1750,3 +1752,32 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .sgsheet textarea.in{font:inherit;font-size:15px;line-height:1.4}
 @media (min-width:700px){.sgsheet .sgdet{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}}
 @media (max-width:860px){.sgsit{flex-wrap:wrap;width:100%}.sgsit button{flex:1 1 auto;justify-content:center;padding:7px 8px}}
+
+/* Administração › Limpeza de dados */
+.lpaviso{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px solid color-mix(in srgb,var(--st-nreal) 40%,var(--line));background:color-mix(in srgb,var(--st-nreal) 7%,var(--surface));border-radius:var(--r)}
+.lpaviso svg{width:22px;height:22px;flex:none;color:var(--st-nreal)}
+.lppasso>header{align-items:center;flex-wrap:nowrap}
+.lppasso.off{opacity:.6}
+.lpn{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--surface);font-weight:700;flex:none}
+.lpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start}
+.lpc{box-shadow:none}
+.lpc.on{border-color:var(--accent)}
+.lpcab{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;cursor:pointer}
+.lpcab input,.lpchk input,.lpmes input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:var(--accent)}
+.lpcab b{display:block}.lpcab small{display:block;color:var(--ink-3);font-size:12.5px;margin-top:2px}
+.lpcorpo{padding-top:0}
+.lpchk{display:inline-flex;gap:8px;align-items:center;cursor:pointer;min-height:32px}
+.lpmeses{display:flex;flex-direction:column;border-top:1px solid var(--line-2);padding-top:8px}
+.lpmes{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line-2);cursor:pointer}
+.lpmes b{white-space:nowrap}.lpmes>:last-child{justify-self:end;text-align:right}
+.lpmes.dis{cursor:default;opacity:.7}
+.lpdatas .sel{flex:1 1 140px;min-width:0}.lpdatas .in{width:100%}
+.lpprev{display:flex;flex-direction:column;gap:10px}
+.lpitem{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
+.lpitem ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.lpitem li{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 12px;font-size:13px}
+.lpconf .in{width:180px;letter-spacing:.08em;text-transform:uppercase}
+.lpbarra{height:12px;border-radius:6px}.lpbarra i{background:var(--st-nreal);transition:width .2s}.lpbarra.ok i{background:var(--st-real)}
+.lpfim{padding:10px 12px;border-radius:var(--r);background:color-mix(in srgb,var(--st-real) 10%,var(--surface));border:1px solid color-mix(in srgb,var(--st-real) 35%,var(--line))}
+.lpfim.bad{background:color-mix(in srgb,var(--st-nreal) 8%,var(--surface));border-color:color-mix(in srgb,var(--st-nreal) 40%,var(--line))}
+@media (max-width:860px){.lpgrid{grid-template-columns:minmax(0,1fr)}.lpconf .in{width:100%}.lpconf .sel{flex:1 1 100%}}

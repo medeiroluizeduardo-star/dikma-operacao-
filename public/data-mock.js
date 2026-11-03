@@ -3,7 +3,8 @@
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 import { acessoDoLegado, legadoDoAcesso, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
-import { veRegSeg } from './segcalc.js';
+import { veRegSeg, fotosDoReg } from './segcalc.js';
+import { aplicarCampos } from './limpeza.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -228,7 +229,7 @@ export async function salvarPrefsAvisos(prefs) { cache.meusAvisos = { ...(cache.
 export async function salvarChaveAvisos(vapid) { cache.avisosCfg = { vapid }; changed(); }
 export async function excluirUsuario(uid) { if (uid === me.uid) throw new Error('Você não pode apagar o seu próprio usuário.'); cache.usuarios = cache.usuarios.filter(u => u.uid !== uid); changed(); }
 export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find(u => u.uid === uid), patch); if (uid === me.uid) emitAuth(); changed(); }
-export function log(t) { cache.log.unshift({ at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
+export function log(t) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;
   for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of SETS[cur].areas) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }
@@ -462,3 +463,47 @@ export function segTratar(a, patch, foto) {
 }
 export async function segFoto(id) { const f = SEG && SEG.fotos[id]; return f ? f.dados : null; }
 export async function segSalvarCfg(cfg) { SEG.cfg = { ...cfg }; segCh(); }
+// Apagar um registro e as fotos dele (a tela só oferece ao administrador).
+export async function segExcluir(col, r) {
+  const k = col === 'seginter' ? 'inter' : 'anom'; SEG[k] = SEG[k].filter(x => x.id !== r.id);
+  for (const f of fotosDoReg(r)) delete SEG.fotos[f];
+  segCh();
+}
+
+// ---------- Limpeza de dados (demonstração): as mesmas consultas e gravações de data.js, sobre o que está em memória ----------
+const setDaCol = col => (col.startsWith('b_') ? 'bateria' : 'patio');
+const semPre = col => col.replace(/^b_/, '');
+const copia = x => JSON.parse(JSON.stringify(x));
+// Documentos da coleção no formato do banco, com o id.
+function docsMock(col) {
+  const k = setDaCol(col), c = semPre(col);
+  if (c === 'semanas') return Object.values(S[k].semanas).map(({ d, _dias, ...x }) => ({ ...x, id: x.id }));
+  if (c === 'aprov') return Object.entries(S[k].aprov).map(([id, v]) => ({ id, area: id.split('|')[0], mes: monthOfWeek(id.split('|')[1]), v }));
+  if (c === 'config') return S[k].config ? [{ id: 'sistema', ...S[k].config }] : [];
+  if (col === 'eqlanc') return cache.e.lanc; if (col === 'eqpar') return cache.e.par; if (col === 'eqinsp') return cache.e.insp;
+  if (col === 'seginter') return SEG.inter; if (col === 'seganom') return SEG.anom;
+  if (col === 'segfotos') return Object.entries(SEG.fotos).map(([id, f]) => ({ id, ...f }));
+  if (col === 'historico') { cache.log.forEach((l, i) => { if (!l.id) l.id = 'h' + i + Date.now().toString(36); }); return cache.log; }
+  return [];
+}
+const valorCmp = v => (v instanceof Date ? v.getTime() : typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? Date.parse(v) : v);
+const OPS = { '==': (a, b) => a === b, '<': (a, b) => a < b, '<=': (a, b) => a <= b, '>': (a, b) => a > b, '>=': (a, b) => a >= b };
+export async function limpezaLer(col, conds = []) {
+  return copia(docsMock(col).filter(x => conds.every(([c, o, v]) => x[c] != null && OPS[o](valorCmp(x[c]), valorCmp(v)))));
+}
+export async function limpezaLerIds(col, ids) { const s = new Set(ids); return copia(docsMock(col).filter(x => s.has(x.id))); }
+export async function limpezaGravar(ops) {
+  let seg = false, eq = false;
+  for (const o of ops) {
+    const k = setDaCol(o.col), c = semPre(o.col);
+    if (c === 'semanas') { if (o.tipo === 'apagar') delete S[k].semanas[o.id]; else { const w = S[k].semanas[o.id]; if (w) Object.assign(w, toLocal(o.id, aplicarCampos(w, o.campos))); } }
+    else if (c === 'aprov') delete S[k].aprov[o.id];
+    else if (c === 'config') { if (o.tipo === 'alterar') aplicarCampos(S[k].config, o.campos); }
+    else if (['eqlanc', 'eqpar', 'eqinsp'].includes(o.col)) { const f = { eqlanc: 'lanc', eqpar: 'par', eqinsp: 'insp' }[o.col]; cache.e[f] = cache.e[f].filter(x => x.id !== o.id); eq = true; }
+    else if (o.col === 'seginter' || o.col === 'seganom') { const f = o.col === 'seginter' ? 'inter' : 'anom'; SEG[f] = SEG[f].filter(x => x.id !== o.id); seg = true; }
+    else if (o.col === 'segfotos') { delete SEG.fotos[o.id]; seg = true; }
+    else if (o.col === 'historico') cache.log = cache.log.filter(x => x.id !== o.id);
+  }
+  if (eq) cache.eVersao++;
+  if (seg) segCh(); else changed();
+}
