@@ -12,6 +12,8 @@ rules_version = '2';
 //   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas.
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
 //   - Usuários, config/permissoes = Administração completa (administrador).
+//   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
+//     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
 // Perfis antigos: admin, gestor, coordenador, supervisor (até 2 áreas: area e area2), lider (1 área),
 // administrativo, leitor, bloqueado. A tela Usuários continua gravando também os campos antigos (papel, modulos).
@@ -364,6 +366,98 @@ service cloud.firestore {
     match /sistema/{docId} {
       allow read: if admin();
       allow write: if false;
+    }
+
+    // ---------- Módulo Segurança: registros de interação e de anomalia ----------
+    // Só registra quem o administrador autorizou (Segurança · registra, trata ou gestor). Quem só registra lê só o que
+    // registrou; trata, gestor, somente leitura e o administrador leem tudo. O supervisor da área (Operação · Supervisor
+    // com a área dele, area ou area2, dentro do conjunto da anomalia: conj = patio | bateria) lê e trata as anomalias e
+    // lê as interações da área. O acompanhamento (status, trat, conclEm) é de quem trata e do supervisor da área; o autor
+    // corrige o próprio registro por 24 h (a anomalia, só enquanto aberta). Apagar = administrador. As fotos (segfotos)
+    // levam o autor e o conjunto do registro e seguem as mesmas regras de leitura.
+    function segP() { return pEm('seguranca'); }
+    function segRegistra() { return admin() || (ativo() && nv() && segP() in ['registra', 'trata', 'gestor']); }
+    function segTudo() { return admin() || (ativo() && nv() && segP() in ['trata', 'gestor', 'leitor']); }
+    function segTrata() { return admin() || (ativo() && nv() && segP() in ['trata', 'gestor']); }
+    function areasDoConj(conj) { return conj == 'patio' ? ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] : ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ']; }
+    function supSeg(conj) {
+      return conj in ['patio', 'bateria'] && ativo()
+        && (nv() ? (pEm('operacao') == 'supervisor' && esc(conj)) : (perfil().papel == 'supervisor' && acOp() && modDe(conj) in mods()))
+        && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj));
+    }
+    function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj); }
+    function txtOk(d, k, min, max) { return d.get(k, '') is string && d.get(k, '').size() >= min && d.get(k, '').size() <= max; }
+    function dataOk(d) { return d.data is string && d.data.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && d.mes == d.data.split('-')[0] + '-' + d.data.split('-')[1]; }
+    function regOk(d) {
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', '']
+        && d.conj is string && txtOk(d, 'local', 1, 120) && txtOk(d, 'mat', 1, 30) && d.get('fotos', []) is list && d.get('minis', []) is list
+        && d.get('fotos', []).size() <= 6 && d.get('minis', []).size() <= 6 && d.por is string && txtOk(d, 'porNome', 0, 120);
+    }
+    function interOk(d) {
+      return regOk(d) && d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'local', 'tipoAtiv', 'risco', 'desvios', 'desvioOutro', 'desc', 'acao', 'resp', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'atualizadoEm'])
+        && txtOk(d, 'tipoAtiv', 1, 40) && txtOk(d, 'risco', 0, 500) && d.get('desvios', []) is list && d.get('desvios', []).size() <= 40
+        && txtOk(d, 'desvioOutro', 0, 200) && txtOk(d, 'desc', 0, 3000) && txtOk(d, 'acao', 0, 3000) && txtOk(d, 'resp', 1, 120);
+    }
+    function anomOk(d) {
+      return regOk(d) && d.keys().hasOnly(['data', 'hora', 'mes', 'area', 'conj', 'local', 'regime', 'desc', 'conseq', 'acao', 'causas', 'sugest', 'comunic', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'status', 'trat', 'conclEm', 'atualizadoEm', 'atualizadoPor'])
+        && d.hora is string && d.hora.matches('[0-9]{2}:[0-9]{2}') && txtOk(d, 'regime', 1, 40)
+        && txtOk(d, 'desc', 1, 3000) && txtOk(d, 'conseq', 1, 3000) && txtOk(d, 'acao', 1, 3000) && txtOk(d, 'causas', 1, 3000)
+        && txtOk(d, 'sugest', 1, 3000) && txtOk(d, 'comunic', 1, 120) && d.status in ['aberta', 'tratamento', 'concluida'];
+    }
+    // Acompanhamento: situação, responsável, prazo, comentário, foto do depois (obrigatória para concluir) e histórico.
+    function tratOk(d) {
+      let t = d.get('trat', {});
+      return d.status in ['aberta', 'tratamento', 'concluida'] && t is map
+        && t.keys().hasOnly(['resp', 'respUid', 'prazo', 'coment', 'fotoDepois', 'miniDepois', 'hist'])
+        && t.get('resp', '') is string && t.get('resp', '').size() <= 120 && t.get('coment', '') is string && t.get('coment', '').size() <= 3000
+        && t.get('prazo', '') is string && t.get('hist', []) is list && t.get('hist', []).size() <= 150
+        && t.get('miniDepois', '') is string && t.get('miniDepois', '').size() < 80000
+        && (d.status != 'concluida' || (t.get('fotoDepois', '') is string && t.get('fotoDepois', '') != ''))
+        && d.get('conclEm', '') is string;
+    }
+    // Campos que o autor corrige (o resto não muda).
+    function corrige(col) {
+      return col == 'seginter'
+        ? soAltera(['data', 'mes', 'area', 'conj', 'local', 'tipoAtiv', 'risco', 'desvios', 'desvioOutro', 'desc', 'acao', 'resp', 'mat', 'atualizadoEm'])
+        : soAltera(['data', 'hora', 'mes', 'area', 'conj', 'local', 'regime', 'desc', 'conseq', 'acao', 'causas', 'sugest', 'comunic', 'mat', 'atualizadoEm']);
+    }
+    function autorNoPrazo() { return segRegistra() && resource.data.por == request.auth.uid && request.time < resource.data.em + duration.value(24, 'h'); }
+    match /seginter/{id} {
+      allow read: if segLe(resource.data);
+      allow create: if segRegistra() && interOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
+      allow update: if autorNoPrazo() && corrige('seginter') && interOk(request.resource.data);
+      allow delete: if admin();
+    }
+    match /seganom/{id} {
+      allow read: if segLe(resource.data);
+      allow create: if segRegistra() && anomOk(request.resource.data) && request.resource.data.por == request.auth.uid
+        && request.resource.data.em == request.time && request.resource.data.status == 'aberta' && !('trat' in request.resource.data);
+      allow update: if ((segTrata() || supSeg(resource.data.conj)) && soAltera(['status', 'trat', 'conclEm', 'atualizadoEm', 'atualizadoPor']) && tratOk(request.resource.data))
+        || (autorNoPrazo() && resource.data.status == 'aberta' && corrige('seganom') && anomOk(request.resource.data));
+      allow delete: if admin();
+    }
+    // Fotos: uma por documento (até ~700 KB). 'antes' = do registro, gravada pelo autor junto com ele; 'depois' = do
+    // tratamento, gravada por quem trata. autor e conj vêm do registro (conferidos com getAfter).
+    function fotoRegOk(d) {
+      let r = getAfter(/databases/$(database)/documents/$(d.col)/$(d.reg)).data;
+      return r.por == d.autor && r.get('conj', '') == d.conj;
+    }
+    match /segfotos/{id} {
+      allow read: if segTudo() || (resource.data.autor == request.auth.uid && segRegistra()) || supSeg(resource.data.conj);
+      allow create: if request.resource.data.por == request.auth.uid && request.resource.data.col in ['seginter', 'seganom']
+        && request.resource.data.reg is string && request.resource.data.dados is string && request.resource.data.dados.size() < 700000
+        && request.resource.data.mini is string && request.resource.data.mini.size() < 80000 && request.resource.data.conj is string
+        && ((request.resource.data.tipo == 'antes' && segRegistra() && request.resource.data.autor == request.auth.uid)
+            || (request.resource.data.tipo == 'depois' && request.resource.data.col == 'seganom' && (segTrata() || supSeg(request.resource.data.conj))))
+        && fotoRegOk(request.resource.data);
+      allow update: if false;
+      allow delete: if admin();
+    }
+    // Listas dos formulários (áreas, tipos de atividade, regimes e desvios): todos os ativos leem; o administrador e a
+    // Administração 'Dos módulos' de quem é Gestor da Segurança alteram.
+    match /config/seguranca {
+      allow read: if ativo();
+      allow write: if admin() || (ativo() && nv() && pEm('administracao') == 'modulo' && segP() == 'gestor');
     }
 
     // Painel Coqueria (repositório Gest-o-Eduardo, gestao-eduardo.web.app): espaço pessoal de cada usuário ativo (tarefas, Medição, Queda Zero).

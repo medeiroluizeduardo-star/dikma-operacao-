@@ -95,6 +95,8 @@ document.addEventListener('click', async e => {
     if (view === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
     if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
     if (view === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
+    // Segurança: o terceiro campo é o filtro da fila de anomalias (abertas, vencidas, comigo).
+    if (vNova.startsWith('sg') && area && UI.sg) UI.sg.sit = area;
     ensureModulo(); aplicarSet(); salvarUI(); trocarTela(UI.view);
     if (novaOc) { const b = document.querySelector('[data-g="novaOc"]'); if (b) b.click(); }
     return;

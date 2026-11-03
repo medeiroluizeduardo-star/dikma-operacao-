@@ -3,6 +3,7 @@
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
 import { acessoDoLegado, legadoDoAcesso, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
+import { veRegSeg } from './segcalc.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -92,14 +93,16 @@ async function fresh() {
 // Acesso por módulo: os usuários de demonstração já vêm convertidos (como a rotina do GitHub faria), menos o
 // "Novo usuário", que fica no modelo antigo para mostrar o selo "a converter" na tela de usuários.
 const comAcesso = u => { if (u.acesso || u.uid === 'novo') return u; const r = acessoDoLegado(u); return { ...u, acesso: r.acesso, escopos: r.escopos }; };
-// Segurança (telas na fase 3): um técnico que registra e um supervisor de área que trata as anomalias.
+// Segurança: um técnico que registra, um supervisor de área que trata as anomalias e uma consulta (somente leitura).
 // Os campos antigos (papel, modulos, área) saem do acesso, como a tela de usuários grava.
 function usuariosSeguranca() {
   const reg = { acesso: { seguranca: 'registra' }, escopos: [] };
   const tra = { acesso: { operacao: 'supervisor', gestao: 'supervisor', seguranca: 'trata' }, escopos: ['patio'] };
+  const lei = { acesso: { seguranca: 'leitor' }, escopos: [] };
   const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
   return [{ uid: 'segr', nome: 'Técnico de Segurança', login: 'seguranca', senha: '123456', ...reg, ...leg(reg, {}) },
-    { uid: 'segt', nome: 'Supervisor da Preparação (Segurança)', login: 'seguranca.trata', senha: '123456', ...tra, ...leg(tra, { fichas: true, area: 'PREPARAÇÃO' }) }];
+    { uid: 'segt', nome: 'Supervisor da Preparação (Segurança)', login: 'seguranca.trata', senha: '123456', ...tra, ...leg(tra, { fichas: true, area: 'PREPARAÇÃO' }) },
+    { uid: 'segl', nome: 'Consulta da Segurança', login: 'seguranca.leitor', senha: '123456', ...lei, ...leg(lei, {}) }];
 }
 
 // Líderes: como os reais, Operação · Líder e Gestão · Líder (Programação, Folha do líder), sem as Fichas.
@@ -137,6 +140,7 @@ export async function start(callbacks) {
   if (me) cache.usuarios = cache.usuarios.map(u => (u.papel === 'lider' && u.acesso && !u.acesso.gestao && !u.acesso.seguranca && u.uid !== 'misto' ? liderGestao(u) : u));
   if (me) me = cache.usuarios.find(u => u.uid === me.uid) || me;
   await iniciarAdm();
+  iniciarSeg();
   emitAuth(); changed();
 }
 // Módulo Administração: na demonstração tudo já está em memória.
@@ -149,7 +153,7 @@ function emitAuth() {
   cb.onAuth({ status: 'ready', user: me });
 }
 export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
-export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
+export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); localStorage.removeItem(LSS); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; SEG = null; iniciarSeg(); await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
@@ -369,3 +373,92 @@ export function heOpWatch(ym) {
   const sig = l.length + '|' + l.map(x => x.data + x.op).join(); if (cache.heOp[ym] && cache.heOp[ym]._sig === sig) return;
   l._sig = sig; cache.heOp[ym] = l; cache.heOpV = (cache.heOpV || 0) + 1;
 }
+
+// ---------- Segurança (demonstração) ----------
+// Registros de exemplo com os nomes fictícios da demonstração e fotos desenhadas na hora (cor lisa com texto).
+// Cada pessoa vê só o que as regras deixariam ver (veRegSeg), como no banco de verdade.
+const LSS = 'coqueria-demo-seg-v1';
+let SEG = null, segVer = 0, segMemo = { k: '', v: null };
+function segPersist() {
+  try { localStorage.setItem(LSS, JSON.stringify(SEG)); }
+  catch (e) { try { localStorage.setItem(LSS, JSON.stringify({ ...SEG, fotos: Object.fromEntries(Object.entries(SEG.fotos).map(([k, f]) => [k, { ...f, dados: f.mini }])) })); } catch (e2) { /* sem espaço: fica só nesta aba */ } }
+}
+const segCh = () => { segVer++; segPersist(); changed(); };
+function fotoExemplo(txt, cor, w, h, q) {
+  try {
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d');
+    g.fillStyle = cor; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.font = `700 ${Math.round(h / 9)}px system-ui,sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('FOTO DE EXEMPLO', w / 2, h / 2 - h / 12); g.font = `600 ${Math.round(h / 13)}px system-ui,sans-serif`; g.fillText(txt, w / 2, h / 2 + h / 10);
+    return cv.toDataURL('image/jpeg', q);
+  } catch (e) { return ''; }
+}
+function segExemplo() {
+  const hoje = today();
+  const dia = n => add(hoje, -n); const ms = (d, h = 9) => new Date(`${d}T${String(h).padStart(2, '0')}:20:00`).getTime();
+  const fotos = {}; let nf = 0;
+  const CORES = ['#5b6b7a', '#7a5b3a', '#3a6b5b', '#6b3a5b', '#4a4a8a'];
+  const nova = (reg, col, autor, area, conj, m, txt, tipo = 'antes') => { const id = 'sf' + (nf++); const cor = CORES[nf % CORES.length]; fotos[id] = { reg, col, tipo, mini: fotoExemplo(txt, cor, 160, 120, 0.6), dados: fotoExemplo(txt, cor, 640, 480, 0.7), ordem: 0, autor, por: autor, conj, area, mes: m }; return id; };
+  const TEC = { por: 'segr', porNome: 'Técnico de Segurança', resp: 'TÉCNICO DE SEGURANÇA', mat: '90001' };
+  const SUP = { por: 'segt', porNome: 'Supervisor da Preparação (Segurança)', resp: 'SUPERVISOR DA PREPARAÇÃO', mat: '90002' };
+  const PAT = { area: 'PÁTIO DE CARVÃO', conj: 'patio' }, BAT = { area: 'BATERIA', conj: 'bateria' };
+  const inter = [
+    [1, PAT, TEC, 'CORREIA C5613A', 'ROTINA', '', ['EPI'], 'Colaborador sem protetor auricular perto da correia.', 'Orientado e protetor entregue na hora.'],
+    [2, BAT, TEC, 'TOPO DA BATERIA 1', 'ROTINA', 'Queda de mesmo nível', ['ARRUMAÇÃO E LIMPEZA', 'ISOLAMENTO DE ÁREA'], 'Mangueira solta no caminho e área sem isolamento.', 'Mangueira recolhida e área isolada com fita.'],
+    [3, PAT, SUP, 'PREPARAÇÃO - PENEIRAS', 'PARADA', 'Prensamento de mãos', ['FERRAMENTAS MANUAIS'], 'Ferramenta improvisada para destravar a peneira.', 'Troca pela ferramenta certa.'],
+    [5, PAT, TEC, 'RECEBIMENTO - MOEGA', 'ROTINA', '', [], 'Interação sobre uso correto do cinto na escada.', ''],
+    [6, BAT, SUP, 'CDQ', 'PARADA', 'Gás', ['GÁS', 'ESPAÇO CONFINADO'], 'Entrada sem medição de gás registrada.', 'Atividade parada até a medição.'],
+    [9, BAT, TEC, 'TRILHO', 'ROTINA', 'Atropelamento', ['SEGURANÇA EM TRILHOS', 'CELULAR'], 'Pedestre usando celular ao cruzar o trilho.', 'Conversa sobre a regra de ouro.'],
+    [33, PAT, TEC, 'FINAL DO PÁTIO', 'ROTINA', '', ['EPI', 'OUTROS'], 'Óculos riscado em uso.', 'Óculos trocado.', 'ÓCULOS DANIFICADO'],
+    [40, BAT, SUP, 'BATERIA 2', 'ROTINA', '', ['ADORNOS'], 'Colaborador com anel na área de máquinas.', 'Anel retirado.']
+  ].map(([n, A, P, local, tipoAtiv, risco, desvios, desc, acao, outro], i) => { const id = 'si' + i; const data = dia(n); return { id, data, mes: data.slice(0, 7), ...A, local, tipoAtiv, risco, desvios, desvioOutro: outro || '', desc, acao, resp: P.resp, mat: P.mat, fotos: [nova(id, 'seginter', P.por, A.area, A.conj, data.slice(0, 7), 'Interação ' + (i + 1))], minis: [], por: P.por, porNome: P.porNome, em: ms(data, 8 + i % 6) }; });
+  const h = (d, n, t) => ({ em: new Date(ms(d, 10 + n)).toISOString(), por: 'segt', nome: 'Supervisor da Preparação (Segurança)', t });
+  const anom = [
+    [1, PAT, TEC, 'aberta', null, 'CORREIA C5613A', 'Proteção da polia de retorno solta.', 'Prensamento de membros.', 'Área isolada.', 'Fixação vibrou com o uso.', 'Incluir a proteção na inspeção semanal.'],
+    [5, PAT, TEC, 'tratamento', { resp: 'Supervisor da Preparação (Segurança)', respUid: 'segt', prazo: dia(1), coment: 'Pedido de compra do guarda-corpo aberto.' }, 'PREPARAÇÃO - PASSARELA', 'Guarda-corpo da passarela com corrosão.', 'Queda de altura.', 'Passarela interditada.', 'Corrosão por umidade.', 'Trocar o trecho e pintar.'],
+    [3, BAT, SUP, 'tratamento', { resp: 'Técnico de Segurança', respUid: 'segr', prazo: add(hoje, 1), coment: 'Manutenção programada.' }, 'BATERIA 1 - PORTA 12', 'Vazamento de gás pela porta do forno.', 'Intoxicação.', 'Área sinalizada.', 'Vedação gasta.', 'Trocar a vedação na próxima parada.'],
+    [20, PAT, TEC, 'concluida', { resp: 'Supervisor da Preparação (Segurança)', respUid: 'segt', prazo: dia(15), coment: 'Extintor recarregado e lacrado.' }, 'RECEBIMENTO', 'Extintor vencido no posto.', 'Sem combate a princípio de incêndio.', 'Extintor reserva colocado.', 'Falta de controle de validade.', 'Controle mensal dos extintores.', 18],
+    [4, BAT, SUP, 'concluida', { resp: 'Técnico de Segurança', respUid: 'segr', prazo: dia(1), coment: 'Sinalização refeita.' }, 'TRILHO', 'Sinalização do cruzamento apagada.', 'Atropelamento.', 'Cones colocados.', 'Desgaste da pintura.', 'Repintar a cada 6 meses.', 2],
+    [0, BAT, SUP, 'aberta', null, 'CDQ', 'Detector de gás sem bateria.', 'Exposição a gás sem alarme.', 'Detector reserva entregue.', 'Sem rotina de troca.', 'Checklist de pré-uso do detector.']
+  ].map(([n, A, P, status, trat, local, desc, conseq, acao, causas, sugest, concl], i) => {
+    const id = 'sa' + i; const data = dia(n); const m = data.slice(0, 7);
+    const a = { id, data, hora: `${String(7 + i).padStart(2, '0')}:30`, mes: m, ...A, local, regime: i % 2 ? 'TURNO' : 'ADM', desc, conseq, acao, causas, sugest, comunic: P.resp, mat: P.mat, fotos: [nova(id, 'seganom', P.por, A.area, A.conj, m, 'Anomalia ' + (i + 1))], minis: [], por: P.por, porNome: P.porNome, em: ms(data, 7 + i), status };
+    if (trat) { a.trat = { ...trat, hist: [h(data, 1, 'Responsável: ' + trat.resp), h(data, 2, 'Situação: Aberta → Em tratamento')] }; }
+    if (status === 'concluida') { const fd = nova(id, 'seganom', P.por, A.area, A.conj, m, 'Depois ' + (i + 1), 'depois'); const cd = dia(concl); a.trat.fotoDepois = fd; a.trat.miniDepois = fotos[fd].mini; a.conclEm = new Date(ms(cd, 15)).toISOString(); a.trat.hist.push({ ...h(cd, 5, 'Situação: Em tratamento → Concluída') }); }
+    return a;
+  });
+  for (const r of [...inter, ...anom]) r.minis = r.fotos.map(f => fotos[f].mini);
+  return { cfg: null, inter, anom, fotos };
+}
+function iniciarSeg() {
+  if (SEG) return;
+  try { SEG = JSON.parse(localStorage.getItem(LSS) || 'null'); } catch (e) { SEG = null; }
+  if (!SEG || !Array.isArray(SEG.inter)) { SEG = segExemplo(); segPersist(); }
+  segVer++;
+}
+Object.defineProperty(cache, 'seg', {
+  get: () => {
+    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 };
+    const k = segVer + '|' + (me ? me.uid : '');
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
+    return segMemo.v;
+  },
+  enumerable: false
+});
+const segId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+export function segWatch() { /* tudo já está em memória */ }
+export function segNovo(col, dados, fotos) {
+  const id = segId(col === 'seginter' ? 'si' : 'sa'); const ids = fotos.map(() => segId('sf'));
+  fotos.forEach((f, i) => { SEG.fotos[ids[i]] = { reg: id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes }; });
+  SEG[col === 'seginter' ? 'inter' : 'anom'].push({ ...dados, id, fotos: ids, minis: fotos.map(f => f.mini), por: me.uid, porNome: me.nome || me.login || '', em: Date.now() });
+  segCh(); return id;
+}
+export async function segEditar(col, id, patch) { const l = SEG[col === 'seginter' ? 'inter' : 'anom']; const i = l.findIndex(x => x.id === id); if (i >= 0) l[i] = { ...l[i], ...patch }; segCh(); }
+export function segTratar(a, patch, foto) {
+  const p = { ...patch };
+  if (foto) { const fid = segId('sf'); SEG.fotos[fid] = { reg: a.id, col: 'seganom', tipo: 'depois', mini: foto.mini, dados: foto.dados, ordem: 0, autor: a.por, por: me.uid, conj: a.conj || '', area: a.area, mes: a.mes }; p.trat = { ...p.trat, fotoDepois: fid, miniDepois: foto.mini }; }
+  const i = SEG.anom.findIndex(x => x.id === a.id); if (i >= 0) SEG.anom[i] = { ...SEG.anom[i], ...p, atualizadoPor: me.uid };
+  segCh();
+}
+export async function segFoto(id) { const f = SEG && SEG.fotos[id]; return f ? f.dados : null; }
+export async function segSalvarCfg(cfg) { SEG.cfg = { ...cfg }; segCh(); }

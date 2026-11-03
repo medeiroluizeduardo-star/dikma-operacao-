@@ -1,5 +1,5 @@
 // Partes criadas na entrada: pessoas (PES) e Meu dia (MD). As telas de Operação (EQ), Frequência e férias (AD) e
-// fichas do Efetivo (GE) ficam em arquivos grandes que só são baixados quando precisa: ao abrir a tela, ou logo
+// fichas do Efetivo (GE) e Segurança (SG) ficam em arquivos grandes que só são baixados quando precisa: ao abrir a tela, ou logo
 // depois do login para quem tem o módulo (em segundo plano). Sem sinal, vêm do service worker (estão no SHELL).
 import { SET_KEYS } from '../cal.js';
 import { criarPessoas, chaveFicha } from '../pessoas.js';
@@ -14,9 +14,10 @@ import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js
 import { render, schedule, isMobile } from '../ui/shell.js';
 import { checkinPendentes } from '../telas/efetivo.js';
 import { jusPendentes } from '../telas/horas-justificativas.js';
+import { temSeg } from '../segcalc.js';
 
 // Criadas por inicio.js (PES, MD) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
-export let PES = null, MD = null, EQ = null, AD = null, GE = null;
+export let PES = null, MD = null, EQ = null, AD = null, GE = null, SG = null;
 
 // Pessoas e Meu dia (antes de abrir o link recebido).
 export function criarModulos() {
@@ -28,7 +29,9 @@ export function criarModulos() {
     const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
     return ok ? chaveFicha(PES.lotacao(c).area) : null;
   });
-  MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais, sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+  MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais,
+    // Segurança no Meu dia: anomalias da pessoa (a tela da Segurança chega sob demanda; enquanto isso, nada aparece).
+    seg: () => (temSeg(ME) ? (SG ? SG.meuDia() : (carregarModulo('SG'), null)) : null), sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 }
 
 // ---- telas carregadas sob demanda ----
@@ -38,9 +41,10 @@ const CARGA = {
   // Operação (lançar) ou na Gestão (Avaliação mensal e Análises), Frequência no RH e fichas na Gestão.
   EQ: () => import('../equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(UI.modulo === 'gestao' ? 'gestao' : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
   AD: () => import('../administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
+  SG: () => import('../telas/seguranca.js').then(m => { SG = m.criarSeguranca(); }),
   GE: () => import('../gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
-const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE };
+const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG };
 const pedidos = {};
 // Baixa (uma vez só) o arquivo da tela; quando chega, a tela é redesenhada. Devolve uma promessa.
 export function carregarModulo(k) {
@@ -67,6 +71,7 @@ export function precarregarModulos(u) {
   if (ms.includes('equipamentos')) ks.push('EQ');
   if (ms.includes('gestao')) ks.push('GE');
   if (ms.includes('frequencia')) ks.push('AD');
+  if (temSeg(u)) ks.push('SG');
   if (!ks.length) return;
   const ir = () => ks.forEach(k => carregarModulo(k));
   if ('requestIdleCallback' in window) requestIdleCallback(ir, { timeout: 1500 }); else setTimeout(ir, 300);

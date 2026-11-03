@@ -23,6 +23,14 @@
 //   eqaval/{AAAA-MM}          { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }
 //   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
 //   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
+//   config/seguranca          { areas[{nome, conj}], tipos[], regimes[], desvios[] }   listas dos formulários da Segurança
+//   seginter/{id}             registro de interação { data, mes, area, conj, local, tipoAtiv, risco, desvios[], desvioOutro,
+//                             desc, acao, resp, mat, fotos[ids], minis[], por, porNome, em }
+//   seganom/{id}              registro de anomalia { data, hora, mes, area, conj, local, regime, desc, conseq, acao, causas,
+//                             sugest, comunic, mat, fotos[], minis[], por, porNome, em, status, trat{resp, respUid, prazo,
+//                             coment, fotoDepois, miniDepois, hist[]}, conclEm }
+//   segfotos/{id}             { reg, col, tipo: antes|depois, mini, dados, ordem, autor, por, conj, area, mes, em }  uma foto
+//                             por documento (até ~700 KB); a lista usa só as miniaturas que ficam no registro
 // Atividades Bateria: as mesmas coleções com o prefixo b_ (b_config/sistema, b_plano, b_colaboradores, b_situacao,
 //   b_semanas, b_evidencias, b_evidenciasArquivo). O conjunto ativo é escolhido com useSet('patio' | 'bateria').
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
@@ -40,6 +48,7 @@ import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaA
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs } from './segcalc.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -138,7 +147,7 @@ export async function start(callbacks) {
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
       // Sem nenhum módulo (nem perfil em algum módulo) não entra.
       if (!temAlgumModulo(me)) { stopData(); cb.onAuth({ status: 'semAcesso', user: me }); return; }
-      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); }
+      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); }
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
@@ -244,6 +253,7 @@ function startData() {
   });
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
+  if (temSeg(me)) startSeg();
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
@@ -272,7 +282,7 @@ export function iniciarAdministracao() {
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
 }
 // Alguma coisa para abrir: perfil em algum módulo (ou o cadastro antigo com algum módulo).
-const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao)) || (!u.acesso && modulosDe(u).length > 0);
+const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao)) || (!u.acesso && modulosDe(u).length > 0);
 function stopData() {
   dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false; admSisOn = false;
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
@@ -280,6 +290,7 @@ function stopData() {
   monthSubs.clear();
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
+  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
@@ -806,3 +817,71 @@ export async function eImportar(seed) {
     await b.commit();
   }
 }
+
+// ---------- módulo Segurança (interações e anomalias) ----------
+// Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
+// As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
+// dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
+function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 }; }
+cache.seg = novoSeg();
+let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
+const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
+function segJuntar() {
+  const inter = {}, anom = {};
+  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : anom; for (const x of l) alvo[x.id] = x; }
+  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom);
+  cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
+}
+function segOuvir(key, q) {
+  if (segSubs.has(key)) return;
+  segSubs.set(key, onSnapshot(q, qs => { segRes.set(key, qs.docs.map(segDoc)); segJuntar(); }, e => { segRes.set(key, []); segJuntar(); if (e.code !== 'permission-denied') cb.onError && cb.onError(e); }));
+}
+// Filtros que as regras pedem para esta pessoa: [] = sem filtro (vê tudo).
+function filtrosSeg() {
+  if (veTudoSeg(me)) return [[]];
+  const l = [];
+  if (registraSeg(me)) l.push([where('por', '==', me.uid)]);
+  for (const k of supConjs(me)) l.push([where('conj', '==', k)]);
+  return l;
+}
+function startSeg() {
+  segOn = true; cache.seg.on = true;
+  dataSubs.push(onSnapshot(doc(db, 'config', 'seguranca'), s => { cache.seg.cfg = s.exists() ? s.data() : null; cache.seg.cfgLoaded = true; cache.seg.v++; changed(); }, e => { cache.seg.cfgLoaded = true; cb.onError && cb.onError(e); }));
+  const m = today().slice(0, 7);
+  // em aberto: uma consulta por situação (só igualdades: não precisa de índice composto no banco)
+  for (const st of ['aberta', 'tratamento']) filtrosSeg().forEach((f, i) => { const k = `seganom|${st}|${i}`; segIniciais.push(k); segOuvir(k, query(collection(db, 'seganom'), where('status', '==', st), ...f)); });
+  segWatch([addMonth(m, -1), m], true);
+}
+export function segWatch(meses, inicial) {
+  if (!db || !me || !segOn) return;
+  for (const m of new Set(meses.filter(Boolean))) {
+    if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
+    for (const col of ['seginter', 'seganom']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
+  }
+}
+// Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
+// quando a conexão voltar. fotos: [{ dados, mini }] já reduzidas pela tela.
+export function segNovo(col, dados, fotos) {
+  const r = doc(collection(db, col)); const ids = fotos.map(() => doc(collection(db, 'segfotos')).id);
+  const b = writeBatch(db);
+  b.set(r, { ...dados, fotos: ids, minis: fotos.map(f => f.mini), por: me.uid, porNome: me.nome || me.login || '', em: serverTimestamp() });
+  fotos.forEach((f, i) => b.set(doc(db, 'segfotos', ids[i]), { reg: r.id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes, em: serverTimestamp() }));
+  track(b.commit());
+  return r.id;
+}
+// O autor corrige o próprio registro (até 24 h; a anomalia, enquanto aberta).
+export const segEditar = (col, id, patch) => track(updateDoc(doc(db, col, id), { ...patch, atualizadoEm: serverTimestamp() }));
+// Acompanhamento da anomalia (só os campos do tratamento). foto = { dados, mini } do depois, quando houver.
+export function segTratar(a, patch, foto) {
+  const b = writeBatch(db); const p = { ...patch };
+  if (foto) {
+    const fid = doc(collection(db, 'segfotos')).id;
+    b.set(doc(db, 'segfotos', fid), { reg: a.id, col: 'seganom', tipo: 'depois', mini: foto.mini, dados: foto.dados, ordem: 0, autor: a.por, por: me.uid, conj: a.conj || '', area: a.area, mes: a.mes, em: serverTimestamp() });
+    p.trat = { ...p.trat, fotoDepois: fid, miniDepois: foto.mini };
+  }
+  b.update(doc(db, 'seganom', a.id), { ...p, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+  track(b.commit());
+}
+// Foto grande (só ao tocar na miniatura).
+export async function segFoto(id) { const s = await getDoc(doc(db, 'segfotos', id)); return s.exists() ? s.data().dados : null; }
+export const segSalvarCfg = cfg => track(setDoc(doc(db, 'config', 'seguranca'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));

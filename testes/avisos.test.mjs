@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   fs.mkdirSync(lib, { recursive: true });
-  for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm']) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
+  for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc']) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -172,4 +172,60 @@ test('justificativas: às 16h o supervisor recebe a contagem das faltas e atraso
   assert.equal(r.msgs.filter(x => x.uid === 'liderRec' && x.tag === 'justificativas').length, 0, 'líder não recebe');
   const cedo = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${HOJE}T15:10:00`), hoje: HOJE });
   assert.equal(cedo.msgs.filter(x => x.tag === 'justificativas').length, 0, 'antes das 16h não avisa');
+});
+
+// ---------------- Segurança: anomalia nova e prazo do tratamento ----------------
+test('Segurança: anomalia nova avisa quem trata e o supervisor da área (não o autor, nem outra área, nem quem só registra)', () => {
+  const us = {
+    tec: { papel: 'leitor', nome: 'Técnico', acesso: { seguranca: 'trata' }, escopos: [] },
+    reg: { papel: 'leitor', nome: 'Registra', acesso: { seguranca: 'registra' }, escopos: [] },
+    supPat: { papel: 'supervisor', nome: 'Sup Pátio', area: 'PREPARAÇÃO', acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
+    supBat: { papel: 'supervisor', nome: 'Sup Bateria', area: 'BATERIA 1', acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
+    lider: { papel: 'lider', nome: 'Líder', area: 'PREPARAÇÃO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
+    admin: { papel: 'admin', nome: 'Administrador' }
+  };
+  const av = Object.fromEntries(Object.keys(us).map(k => [k, tok]));
+  const agora = new Date(`${HOJE}T10:00:00`);
+  const anom = [{ id: 'a1', status: 'aberta', area: 'PÁTIO DE CARVÃO', conj: 'patio', local: 'CORREIA C1', desc: 'Proteção solta', por: 'reg', em: agora.getTime() - 36e5 },
+    { id: 'a0', status: 'aberta', area: 'PÁTIO DE CARVÃO', conj: 'patio', local: 'VELHA', desc: 'x', por: 'reg', em: agora.getTime() - 3 * 864e5 }];
+  const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: {}, agora, hoje: HOJE, seg: { anom } });
+  const seg = uid => r.msgs.filter(m => m.uid === uid && m.tag === 'seguranca');
+  assert.equal(seg('tec').length, 1); assert.equal(seg('tec')[0].titulo, 'Anomalia nova: CORREIA C1');
+  assert.match(seg('tec')[0].url, /m=seguranca&v=sganom/);
+  assert.equal(seg('supPat').length, 1, 'supervisor da área do Pátio');
+  assert.equal(seg('supBat').length, 0, 'supervisor de outra área');
+  assert.equal(seg('reg').length, 0, 'o autor (e quem só registra) não recebe');
+  assert.equal(seg('lider').length, 0); assert.equal(seg('admin').length, 0);
+  assert.ok(r.marcar.includes('sga|a1')); assert.ok(!r.marcar.includes('sga|a0'), 'anomalia de dias atrás não é nova');
+  const de2 = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: { 'sga|a1': HOJE }, agora, hoje: HOJE, seg: { anom } });
+  assert.equal(de2.msgs.filter(m => m.tag === 'seguranca').length, 0, 'uma vez por anomalia');
+  const semPref = planejar({ usuarios: us, avisos: { ...av, tec: { tokens: ['t'], prefs: { seguranca: false } } }, paradas: [], ocorr: [], sets: {}, enviados: {}, agora, hoje: HOJE, seg: { anom } });
+  assert.equal(semPref.msgs.filter(m => m.uid === 'tec' && m.tag === 'seguranca').length, 0, 'respeita a preferência');
+});
+
+test('Segurança: prazo amanhã e prazo vencido avisam só o responsável pelo tratamento, das 7h em diante, uma vez por prazo', () => {
+  const us = {
+    tec: { papel: 'leitor', nome: 'Técnico Um', acesso: { seguranca: 'trata' }, escopos: [] },
+    outro: { papel: 'leitor', nome: 'Técnico Dois', acesso: { seguranca: 'trata' }, escopos: [] },
+    supPat: { papel: 'supervisor', nome: 'Sup Pátio', area: 'PREPARAÇÃO', acesso: { operacao: 'supervisor' }, escopos: ['patio'] }
+  };
+  const av = Object.fromEntries(Object.keys(us).map(k => [k, tok]));
+  const velho = new Date(`${HOJE}T08:00:00`).getTime() - 10 * 864e5;
+  const anom = [
+    { id: 'p1', status: 'tratamento', area: 'BATERIA', conj: 'bateria', local: 'PORTA 12', por: 'x', em: velho, trat: { resp: 'Técnico Um', respUid: 'tec', prazo: '2026-10-15' } },
+    { id: 'p2', status: 'tratamento', area: 'PÁTIO DE CARVÃO', conj: 'patio', local: 'PASSARELA', por: 'x', em: velho, trat: { resp: 'SUP PATIO', prazo: '2026-10-10' } },
+    { id: 'p3', status: 'concluida', area: 'BATERIA', conj: 'bateria', local: 'TRILHO', por: 'x', em: velho, trat: { resp: 'Técnico Um', respUid: 'tec', prazo: '2026-10-01' } },
+    { id: 'p4', status: 'tratamento', area: 'BATERIA', conj: 'bateria', local: 'CDQ', por: 'x', em: velho, trat: { resp: 'Técnico Um', respUid: 'tec', prazo: '2026-10-20' } }
+  ];
+  const rodarS = (h, enviados = {}) => planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados, agora: new Date(`${HOJE}T${String(h).padStart(2, '0')}:30:00`), hoje: HOJE, seg: { anom } });
+  const r = rodarS(8);
+  const seg = uid => r.msgs.filter(m => m.uid === uid && m.tag === 'seguranca');
+  assert.deepEqual(seg('tec').map(m => m.titulo), ['Prazo amanhã: 1 anomalia com você'], 'p1 vence amanhã; p3 concluída e p4 longe não contam');
+  assert.match(seg('tec')[0].corpo, /PORTA 12/);
+  assert.deepEqual(seg('supPat').map(m => m.titulo), ['Prazo vencido: 1 anomalia com você'], 'responsável achado pelo nome digitado');
+  assert.equal(seg('outro').length, 0, 'quem não é o responsável não recebe');
+  assert.ok(r.marcar.includes('sgp1|p1|2026-10-15') && r.marcar.includes('sgpv|p2|2026-10-10'));
+  assert.equal(rodarS(6).msgs.filter(m => m.tag === 'seguranca').length, 0, 'antes das 7h não avisa prazo');
+  assert.equal(rodarS(9, { 'sgp1|p1|2026-10-15': HOJE, 'sgpv|p2|2026-10-10': HOJE }).msgs.filter(m => m.tag === 'seguranca').length, 0, 'uma vez por prazo');
+  for (const m of r.msgs) assert.ok(!/FULANO|Fulano/.test(m.titulo + m.corpo));
 });

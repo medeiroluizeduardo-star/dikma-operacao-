@@ -4,7 +4,7 @@ import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora 
 import { aprovaPapel, contarPendentes } from './aprovacao.js';
 
 const DIAS_L = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true };
 
 export function criarMeuDia(X) {
   const { DB, esc, title, I, toast, render } = X;
@@ -51,7 +51,7 @@ export function criarMeuDia(X) {
   }
 
   // Quem só consulta (visitante) não vê botão de ação: só "Ver". O laranja fica para a ação principal da faixa de abertura.
-  const soLer = () => ['operacao', 'gestao', 'rh'].map(P).filter(Boolean).every(p => p === 'leitor');
+  const soLer = () => ['operacao', 'gestao', 'seguranca', 'rh'].map(P).filter(Boolean).every(p => p === 'leitor') && !(X.seg && X.seg() && X.seg().trata);
   const ir = (mod, view, area, txt) => (soLer() ? (view === 'gnovaoc' ? '' : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">Ver</button>`) : `<button class="btn sm" data-md="${mod}|${view}|${area || ''}">${txt}</button>`);
   const vazio = t => `<p class="muted small m0">${t}</p>`;
 
@@ -67,6 +67,7 @@ export function criarMeuDia(X) {
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)'],
       (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
+      X.seg && X.seg() && ['seguranca', X.seg().trata ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       ehAdm() && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
     ].filter(Boolean);
     let corpo;
@@ -154,6 +155,8 @@ export function criarMeuDia(X) {
         </div></div>`);
       }
     }
+    // Segurança: anomalias vencidas, com a pessoa e abertas na área dela (telas/seguranca.js)
+    if (X.seg) { const sg = X.seg(); if (sg) { tiles.push(...sg.tiles); if (sg.bloco) blocos.push(sg.bloco); } }
     // Justificativas e check-in: contados por conjunto (Pátio e Bateria), não pelo módulo aberto antes
     for (const k of SET_KEYS) {
       if (X.jusPend) { const n = X.jusPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa'} · ${SETS[k].curto}`, s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', '', k], acao: 'Justificar' }); }
