@@ -14,8 +14,11 @@ export const docsFor = ({ mes, ini, area }) => Object.values(DB.cache.semanas).f
 // Datas dos 7 dias de cada semana, calculadas uma vez só (as telas grandes chamam isso milhares de vezes).
 export const diasDe = doc => (doc._dias && doc._dias.ini === doc.ini ? doc._dias.v : (doc._dias = { ini: doc.ini, v: DAYS.map((_, k) => add(doc.ini, k)) }).v);
 // Código para a tela: 'A' = programada em dia que já passou · 'X' = sem programação · 'D' = dispensada na limpeza de dados
-// (no banco a célula é '_' e a semana guarda a marca dx: não conta em nenhuma conta, só aparece com um traço; limpeza.js).
-export function st(doc, i, k) { const c = doc.d[i][k]; if (c === 'P' && diasDe(doc)[k] < TODAY) return 'A'; return c === '_' ? (doc.dx && doc.dx[doc.ids[i] + '|' + k] ? 'D' : 'X') : c; }
+// (no banco a célula é '_' e a semana guarda a marca dx: não conta em nenhuma conta, só aparece com um traço; limpeza.js)
+// · 'F' = feriado sem operação (célula '_' com a marca fe = descrição do feriado; feriados.js).
+export function st(doc, i, k) { const c = doc.d[i][k]; if (c === 'P' && diasDe(doc)[k] < TODAY) return 'A'; if (c !== '_') return c; const key = doc.ids[i] + '|' + k; return doc.fe && doc.fe[key] ? 'F' : doc.dx && doc.dx[key] ? 'D' : 'X'; }
+// Descrição do feriado de uma célula marcada (ou '').
+export const feriadoDe = (doc, i, k) => (doc.d[i][k] === '_' && doc.fe && doc.fe[doc.ids[i] + '|' + k]) || '';
 export function stats(docs, { rota = 'TODAS', tipo = 'TODOS' } = {}) {
   const s = { prog: 0, R: 0, N: 0, P: 0, A: 0, E: 0, FP: 0, progHoje: 0, Rhoje: 0, day: Array.from({ length: 7 }, () => ({ R: 0, N: 0, P: 0, A: 0, E: 0 })) };
   for (const doc of docs) for (let i = 0; i < doc.ids.length; i++) {
@@ -143,5 +146,5 @@ export function devolver(x, mot) {
   Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, { [doc.ids[i] + '|' + k]: { s: 'D', c: 'P', ant, mot } })).catch(() => toast('Não foi possível devolver'));
   DB.log(`Devolveu ao líder: ${x.p.ativ} · ${x.p.rota} · ${ddmm(x.dt)} (${mot})`);
 }
-export const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·', D: '–' };
-export const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada', D: 'Dispensada na limpeza' };
+export const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·', D: '–', F: '–' };
+export const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada', D: 'Dispensada na limpeza', F: 'Feriado' };

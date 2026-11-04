@@ -166,6 +166,8 @@ service cloud.firestore {
 
     // Apagar semanas e aprovações (Limpeza de dados) e o histórico: só o administrador. A dispensa das pendências
     // antigas (célula volta a '_' e a marca vai em dx) é uma alteração: o administrador já altera a semana inteira.
+    // O mesmo vale para o feriado sem operação (célula volta a '_' e a marca vai em fe; public/feriados.js): grava o
+    // administrador (Escalas e turnos) ou a rotina do GitHub (chave de serviço, que não passa por estas regras).
     match /semanas/{id} {
       allow read: if op();
       allow create: if admMod('operacao');

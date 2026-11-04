@@ -18,6 +18,7 @@ import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
 import { listasSeg } from '../segcalc.js';
 import { vLimpeza } from './limpeza.js';
+import * as FE from '../feriados.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
@@ -79,7 +80,7 @@ function vCfEscala() {
       ${ed ? `<span class="turi add"><input class="in" maxlength="2" placeholder="Letra" data-escnova="${k}" aria-label="Nova turma"><button type="button" class="btn sm" data-escadd="${k}">${I.plus} Turma</button></span>` : ''}</div></div>`).join('');
   const fer = R.feriados.slice().sort((a, b) => (a.data < b.data ? -1 : 1));
   const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data));
-  const ferH = `<div class="regc"><div class="regh"><b>Feriados</b><span class="muted small">folga do administrativo (turno segue a escala)</span></div>
+  const ferH = `<div class="regc"><div class="regh"><b>Feriados</b><span class="muted small">folga do administrativo (turno segue a escala) · nas atividades do Pátio e da Bateria, o que estava programado não conta como atrasado</span></div>
     ${fer.length ? `<div class="rchips">${fer.map(f => `<span class="rchip">${dBRs(f.data)} · ${esc(f.desc || 'feriado')}${ed ? `<button type="button" class="btn ghost mini-x" data-escferdel="${f.data}" aria-label="Remover">✕</button>` : ''}</span>`).join('')}</div>` : '<p class="muted small m0">Nenhum feriado cadastrado.</p>'}
     ${ed ? `<div class="row-gap"><input class="in" type="date" id="escFerD"><input class="in grow" id="escFerT" placeholder="Descrição"><button type="button" class="btn" data-escfer="1">${I.plus} Feriado</button>${eqF.length ? `<button type="button" class="btn ghost" data-escfereq="1">Copiar ${eqF.length} da Operação</button>` : ''}</div>` : ''}</div>`;
   const barra = ed ? `<div class="body row-gap savebar"><button class="btn pri" data-act="escSalvar" ${salvo ? 'disabled' : ''}>${salvo ? 'Tudo salvo' : 'Salvar escalas'}</button>${salvo ? '' : '<button class="btn ghost" data-act="escDescartar">Descartar mudanças</button><span class="muted small">As mudanças só valem depois de salvar.</span>'}</div>` : '';
@@ -419,13 +420,46 @@ acoes.permSalvar = async (t, d) => {
 };
 acoes.permPadrao = (t, d) => { UI.perm = {}; render(); toast('Padrão carregado. Salve para aplicar'); };
 acoes.permDesfazer = (t, d) => { UI.perm = null; render(); };
-acoes.escSalvar = (t, d) => {
-  const R = rascEsc(); DB.salvarEscalas({ regimes: R.regimes, feriados: R.feriados });
+acoes.escSalvar = async (t, d) => {
+  const R = rascEsc();
+  const mudouFer = JSON.stringify((DB.cache.escalas && DB.cache.escalas.feriados) || []) !== JSON.stringify(R.feriados);
+  const salvo = DB.salvarEscalas({ regimes: R.regimes, feriados: R.feriados });
   // mantém a Operação igual: turmas 4x4 também no cadastro dela
   const t4 = (R.regimes['4x4'] || {}).turmas || {};
   if (VIEWS.find(v => v.id === 'econfig').req() && DB.cache.e && DB.cache.e.config) DB.eSalvarConfig({ turmas: Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) });
   UI.escR = null; DB.log('Atualizou as escalas e turnos'); toast('Escalas salvas · valem para todos os módulos'); render();
+  if (!mudouFer) return;
+  if (!isAdmin()) { toast('Escalas salvas · as atividades dos feriados são ajustadas pela rotina automática em até 1 hora'); return; }
+  try { await salvo; await aplicarFeriadosAtividades(); } catch (err) { toast('Não foi possível aplicar os feriados agora: ' + (err.message || err) + ' · a rotina automática tenta de novo em até 1 hora'); }
 };
+// Feriados nas atividades (feriados.js): o administrador aplica em todos os meses gerados do Pátio e da Bateria.
+// Lê as semanas e as aprovações do servidor mês a mês e grava só o que muda, em lotes de até 400.
+// A rotina do GitHub (integracao/avisos) faz a mesma conta de hora em hora, para quem não passou por aqui.
+let aplicandoFer = false;
+export async function aplicarFeriadosAtividades() {
+  if (!isAdmin() || aplicandoFer) return null;
+  aplicandoFer = true;
+  try {
+    const { fer, completo } = await DB.feriadosAtuais();
+    const ops = []; const n = { feriado: 0, volta: 0 };
+    for (const k of SET_KEYS) {
+      const C = x => SETS[k].pre + x;
+      const cfg = (await DB.limpezaLerIds(C('config'), ['sistema']))[0]; if (!cfg) continue;
+      for (const m of cfg.meses || []) {
+        const [sem, ap] = await Promise.all([DB.limpezaLer(C('semanas'), [['mes', '==', m]]), DB.limpezaLer(C('aprov'), [['mes', '==', m]])]);
+        const plano = FE.planoFeriados(sem, fer, { desfazer: completo, aprov: Object.fromEntries(ap.map(a => [a.id, a.v || {}])) });
+        const c = FE.contarPlano(plano); n.feriado += c.feriado; n.volta += c.volta;
+        for (const x of plano) ops.push({ tipo: 'alterar', col: C('semanas'), id: x.id, campos: x.campos });
+      }
+    }
+    if (!ops.length) { toast('Feriados: as atividades já estavam certas'); return n; }
+    toast(`Aplicando feriados: ${n.feriado + n.volta} atividades`);
+    for (let i = 0; i < ops.length; i += 400) await DB.limpezaGravar(ops.slice(i, i + 400));
+    const txt = [n.feriado ? `${n.feriado} fora da conta (feriado)` : '', n.volta ? `${n.volta} voltaram a programadas` : ''].filter(Boolean).join(' · ');
+    DB.log(`Feriados nas atividades: ${txt}`); toast(`Feriados aplicados: ${txt}`); render();
+    return n;
+  } finally { aplicandoFer = false; }
+}
 acoes.escDescartar = (t, d) => { UI.escR = null; render(); };
 acoes.escFicha = (t, d) => {
   let n = 0;

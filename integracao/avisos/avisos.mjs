@@ -1,22 +1,17 @@
 // Dikma Gestão — avisos no celular. Roda no GitHub Actions (workflow "Avisos no celular"), de hora em hora.
 // Lê o Firestore com a chave de serviço, decide os avisos (planejar.mjs) e envia pelo Firebase Cloud Messaging.
 // Cada aviso vai uma vez só: o que já foi enviado fica marcado em avisos_enviados/estado.
+// Antes, aplica os feriados nas atividades (feriados.mjs): atividade programada em feriado sem operação não fica atrasada.
 // Também refaz, uma vez por dia, os resumos que todos leem: adm/feriasAtivas (férias de 2 meses antes a 6 meses depois)
 // e adm/desligados (demissão das fichas), para não ficarem velhos quando ninguém edita férias ou fichas.
 // AVISOS_SO_TESTAR=1 mostra o que seria enviado, sem enviar nem marcar (os resumos também não são gravados).
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { copiarDoSite } from './lib-site.mjs';
 
 process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
-const aqui = path.dirname(fileURLToPath(import.meta.url));
 
-// As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node.
-fs.mkdirSync(path.join(aqui, 'lib'), { recursive: true });
-for (const f of ['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc']) {
-  const src = fs.readFileSync(path.join(aqui, '..', '..', 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'");
-  fs.writeFileSync(path.join(aqui, 'lib', f + '.mjs'), src);
-}
+// As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
+// (um arquivo novo importado por estes vem junto sozinho).
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
@@ -28,7 +23,7 @@ const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!sa) { console.error('::error::Falta o segredo FIREBASE_SERVICE_ACCOUNT.'); process.exit(1); }
 
 const { initializeApp, cert } = await import('firebase-admin/app');
-const { getFirestore, FieldValue } = await import('firebase-admin/firestore');
+const { getFirestore, FieldValue, FieldPath } = await import('firebase-admin/firestore');
 const { getMessaging } = await import('firebase-admin/messaging');
 initializeApp({ credential: cert(JSON.parse(sa)) });
 const db = getFirestore();
@@ -50,6 +45,28 @@ let fichas = null;
       await db.doc('adm/desligados').set({ itens: des, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() });
     }
   }
+}
+
+// Feriados nas atividades (Pátio e Bateria): em feriado sem operação, o que estava programado e não foi apontado sai
+// da conta; feriado removido, volta (public/feriados.js). Antes dos avisos, para não avisar de atividade em feriado.
+// Lê todos os meses gerados só quando os feriados ou os meses mudaram, e uma vez por dia por garantia; só grava o que muda.
+{
+  const { planejarFeriados, gravarFeriados, fonteBanco, relatorio } = await import('./feriados.mjs');
+  const ref = db.doc('avisos_enviados/feriados');
+  const ant = (await ref.get()).data() || {};
+  const { mapaFeriados, assinaturaFeriados } = await import('./lib/feriados.mjs');
+  const fer0 = mapaFeriados((await db.doc('config/escalas').get()).data() || {}, (await db.doc('eq/config').get()).data() || null);
+  const meses0 = [];
+  for (const k of SET_KEYS) { const c = await db.doc(`${SETS[k].pre}config/sistema`).get(); meses0.push(((c.exists && c.data().meses) || []).slice().sort().join(',')); }
+  const assin = assinaturaFeriados(fer0) + '#' + meses0.join('/');
+  if (ant.dia !== hoje || ant.assinatura !== assin) {
+    const r = await planejarFeriados(fonteBanco(db));
+    relatorio(r).forEach(l => console.log(l));
+    let gravadas = 0;
+    if (!soTestar && r.total.semanas) gravadas = await gravarFeriados(db, FieldPath, FieldValue, r.planos);
+    console.log(`Aplicar feriados: ${r.total.feriado} atividade(s) fora da conta · ${r.total.volta} de volta · ${soTestar ? 'só teste, nada gravado' : `${gravadas} semana(s) gravada(s)`} · ${r.leituras} leituras.`);
+    if (!soTestar) await ref.set({ dia: hoje, assinatura: r.assinatura, ultimo: { feriado: r.total.feriado, volta: r.total.volta, semanas: gravadas }, em: FieldValue.serverTimestamp() });
+  } else console.log('Aplicar feriados: nada mudou desde a última vez hoje.');
 }
 
 const avisos = porId(await db.collection('avisos').get());

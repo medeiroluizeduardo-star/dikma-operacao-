@@ -5,6 +5,7 @@ import { acessoDoLegado, legadoDoAcesso, marcasDe, ehAdminU, modulosDe } from '.
 import { prepararImportacao } from './planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from './segcalc.js';
 import { aplicarCampos } from './limpeza.js';
+import { mapaFeriados, aplicarNaSemana } from './feriados.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -46,16 +47,21 @@ async function freshSet(k) {
   // demonstração: quem é de turno 4x4 recebe uma letra (A a D), para a folga automática da escala aparecer
   { let i = 0; for (const a of Object.keys(x.colabs)) x.colabs[a].forEach(c => { if (/4\s*X\s*4/i.test(c.regime || '') && !c.turma) c.turma = 'ABCD'[i++ % 4]; }); }
   const hoje = today(), cur0 = monthOfWeek(weekOf(hoje));
+  const fer = feriadosMock(); let exFer = false;
   for (const m of [addMonth(cur0, -1), cur0, addMonth(cur0, 1), addMonth(cur0, 2)]) {
     for (const ini of weeksOfMonth(m)) for (const a of SETS[k].areas) {
       const w = novaSemana(a, ini, x.plano[a]);
+      // feriado sem operação: sai da programação antes dos apontamentos de exemplo (feriados.js)
+      aplicarNaSemana(w, fer);
+      // exemplo: a primeira atividade marcada num feriado da última semana foi feita mesmo assim (continua realizada)
+      if (a === SETS[k].areas[0] && !exFer) for (const key of Object.keys(w.fe || {})) { const [pid, d] = key.split('|'); if (add(ini, +d) < hoje && add(ini, +d) >= add(hoje, -7)) { const arr = [...w.s[pid]]; arr[+d] = 'R'; w.s[pid] = arr.join(''); delete w.fe[key]; exFer = true; break; } }
       for (const pid of w.ids) {
         const arr = [...w.s[pid]];
         for (let d = 0; d < 7; d++) {
           if (add(ini, d) >= hoje) continue;
           const r = rnd(hash(a + ini + pid + d));
           if (arr[d] === 'P') { if (r < .86) arr[d] = 'R'; else if (r < .93) { arr[d] = 'N'; w.m[pid + '|' + d] = MOTIVOS[Math.floor(r * 1000) % 6]; } }
-          else if (d < 5 && r < .012) arr[d] = 'E';
+          else if (d < 5 && r < .012 && !(w.fe && w.fe[pid + '|' + d])) arr[d] = 'E';
         }
         w.s[pid] = arr.join('');
       }
@@ -133,6 +139,7 @@ export async function start(callbacks) {
     if (saved.g && saved.g.config) { cache.g = { loaded: true, ...saved.g }; cache.gAssin = saved.gAssin || {}; } else { const sg = await seed_('seed-gestao.json'); cache.g = { loaded: true, config: { codigo: sg.codigo, revisao: sg.revisao, declaracao: sg.declaracao, tipos: sg.tipos }, colabs: sg.colabs, ocorr: sg.ocorrencias.map((o, i) => ({ id: 'oc' + i, ...o })) }; }
   } else { saved = null; await fresh(); }
   for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m));
+  aplicarFeriadosMock();
   await seniorExemplo();
   me = saved && 'me' in saved ? (cache.usuarios.find(u => u.uid === saved.me) || null) : cache.usuarios[0];
   if (me && !cache.usuarios.some(u => u.uid === 'admv')) cache.usuarios.push({ uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] });
@@ -216,7 +223,15 @@ export async function saveRotas(rotas) { cache.config.rotas = rotas; changed(); 
 cache.avisosCfg = { vapid: 'demonstracao' }; cache.meusAvisos = null; cache.permissoes = {};
 export async function salvarPermissoes(abas) { cache.permissoes = abas; changed(); }
 // Escala na demonstração: 3x3 com datas de exemplo (o 4x4 vem das turmas da Operação).
-cache.escalas = { regimes: { '3x3': { turmas: { I: '2026-10-01', J: '2026-10-04' } } } }; cache.escalasLoaded = true;
+// Feriados de exemplo (sem operação): as atividades programadas nesses dias ficam fora da conta (feriados.js).
+cache.escalas = { regimes: { '3x3': { turmas: { I: '2026-10-01', J: '2026-10-04' } } }, feriados: [
+  { data: '2026-10-12', desc: 'Nossa Senhora Aparecida' }, { data: '2026-11-02', desc: 'Finados' }, { data: '2026-11-15', desc: 'Proclamação da República' },
+  { data: '2026-11-20', desc: 'Dia da Consciência Negra' }, { data: '2026-12-25', desc: 'Natal' }, { data: '2027-01-01', desc: 'Confraternização Universal' }] };
+cache.escalasLoaded = true;
+function feriadosMock() { return mapaFeriados(cache.escalas, cache.e && cache.e.config); }
+export async function feriadosAtuais() { return { fer: feriadosMock(), completo: true }; }
+// A demonstração aplica a regra ao abrir (vale também para dados já guardados neste navegador).
+function aplicarFeriadosMock() { const fer = feriadosMock(); for (const k of SET_KEYS) for (const w of Object.values(S[k].semanas)) aplicarNaSemana(w, fer); }
 export async function salvarEscalas(cfg) { cache.escalas = JSON.parse(JSON.stringify(cfg)); changed(); }
 export async function avisosSuportados() { return 'Notification' in window; }
 export async function ativarAvisos(prefs) {
@@ -232,7 +247,7 @@ export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find
 export function log(t) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;
-  for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of SETS[cur].areas) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }
+  for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of SETS[cur].areas) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); aplicarNaSemana(w, feriadosMock()); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }
   if (!cache.config.meses.includes(ym)) { cache.config.meses.push(ym); cache.config.meses.sort(); }
   cache.monthsLoaded.add(ym); changed(); return n;
 }

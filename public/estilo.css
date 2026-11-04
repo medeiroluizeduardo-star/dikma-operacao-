@@ -151,6 +151,15 @@ td.today{background:color-mix(in srgb,var(--focus) 6%,transparent)}
 .chip.X{color:var(--line);font-size:18px}
 .chip.X:hover{color:var(--ink-3);border-color:var(--line)}
 .chip.D{color:var(--ink-3);border-style:dashed;border-color:var(--line);font-weight:700}
+/* Feriado sem operação (feriados.js): cinza, não conta */
+.chip.F{color:var(--ink-3);background:var(--surface-2);border-color:var(--line);font-weight:700}
+th.fer{color:var(--ink-3)}
+.thf{font-weight:500;font-size:10px;text-transform:lowercase;color:var(--ink-3)}
+.ferav{margin:0;padding:8px 10px;border-radius:8px;font-size:12.5px;background:var(--surface-2);color:var(--ink-2);border-left:3px solid var(--line)}
+.act.F{opacity:.75}
+.act.F .t{color:var(--ink-2)}
+.dbtn.fer{border-style:dashed}
+.dbtn.fer:not([aria-pressed="true"]) b{color:var(--ink-3)}
 .chip:hover{filter:brightness(1.08)}
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border-radius:20px;padding:2px 9px;white-space:nowrap}
 .pill.ok{background:color-mix(in srgb,var(--st-real) 14%,transparent);color:var(--st-real)}
