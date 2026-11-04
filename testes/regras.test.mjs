@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -749,4 +749,24 @@ test('Limpeza de dados: a Administração Dos módulos continua gerando meses, m
   await assertSucceeds(setDoc(doc(d, 'semanas', 'RECEBIMENTO|2027-03-01'), { area: 'RECEBIMENTO', mes: '2027-03', ini: '2027-03-01', ids: [], s: {}, m: {} }));
   await assertFails(deleteDoc(doc(d, 'semanas', 'RECEBIMENTO|2027-03-01')));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'semanas', 'RECEBIMENTO|2027-03-01')));
+});
+
+// ---------------- Feriados nas atividades (marca fe; public/feriados.js) ----------------
+test('Feriados: o administrador marca e desfaz a atividade em feriado (Pátio e Bateria); líder e supervisor não', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const d = ctx.firestore();
+    await setDoc(doc(d, 'semanas', 'RECEBIMENTO|2026-11-02'), { area: 'RECEBIMENTO', mes: '2026-11', ini: '2026-11-02', ids: ['X1'], s: { X1: 'PPPPP__' }, m: {}, ev: {} });
+    await setDoc(doc(d, 'b_semanas', 'BATERIA 1|2026-11-02'), { area: 'BATERIA 1', mes: '2026-11', ini: '2026-11-02', ids: ['Y1'], s: { Y1: 'PPPPP__' }, m: {}, ev: {} });
+  });
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', 'RECEBIMENTO|2026-11-02'), { 's.X1': '_PPPP__', 'fe.X1|0': 'Finados' }), 'líder não marca feriado');
+  await assertFails(updateDoc(doc(db('sup'), 'semanas', 'RECEBIMENTO|2026-11-02'), { 'fe.X1|0': 'Finados' }), 'supervisor não marca feriado');
+  const a = db('admin');
+  for (const [c, id, pid] of [['semanas', 'RECEBIMENTO|2026-11-02', 'X1'], ['b_semanas', 'BATERIA 1|2026-11-02', 'Y1']]) {
+    const b = writeBatch(a);
+    b.update(doc(a, c, id), { [`s.${pid}`]: '_PPPP__', [`fe.${pid}|0`]: 'Finados' });
+    await assertSucceeds(b.commit(), `${c}: marca`);
+    await assertSucceeds(updateDoc(doc(a, c, id), { [`s.${pid}`]: 'PPPPP__', [`fe.${pid}|0`]: deleteField() }), `${c}: desfaz`);
+  }
+  // a Administração Dos módulos (gera os meses) cria a semana já marcada
+  await assertSucceeds(setDoc(doc(db('admModulo'), 'semanas', 'RECEBIMENTO|2026-11-16'), { area: 'RECEBIMENTO', mes: '2026-11', ini: '2026-11-16', ids: ['X1'], s: { X1: 'PPPP___' }, fe: { 'X1|4': 'Consciência Negra' }, m: {} }));
 });

@@ -212,6 +212,8 @@ export function vProg() {
   if (UI.rota !== 'TODAS' && !rts.includes(UI.rota)) UI.rota = 'TODAS';
   const s = stats(docs, { rota: UI.rota, tipo: UI.tipo });
   const cel = isMobile();
+  // Feriado sem operação de cada dia da semana (pela marca nas semanas; feriados.js)
+  const ferSem = DAYS.map((_, k) => { for (const d of docs) if (d.fe) for (const [key, v] of Object.entries(d.fe)) if (key.endsWith('|' + k) && v) return v; return ''; });
   const selRota = `<label class="sel"><span>Rota</span><select class="in" id="fRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
    <label class="sel"><span>Tipo</span><select class="in" id="fTipo"><option value="TODOS">Todos</option>${tipos().map(t => `<option ${t === UI.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
   let h = `<div class="filters">
@@ -221,7 +223,8 @@ export function vProg() {
    ${!framed && !cel ? `<button class="btn" data-act="csv" style="align-self:flex-end">${I.dl} Exportar Excel</button>` : ''}
   </div>${cel ? `<details class="legdet"${UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' open' : ''}><summary>Filtrar por rota ou tipo</summary><div class="filters">${selRota}</div></details>` : ''}
   <div class="mini"><div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
-  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span>${docs.some(d => d.dx && Object.keys(d.dx).length) ? `<span><span class="chip sm D">${CHIP.D}</span>${ST_NOME.D}</span>` : ''}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
+  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span>${docs.some(d => d.dx && Object.keys(d.dx).length) ? `<span><span class="chip sm D">${CHIP.D}</span>${ST_NOME.D}</span>` : ''}${ferSem.some(Boolean) ? `<span><span class="chip sm F">${CHIP.F}</span>Feriado sem operação (não conta)</span>` : ''}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
+  if (ferSem.some(Boolean)) h += `<p class="ferav">${DAYS.map((d, k) => (ferSem[k] ? `<b>${d} ${ddmm(add(UI.ini, k))} · Feriado · ${esc(ferSem[k])}</b>` : '')).filter(Boolean).join(' · ')} — dia sem operação: as atividades programadas não contam como programadas nem como atrasadas.</p>`;
   const q = UI.q.trim().toLowerCase();
   const rows = [];
   for (const doc of docs) doc.ids.forEach((id, i) => {
@@ -235,14 +238,14 @@ export function vProg() {
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
   // Rotas recolhidas: cada rota mostra o resumo; o detalhe abre ao tocar. Com busca ou uma rota escolhida, abre tudo.
   const grupos = new Map();
-  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X' || c === 'D') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
+  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X' || c === 'D' || c === 'F') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
   const tudoAberto = !!q || UI.rota !== 'TODAS' || grupos.size === 1;
   const abertas = new Set(UI.progAbertas || []);
   const aberto = key => tudoAberto || abertas.has(key);
   const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.rows.length} ${x.rows.length === 1 ? 'atividade' : 'atividades'}</small></span><span class="pres num">${x.R} de ${x.tot} feitas${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
   if (!tudoAberto) h += `<div class="row-gap pgtool"><button class="btn sm" data-act="progTodas">${abertas.size ? 'Recolher todas' : 'Abrir todas'}</button><span class="muted small">${grupos.size} rotas · toque numa rota para ver as atividades</span></div>`;
   rows.length = 0; for (const [key, x] of grupos) { if (aberto(key)) rows.push(...x.rows); else rows.push({ fechado: key }); }
-  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const fp = doc.fp && doc.fp[doc.ids[i] + '|' + k]; return `<button class="chip ${c}${fp ? ' fp' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${ST_NOME[c]}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${fp ? ' · fora da programação' : ''}">${CHIP[c]}</button>`; };
+  const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const fp = doc.fp && doc.fp[doc.ids[i] + '|' + k]; return `<button class="chip ${c}${fp ? ' fp' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${c === 'F' ? 'Feriado · ' + esc(doc.fe[doc.ids[i] + '|' + k]) : ST_NOME[c]}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${c === 'F' ? 'Feriado · ' + esc(doc.fe[doc.ids[i] + '|' + k]) + ' (sem operação, não conta)' : ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${fp ? ' · fora da programação' : ''}">${CHIP[c]}</button>`; };
   const LIM = UI.more || (isMobile() ? 80 : 250); // o resto aparece em "Mostrar mais" (abre mais rápido)
   const shown = rows.slice(0, LIM);
   let g = '';
@@ -257,7 +260,7 @@ export function vProg() {
     }
     h += '</div>';
   } else {
-    h += `<div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}">${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span></th>`).join('')}</tr></thead><tbody>`;
+    h += `<div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}${ferSem[k] ? ' fer' : ''}"${ferSem[k] ? ` title="Feriado · ${esc(ferSem[k])} · sem operação"` : ''}>${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span>${ferSem[k] ? '<br><span class="thf">feriado</span>' : ''}</th>`).join('')}</tr></thead><tbody>`;
     for (const r of shown) {
       if (r.fechado) { h += `<tr class="grp"><td colspan="11">${cabGrupo(r.fechado, grupos.get(r.fechado))}</td></tr>`; g = r.fechado; continue; }
       const { doc, i, p } = r;

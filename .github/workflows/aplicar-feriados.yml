@@ -1,0 +1,46 @@
+name: Aplicar feriados
+
+# Atividades programadas em FERIADO SEM OPERAÇÃO deixam de contar como atrasadas e pendentes (Pátio e Bateria,
+# todas as áreas e rotas, meses passados e futuros). Feriado removido ou "com operação": a atividade volta a programada.
+# Os feriados vêm de Administração › Escalas e turnos e dos "sem operação" da Operação.
+# A rotina "Avisos no celular" já faz isso sozinha de hora em hora, e a tela faz ao salvar os feriados; este workflow
+# é para conferir ou forçar na hora. Só manual (Run workflow).
+#   simular (padrão): só mostra, no resumo desta execução, os feriados encontrados e, por feriado, conjunto e área,
+#                     quantas atividades mudam. Nada é gravado.
+#   gravar: grava só as semanas que precisam mudar (lotes de até 400). Rodar de novo não muda mais nada.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'simular (só mostra) ou gravar'
+        type: choice
+        options: [simular, gravar]
+        default: simular
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avisos-celular
+  cancel-in-progress: false
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: integracao/avisos
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Instalar dependências
+        run: npm install --omit=dev --no-audit --no-fund
+      - name: Aplicar feriados (${{ inputs.modo }})
+        env:
+          TZ: America/Sao_Paulo
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FERIADOS_MODO: ${{ inputs.modo }}
+        run: node aplicar-feriados.mjs

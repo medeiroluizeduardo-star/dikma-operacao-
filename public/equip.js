@@ -7,6 +7,9 @@ import { criarBusca, competenciaDe } from './planilhas-adm.js';
 import { indiceFerias } from './acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
 import { situacaoDoDia, textoOperacao, feriadosOperacao } from './situacao.js';
+// Feriado sem operação mudou: o administrador já aplica nas atividades do Pátio e da Bateria (feriados.js);
+// para os demais, a rotina do GitHub faz o mesmo em até 1 hora.
+const ferAtiv = salvo => Promise.resolve(salvo).then(() => import('./telas/config.js')).then(m => m.aplicarFeriadosAtividades()).catch(() => {});
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
@@ -693,7 +696,7 @@ export function criarEquip(X) {
       case 'delInsp': if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; return; } DB.eDel('insp', d.id); toast('Inspeção excluída'); break;
       case 'recarregar': U.hist = null; render(); break;
       case 'delCausa': DB.eSalvarConfig({ causas: E().config.causas.filter((_, i) => i !== +d.i) }); break;
-      case 'delFer': DB.eSalvarConfig({ feriados: E().config.feriados.filter(f => !(f.data === d.data && f.desc === d.desc)) }); break;
+      case 'delFer': ferAtiv(DB.eSalvarConfig({ feriados: E().config.feriados.filter(f => !(f.data === d.data && f.desc === d.desc)) })); break;
       case 'importar': {
         UI.busy = true; render();
         try { const s = await DB.seed('seed-equip.json'); await DB.eImportar(s); DB.log('Operação: importou a planilha de controle de equipamentos'); toast('Planilha importada'); }
@@ -732,7 +735,7 @@ export function criarEquip(X) {
   document.addEventListener('submit', e => {
     const f = e.target;
     if (f.id === 'fCausa') { e.preventDefault(); const c = $('ncCausa').value.trim().toUpperCase(); if (!c) return; DB.eSalvarConfig({ causas: [...E().config.causas, { causa: c, resp: $('ncResp').value }] }); toast('Causa adicionada'); }
-    if (f.id === 'fFer') { e.preventDefault(); const dt = $('nfData').value, ds = $('nfDesc').value.trim(); if (!dt || !ds) { toast('Informe data e descrição'); return; } DB.eSalvarConfig({ feriados: [...E().config.feriados, { data: dt, desc: ds, semOp: $('nfSem').checked }] }); toast('Feriado adicionado'); }
+    if (f.id === 'fFer') { e.preventDefault(); const dt = $('nfData').value, ds = $('nfDesc').value.trim(); if (!dt || !ds) { toast('Informe data e descrição'); return; } ferAtiv(DB.eSalvarConfig({ feriados: [...E().config.feriados, { data: dt, desc: ds, semOp: $('nfSem').checked }] })); toast('Feriado adicionado'); }
   });
 
   return {

@@ -4,6 +4,8 @@ name: Avisos no celular
 # aprovação esperando há mais de 1 dia (8h), assinaturas pendentes há mais
 # de 7 dias (a partir das 8h), atividades do dia sem apontar (a partir das 15h) e déficit de efetivo amanhã (17h).
 # Cada pessoa recebe só o que é dela. Enquanto ninguém ligar os avisos no sistema, só registra "nada a enviar".
+# Antes dos avisos, aplica os feriados nas atividades (programada em feriado sem operação não fica atrasada; só grava o
+# que muda; lê todos os meses quando os feriados ou os meses mudam e uma vez por dia). Manual: workflow "Aplicar feriados".
 # Uma vez por dia também refaz os resumos lidos por todos: férias (adm/feriasAtivas) e desligamentos das fichas (adm/desligados).
 on:
   schedule:

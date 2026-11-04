@@ -11,7 +11,8 @@
 //   colaboradores/{ÁREA}      { itens: [ {id, area, rota, nome, funcao, regime} ] }
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" },
-//                             dx: { "REC-001|3": "AAAA-MM-DD" } }  dx = pendência dispensada na Limpeza de dados (a célula fica "_")
+//                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
+//                             fe: { "REC-001|0": "Finados" } }     fe = feriado sem operação (a célula fica "_"; feriados.js)
 //   historico/{auto}          { at, uid, nome, t }
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
 //   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
@@ -50,6 +51,7 @@ import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './segcalc.js';
+import { mapaFeriados, aplicarNaSemana } from './feriados.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -475,15 +477,25 @@ export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 
+// Feriados sem operação lidos do servidor: Escalas e turnos (config/escalas) e os da Operação (eq/config).
+// completo = false quando não deu para ler os da Operação (aí quem aplica não desfaz nada; feriados.js).
+export async function feriadosAtuais() {
+  let esc = cache.escalas || {}, eq = (cache.e && cache.e.config) || null, completo = true;
+  try { const s = await getDoc(doc(db, 'config', 'escalas')); esc = s.exists() ? s.data() : {}; } catch (e) { completo = false; }
+  try { const s = await getDoc(doc(db, 'eq', 'config')); eq = s.exists() ? s.data() : null; } catch (e) { completo = !!eq && completo; }
+  return { fer: mapaFeriados(esc, eq), completo };
+}
 export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
   const exist = await getDocs(query(collection(db, C('semanas', k)), where('mes', '==', ym)));
   const have = new Set(exist.docs.map(d => d.id));
+  // feriado sem operação já sai sem programação, com a marca (feriados.js)
+  const { fer } = await feriadosAtuais().catch(() => ({ fer: new Map() }));
   const b = writeBatch(db); let n = 0;
   for (const ini of weeksOfMonth(ym)) {
     if (aPartirDe && ini < aPartirDe) continue;
     for (const area of SETS[k].areas) {
       const id = area + '|' + ini; if (have.has(id)) continue;
-      const w = novaSemana(area, ini, planoPorArea[area] || []);
+      const w = novaSemana(area, ini, planoPorArea[area] || []); aplicarNaSemana(w, fer);
       b.set(doc(db, C('semanas', k), id), { ...w, criadoEm: serverTimestamp() }); n += w.ids.length;
     }
   }
