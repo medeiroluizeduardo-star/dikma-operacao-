@@ -195,7 +195,11 @@ document.addEventListener('submit', async e => {
       await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, ...ac });
       DB.log(`Cadastrou o usuário ${login} (${textoAcesso(ac.acesso)})`);
       UI.busy = false; UI.senhaSug = null; UI.nuAcesso = null; render();
-      formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Fechar', async () => {});
+      formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Copiar dados', async () => {
+        // copia endereço, usuário e senha prontos para colar no WhatsApp ou no e-mail
+        const txt = `Acesso ao Dikma Gestão\nEndereço: ${location.origin}\nUsuário: ${login}\nSenha provisória: ${senha}\nNo primeiro acesso você cria a sua própria senha.`;
+        try { await navigator.clipboard.writeText(txt); toast('Dados copiados'); } catch (e) { toast('Não foi possível copiar: selecione e copie os dados na tela'); }
+      }, { cancelarTxt: 'Fechar' });
       return;
     }
   } catch (err) {
