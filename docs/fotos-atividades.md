@@ -13,6 +13,10 @@ Arquivos:
 | `public/data.js` | Gravação (`apontarComFotos`), leitura (`listarFotosCel`, `listarEvidenciasSemanas`, `abrirEvidencia`), `ajustarRefsFoto`, `salvarCfgFotos`. |
 | `public/data-mock.js` | Os mesmos nomes na demonstração (fotos de exemplo desenhadas em canvas). |
 | `firestore.rules` | Bloco "Fotos das atividades". Testado em `testes/regras.test.mjs`. |
+| `public/fotos-arquivo.js` | **Parte 2**, contas sem tela: situação da foto, o que pode ir para a lixeira/apagar, lotes, confirmação, nomes do .zip, `indice.csv`, SHA-256, espaço e conteúdo do relatório. Testado em `testes/fotos-arquivo.test.mjs`. |
+| `public/telas/fotos-arquivo.js` | **Parte 2**, tela Administração › Relatórios e arquivo de fotos. |
+| `public/telas/fotos-pptx.js` | **Parte 2**, monta o .pptx e o .zip no navegador (carregado só quando usado). |
+| `public/vendor/pptxgen.bundle.js` | PptxGenJS 3.12.0 (MIT) com JSZip dentro. Fora do pacote que abre sem sinal (é grande): entra por uma tag `<script>` criada na hora. |
 
 ## Como funciona na tela
 
@@ -90,9 +94,10 @@ antes) também é somado. Uma foto com 20 `refs` soma 1 em cada uma das 20 célu
 | `bytes`, `w`, `h` | criação | tamanho do JPEG completo (até 700 mil) e pixels |
 | `sha` | criação | SHA-256 (hex, 64) dos bytes do JPEG completo, calculado no aparelho; `''` se o navegador não deixou |
 | `por`, `porNome`, `at` | criação | autor (= quem está logado) e hora do servidor (`at == request.time`) |
-| `exportadoEm`, `exportLote` | **só o administrador** | `null` na criação. Parte 2: quando e em que lote a foto foi exportada |
+| `exportadoEm`, `exportLote` | **só o administrador** | `null` na criação. Parte 2: quando e em que lote a foto foi exportada (`EXP-AAAAMMDD-HHMM-xxxx`) |
+| `exportConf` | **só o administrador** | ausente/`null` na criação. Parte 2: conferência do SHA-256 na exportação: `ok`, `divergente` ou `sem-sha` |
 | `lixeiraEm` | **só o administrador** | `null` na criação. Parte 2: foto na lixeira (as telas já escondem) |
-| `removidaEm` | **só o administrador** | `null` na criação. Parte 2: arquivo completo apagado (as telas já escondem) |
+| `removidaEm` | **só o administrador** | `null` na criação. Parte 2: arquivo completo apagado; as telas mostram só a miniatura com o selo "Arquivada fora do banco" |
 | `atualizadoEm`, `atualizadoPor` | quem altera depois | |
 
 Apagar o documento: **só o administrador**.
@@ -123,7 +128,7 @@ por esse campo, e a contagem soma `ev`. A Parte 2 deve tratar `refs` ausente com
 ## O que a Parte 2 precisa saber
 
 1. Para listar as fotos de um período: `evidencias` por `mes` ou por `semana` (`listarEvidenciasSemanas`), sempre
-   filtrando `lixeiraEm == null && removidaEm == null`. O arquivo completo vem de `abrirEvidencia(id, conj)`.
+   filtrando `lixeiraEm == null && removidaEm == null` (a Parte 2 mostra as arquivadas com a miniatura; veja abaixo). O arquivo completo vem de `abrirEvidencia(id, conj)`.
 2. Uma foto pode valer para várias atividades: no relatório, use `refs` (e o plano) para listar as atividades; no .zip,
    guarde o arquivo uma vez (o `sha` identifica fotos iguais).
 3. Ao exportar: grave `exportadoEm` (hora) e `exportLote` (id do lote) — só o administrador pode.
@@ -134,3 +139,116 @@ por esse campo, e a contagem soma `ev`. A Parte 2 deve tratar `refs` ausente com
 6. `firestore.indexes.json` tira `thumb` e `dados` dos índices (economiza espaço). A publicação automática hoje envia só
    as regras (`firestore:rules`): para valer, publique os índices uma vez (`firebase deploy --only firestore:indexes`)
    ou acrescente `firestore:indexes` ao passo de publicação.
+
+---
+
+# Parte 2 — Relatórios e arquivo de fotos
+
+Tela **Administração › Relatórios e arquivo de fotos** (aba "Arquivo de fotos", ao lado de "Fotos"), só do
+**administrador** (`isAdmin()`; fica em `SO_ADMIN` de `permissoes.js`, não aparece para o perfil "Dos módulos").
+Escolhe-se **Pátio ou Bateria**, o **período** (esta semana, semana passada ou datas, até 3 meses) e, se quiser, a
+**rota**. A tela lê as fotos do período (`listarEvidenciasPeriodo`, por `mes`) e mostra quantas há em cada situação e o
+espaço estimado no banco.
+
+## Situação de cada foto (selos)
+
+| Selo | Campos | O que quer dizer |
+| --- | --- | --- |
+| **No banco** | sem `exportadoEm` | ainda não foi para nenhum .zip |
+| **Exportada** | `exportadoEm`, `exportLote`, `exportConf` | está num .zip que o administrador confirmou ter salvo; a foto completa continua no banco |
+| **Na lixeira** | + `lixeiraEm` | some das telas (Apontar, Programação); pode ser restaurada |
+| **Arquivada fora do banco** | + `removidaEm` | a foto completa (`evidenciasArquivo`) foi apagada; fica o documento leve |
+
+Os selos aparecem na tela de gestão e no visualizador (fotos de uma atividade). No visualizador, "No banco" só aparece
+para o administrador; a arquivada abre só a miniatura, com o lote da exportação na legenda.
+
+## Relatório em PowerPoint (.pptx)
+
+Gerado no navegador com a PptxGenJS (tamanho 16:9, cores da marca: azul `#272662`, laranja `#F05A26`, logotipo
+branco). Não grava nada no banco.
+
+1. **Capa**: área (Pátio/Bateria), período, rota, quem gerou e um resumo (% de cumprimento, % com foto, realizadas,
+   registros fotográficos).
+2. **Indicadores do período**: programadas, realizadas, não realizadas, extras, % de cumprimento (realizadas ÷
+   programadas, contando os dias até hoje) e % com foto (realizadas e extras com foto, pela contagem `ft` da semana);
+   gráfico de barras por rota.
+3. **Resultado por rota** (tabela, 14 rotas por slide, com o total).
+4. **Registros fotográficos**: até 4 fotos por slide, com legenda (número, data, hora, colaborador). A atividade com
+   4 fotos ou mais tem slides só dela, com data, área, rota, local/equipamento, colaborador e a situação no cabeçalho;
+   atividades com poucas fotos do mesmo dia, área e rota dividem o slide (cada foto com a legenda da sua atividade e a
+   situação). A foto de várias atividades ("Marcar restantes") aparece uma vez, com "Vale para: …".
+5. **Atividades não realizadas** (com o motivo) e **Realizadas sem registro fotográfico** (tabelas; até 4 e 3 slides).
+
+**Limite:** 120 fotos por relatório (~150 KB cada). Acima disso, as fotos entram em rodízio entre as atividades do
+período (a 1ª de cada, depois a 2ª…) e a tela e o slide de indicadores avisam quantas ficaram de fora — para todas,
+escolha uma rota ou um período menor. A foto arquivada entra com a miniatura (e o aviso na legenda).
+
+## Exportar fotos (.zip)
+
+- Entram as fotos **No banco** (marcando "Incluir as já exportadas", também as exportadas). Até 600 fotos por arquivo.
+- Para cada foto, o navegador baixa a foto completa (`abrirEvidencia`), **calcula o SHA-256** e compara com o `sha`
+  gravado pelo celular. Resultado em `indice.csv` (coluna `conferencia`): `conferida`, `DIVERGENTE`,
+  `sem SHA gravado (não conferida)` ou `SEM ARQUIVO no banco` (a foto ainda não subiu: fica fora do .zip e não é
+  marcada). A tela avisa as divergentes.
+- Estrutura (sem acentos e sem caracteres proibidos no Windows, em maiúsculas):
+
+  ```
+  2026-11-09_a_2026-11-15/
+    indice.csv
+    LEIA-ME.txt
+    NOME DO COLABORADOR/
+      ROTA - LOCAL - ATIVIDADE/2026-11-10_<id>.jpg
+      ROTA - VARIAS ATIVIDADES (5)/2026-11-10_<id>.jpg     ← foto que vale para 5 atividades (guardada uma vez)
+  ```
+
+  Colaborador = `porNome` (quem tirou a foto). As fotos entram sem compressão (já são JPEG).
+- `indice.csv`: UTF-8 com BOM, separado por **ponto e vírgula** (abre direto no Excel em português), uma linha por foto
+  e atividade (a foto de 5 atividades tem 5 linhas com o mesmo arquivo). Colunas: `id; data; area; rota; local;
+  atividade; situacao; colaborador; sha256; arquivo; conferencia; lote`. Texto que começa com `=`, `+`, `-` ou `@`
+  ganha um apóstrofo (não vira fórmula).
+- Depois do download a tela pergunta **"O arquivo foi salvo?"**. Só no **"O arquivo foi salvo"** as fotos que entraram
+  recebem `exportadoEm` (hora do servidor), `exportLote` e `exportConf` (lotes de 400). "Baixar de novo" entrega o mesmo
+  arquivo; "Não salvei · cancelar" não marca nada. O histórico registra o lote.
+
+## Lixeira e apagar de vez
+
+- **Mover para a lixeira** (em lote ou uma a uma): só fotos **Exportadas**. Em lote, as de SHA-256 divergente ficam de
+  fora (uma a uma, com a confirmação, podem ir). Confirmação: **digitar a quantidade**. Grava `lixeiraEm`.
+- **Restaurar**: tira `lixeiraEm` (continua exportada). Não pede texto.
+- **Apagar de vez** (aba Lixeira, em lote ou uma a uma): só as que estão na lixeira há **7 dias ou mais**; marcando
+  "Incluir as que estão na lixeira há menos de 7 dias", também as recentes. Confirmação: **digitar `APAGAR n`**. No
+  mesmo lote: apaga `evidenciasArquivo/{id}` (a foto completa) e grava `removidaEm` no documento leve. **Lotes de 15
+  fotos**: a regra lê o documento leve de cada foto e o Firestore aceita no máximo 20 leituras de regra por lote.
+- Não há limpeza automática: depois dos 7 dias a foto continua na lixeira até o administrador apagar de vez (sem
+  servidor próprio no plano grátis).
+
+### Decisões
+
+- **O documento leve fica** (com a miniatura de ~5 KB, `sha`, dados da atividade, `exportLote`): o histórico continua
+  mostrando que a atividade teve foto e onde ela foi arquivada (lote), e o relatório pode usar a miniatura. Cada foto
+  arquivada ocupa ~6 KB em vez de ~200 KB.
+- **A contagem `ft` da semana não diminui**: o 📷n continua igual e o indicador "% com foto" não cai, porque a
+  atividade *teve* foto (só não está mais no banco). Diminuir faria a atividade aparecer como "sem foto" no Meu dia e no
+  Painel, o que seria falso. No visualizador, a foto arquivada aparece com a miniatura e o selo; a da lixeira não
+  aparece (o 📷n pode mostrar mais fotos do que a lista enquanto a foto está na lixeira).
+- **Os apontamentos não mudam** (semanas, aprovações): nenhuma ação desta tela grava nas semanas.
+- O relatório em PowerPoint não marca exportação: só o .zip é o arquivo de guarda.
+
+### Regras (firestore.rules) — o que a Parte 2 acrescentou
+
+- `exportConf` entra na lista de campos (nasce vazio).
+- O administrador altera `exportadoEm` (hora ou null), `exportLote` (texto até 60), `exportConf` (`ok`, `divergente`,
+  `sem-sha` ou null), `lixeiraEm` (hora, **só com `exportadoEm`**; null = restaurar) e `removidaEm` (hora, **só com
+  `lixeiraEm`**). Depois de removida a foto não volta (removidaEm, lixeiraEm e exportadoEm ficam como estão).
+- `evidenciasArquivo` (e `b_`): apagar só o administrador e **só junto da marca `removidaEm` numa foto exportada**
+  (`getAfter` do leve) ou junto com o próprio documento leve.
+- Fotos do código antigo (só `ref`, sem `refs`): o administrador pode marcar exportação, lixeira e remoção.
+- Testes em `testes/regras.test.mjs` (blocos "Fotos (Parte 2)").
+
+### Funções novas (data.js e data-mock.js)
+
+`listarEvidenciasPeriodo(conj, de, ate)`, `listarEvidenciasLixeira(conj)` (`where('lixeiraEm', '!=', null)`),
+`semanasPeriodo(conj, meses)`, `marcarExportadas(conj, itens, lote)`, `moverLixeira(conj, ids)`,
+`restaurarLixeira(conj, ids)`, `apagarDefinitivo(conj, ids)`. As gravações esperam o servidor (sem sinal a tela não
+começa) e mostram o progresso. A demonstração (`?demo`) já começa com fotos nas quatro situações e uma foto com SHA-256
+"errado" de propósito, para mostrar o aviso.

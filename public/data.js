@@ -39,7 +39,9 @@
 //     sha          SHA-256 (hex) dos bytes do JPEG completo, calculado no aparelho ('' se o navegador não deixar)
 //     por, porNome, at (hora do servidor)                                         ← gravados na criação, não mudam
 //     exportadoEm, exportLote, lixeiraEm, removidaEm   null na criação; SÓ O ADMINISTRADOR altera (Parte 2: exportação
-//                  em .zip/PowerPoint, lixeira e remoção do arquivo). As telas escondem foto com lixeiraEm/removidaEm.
+//                  em .zip, lixeira e remoção do arquivo). exportConf = conferência do SHA-256 na exportação ('ok' |
+//                  'divergente' | 'sem-sha'). As telas escondem a foto na lixeira; a arquivada fora do banco (removidaEm:
+//                  arquivo completo apagado) aparece só com a miniatura e o selo. A contagem ft da semana não diminui.
 //     atualizadoEm, atualizadoPor   quando alguém altera depois
 //     Quem altera: o autor só ajusta refs (até 24 h depois da foto, na área em que aponta); o administrador altera refs
 //     e os campos de exportação/lixeira/remoção. Apagar: só o administrador.
@@ -449,9 +451,10 @@ export function apontarComFotos(docId, changes, fotos) {
   track(b.commit());
   return ids;
 }
-const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date() }; };
-const visivel = f => !f.lixeiraEm && !f.removidaEm;
+const dataDe = v => (v && v.toDate ? v.toDate() : v || null);
+const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date(), exportadoEm: dataDe(x.exportadoEm), lixeiraEm: dataDe(x.lixeiraEm), removidaEm: dataDe(x.removidaEm) }; };
 // Fotos (leves, com miniatura) de uma atividade num dia. Também as do código antigo (campo ref).
+// As da lixeira ficam de fora; as arquivadas fora do banco (removidaEm) vêm, para a tela mostrar a miniatura e o selo.
 export async function listarFotosCel(semana, pid, k, conj = setDaArea(semana.split('|')[0]) || cur) {
   const col = collection(db, C('evidencias', conj));
   const [a, b] = await Promise.all([
@@ -460,7 +463,7 @@ export async function listarFotosCel(semana, pid, k, conj = setDaArea(semana.spl
   ]);
   const vistos = new Set(); const out = [];
   for (const d of [...a.docs, ...b.docs]) if (!vistos.has(d.id)) { vistos.add(d.id); out.push(comoFoto(d)); }
-  return out.filter(visivel).sort((x, y) => x.at - y.at);
+  return out.filter(f => !f.lixeiraEm || f.removidaEm).sort((x, y) => x.at - y.at);
 }
 // Relatório fotográfico (Parte 2): lista leve (miniaturas) de várias semanas de uma vez.
 export async function listarEvidenciasSemanas(ids, conj = cur) {
@@ -475,6 +478,49 @@ export async function listarEvidenciasSemanas(ids, conj = cur) {
 export async function abrirEvidencia(id, conj = cur) { const s = await getDoc(doc(db, C('evidenciasArquivo', conj), id)); return s.exists() ? s.data().dados : null; }
 // O autor ajusta a quais atividades a foto vale (até 24 h depois; as regras conferem).
 export const ajustarRefsFoto = (id, refs, conj = cur) => track(updateDoc(doc(db, C('evidencias', conj), id), { refs, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
+// ---------- Relatórios e arquivo de fotos (Parte 2; só o administrador; contas em fotos-arquivo.js) ----------
+// Fotos (leves) de um período: lidas por mês e filtradas pelo dia. Todas as situações (a tela separa).
+export async function listarEvidenciasPeriodo(conj, de, ate) {
+  const meses = []; for (let m = de.slice(0, 7); m <= ate.slice(0, 7); m = addMonth(m, 1)) meses.push(m);
+  const out = [];
+  for (let i = 0; i < meses.length; i += 10) {
+    const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('mes', 'in', meses.slice(i, i + 10))));
+    qs.docs.forEach(d => { const f = comoFoto(d); if (f.dia >= de && f.dia <= ate) out.push(f); });
+  }
+  return out;
+}
+// Lixeira: fotos com lixeiraEm (de qualquer período), sem as já apagadas de vez.
+export async function listarEvidenciasLixeira(conj) {
+  const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('lixeiraEm', '!=', null)));
+  return qs.docs.map(comoFoto).filter(f => !f.removidaEm);
+}
+// Semanas do período (para os indicadores do relatório), lidas por mês (campo mes da semana).
+export async function semanasPeriodo(conj, meses) {
+  const out = {};
+  for (let i = 0; i < meses.length; i += 10) {
+    const qs = await getDocs(query(collection(db, C('semanas', conj)), where('mes', 'in', meses.slice(i, i + 10))));
+    qs.docs.forEach(d => { out[d.id] = toLocal(d.id, d.data()); });
+  }
+  return out;
+}
+// Grava um lote e espera o servidor (sem sinal a tela nem começa): a tela mostra o progresso e para no erro.
+async function gravarLote(b) { pending++; syncMudou(); try { await b.commit(); } finally { pending--; syncMudou(); } }
+const marca = () => ({ atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+// Exportada: itens [{ id, conf: 'ok' | 'divergente' | 'sem-sha' }] num lote só (até 400).
+export async function marcarExportadas(conj, itens, lote) {
+  const b = writeBatch(db);
+  for (const x of itens) b.update(doc(db, C('evidencias', conj), x.id), { exportadoEm: serverTimestamp(), exportLote: lote, exportConf: x.conf, ...marca() });
+  await gravarLote(b);
+}
+export async function moverLixeira(conj, ids) { const b = writeBatch(db); for (const id of ids) b.update(doc(db, C('evidencias', conj), id), { lixeiraEm: serverTimestamp(), ...marca() }); await gravarLote(b); }
+export async function restaurarLixeira(conj, ids) { const b = writeBatch(db); for (const id of ids) b.update(doc(db, C('evidencias', conj), id), { lixeiraEm: null, ...marca() }); await gravarLote(b); }
+// Apagar de vez: apaga a foto completa (evidenciasArquivo) e marca removidaEm no documento leve, no mesmo lote
+// (até 200 fotos). O documento leve fica, com a miniatura, os dados da atividade, o sha e o lote da exportação.
+export async function apagarDefinitivo(conj, ids) {
+  const b = writeBatch(db);
+  for (const id of ids) { b.delete(doc(db, C('evidenciasArquivo', conj), id)); b.update(doc(db, C('evidencias', conj), id), { removidaEm: serverTimestamp(), ...marca() }); }
+  await gravarLote(b);
+}
 // Configuração das fotos (só o administrador).
 export const salvarCfgFotos = c => track(setDoc(doc(db, 'config', 'fotos'), { obrig: c.obrig, min: c.min, max: c.max, situacoes: c.situacoes, desde: c.desde, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.

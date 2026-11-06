@@ -17,7 +17,9 @@ rules_version = '2';
 //     antes: quem lança na Operação apaga o próprio lançamento um a um (o administrador também).
 //   - Fotos das atividades (evidencias, evidenciasArquivo e b_): cria quem aponta na área, em nome próprio; lê quem lê
 //     as semanas; o autor só ajusta refs (24 h); exportação/lixeira/remoção e apagar = administrador; config/fotos =
-//     administrador. Veja o bloco "Fotos das atividades" abaixo e docs/fotos-atividades.md.
+//     administrador. Parte 2 (Relatórios e arquivo de fotos): lixeira só da foto exportada; a foto completa só sai do
+//     banco junto da marca removidaEm (e só da que está na lixeira). Veja o bloco "Fotos das atividades" abaixo e
+//     docs/fotos-atividades.md.
 //   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
@@ -222,9 +224,15 @@ service cloud.firestore {
     // - Ler: quem lê as semanas do conjunto (Operação ou Gestão com o escopo).
     // - Alterar: o autor só ajusta refs, até 24 h depois da foto e se ainda aponta na área; o administrador ajusta refs
     //   e os campos de exportação, lixeira e remoção (Parte 2). Nada mais muda.
-    // - Apagar: só o administrador.
+    // - Parte 2 (Administração › Relatórios e arquivo de fotos), só o administrador:
+    //   exportadoEm (hora) + exportLote (até 60 caracteres) + exportConf (conferência do SHA-256: ok, divergente,
+    //   sem-sha) ao confirmar o .zip salvo; lixeiraEm (hora) só na foto já exportada (restaurar = lixeiraEm null);
+    //   removidaEm (hora) só na foto que está na lixeira, no MESMO lote que apaga a foto completa (evidenciasArquivo).
+    //   Depois de removida, a foto não volta: removidaEm, lixeiraEm e exportadoEm ficam como estão.
+    // - Apagar o documento leve: só o administrador. Apagar a foto completa (evidenciasArquivo): só o administrador e só
+    //   junto da marca removidaEm numa foto exportada (ou junto com o documento leve).
     function fotoCampos() { return ['refs', 'semana', 'area', 'conj', 'pid', 'k', 'dia', 'mes', 'rota', 'sit', 'local', 'ativ', 'nome', 'tipo', 'tamanho',
-      'bytes', 'w', 'h', 'sha', 'thumb', 'por', 'porNome', 'at', 'exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm']; }
+      'bytes', 'w', 'h', 'sha', 'thumb', 'por', 'porNome', 'at', 'exportadoEm', 'exportLote', 'exportConf', 'lixeiraEm', 'removidaEm']; }
     function fotoOk(d, col) {
       return d.keys().hasOnly(fotoCampos()) && d.keys().hasAll(['refs', 'semana', 'area', 'k', 'dia', 'mes', 'thumb', 'por', 'at', 'bytes', 'w', 'h', 'sha'])
         && d.por == request.auth.uid && d.at == request.time
@@ -235,7 +243,7 @@ service cloud.firestore {
         && d.bytes is int && d.bytes > 0 && d.bytes <= 700000 && d.w is int && d.h is int
         && d.sha is string && (d.sha == '' || d.sha.matches('[0-9a-f]{64}'))
         && d.get('ativ', '') is string && d.get('ativ', '').size() <= 600 && d.get('local', '') is string && d.get('local', '').size() <= 400
-        && d.get('exportadoEm', null) == null && d.get('exportLote', null) == null && d.get('lixeiraEm', null) == null && d.get('removidaEm', null) == null
+        && d.get('exportadoEm', null) == null && d.get('exportLote', null) == null && d.get('exportConf', null) == null && d.get('lixeiraEm', null) == null && d.get('removidaEm', null) == null
         && get(/databases/$(database)/documents/$(col)/$(d.semana)).data.area == d.area;
     }
     function arqOk(d, col, id) {
@@ -248,19 +256,40 @@ service cloud.firestore {
       return resource.data.por == request.auth.uid && apontaDa(resource.data.area, e) && soAltera(['refs', 'atualizadoEm', 'atualizadoPor'])
         && request.time < resource.data.at + duration.value(24, 'h');
     }
-    function fotoAdmin() { return admin() && soAltera(['refs', 'exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm', 'atualizadoEm', 'atualizadoPor']); }
+    function fotoAdmin() {
+      let d = request.resource.data;
+      let antes = resource.data;
+      return admin() && soAltera(['refs', 'exportadoEm', 'exportLote', 'exportConf', 'lixeiraEm', 'removidaEm', 'atualizadoEm', 'atualizadoPor'])
+        && (d.get('exportadoEm', null) == null || d.get('exportadoEm', null) is timestamp)
+        && (d.get('exportLote', null) == null || (d.get('exportLote', null) is string && d.get('exportLote', null).size() <= 60))
+        && d.get('exportConf', null) in [null, 'ok', 'divergente', 'sem-sha']
+        && (d.get('lixeiraEm', null) == null || (d.get('lixeiraEm', null) is timestamp && d.get('exportadoEm', null) != null))
+        && (d.get('removidaEm', null) == null || (d.get('removidaEm', null) is timestamp && d.get('lixeiraEm', null) != null))
+        && (antes.get('removidaEm', null) == null || (d.get('removidaEm', null) == antes.get('removidaEm', null)
+          && d.get('lixeiraEm', null) == antes.get('lixeiraEm', null) && d.get('exportadoEm', null) == antes.get('exportadoEm', null)));
+    }
     function refsOk(d) { return d.refs is list && d.refs.size() >= 1 && d.refs.size() <= 100; }
+    // Foto do código antigo (só o campo ref, sem refs): o administrador marca exportação/lixeira sem criar refs.
+    function refsOuAntiga(d) { return refsOk(d) || (!('refs' in d) && !('refs' in resource.data)); }
+    // A foto completa só sai junto da marca removidaEm (foto exportada) ou junto com o documento leve.
+    // Cada foto custa uma leitura (getAfter do leve): o lote de "apagar de vez" tem até 15 fotos, porque o Firestore
+    // aceita no máximo 20 documentos lidos pelas regras num lote (fotos-arquivo.js › LOTE).
+    function arqApagavel(col, id) {
+      return admin() && (!existsAfter(/databases/$(database)/documents/$(col)/$(id))
+        || (getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('removidaEm', null) != null
+          && getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('exportadoEm', null) != null));
+    }
     match /evidencias/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area)) && fotoOk(request.resource.data, 'semanas');
-      allow update: if (fotoAutor('patio') || fotoAdmin()) && refsOk(request.resource.data);
+      allow update: if (fotoAutor('patio') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
       allow delete: if admin();
     }
     match /evidenciasArquivo/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area)) && arqOk(request.resource.data, 'evidencias', id);
       allow update: if false;
-      allow delete: if admin();
+      allow delete: if arqApagavel('evidencias', id);
     }
     // Configuração das fotos: todos os ativos leem; só o administrador grava (com os limites conferidos).
     match /config/fotos {
@@ -308,14 +337,14 @@ service cloud.firestore {
     match /b_evidencias/{id} {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && fotoOk(request.resource.data, 'b_semanas');
-      allow update: if (fotoAutor('bateria') || fotoAdmin()) && refsOk(request.resource.data);
+      allow update: if (fotoAutor('bateria') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
       allow delete: if admin();
     }
     match /b_evidenciasArquivo/{id} {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && arqOk(request.resource.data, 'b_evidencias', id);
       allow update: if false;
-      allow delete: if admin();
+      allow delete: if arqApagavel('b_evidencias', id);
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------

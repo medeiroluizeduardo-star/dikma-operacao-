@@ -324,6 +324,10 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 - A foto é reduzida no celular (cerca de 150 KB) e sobe junto com o apontamento; sem sinal, sobe quando a conexão voltar.
 - A atividade com foto mostra **📷n** no Apontar e na Programação: tocar abre as fotos; tocar numa foto abre grande. Quem aponta pode **adicionar foto** depois, até o máximo.
 - O administrador configura em **Administração › Fotos das atividades** (obrigatória ou não, mínimo, máximo, situações e a data de início) e vê a previsão de uso do banco. O Painel de Atividades mostra **Atividades com foto** e o Meu dia do supervisor avisa as realizadas sem foto.
+- **Relatórios e arquivo de fotos** (Administração, só o administrador): escolha Pátio ou Bateria, a semana (ou as datas) e, se quiser, a rota.
+  - **Relatório em PowerPoint (.pptx):** capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota, os registros fotográficos (até 4 por slide, com legenda) e as listas de não realizadas e de realizadas sem foto. Até 120 fotos por relatório (para mais, escolha uma rota ou um período menor).
+  - **Exportar fotos (.zip):** pastas por período, colaborador e atividade, com `indice.csv` e a conferência do SHA-256 de cada foto. Depois de salvar o arquivo, clique em **O arquivo foi salvo**: só então as fotos ficam **Exportadas**.
+  - **Lixeira e apagar de vez:** só fotos exportadas vão para a lixeira (somem das telas; dá para restaurar). Depois de 7 dias, **Apagar de vez** tira a foto completa do banco e libera espaço; fica a miniatura (a foto aparece como **Arquivada fora do banco**). Pede para digitar a quantidade (ou "APAGAR n"). Os apontamentos não mudam.
 - Detalhes e modelo de dados: `docs/fotos-atividades.md`.
 
 ## Perfis

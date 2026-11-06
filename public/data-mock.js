@@ -7,6 +7,7 @@ import { veRegSeg, fotosDoReg } from './segcalc.js';
 import { aplicarCampos } from './limpeza.js';
 import { mapaFeriados, aplicarNaSemana } from './feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from './fotos.js';
+import { shaDe } from './ui/fotos.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -285,12 +286,26 @@ function fotosDemo() {
         for (const [rota, itens] of porRota) {
           const r = rnd(hash(w.id + rota + dk + 'foto'));
           const base = { semana: w.id, area: w.area, conj: k, rota, dia, k: dk };
-          const nova = (its, n) => { const m = metaFoto({ ...base, sit: its[0].c, itens: its, img: { bytes: 118000 + Math.round(rnd(hash(its[0].pid + dia + n)) * 40000), w: 1280, h: 960, sha: '', nome: `foto-${n + 1}.jpg`, thumb: '' }, por: 'demo', porNome: 'Líder (exemplo)' }); EV.push({ ...m, id: 'evd' + EV.length.toString(36), demo: true, at: new Date(dia + 'T' + String(8 + (EV.length % 9)).padStart(2, '0') + ':' + String(EV.length % 60).padStart(2, '0') + ':00') }); for (const [key, v] of Object.entries(incrementosFt(m.refs, 1))) w.ft[key] = (w.ft[key] || 0) + v; };
+          const nova = (its, n) => { const m = metaFoto({ ...base, sit: its[0].c, itens: its, img: { bytes: 118000 + Math.round(rnd(hash(its[0].pid + dia + n)) * 40000), w: 1280, h: 960, sha: '', nome: `foto-${n + 1}.jpg`, thumb: '' }, por: 'demo', porNome: `Líder ${w.area.toLowerCase().replace(/(^|\s)(\S)/g, (x, a, b) => a + b.toUpperCase())} (exemplo)` }); EV.push({ ...m, id: 'evd' + EV.length.toString(36), demo: true, at: new Date(dia + 'T' + String(8 + (EV.length % 9)).padStart(2, '0') + ':' + String(EV.length % 60).padStart(2, '0') + ':00') }); for (const [key, v] of Object.entries(incrementosFt(m.refs, 1))) w.ft[key] = (w.ft[key] || 0) + v; };
           if (r < 0.4) nova(itens, 0);
           else if (r < 0.8) itens.forEach((it, j) => { if (rnd(hash(it.pid + dia)) < 0.8) { nova([it], 0); if (j % 5 === 0) nova([it], 1); } });
         }
       }
     }
+  }
+  // Relatórios e arquivo de fotos (Parte 2): para a demonstração mostrar todas as situações, as fotos do dia mais
+  // antigo com foto já foram exportadas (lote de exemplo); de cada conjunto, 2 estão na lixeira e 1 foi arquivada fora do banco.
+  // Uma foto de ontem tem o SHA-256 "errado" de propósito, para mostrar o aviso de foto divergente na exportação.
+  const agora = Date.now(); const D = 864e5;
+  for (const k of SET_KEYS) {
+    const doConj = EV.filter(e => e.demo && e.conj === k);
+    const dia0 = doConj.reduce((m, e) => (e.dia < m ? e.dia : m), hoje); const antigas = doConj.filter(e => e.dia === dia0);
+    antigas.forEach((e, j) => {
+      Object.assign(e, { exportadoEm: new Date(agora - 4 * D), exportLote: 'EXP-DEMO-1', exportConf: 'ok' });
+      if (j < 2) e.lixeiraEm = new Date(agora - (j ? 2 : 1) * D);
+      else if (j === 2) Object.assign(e, { lixeiraEm: new Date(agora - 3 * D), removidaEm: new Date(agora - D) });
+    });
+    const ontem = doConj.find(e => e.dia === add(hoje, -1)); if (ontem) ontem.sha = 'f'.repeat(64);
   }
 }
 // Imagem da foto de exemplo: um quadro colorido com a atividade, a rota e o dia.
@@ -305,12 +320,32 @@ function desenharDemo(e, lado) {
   return cv.toDataURL('image/jpeg', lado > 400 ? 0.7 : 0.6);
 }
 const semDados = ({ dados, demo, ...m }) => m;
+// A cópia leve lê o sha da foto de exemplo na hora (ele é calculado quando a foto é desenhada pela primeira vez, como
+// se o celular tivesse calculado ao tirar a foto): assim a exportação confere o SHA-256 também na demonstração.
+const leve = e => { if (!e.thumb) e.thumb = desenharDemo(e, 240); const c = semDados(e); if (e.demo) Object.defineProperty(c, 'sha', { get: () => e.sha, enumerable: true }); return c; };
 export async function listarFotosCel(semana, pid, k) {
   const ref = refCel(semana, pid, k);
-  return EV.filter(e => (e.refs || []).includes(ref) && !e.lixeiraEm && !e.removidaEm).map(e => { if (!e.thumb) e.thumb = desenharDemo(e, 240); return semDados(e); }).sort((a, b) => a.at - b.at);
+  return EV.filter(e => (e.refs || []).includes(ref) && (!e.lixeiraEm || e.removidaEm)).map(leve).sort((a, b) => a.at - b.at);
 }
-export async function listarEvidenciasSemanas(ids) { return EV.filter(e => ids.includes(e.semana)).map(e => { if (!e.thumb) e.thumb = desenharDemo(e, 240); return semDados(e); }); }
-export async function abrirEvidencia(id) { const e = EV.find(x => x.id === id); if (!e) return null; if (!e.dados) e.dados = desenharDemo(e, 1280); return e.dados; }
+export async function listarEvidenciasSemanas(ids) { return EV.filter(e => ids.includes(e.semana)).map(leve); }
+// Foto completa: desenhada na primeira vez (a de exemplo ganha o SHA-256 como se o aparelho tivesse calculado).
+export async function abrirEvidencia(id) {
+  const e = EV.find(x => x.id === id); if (!e || e.removidaEm) return null;
+  if (!e.dados) e.dados = desenharDemo(e, 1280);
+  if (!e.sha) e.sha = await shaDe(e.dados);
+  return e.dados;
+}
+// Relatórios e arquivo de fotos (Parte 2), como no data.js.
+const conjDe = e => e.conj || setDaArea(e.area) || 'patio';
+export async function listarEvidenciasPeriodo(conj, de, ate) { return EV.filter(e => conjDe(e) === conj && e.dia >= de && e.dia <= ate).map(leve); }
+export async function listarEvidenciasLixeira(conj) { return EV.filter(e => conjDe(e) === conj && e.lixeiraEm && !e.removidaEm).map(leve); }
+export async function semanasPeriodo(conj, meses) { return Object.fromEntries(Object.entries(S[conj].semanas).filter(([, w]) => meses.includes(w.mes))); }
+const pausa = () => new Promise(r => setTimeout(r, 30));
+const acharEv = id => { const e = EV.find(x => x.id === id); if (!e) throw new Error('Foto não encontrada: ' + id); return e; };
+export async function marcarExportadas(conj, itens, lote) { await pausa(); for (const x of itens) Object.assign(acharEv(x.id), { exportadoEm: new Date(), exportLote: lote, exportConf: x.conf }); changed(); }
+export async function moverLixeira(conj, ids) { await pausa(); for (const id of ids) { const e = acharEv(id); if (!e.exportadoEm) throw new Error('Só foto exportada vai para a lixeira'); e.lixeiraEm = new Date(); } changed(); }
+export async function restaurarLixeira(conj, ids) { await pausa(); for (const id of ids) { const e = acharEv(id); if (e.removidaEm) throw new Error('Foto já apagada'); e.lixeiraEm = null; } changed(); }
+export async function apagarDefinitivo(conj, ids) { await pausa(); for (const id of ids) { const e = acharEv(id); if (!e.lixeiraEm) throw new Error('Só foto da lixeira é apagada'); delete e.dados; e.removidaEm = new Date(); } changed(); }
 export function apontarComFotos(docId, changes, fotos) {
   const k = setDaArea((fotos[0] && fotos[0].meta.area) || '') || cur; const w = S[k].semanas[docId];
   for (const c of changes) { w.s[c.pid] = c.str; const mk = c.pid + '|' + c.k; if (c.motivo) w.m[mk] = c.motivo; else delete w.m[mk]; }

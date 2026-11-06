@@ -104,7 +104,7 @@ export function render() {
 // Telas de cada arquivo carregado sob demanda: Equipamentos (EQ), fichas (GE) e Frequência (AD).
 const EQ_VIEWS = ['elanc', 'eequipe', 'einsp', 'eaval', 'eanal', 'epainel', 'econfig'];
 const GE_VIEWS = ['gcolab', 'gimpr', 'gpainel', 'gtipos', 'gimport'];
-const CF_VIEWS = ['cfgeral', 'cfconf', 'cfuso', 'cflimpa', 'cfescala', 'cffotos', 'usuarios', 'perfis'];
+const CF_VIEWS = ['cfgeral', 'cfconf', 'cfuso', 'cflimpa', 'cfescala', 'cffotos', 'cfarqfotos', 'usuarios', 'perfis'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
@@ -294,7 +294,7 @@ function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
-const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
+const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {

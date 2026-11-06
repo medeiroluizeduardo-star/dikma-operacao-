@@ -310,6 +310,88 @@ test('Fotos na Bateria (b_): o supervisor grava na área dele; o líder do Páti
   await assertFails(updateDoc(doc(db('sup'), 'b_evidencias', 'b1'), { exportadoEm: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(db('admin'), 'b_evidencias', 'b1'), { exportadoEm: serverTimestamp(), exportLote: 'lote-1' }));
 });
+// ---- Parte 2: Relatórios e arquivo de fotos (exportar, lixeira, apagar de vez; só o administrador) ----
+const marcarExp = (uid, id, extra = {}, pre = '') => updateDoc(doc(db(uid), pre + 'evidencias', id), { exportadoEm: serverTimestamp(), exportLote: 'EXP-20261110-1015-ab12', exportConf: 'ok', atualizadoEm: serverTimestamp(), atualizadoPor: uid, ...extra });
+// Apagar de vez como a tela faz: apaga a foto completa e marca removidaEm no documento leve, no mesmo lote.
+function apagarDeVez(uid, ids, pre = '') {
+  const d = db(uid); const b = writeBatch(d);
+  for (const id of ids) { b.delete(doc(d, pre + 'evidenciasArquivo', id)); b.update(doc(d, pre + 'evidencias', id), { removidaEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: uid }); }
+  return b.commit();
+}
+test('Fotos (Parte 2): só o administrador marca a exportação, com lote e conferência do SHA-256 válidos', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'p1'));
+  for (const u of ['liderRec', 'sup', 'coord', 'gestorP', 'admModulo']) await assertFails(marcarExp(u, 'p1'), u);
+  await assertFails(marcarExp('admin', 'p1', { exportLote: 'x'.repeat(61) }));
+  await assertFails(marcarExp('admin', 'p1', { exportConf: 'talvez' }));
+  await assertFails(marcarExp('admin', 'p1', { exportadoEm: '2026-11-10' }));
+  await assertFails(marcarExp('admin', 'p1', { thumb: 'outra' }));
+  await assertSucceeds(marcarExp('admin', 'p1', { exportConf: 'divergente' }));
+  await assertSucceeds(marcarExp('admin', 'p1'));
+  // ninguém cria foto já marcada como exportada (nem com a conferência preenchida)
+  await assertFails(gravarFoto('liderRec', 'p1x', { meta: fotoMeta({ exportConf: 'ok' }) }));
+});
+test('Fotos (Parte 2): lixeira só da foto já exportada; restaurar volta; só o administrador', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'p2'));
+  const lix = (uid, v) => updateDoc(doc(db(uid), 'evidencias', 'p2'), { lixeiraEm: v, atualizadoEm: serverTimestamp(), atualizadoPor: uid });
+  await assertFails(lix('admin', serverTimestamp()), 'antes de exportar');
+  await assertSucceeds(marcarExp('admin', 'p2'));
+  for (const u of ['liderRec', 'gestorP', 'admModulo']) await assertFails(lix(u, serverTimestamp()), u);
+  await assertFails(lix('admin', 'ontem'), 'lixeiraEm precisa ser hora');
+  await assertSucceeds(lix('admin', serverTimestamp()));
+  await assertSucceeds(lix('admin', null)); // restaurar
+  await assertSucceeds(lix('admin', serverTimestamp()));
+  // tirar a marca de exportada com a foto na lixeira não pode
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'p2'), { exportadoEm: null }));
+});
+test('Fotos (Parte 2): apagar de vez só da lixeira, no mesmo lote que marca removidaEm; o documento leve fica e não volta', async () => {
+  for (const id of ['p3', 'p4', 'p5']) await assertSucceeds(gravarFoto('liderRec', id));
+  // a foto completa não sai sozinha, nem de foto que não foi exportada ou não está na lixeira
+  await assertFails(deleteDoc(doc(db('admin'), 'evidenciasArquivo', 'p3')), 'sozinha');
+  await assertFails(apagarDeVez('admin', ['p3']), 'não exportada');
+  await assertSucceeds(marcarExp('admin', 'p3'));
+  await assertFails(apagarDeVez('admin', ['p3']), 'exportada mas fora da lixeira');
+  await assertFails(deleteDoc(doc(db('admin'), 'evidenciasArquivo', 'p3')), 'exportada, sozinha');
+  for (const id of ['p3', 'p4']) { if (id !== 'p3') await assertSucceeds(marcarExp('admin', id)); await assertSucceeds(updateDoc(doc(db('admin'), 'evidencias', id), { lixeiraEm: serverTimestamp() })); }
+  for (const u of ['liderRec', 'gestorP', 'coord', 'admModulo']) await assertFails(apagarDeVez(u, ['p3']), u);
+  await assertSucceeds(apagarDeVez('admin', ['p3', 'p4']));
+  const leve = await getDoc(doc(db('liderRec'), 'evidencias', 'p3'));
+  assert.ok(leve.exists() && leve.data().thumb && leve.data().removidaEm, 'o documento leve fica com a miniatura e removidaEm');
+  assert.equal((await getDoc(doc(db('liderRec'), 'evidenciasArquivo', 'p3'))).exists(), false, 'a foto completa saiu');
+  // depois de removida, não volta: nem restaurar, nem tirar removidaEm, nem mudar a exportação
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'p3'), { lixeiraEm: null }));
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'p3'), { removidaEm: null }));
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'p3'), { exportadoEm: null, exportLote: null }));
+  // removidaEm sem a foto estar na lixeira não pode (p5 só exportada)
+  await assertSucceeds(marcarExp('admin', 'p5'));
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'p5'), { removidaEm: serverTimestamp() }));
+  // o apontamento (semana) não muda: a contagem ft continua
+  const sem = await getDoc(doc(db('liderRec'), 'semanas', SEM));
+  assert.ok(sem.data().ft['REC-001|2'] >= 1, 'ft da célula continua');
+  // apagar o documento leve junto com a foto completa (limpeza total): só o administrador
+  await assertFails(deleteDoc(doc(db('gestorP'), 'evidencias', 'p5')));
+  const d = db('admin'); const b = writeBatch(d); b.delete(doc(d, 'evidencias', 'p5')); b.delete(doc(d, 'evidenciasArquivo', 'p5'));
+  await assertSucceeds(b.commit());
+});
+test('Fotos (Parte 2) na Bateria (b_) e fotos antigas (só ref): o administrador exporta e arquiva', async () => {
+  const meta = fotoMeta({ refs: [`${SEM_B1}|B1-001|2`], semana: SEM_B1, area: 'BATERIA 1', conj: 'bateria', pid: 'B1-001', por: 'sup' });
+  const arq = fotoArq({ area: 'BATERIA 1', semana: SEM_B1, por: 'sup' });
+  await assertSucceeds(gravarFoto('sup', 'pb1', { pre: 'b_', sem: SEM_B1, pid: 'B1-001', meta, arq }));
+  await assertFails(apagarDeVez('admin', ['pb1'], 'b_'));
+  await assertSucceeds(marcarExp('admin', 'pb1', {}, 'b_'));
+  await assertFails(updateDoc(doc(db('sup'), 'b_evidencias', 'pb1'), { lixeiraEm: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db('admin'), 'b_evidencias', 'pb1'), { lixeiraEm: serverTimestamp() }));
+  await assertFails(apagarDeVez('sup', ['pb1'], 'b_'));
+  await assertSucceeds(apagarDeVez('admin', ['pb1'], 'b_'));
+  // foto do código antigo: só o campo ref (sem refs)
+  await env.withSecurityRulesDisabled(async ctx => {
+    const f = ctx.firestore(); const { refs, ...velha } = fotoMeta();
+    await setDoc(doc(f, 'evidencias', 'pv1'), { ...velha, ref: `${SEM}#REC-001|2` });
+    await setDoc(doc(f, 'evidenciasArquivo', 'pv1'), fotoArq());
+  });
+  await assertSucceeds(marcarExp('admin', 'pv1'));
+  await assertSucceeds(updateDoc(doc(db('admin'), 'evidencias', 'pv1'), { lixeiraEm: serverTimestamp() }));
+  await assertSucceeds(apagarDeVez('admin', ['pv1']));
+});
 test('Fotos: config/fotos todos leem; só o administrador grava, dentro dos limites', async () => {
   const cfg = (x = {}) => ({ obrig: true, min: 1, max: 3, situacoes: ['R', 'E'], desde: '2026-11-09', atualizadoEm: serverTimestamp(), por: 'Admin', ...x });
   await assertSucceeds(setDoc(doc(db('admin'), 'config', 'fotos'), cfg()));
