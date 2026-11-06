@@ -1,4 +1,25 @@
 {
   "indexes": [],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "evidencias",
+      "fieldPath": "thumb",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "b_evidencias",
+      "fieldPath": "thumb",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "evidenciasArquivo",
+      "fieldPath": "dados",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "b_evidenciasArquivo",
+      "fieldPath": "dados",
+      "indexes": []
+    }
+  ]
 }

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField, increment } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -227,12 +227,99 @@ test('Atividades: fora da programação só pelo coordenador e pelo supervisor d
   await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { 's.B1-002': 'P______', ...fp('B1-002', 0) }));
   await assertFails(updateDoc(doc(db('leitorG'), 'semanas', SEM), { 's.REC-003': 'P______', ...fp('REC-003', 0) }));
 });
-test('Atividades: foto só na própria área, em nome próprio, e no máximo 6 por atividade no dia', async () => {
-  const ev = (semana, extra = {}) => ({ semana, area: 'RECEBIMENTO', pid: 'REC-001', k: 2, por: 'liderRec', thumb: 'x', ...extra });
-  await assertSucceeds(setDoc(doc(db('liderRec'), 'evidencias', 'e1'), ev(SEM)));
-  await assertFails(setDoc(doc(db('liderRec'), 'evidencias', 'e2'), ev(SEM_CHEIA)));
-  await assertFails(setDoc(doc(db('liderRec'), 'evidencias', 'e3'), ev(SEM, { por: 'outro' })));
-  await assertFails(setDoc(doc(db('liderPrep'), 'evidencias', 'e4'), ev(SEM, { por: 'liderPrep' })));
+// ---------------- Fotos das atividades (evidencias + evidenciasArquivo, no mesmo lote do apontamento) ----------------
+const SHA = 'ab'.repeat(32);
+const fotoMeta = (extra = {}) => ({
+  refs: [`${SEM}|REC-001|2`, `${SEM}|REC-002|2`], semana: SEM, area: 'RECEBIMENTO', conj: 'patio', pid: 'REC-001', k: 2, dia: '2026-10-07', mes: '2026-10',
+  rota: 'ROTA 1', sit: 'R', local: 'Pátio', ativ: '2 atividades: a; b', nome: 'foto.jpg', tipo: 'image/jpeg', tamanho: 120000, bytes: 120000, w: 1280, h: 960,
+  sha: SHA, thumb: 'data:image/jpeg;base64,' + 'A'.repeat(2000), por: 'liderRec', porNome: 'Líder', at: serverTimestamp(),
+  exportadoEm: null, exportLote: null, lixeiraEm: null, removidaEm: null, ...extra
+});
+const fotoArq = (extra = {}) => ({ area: 'RECEBIMENTO', semana: SEM, dia: '2026-10-07', sha: SHA, por: 'liderRec', dados: 'data:image/jpeg;base64,' + 'A'.repeat(5000), ...extra });
+// Grava como o aparelho grava: semana (s e ft) + leve + arquivo num lote só.
+function gravarFoto(uid, id, { meta = fotoMeta(), arq = fotoArq(), pre = '', sem = SEM, pid = 'REC-001' } = {}) {
+  const d = db(uid); const b = writeBatch(d);
+  b.update(doc(d, pre + 'semanas', sem), { [`s.${pid}`]: '__R____', [`ft.${pid}|2`]: increment(1), atualizadoPor: uid });
+  if (meta) b.set(doc(d, pre + 'evidencias', id), meta);
+  if (arq) b.set(doc(d, pre + 'evidenciasArquivo', id), arq);
+  return b.commit();
+}
+test('Fotos: o líder grava o apontamento com a foto na área dele (um lote só) e todos que leem as semanas veem', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'f1'));
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'evidencias', 'f1')));
+  await assertSucceeds(getDoc(doc(db('freqLeitor'), 'evidenciasArquivo', 'f1')));
+  await assertSucceeds(getDocs(query(collection(db('liderPrep'), 'evidencias'), where('refs', 'array-contains', `${SEM}|REC-001|2`))));
+  await assertFails(getDoc(doc(db('segReg'), 'evidencias', 'f1')));
+  // juntar foto depois (só a contagem ft e as fotos, sem mudar a situação)
+  const d = db('liderRec'); const b = writeBatch(d);
+  b.update(doc(d, 'semanas', SEM), { 'ft.REC-001|2': increment(1) });
+  b.set(doc(d, 'evidencias', 'f1b'), fotoMeta({ refs: [`${SEM}|REC-001|2`] })); b.set(doc(d, 'evidenciasArquivo', 'f1b'), fotoArq());
+  await assertSucceeds(b.commit());
+});
+test('Fotos: ninguém grava foto em outra área, em nome de outro, nem com a área diferente da semana', async () => {
+  await assertFails(gravarFoto('liderPrep', 'f2', { meta: fotoMeta({ por: 'liderPrep' }), arq: fotoArq({ por: 'liderPrep' }) }));
+  await assertFails(gravarFoto('liderRec', 'f3', { meta: fotoMeta({ por: 'outro' }), arq: fotoArq({ por: 'outro' }) }));
+  await assertFails(gravarFoto('liderRec', 'f4', { meta: fotoMeta({ area: 'PREPARAÇÃO', semana: SEM_PREP }), arq: fotoArq({ area: 'PREPARAÇÃO', semana: SEM_PREP }), sem: SEM_PREP, pid: 'PRE-001' }));
+  // área RECEBIMENTO declarada, mas a semana é da Preparação
+  await assertFails(setDoc(doc(db('liderRec'), 'evidencias', 'f5'), fotoMeta({ semana: SEM_PREP })));
+  await assertFails(gravarFoto('liderRec', 'f6', { pre: 'b_', sem: SEM_B1, pid: 'B1-001' }));
+});
+test('Fotos: quem só lê (leitor) e quem não aponta não gravam foto', async () => {
+  for (const u of ['freqLeitor', 'leitorG', 'segReg', 'admLeitor']) await assertFails(gravarFoto(u, 'fl-' + u, { meta: fotoMeta({ por: u }), arq: fotoArq({ por: u }) }), u);
+  for (const u of ['freqLeitor', 'leitorG']) await assertFails(setDoc(doc(db(u), 'evidencias', 'fl2-' + u), fotoMeta({ por: u })), u);
+});
+test('Fotos: campos obrigatórios, tamanhos e campos de exportação vazios na criação', async () => {
+  const sem = ({ sha, ...m }) => m;
+  await assertFails(gravarFoto('liderRec', 'g1', { meta: sem(fotoMeta()) }));
+  await assertFails(gravarFoto('liderRec', 'g2', { meta: fotoMeta({ thumb: 'x'.repeat(40001) }) }));
+  await assertSucceeds(gravarFoto('liderRec', 'g3', { meta: fotoMeta({ thumb: 'x'.repeat(39000) }) }));
+  await assertFails(gravarFoto('liderRec', 'g4', { arq: fotoArq({ dados: 'x'.repeat(900001) }) }));
+  await assertFails(gravarFoto('liderRec', 'g5', { meta: fotoMeta({ exportadoEm: '2026-10-08' }) }));
+  await assertFails(gravarFoto('liderRec', 'g6', { meta: fotoMeta({ lixeiraEm: '2026-10-08' }) }));
+  await assertFails(gravarFoto('liderRec', 'g7', { meta: fotoMeta({ refs: [] }) }));
+  await assertFails(gravarFoto('liderRec', 'g8', { meta: fotoMeta({ mes: '2026-11' }) }));
+  await assertFails(gravarFoto('liderRec', 'g9', { meta: fotoMeta({ outroCampo: 1 }) }));
+  await assertFails(gravarFoto('liderRec', 'g10', { meta: fotoMeta({ sha: 'nao-e-hash' }) }));
+  // arquivo sem o documento leve (foto solta) e leve sem o arquivo
+  await assertFails(gravarFoto('liderRec', 'g11', { meta: null }));
+  await assertSucceeds(gravarFoto('liderRec', 'g12', { arq: null })); // leve sozinho passa; o aparelho sempre grava os dois juntos
+});
+test('Fotos: o autor só ajusta refs (24 h); exportação, lixeira e remoção só o administrador; apagar só o administrador', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'h1'));
+  await assertSucceeds(updateDoc(doc(db('liderRec'), 'evidencias', 'h1'), { refs: [`${SEM}|REC-001|2`], atualizadoEm: serverTimestamp(), atualizadoPor: 'liderRec' }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'evidencias', 'h1'), { refs: [] }));
+  for (const campo of ['exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm']) {
+    for (const u of ['liderRec', 'sup', 'coord', 'gestorP', 'admModulo']) await assertFails(updateDoc(doc(db(u), 'evidencias', 'h1'), { [campo]: 'x' }), `${u} ${campo}`);
+    await assertSucceeds(updateDoc(doc(db('admin'), 'evidencias', 'h1'), { [campo]: campo === 'exportLote' ? 'lote-1' : serverTimestamp() }));
+  }
+  await assertFails(updateDoc(doc(db('liderRec'), 'evidencias', 'h1'), { thumb: 'y' }));
+  await assertFails(updateDoc(doc(db('admin'), 'evidencias', 'h1'), { thumb: 'y' }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'evidenciasArquivo', 'h1'), { dados: 'y' }));
+  // depois de 24 h o autor não ajusta mais
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'evidencias', 'h2'), { ...fotoMeta(), at: Timestamp.fromMillis(Date.now() - 3 * 864e5) }); });
+  await assertFails(updateDoc(doc(db('liderRec'), 'evidencias', 'h2'), { refs: [`${SEM}|REC-001|2`] }));
+  for (const u of ['liderRec', 'gestorP', 'admModulo']) { await assertFails(deleteDoc(doc(db(u), 'evidencias', 'h1')), u); await assertFails(deleteDoc(doc(db(u), 'evidenciasArquivo', 'h1')), u); }
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'evidenciasArquivo', 'h1')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'evidencias', 'h1')));
+});
+test('Fotos na Bateria (b_): o supervisor grava na área dele; o líder do Pátio não', async () => {
+  const meta = fotoMeta({ refs: [`${SEM_B1}|B1-001|2`], semana: SEM_B1, area: 'BATERIA 1', conj: 'bateria', pid: 'B1-001', por: 'sup' });
+  const arq = fotoArq({ area: 'BATERIA 1', semana: SEM_B1, por: 'sup' });
+  await assertSucceeds(gravarFoto('sup', 'b1', { pre: 'b_', sem: SEM_B1, pid: 'B1-001', meta, arq }));
+  await assertFails(gravarFoto('liderRec', 'b2', { pre: 'b_', sem: SEM_B1, pid: 'B1-001', meta: { ...meta, por: 'liderRec' }, arq: { ...arq, por: 'liderRec' } }));
+  await assertFails(updateDoc(doc(db('sup'), 'b_evidencias', 'b1'), { exportadoEm: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(db('admin'), 'b_evidencias', 'b1'), { exportadoEm: serverTimestamp(), exportLote: 'lote-1' }));
+});
+test('Fotos: config/fotos todos leem; só o administrador grava, dentro dos limites', async () => {
+  const cfg = (x = {}) => ({ obrig: true, min: 1, max: 3, situacoes: ['R', 'E'], desde: '2026-11-09', atualizadoEm: serverTimestamp(), por: 'Admin', ...x });
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'fotos'), cfg()));
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'config', 'fotos')));
+  for (const u of ['gestorP', 'coord', 'sup', 'liderRec', 'admModulo']) await assertFails(setDoc(doc(db(u), 'config', 'fotos'), cfg()), u);
+  await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ max: 11 })));
+  await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ min: 0 })));
+  await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ min: 4, max: 3 })));
+  await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ situacoes: ['X'] })));
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ obrig: false, min: 0, situacoes: [] })));
 });
 
 // ---------------- histórico, integração e avisos ----------------

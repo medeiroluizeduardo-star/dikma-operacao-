@@ -15,6 +15,7 @@ import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { toast, formSheet } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
+import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 
 // ---- Perguntas dos formulários (ordem, textos e obrigatórias iguais aos do Google) ----
 // t: date | time | text | area (texto longo) | radio (uma opção) | checks (várias) | fotos · obr: obrigatória
@@ -92,13 +93,6 @@ export function criarSeguranca() {
   }
 
   // ---------- fotos: reduzidas no aparelho (JPEG ~1280 px e miniatura ~320 px) ----------
-  const carregarImg = file => new Promise((ok, ko) => { const u = URL.createObjectURL(file); const im = new Image(); im.onload = () => { ok(im); setTimeout(() => URL.revokeObjectURL(u), 1000); }; im.onerror = () => ko(new Error('Não foi possível abrir esta imagem.')); im.src = u; });
-  function jpeg(im, lado, q) {
-    const sc = Math.min(1, lado / Math.max(im.naturalWidth || im.width, im.naturalHeight || im.height));
-    const cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round((im.naturalWidth || im.width) * sc)); cv.height = Math.max(1, Math.round((im.naturalHeight || im.height) * sc));
-    const g = cv.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height); g.drawImage(im, 0, 0, cv.width, cv.height);
-    return cv.toDataURL('image/jpeg', q);
-  }
   async function reduzirFoto(file) {
     if (!/^image\//.test(file.type || 'image/')) throw new Error('Escolha uma foto (imagem).');
     const im = await carregarImg(file);
@@ -106,19 +100,8 @@ export function criarSeguranca() {
     while (dados.length > 650000 && (q > 0.4 || lado > 640)) { if (q > 0.4) q -= 0.1; else lado = Math.round(lado * 0.8); dados = jpeg(im, lado, q); }
     return { dados, mini: jpeg(im, 320, 0.6) };
   }
-  // Foto grande, ao tocar na miniatura (carrega só ela).
-  async function verFoto(id, mini) {
-    document.querySelectorAll('.sgfoto').forEach(x => x.remove());
-    const el = document.createElement('div'); el.className = 'sgfoto'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Registro fotográfico');
-    el.innerHTML = `<button type="button" class="btn sgfoto-x" aria-label="Fechar a foto">✕ Fechar</button><img alt="Registro fotográfico" src="${mini || ''}"><p class="sgfoto-st" role="status">Carregando a foto…</p>`;
-    const fechar = () => { el.remove(); document.removeEventListener('keydown', kd, true); };
-    const kd = e => { if (e.key === 'Escape') { e.stopPropagation(); fechar(); } };
-    el.addEventListener('click', e => { if (e.target === el || e.target.closest('.sgfoto-x')) fechar(); });
-    document.addEventListener('keydown', kd, true);
-    document.body.appendChild(el); el.querySelector('.sgfoto-x').focus();
-    try { const d = await DB.segFoto(id); const st = el.querySelector('.sgfoto-st'); if (d) { el.querySelector('img').src = d; st.remove(); } else st.textContent = 'Foto ainda não chegou ao servidor (sobe quando o sinal voltar).'; }
-    catch (e) { const st = el.querySelector('.sgfoto-st'); if (st) st.textContent = 'Sem sinal: aparece só a miniatura.'; }
-  }
+  // Foto grande, ao tocar na miniatura (carrega só ela; ui/fotos.js).
+  const verFoto = (id, mini) => verFotoGrande(() => DB.segFoto(id), mini, 'Registro fotográfico');
 
   // ---------- janela (folha) própria: tela cheia no celular ----------
   // Fecha no X, no Cancelar, no fundo e com Esc; o Voltar do celular também fecha (eventos.js cuida do #layer).
