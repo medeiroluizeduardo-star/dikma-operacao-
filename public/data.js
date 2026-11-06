@@ -23,8 +23,30 @@
 //   eqlanc/{id} eqpar/{id} eqinsp/{id}   lançamentos, paradas e inspeções (campo mes = AAAA-MM)
 //   integracao/senior        { estado, modo, recebidoEm, total, registros[], erro, aplicadoEm }  (ponte com o Senior)
 //   eqaval/{AAAA-MM}          { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }
-//   evidencias/{id}           { ref, semana, area, pid, k, nome, tipo, tamanho, thumb, por, porNome, at }  (lista leve)
-//   evidenciasArquivo/{id}    { area, por, dados }   foto/arquivo completo (até ~900 KB), lido só ao abrir
+//   ---- FOTOS DAS ATIVIDADES (contas em fotos.js; explicação completa em docs/fotos-atividades.md) ----
+//   config/fotos              { obrig, min, max, situacoes: ['R','E'(,'N')], desde: 'AAAA-MM-DD', atualizadoEm, por }
+//                             grava só o administrador (Administração › Fotos das atividades). Sem o documento vale o
+//                             padrão de fotos.js (obrig true, min 1, max 3, R e E). desde = a partir de quando contam as
+//                             realizadas "sem foto" (antes disso não se pedia foto: não é retroativo).
+//   semanas/{id}.ft           { 'PID|k': n }  quantas fotos cada célula tem (sobe no MESMO lote que grava a foto); as telas
+//                             mostram 📷n sem ler as fotos. ev = contagem do código antigo de evidências (somada a ft).
+//   evidencias/{id}           documento leve, um por foto (a mesma foto pode valer para várias atividades do dia e rota):
+//     refs[]       'ÁREA|AAAA-MM-DD|PID|k' (semana|pid|dia da semana) de cada atividade que a foto comprova (até 100)
+//     semana, area, conj ('patio'|'bateria'), pid (o 1º de refs), k (0 = segunda), dia 'AAAA-MM-DD', mes 'AAAA-MM'
+//     rota, local, ativ   descrição (com várias atividades: "N atividades: a; b; …") · sit  situação ao fotografar (R|N|E)
+//     thumb        miniatura JPEG 240 px em texto data:… (até 40 mil caracteres; ~15 KB)
+//     nome, tipo ('image/jpeg'), tamanho = bytes (tamanho do JPEG completo), w, h (pixels da foto completa)
+//     sha          SHA-256 (hex) dos bytes do JPEG completo, calculado no aparelho ('' se o navegador não deixar)
+//     por, porNome, at (hora do servidor)                                         ← gravados na criação, não mudam
+//     exportadoEm, exportLote, lixeiraEm, removidaEm   null na criação; SÓ O ADMINISTRADOR altera (Parte 2: exportação
+//                  em .zip/PowerPoint, lixeira e remoção do arquivo). As telas escondem foto com lixeiraEm/removidaEm.
+//     atualizadoEm, atualizadoPor   quando alguém altera depois
+//     Quem altera: o autor só ajusta refs (até 24 h depois da foto, na área em que aponta); o administrador altera refs
+//     e os campos de exportação/lixeira/remoção. Apagar: só o administrador.
+//   evidenciasArquivo/{id}    { area, semana, dia, sha, por, dados }  mesmo id do leve; dados = JPEG completo em texto data:…
+//                             (até 900 mil caracteres; alvo ~200 mil). Lido só ao abrir a foto grande ou exportar.
+//   Gravação: semana (s, m, ft) + evidencias + evidenciasArquivo no MESMO writeBatch (apontarComFotos): sem sinal fica tudo
+//   na fila do aparelho e sobe junto — nunca fica apontamento sem foto nem foto sem apontamento.
 //   config/seguranca          { areas[{nome, conj}], tipos[], regimes[], desvios[] }   listas dos formulários da Segurança
 //   seginter/{id}             registro de interação { data, mes, area, conj, local, tipoAtiv, risco, desvios[], desvioOutro,
 //                             desc, acao, resp, mat, fotos[ids], minis[], por, porNome, em }
@@ -52,6 +74,7 @@ import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.
 import { competenciaDe } from './planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from './feriados.js';
+import { incrementosFt } from './fotos.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -263,6 +286,8 @@ function startData() {
   // Abas por perfil (tela Perfis e permissões).
   on(doc(db, 'config', 'permissoes'), s => { cache.permissoes = s.exists() ? (s.data().abas || {}) : {}; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
+  // Fotos das atividades: obrigatoriedade, mínimo, máximo e situações (Administração › Fotos das atividades).
+  on(doc(db, 'config', 'fotos'), s => { cache.fotosCfg = s.exists() ? s.data() : null; cache.fotosCfgLoaded = true; changed(); });
   if (ehAdminU(me)) on(doc(db, 'avisos_enviados', 'estado'), s => { const x = s.exists() ? s.data() : null; cache.avisosEstado = x ? { ...x, enviados: undefined, ultimaExecucao: x.ultimaExecucao && x.ultimaExecucao.toDate ? x.ultimaExecucao.toDate() : null } : null; changed(); });
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (ehAdminU(me)) on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
@@ -299,7 +324,7 @@ function stopData() {
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
-const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, fp: x.fp || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
+const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, ft: x.ft || {}, fp: x.fp || {}, d: x.ids.map(p => (x.s && x.s[p]) || '_______') });
 
 // Meses em tempo real. O mês anterior, o atual e o próximo ficam sempre ligados (Meu dia, Painel, avisos);
 // os outros que a pessoa abrir ficam ligados até 4 de cada vez (os mais antigos saem). Assim, voltar a uma
@@ -397,43 +422,61 @@ export function salvarColabsArea(area, itens, k = setDaArea(area) || cur) {
 export const saveRotas = rotas => track(updateDoc(doc(db, C('config'), 'sistema'), { rotas }));
 export const saveConfig = patch => track(updateDoc(doc(db, C('config'), 'sistema'), patch));
 
-// ---------- evidências (fotos e arquivos) ----------
-// Guardadas no próprio Firestore (plano grátis): a foto já chega reduzida pelo app.
-const refEv = (docId, pid, k) => `${docId}#${pid}|${k}`;
-export async function listarEvidencias(docId, pid, k) {
-  const qs = await getDocs(query(collection(db, C('evidencias')), where('ref', '==', refEv(docId, pid, k))));
-  return qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at ? x.at.toDate() : new Date() }; }).sort((a, b) => a.at - b.at);
+// ---------- fotos das atividades (evidencias + evidenciasArquivo) ----------
+// Guardadas no próprio Firestore (plano grátis): a foto já chega reduzida pelo aparelho (ui/fotos.js).
+// Grava o apontamento (changes, pode ser vazio para só juntar fotos) e as fotos num lote só. Não espera o servidor:
+// sem sinal, fica tudo na fila do aparelho e sobe junto quando a conexão voltar.
+// fotos: [{ meta (fotos.js › metaFoto, sem por/at), dados }] · devolve os ids das fotos
+export function apontarComFotos(docId, changes, fotos) {
+  const k = setDaArea((fotos[0] && fotos[0].meta.area) || '') || cur;
+  const args = []; const finalStr = {};
+  for (const c of changes) finalStr[c.pid] = c.str;
+  for (const [pid, str] of Object.entries(finalStr)) args.push(new FieldPath('s', pid), str);
+  for (const c of changes) args.push(new FieldPath('m', c.pid + '|' + c.k), c.motivo ? c.motivo : deleteField());
+  const inc = {};
+  for (const f of fotos) for (const [key, n] of Object.entries(incrementosFt(f.meta.refs, 1))) inc[key] = (inc[key] || 0) + n;
+  for (const [key, n] of Object.entries(inc)) args.push(new FieldPath('ft', key), increment(n));
+  args.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  const b = writeBatch(db);
+  b.update(doc(db, C('semanas', k), docId), ...args);
+  const ids = [];
+  for (const f of fotos) {
+    const r = doc(collection(db, C('evidencias', k)));
+    b.set(r, { ...f.meta, por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() });
+    b.set(doc(db, C('evidenciasArquivo', k), r.id), { area: f.meta.area, semana: f.meta.semana, dia: f.meta.dia, sha: f.meta.sha || '', por: me.uid, dados: f.dados });
+    ids.push(r.id);
+  }
+  track(b.commit());
+  return ids;
 }
-// Relatório fotográfico: lista leve (miniaturas) de várias semanas de uma vez.
-export async function listarEvidenciasSemanas(ids) {
+const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date() }; };
+const visivel = f => !f.lixeiraEm && !f.removidaEm;
+// Fotos (leves, com miniatura) de uma atividade num dia. Também as do código antigo (campo ref).
+export async function listarFotosCel(semana, pid, k, conj = setDaArea(semana.split('|')[0]) || cur) {
+  const col = collection(db, C('evidencias', conj));
+  const [a, b] = await Promise.all([
+    getDocs(query(col, where('refs', 'array-contains', `${semana}|${pid}|${k}`))),
+    getDocs(query(col, where('ref', '==', `${semana}#${pid}|${k}`))).catch(() => ({ docs: [] }))
+  ]);
+  const vistos = new Set(); const out = [];
+  for (const d of [...a.docs, ...b.docs]) if (!vistos.has(d.id)) { vistos.add(d.id); out.push(comoFoto(d)); }
+  return out.filter(visivel).sort((x, y) => x.at - y.at);
+}
+// Relatório fotográfico (Parte 2): lista leve (miniaturas) de várias semanas de uma vez.
+export async function listarEvidenciasSemanas(ids, conj = cur) {
   const out = [];
   for (let i = 0; i < ids.length; i += 30) {
-    const qs = await getDocs(query(collection(db, C('evidencias')), where('semana', 'in', ids.slice(i, i + 30))));
-    qs.docs.forEach(d => { const x = d.data({ serverTimestamps: 'estimate' }); out.push({ id: d.id, ...x, at: x.at ? x.at.toDate() : new Date() }); });
+    const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('semana', 'in', ids.slice(i, i + 30))));
+    qs.docs.forEach(d => out.push(comoFoto(d)));
   }
   return out;
 }
-export async function abrirEvidencia(id) { const s = await getDoc(doc(db, C('evidenciasArquivo'), id)); return s.exists() ? s.data().dados : null; }
-// Não espera o servidor: sem sinal, fica na fila e sobe quando a conexão voltar.
-export function addEvidencia(e) {
-  const k = setDaArea(e.area) || cur;
-  const r = doc(collection(db, C('evidencias', k)));
-  const meta = { ref: refEv(e.docId, e.pid, e.k), semana: e.docId, area: e.area, pid: e.pid, k: e.k, nome: e.nome, tipo: e.tipo, tamanho: e.tamanho, thumb: e.thumb || '', por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() };
-  const b = writeBatch(db);
-  b.set(r, meta);
-  b.set(doc(db, C('evidenciasArquivo', k), r.id), { area: e.area, por: me.uid, dados: e.dados });
-  b.update(doc(db, C('semanas', k), e.docId), new FieldPath('ev', e.pid + '|' + e.k), increment(1), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  track(b.commit());
-  return { id: r.id, ...meta, at: new Date() };
-}
-export function removerEvidencia(ev) {
-  const k = setDaArea(ev.area) || cur;
-  const b = writeBatch(db);
-  b.delete(doc(db, C('evidencias', k), ev.id));
-  b.delete(doc(db, C('evidenciasArquivo', k), ev.id));
-  b.update(doc(db, C('semanas', k), ev.semana), new FieldPath('ev', ev.pid + '|' + ev.k), increment(-1), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  return track(b.commit());
-}
+// Foto completa (só ao abrir grande ou exportar).
+export async function abrirEvidencia(id, conj = cur) { const s = await getDoc(doc(db, C('evidenciasArquivo', conj), id)); return s.exists() ? s.data().dados : null; }
+// O autor ajusta a quais atividades a foto vale (até 24 h depois; as regras conferem).
+export const ajustarRefsFoto = (id, refs, conj = cur) => track(updateDoc(doc(db, C('evidencias', conj), id), { refs, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
+// Configuração das fotos (só o administrador).
+export const salvarCfgFotos = c => track(setDoc(doc(db, 'config', 'fotos'), { obrig: c.obrig, min: c.min, max: c.max, situacoes: c.situacoes, desde: c.desde, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.
 // (A conta interna do Firebase Authentication fica órfã e pode ser apagada no console, se quiser.)
 export async function excluirUsuario(uid) {

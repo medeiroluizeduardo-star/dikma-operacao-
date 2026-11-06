@@ -47,7 +47,7 @@ jobs:
           node integracao/admin/enviar-dados.mjs
 
       - name: Publicar site e regras de segurança
-        run: npx --yes firebase-tools@13 deploy --only hosting,firestore:rules --project "$PROJECT_ID" --non-interactive
+        run: npx --yes firebase-tools@13 deploy --only hosting,firestore:rules,firestore:indexes --project "$PROJECT_ID" --non-interactive
 
       - name: Organizar o Efetivo por área (só na primeira vez)
         env:

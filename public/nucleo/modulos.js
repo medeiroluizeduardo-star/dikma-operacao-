@@ -15,6 +15,7 @@ import { render, schedule, isMobile } from '../ui/shell.js';
 import { checkinPendentes } from '../telas/efetivo.js';
 import { jusPendentes } from '../telas/horas-justificativas.js';
 import { temSeg } from '../segcalc.js';
+import { semFotoPend } from '../telas/fotos.js';
 
 // Criadas por inicio.js (PES, MD) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
 export let PES = null, MD = null, EQ = null, AD = null, GE = null, SG = null;
@@ -29,7 +30,7 @@ export function criarModulos() {
     const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
     return ok ? chaveFicha(PES.lotacao(c).area) : null;
   });
-  MD = criarMeuDia({ checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais,
+  MD = criarMeuDia({ semFoto: (k, areas) => semFotoPend(k, areas), checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais,
     // Segurança no Meu dia: anomalias da pessoa (a tela da Segurança chega sob demanda; enquanto isso, nada aparece).
     seg: () => (temSeg(ME) ? (SG ? SG.meuDia() : (carregarModulo('SG'), null)) : null), sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
 }

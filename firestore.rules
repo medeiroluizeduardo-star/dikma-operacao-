@@ -15,6 +15,9 @@ rules_version = '2';
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
 //     administrador; Segurança (seginter, seganom, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp) seguem como
 //     antes: quem lança na Operação apaga o próprio lançamento um a um (o administrador também).
+//   - Fotos das atividades (evidencias, evidenciasArquivo e b_): cria quem aponta na área, em nome próprio; lê quem lê
+//     as semanas; o autor só ajusta refs (24 h); exportação/lixeira/remoção e apagar = administrador; config/fotos =
+//     administrador. Veja o bloco "Fotos das atividades" abaixo e docs/fotos-atividades.md.
 //   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
@@ -168,12 +171,13 @@ service cloud.firestore {
     // antigas (célula volta a '_' e a marca vai em dx) é uma alteração: o administrador já altera a semana inteira.
     // O mesmo vale para o feriado sem operação (célula volta a '_' e a marca vai em fe; public/feriados.js): grava o
     // administrador (Escalas e turnos) ou a rotina do GitHub (chave de serviço, que não passa por estas regras).
+    // ft = quantas fotos cada célula tem (sobe no mesmo lote que grava a foto; veja Fotos das atividades abaixo).
     match /semanas/{id} {
       allow read: if op();
       allow create: if admMod('operacao');
       allow delete: if admin();
-      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
+      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
 
     // Aprovação dos apontamentos: o supervisor da área aprova ou devolve o que foi apontado; o administrador é a reserva.
@@ -208,23 +212,65 @@ service cloud.firestore {
       allow delete: if admMod('bateria');
     }
 
-    // Fotos e arquivos das atividades. A lista (com miniatura) é separada do arquivo completo.
+    // ---------- Fotos das atividades (evidencias/evidenciasArquivo; Bateria com o prefixo b_) ----------
+    // Um documento leve por foto (miniatura e dados da atividade; refs = as atividades que a foto comprova) e o arquivo
+    // completo com o mesmo id, gravados no mesmo lote do apontamento (data.js › apontarComFotos). Modelo completo em
+    // docs/fotos-atividades.md.
+    // - Criar: quem aponta na área (a mesma regra do apontamento) ou o administrador, em nome próprio, com os campos
+    //   obrigatórios, miniatura até 40 mil caracteres e arquivo até 900 mil; a área tem de ser a da semana; o arquivo só
+    //   entra junto do documento leve (getAfter), e os campos de exportação/lixeira/remoção nascem vazios.
+    // - Ler: quem lê as semanas do conjunto (Operação ou Gestão com o escopo).
+    // - Alterar: o autor só ajusta refs, até 24 h depois da foto e se ainda aponta na área; o administrador ajusta refs
+    //   e os campos de exportação, lixeira e remoção (Parte 2). Nada mais muda.
+    // - Apagar: só o administrador.
+    function fotoCampos() { return ['refs', 'semana', 'area', 'conj', 'pid', 'k', 'dia', 'mes', 'rota', 'sit', 'local', 'ativ', 'nome', 'tipo', 'tamanho',
+      'bytes', 'w', 'h', 'sha', 'thumb', 'por', 'porNome', 'at', 'exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm']; }
+    function fotoOk(d, col) {
+      return d.keys().hasOnly(fotoCampos()) && d.keys().hasAll(['refs', 'semana', 'area', 'k', 'dia', 'mes', 'thumb', 'por', 'at', 'bytes', 'w', 'h', 'sha'])
+        && d.por == request.auth.uid && d.at == request.time
+        && d.refs is list && d.refs.size() >= 1 && d.refs.size() <= 100
+        && d.semana is string && d.area is string && d.k is int && d.k >= 0 && d.k <= 6
+        && d.dia is string && d.dia.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && d.mes == d.dia.split('-')[0] + '-' + d.dia.split('-')[1]
+        && d.thumb is string && d.thumb.size() <= 40000
+        && d.bytes is int && d.bytes > 0 && d.bytes <= 700000 && d.w is int && d.h is int
+        && d.sha is string && (d.sha == '' || d.sha.matches('[0-9a-f]{64}'))
+        && d.get('ativ', '') is string && d.get('ativ', '').size() <= 600 && d.get('local', '') is string && d.get('local', '').size() <= 400
+        && d.get('exportadoEm', null) == null && d.get('exportLote', null) == null && d.get('lixeiraEm', null) == null && d.get('removidaEm', null) == null
+        && get(/databases/$(database)/documents/$(col)/$(d.semana)).data.area == d.area;
+    }
+    function arqOk(d, col, id) {
+      let leve = getAfter(/databases/$(database)/documents/$(col)/$(id)).data;
+      return d.keys().hasOnly(['area', 'semana', 'dia', 'sha', 'por', 'dados']) && d.por == request.auth.uid
+        && d.dados is string && d.dados.size() <= 900000 && d.area is string
+        && leve.por == request.auth.uid && leve.area == d.area;
+    }
+    function fotoAutor(e) {
+      return resource.data.por == request.auth.uid && apontaDa(resource.data.area, e) && soAltera(['refs', 'atualizadoEm', 'atualizadoPor'])
+        && request.time < resource.data.at + duration.value(24, 'h');
+    }
+    function fotoAdmin() { return admin() && soAltera(['refs', 'exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm', 'atualizadoEm', 'atualizadoPor']); }
+    function refsOk(d) { return d.refs is list && d.refs.size() >= 1 && d.refs.size() <= 100; }
     match /evidencias/{id} {
       allow read: if op();
-      allow create: if (admin() || gestorDa(request.resource.data.area))
-        && request.resource.data.por == request.auth.uid
-        && request.resource.data.thumb.size() < 80000
-        // no máximo 6 anexos por atividade em cada dia
-        && get(/databases/$(database)/documents/semanas/$(request.resource.data.semana)).data.get('ev', {})
-             .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
-      allow delete: if admMod('operacao') || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+      allow create: if (admin() || gestorDa(request.resource.data.area)) && fotoOk(request.resource.data, 'semanas');
+      allow update: if (fotoAutor('patio') || fotoAdmin()) && refsOk(request.resource.data);
+      allow delete: if admin();
     }
     match /evidenciasArquivo/{id} {
       allow read: if op();
-      allow create: if (admin() || gestorDa(request.resource.data.area))
-        && request.resource.data.por == request.auth.uid
-        && request.resource.data.dados.size() < 1000000;
-      allow delete: if admMod('operacao') || (gestorDa(resource.data.area) && resource.data.por == request.auth.uid);
+      allow create: if (admin() || gestorDa(request.resource.data.area)) && arqOk(request.resource.data, 'evidencias', id);
+      allow update: if false;
+      allow delete: if admin();
+    }
+    // Configuração das fotos: todos os ativos leem; só o administrador grava (com os limites conferidos).
+    match /config/fotos {
+      allow read: if ativo();
+      allow write: if admin() && request.resource.data.keys().hasOnly(['obrig', 'min', 'max', 'situacoes', 'desde', 'atualizadoEm', 'por'])
+        && request.resource.data.obrig is bool && request.resource.data.min is int && request.resource.data.max is int
+        && request.resource.data.min >= 0 && (request.resource.data.obrig == false || request.resource.data.min >= 1) && request.resource.data.max >= request.resource.data.min
+        && request.resource.data.max >= 1 && request.resource.data.max <= 10
+        && request.resource.data.situacoes is list && request.resource.data.situacoes.hasOnly(['R', 'E', 'N'])
+        && (!request.resource.data.obrig || request.resource.data.situacoes.size() >= 1);
     }
 
     // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
@@ -248,8 +294,8 @@ service cloud.firestore {
       allow read: if ba();
       allow create: if admMod('bateria');
       allow delete: if admin();
-      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'fp', 'atualizadoEm', 'atualizadoPor']));
+      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
     // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
     function aprovaDaB(area) { return aprova(area, 'bateria'); }
@@ -261,19 +307,15 @@ service cloud.firestore {
     }
     match /b_evidencias/{id} {
       allow read: if ba();
-      allow create: if (admin() || gestorDaB(request.resource.data.area))
-        && request.resource.data.por == request.auth.uid
-        && request.resource.data.thumb.size() < 80000
-        && get(/databases/$(database)/documents/b_semanas/$(request.resource.data.semana)).data.get('ev', {})
-             .get(request.resource.data.pid + '|' + string(request.resource.data.k), 0) < 6;
-      allow delete: if admMod('bateria') || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
+      allow create: if (admin() || gestorDaB(request.resource.data.area)) && fotoOk(request.resource.data, 'b_semanas');
+      allow update: if (fotoAutor('bateria') || fotoAdmin()) && refsOk(request.resource.data);
+      allow delete: if admin();
     }
     match /b_evidenciasArquivo/{id} {
       allow read: if ba();
-      allow create: if (admin() || gestorDaB(request.resource.data.area))
-        && request.resource.data.por == request.auth.uid
-        && request.resource.data.dados.size() < 1000000;
-      allow delete: if admMod('bateria') || (gestorDaB(resource.data.area) && resource.data.por == request.auth.uid);
+      allow create: if (admin() || gestorDaB(request.resource.data.area)) && arqOk(request.resource.data, 'b_evidencias', id);
+      allow update: if false;
+      allow delete: if admin();
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------

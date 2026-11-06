@@ -58,11 +58,12 @@ export function localChange(doc, i, k, c, motivo) {
   const mk = pid + '|' + k; if (c === 'N' && motivo) doc.m[mk] = motivo; else delete doc.m[mk];
   return { pid, str, k, motivo: c === 'N' ? motivo : null };
 }
-export function setSt(doc, i, k, c, motivo) {
+// fotos (opcional): [{ meta, dados }] gravadas no mesmo lote do apontamento (telas/fotos.js › montarFotos).
+export function setSt(doc, i, k, c, motivo, fotos) {
   if (!canEdit(doc.area)) { toast('Seu perfil não pode apontar nesta área'); return; }
   const ch = localChange(doc, i, k, c, motivo);
   UI.flash = { id: doc.id, i, k, t: Date.now() };
-  gravarApont(doc, [ch]);
+  gravarApont(doc, [ch], fotos);
   const p = PL.get(doc.ids[i]); const nm = { R: 'realizada', N: 'não realizada', P: 'voltou para programada', E: 'extra', _: 'extra removida' }[c];
   DB.log(`${p ? p.ativ : doc.ids[i]} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → ${nm}${c === 'N' && motivo ? ' (' + motivo + ')' : ''}`);
 }
@@ -123,10 +124,12 @@ export function listaAprov(areas, est = 'pend') {
   return APROV_MEMO.get(mk)[est] || [];
 }
 // Grava o apontamento; quando quem aponta é supervisor para cima, já fica aprovado.
-export function gravarApont(doc, ch) {
+// Com fotos, apontamento e fotos vão num lote só (data.js › apontarComFotos); ch pode ser vazio (só juntar fotos).
+export function gravarApont(doc, ch, fotos) {
   mudouDados();
+  if (fotos && fotos.length) DB.apontarComFotos(doc.id, ch, fotos);
+  else if (ch.length) DB.setStatusMany(doc.id, ch);
   if (!ch.length) return;
-  DB.setStatusMany(doc.id, ch);
   if (!areasAprov().includes(doc.area) || !canEdit(doc.area)) return; // quem aprova a área (supervisor, ou o administrador como reserva)
   const it = {};
   for (const x of ch) { const c = x.str[x.k]; if ((c === 'R' || c === 'N' || c === 'E') && add(doc.ini, x.k) >= APROV_DESDE) it[x.pid + '|' + x.k] = c === 'N' ? { s: 'A', c, m: x.motivo || '' } : { s: 'A', c }; }

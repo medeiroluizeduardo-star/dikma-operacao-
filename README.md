@@ -317,7 +317,14 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 - Ao marcar **✕ Não realizada** (no Apontar ou em Pendências), o sistema pergunta **por que não foi feita**: escolha um motivo da lista ou **Escrever a justificativa** (até 500 caracteres, com contador). Sem justificativa, não marca.
 - No Apontar, a justificativa aparece embaixo da atividade, com **editar** para quem aponta na área.
 - O supervisor vê a justificativa na **Aprovação** e pode devolver com "Justificativa não confere". Pendências mostra o resumo **Por que não foi feito** (as escritas entram em "Outras justificativas"). A Folha do líder e o Excel levam a justificativa.
-- **Fotos das atividades:** foram retiradas (botão da câmera, Relatório fotográfico e "Exigir foto"). As fotos antigas continuam guardadas no banco e na cópia de segurança, mas não aparecem mais no sistema. A foto da via em papel das fichas do Efetivo continua.
+
+## Fotos das atividades
+- Ao marcar uma atividade como **realizada** (ou extra, ou não realizada, conforme a configuração), o Apontar pede a **foto antes de concluir**: "Tirar foto / escolher", miniaturas com ✕ e o contador "Fotos: 1 de 1 obrigatória · máximo 3". Sem o mínimo, não marca; cancelar não marca.
+- **Marcar restantes** pede as fotos uma vez só: elas valem para todas as atividades marcadas naquele momento (guardadas uma vez).
+- A foto é reduzida no celular (cerca de 150 KB) e sobe junto com o apontamento; sem sinal, sobe quando a conexão voltar.
+- A atividade com foto mostra **📷n** no Apontar e na Programação: tocar abre as fotos; tocar numa foto abre grande. Quem aponta pode **adicionar foto** depois, até o máximo.
+- O administrador configura em **Administração › Fotos das atividades** (obrigatória ou não, mínimo, máximo, situações e a data de início) e vê a previsão de uso do banco. O Painel de Atividades mostra **Atividades com foto** e o Meu dia do supervisor avisa as realizadas sem foto.
+- Detalhes e modelo de dados: `docs/fotos-atividades.md`.
 
 ## Perfis
 | Perfil | O que faz |

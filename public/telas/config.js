@@ -19,6 +19,7 @@ import { comModulo } from '../nucleo/modulos.js';
 import { listasSeg } from '../segcalc.js';
 import { planoNaProgramacao } from './plano-prog.js';
 import { vLimpeza } from './limpeza.js';
+import { vCfFotos } from './fotos.js';
 import * as FE from '../feriados.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
@@ -163,6 +164,7 @@ export function vConfigModulo(view) {
   if (view === 'cfconf') return vCfConf();
   if (view === 'cfuso') return vCfUso();
   if (view === 'cflimpa') return vLimpeza();
+  if (view === 'cffotos') return vCfFotos();
   if (view === 'cfescala') return vCfEscala();
   if (view === 'usuarios') return vUsuarios();
   if (view === 'perfis') return vPerfis();
