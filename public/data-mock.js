@@ -216,6 +216,11 @@ export async function setAprov(docId, area, mes, itens) {
   changed();
 }
 export async function setSit(key, code, k = cur) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (code) o[key] = code; else delete o[key]; changed(); }
+export async function semanasDaArea(area, k = cur) { return Object.values(S[k].semanas).filter(w => w.area === area).map(w => ({ ...w, s: { ...w.s }, ids: [...w.ids] })); }
+export async function gravarPlanoNasSemanas(muda, k = cur) {
+  for (const x of muda) { const w = S[k].semanas[x.id]; if (!w) continue; w.s[x.pid] = x.linha; if (x.novo && !w.ids.includes(x.pid)) w.ids.push(x.pid); Object.assign(w, toLocal(x.id, w)); }
+  changed();
+}
 export async function savePlano(area, itens) { cache.plano[area] = itens; changed(); }
 // Número do colaborador: o maior já usado só cresce (o mesmo de data.js)
 const numId = id => parseInt(String(id || '').replace(/\D/g, ''), 10) || 0;

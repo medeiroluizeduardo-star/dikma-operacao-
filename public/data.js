@@ -528,6 +528,18 @@ export async function feriadosAtuais() {
   try { const s = await getDoc(doc(db, 'eq', 'config')); eq = s.exists() ? s.data() : null; } catch (e) { completo = !!eq && completo; }
   return { fer: mapaFeriados(esc, eq), completo };
 }
+// Plano padrão → Programação já gerada (planoaplica.js): lê as semanas da área e grava as linhas que mudam.
+export async function semanasDaArea(area, k = cur) {
+  const qs = await getDocs(query(collection(db, C('semanas', k)), where('area', '==', area)));
+  return qs.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+export async function gravarPlanoNasSemanas(muda, k = cur) {
+  for (let i = 0; i < muda.length; i += 400) {
+    const b = writeBatch(db);
+    for (const x of muda.slice(i, i + 400)) b.update(doc(db, C('semanas', k), x.id), new FieldPath('s', x.pid), x.linha, ...(x.novo ? ['ids', arrayUnion(x.pid)] : []), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+    await track(b.commit());
+  }
+}
 export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
   const exist = await getDocs(query(collection(db, C('semanas', k)), where('mes', '==', ym)));
   const have = new Set(exist.docs.map(d => d.id));

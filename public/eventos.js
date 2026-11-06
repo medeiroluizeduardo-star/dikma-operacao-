@@ -1,5 +1,6 @@
 // Eventos da página: cliques (data-*), envio de formulários, mudança de campos, teclado, Voltar e avisos de saída.
 // Botões com data-act chamam a ação registrada em acoes (nucleo/acoes.js); cada tela registra as suas.
+import { planoNaProgramacao } from './telas/plano-prog.js';
 import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './cal.js';
 import { pedirJus } from './presenca.js';
 import { letra, periodosDe } from './escala.js';
@@ -140,7 +141,7 @@ document.addEventListener('click', async e => {
 
   if (d.ptog) {
     const [id, k] = d.ptog.split('|'); const p = PL.get(id); const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, dias: [...x.dias].map((c, j) => (j === +k ? (c === '1' ? '0' : '1') : c)).join('') } : x));
-    DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); return;
+    DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); planoNaProgramacao(itens.find(x => x.id === id)); return;
   }
   if (d.eye) { toggleEye(t); return; }
   if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); if (novo !== 'HE') { DB.setSitExtra('he', key, null); DB.setSitExtra('hed', key, null); } DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`); render(); return; }

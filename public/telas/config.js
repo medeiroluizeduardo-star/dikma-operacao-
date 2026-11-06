@@ -17,6 +17,7 @@ import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
 import { listasSeg } from '../segcalc.js';
+import { planoNaProgramacao } from './plano-prog.js';
 import { vLimpeza } from './limpeza.js';
 import { vCfFotos } from './fotos.js';
 import * as FE from '../feriados.js';
@@ -175,9 +176,19 @@ export function vConfigModulo(view) {
 /* ---------------- PLANO PADRÃO ---------------- */
 export function vPlano() {
   const a = UI.pArea;
-  const ps = (DB.cache.plano[a] || []).filter(p => p.ativo !== false);
+  const todas = (DB.cache.plano[a] || []).filter(p => p.ativo !== false);
   const rts = rotasDa(a).filter(r => r.rota !== 'GESTÃO').map(r => r.rota);
-  return `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fPArea">${AREAS.map(x => `<option value="${x}" ${x === a ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label><span class="muted" style="align-self:flex-end">${ps.length} atividades · rota, local, atividade e tipo mudam na hora (inclusive nos meses já gerados); os dias valem para os meses gerados depois</span></div>
+  // Filtros: rota e busca (atividade, local/equipamento, código ou tipo)
+  const fr = UI.pRota && [...new Set(todas.map(p => p.rota))].includes(UI.pRota) ? UI.pRota : '';
+  const q = semAcento(UI.pQ || '').toLowerCase().trim();
+  const ps = todas.filter(p => (!fr || p.rota === fr) && (!q || semAcento([p.id, p.ativ, p.local, p.tipo, p.rota].join(' ')).toLowerCase().includes(q)));
+  const contaRota = new Map(); todas.forEach(p => contaRota.set(p.rota, (contaRota.get(p.rota) || 0) + 1));
+  const rotasPlano = [...contaRota.keys()].sort((x, y) => (rts.indexOf(x) + 1 || 999) - (rts.indexOf(y) + 1 || 999) || x.localeCompare(y));
+  return `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fPArea">${AREAS.map(x => `<option value="${x}" ${x === a ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label>
+   <label class="sel"><span>Rota</span><select class="in" id="fPRota"><option value="">Todas as rotas (${todas.length})</option>${rotasPlano.map(r => `<option value="${esc(r)}" ${r === fr ? 'selected' : ''}>${esc(r)} (${contaRota.get(r)})</option>`).join('')}</select></label>
+   <div class="sel wide"><span>Buscar</span>${caixaBusca('fPQ', UI.pQ || '', 'Atividade, local, equipamento ou código')}</div>
+   ${fr || q ? `<button class="btn sm ghost" data-act="limparPF" style="align-self:flex-end">Limpar filtros</button>` : ''}
+   <span class="muted" style="align-self:flex-end">${fr || q ? `${ps.length} de ${todas.length}` : ps.length} atividades · rota, local, atividade e tipo mudam na hora; os dias e as atividades tiradas ou incluídas valem na Programação de hoje em diante, também nos meses já gerados</span></div>
   <div class="card"><header><h2>Nova atividade</h2></header><div class="body"><form id="fNova" class="form">
    <label class="sel"><span>Rota</span><select class="in" id="nRota">${rts.map(r => `<option>${esc(r)}</option>`).join('')}</select></label>
    <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required placeholder="Ex.: CORREIA C5613A"></label>
@@ -473,9 +484,10 @@ acoes.escFicha = (t, d) => {
   DB.log(`Gravou ${n} turma(s) a partir das fichas do Efetivo`); toast(`${n} turma(s) gravadas`); render();
 };
 acoes.askDel = (t, d) => { UI.confirm = 'del:' + d.id; render(); };
+acoes.limparPF = (t, d) => { UI.pRota = ''; UI.pQ = ''; UI.more = 0; render(); };
 acoes.del = (t, d) => {
   const p = PL.get(d.id); const itens = DB.cache.plano[p.area].map(x => (x.id === d.id ? { ...x, ativo: false } : x));
-  DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); DB.log(`Plano padrão: removeu ${p.id} · ${p.ativ}`); UI.confirm = null; toast(`${p.id} removida do plano`); render();
+  DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); DB.log(`Plano padrão: removeu ${p.id} · ${p.ativ}`); UI.confirm = null; toast(`${p.id} removida do plano`); render(); planoNaProgramacao({ ...p, ativo: false });
 };
 acoes.gerar = async (t, d) => {
   UI.busy = true; render();
