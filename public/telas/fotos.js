@@ -11,6 +11,7 @@ import { render } from '../ui/shell.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../fotos.js';
 import { gravarApont, diasDe } from '../calc/atividades.js';
+import { statusFoto, STATUS } from '../fotos-arquivo.js';
 
 // Configuração em vigor (config/fotos ou o padrão).
 export const cfgF = () => cfgFotos(DB.cache.fotosCfg);
@@ -129,15 +130,25 @@ export async function verFotosCel(doc, i, k) {
     e.stopPropagation();
     if (e.target.id === 'scrim' || e.target.closest('[data-close]')) return fechar();
     const f = e.target.closest('[data-fid]');
-    if (f) { const x = lista.find(y => y.id === f.dataset.fid); if (x) verFotoGrande(() => DB.abrirEvidencia(x.id, conj), x.thumb, 'Foto da atividade', `${title(x.porNome || '')} · ${x.at ? x.at.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}${(x.refs || []).length > 1 ? ` · vale para ${x.refs.length} atividades` : ''}`); return; }
+    if (f) {
+      const x = lista.find(y => y.id === f.dataset.fid); if (!x) return;
+      const st = statusFoto(x); const leg = `${title(x.porNome || '')} · ${x.at ? x.at.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}${(x.refs || []).length > 1 ? ` · vale para ${x.refs.length} atividades` : ''}`;
+      // arquivada fora do banco: só a miniatura (a foto completa está no .zip do lote)
+      if (st === 'arquivada') verFotoGrande(async () => x.thumb, x.thumb, 'Foto da atividade (miniatura)', `${leg} · ${STATUS.arquivada.t}${x.exportLote ? ` (lote ${x.exportLote})` : ''}: aparece só a miniatura`);
+      else verFotoGrande(() => DB.abrirEvidencia(x.id, conj), x.thumb, 'Foto da atividade', `${leg}${st === 'exportada' ? ` · ${STATUS.exportada.t}${x.exportLote ? ` (lote ${x.exportLote})` : ''}` : ''}`);
+      return;
+    }
     if (e.target.closest('#fJuntar')) { fechar(); juntarFotos(doc, i, k); }
   };
   try {
     lista = await DB.listarFotosCel(doc.id, doc.ids[i], k, conj);
     const v = $('fVer'); if (!v) return;
-    v.innerHTML = lista.length ? lista.map((x, j) => `<button type="button" class="sgmini fmini" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}</button>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal).' : 'Nenhuma foto nesta atividade.'}</p>`;
+    // selo da situação da foto (Relatórios e arquivo de fotos): "No banco" só aparece para o administrador
+    const selo = x => { const st = statusFoto(x); return st === 'banco' && !isAdmin() ? '' : `<span class="fstat ${st}">${esc(STATUS[st].c)}</span>`; };
+    v.innerHTML = lista.length ? lista.map((x, j) => `<button type="button" class="sgmini fmini${statusFoto(x) === 'arquivada' ? ' arq' : ''}" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1} (${esc(STATUS[statusFoto(x)].t)})" title="${esc(STATUS[statusFoto(x)].d)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}${selo(x)}</button>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal) ou estão na lixeira da administração.' : 'Nenhuma foto nesta atividade.'}</p>`;
     const comp = lista.filter(x => (x.refs || []).length > 1).length;
-    $('fVerInfo').textContent = lista.length ? `Toque numa foto para ver grande.${comp ? ` ${comp === 1 ? 'Uma foto vale' : `${comp} fotos valem`} para várias atividades da rota.` : ''}` : '';
+    const arq = lista.filter(x => statusFoto(x) === 'arquivada').length;
+    $('fVerInfo').textContent = lista.length ? `Toque numa foto para ver grande.${comp ? ` ${comp === 1 ? 'Uma foto vale' : `${comp} fotos valem`} para várias atividades da rota.` : ''}${arq ? ` ${arq === 1 ? 'Uma foto foi arquivada' : `${arq} fotos foram arquivadas`} fora do banco (fica a miniatura).` : ''}` : '';
   } catch (err) { const v = $('fVer'); if (v) v.innerHTML = '<p class="muted small m0">Sem sinal: não deu para carregar as fotos agora.</p>'; }
 }
 // Juntar fotos a um apontamento já feito (ex.: realizada antes da regra, ou foto que faltou).
