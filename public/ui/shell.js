@@ -373,7 +373,9 @@ function afterRender() {
   on('fIRota', 'change', e => { UI.iRota = e.target.value; render(); });
   on('fLider', 'input', e => { UI.lider = e.target.value; document.querySelectorAll('.liderTxt').forEach(t => { t.innerHTML = '<b>Líder responsável:</b> ' + esc(UI.lider); }); });
   on('fJusRota', 'change', e => { UI.jusRota = e.target.value; UI.more = 0; render(); });
-  on('fPArea', 'change', e => { UI.pArea = e.target.value; UI.more = 0; render(); });
+  on('fPArea', 'change', e => { UI.pArea = e.target.value; UI.pRota = ''; UI.more = 0; render(); });
+  on('fPRota', 'change', e => { UI.pRota = e.target.value; UI.more = 0; render(); });
+  on('fPQ', 'input', e => { UI.pQ = e.target.value; UI.more = 0; clearTimeout(window._pqt); window._pqt = setTimeout(schedule, 180); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
   on('fNova', 'submit', e => {
@@ -384,7 +386,7 @@ function afterRender() {
     const dias = [...document.querySelectorAll('[data-ntog]')].map(b => (b.getAttribute('aria-pressed') === 'true' ? '1' : '0')).join('');
     if (!dias.includes('1')) { toast('Escolha pelo menos um dia'); return; }
     const p = { id: `${pre}-${String(max + 1).padStart(3, '0')}`, area: a, rota: $('nRota').value, local: $('nLocal').value.trim().toUpperCase(), ativ: $('nAtiv').value.trim(), tipo: $('nTipo').value, dias, ativo: true };
-    itens.push(p); DB.cache.plano[a] = itens; DB.savePlano(a, itens); DB.log(`Plano padrão: nova atividade ${p.id} · ${p.ativ}`); toast(`${p.id} adicionada ao plano`); render();
+    itens.push(p); DB.cache.plano[a] = itens; DB.savePlano(a, itens); DB.log(`Plano padrão: nova atividade ${p.id} · ${p.ativ}`); toast(`${p.id} adicionada ao plano`); render(); import('../telas/plano-prog.js').then(m => m.planoNaProgramacao(p));
   });
 }
 
