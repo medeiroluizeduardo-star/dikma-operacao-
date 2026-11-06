@@ -384,8 +384,9 @@ test('Fotos (Parte 2) na Bateria (b_) e fotos antigas (só ref): o administrador
   await assertSucceeds(apagarDeVez('admin', ['pb1'], 'b_'));
   // foto do código antigo: só o campo ref (sem refs)
   await env.withSecurityRulesDisabled(async ctx => {
-    const { refs, ...velha } = fotoMeta(); await setDoc(doc(ctx.firestore(), 'evidencias', 'pv1'), { ...velha, ref: `${SEM}#REC-001|2` });
-    await setDoc(doc(ctx.firestore(), 'evidenciasArquivo', 'pv1'), fotoArq());
+    const f = ctx.firestore(); const { refs, ...velha } = fotoMeta();
+    await setDoc(doc(f, 'evidencias', 'pv1'), { ...velha, ref: `${SEM}#REC-001|2` });
+    await setDoc(doc(f, 'evidenciasArquivo', 'pv1'), fotoArq());
   });
   await assertSucceeds(marcarExp('admin', 'pv1'));
   await assertSucceeds(updateDoc(doc(db('admin'), 'evidencias', 'pv1'), { lixeiraEm: serverTimestamp() }));
