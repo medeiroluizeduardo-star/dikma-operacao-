@@ -56,3 +56,33 @@ MOD_IC.gestao = MOD_IC.paineis;
 I.tv = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>';
 I.escudo = MOD_IC.seguranca;
 I.lixo = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
+// Ícones próprios de cada aba do menu (um por aba, para reconhecer pela figura).
+const svg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">${d}</svg>`;
+Object.assign(I, {
+  carimbo: svg('<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/>'),
+  lanc: svg('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4M9 10h6M9 14h6M9 18h3"/>'),
+  presenca: svg('<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.3-5.8 6.5-5.8 1.5 0 2.8.4 3.9 1.2"/><path d="M15 18l2 2 4-4.5"/>'),
+  nota: svg('<path d="M12 21H6V3h8l4 4v3"/><path d="M14 3v4h4"/><path d="M14 21l.8-3.2 4.7-4.7 2.4 2.4-4.7 4.7z"/>'),
+  organograma: svg('<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>'),
+  balanca: svg('<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7l-3 6h6zM19 7l-3 6h6z"/>'),
+  ficha: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="2"/><path d="M5.5 16c.5-1.6 1.6-2.4 3-2.4s2.5.8 3 2.4M14 10h4M14 14h4"/>'),
+  estrela: svg('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>'),
+  tendencia: svg('<path d="M3 20h18"/><path d="M4 16l5-5 4 3 7-7"/><path d="M15 7h5v5"/>'),
+  conversa: svg('<path d="M4 5h12v8H9l-4 3v-3H4z"/><path d="M16 9h4v8h-1v3l-4-3h-4v-2"/>'),
+  anomalia: svg('<path d="M8.3 3h7.4L21 8.3v7.4L15.7 21H8.3L3 15.7V8.3z"/><path d="M12 7.5v5.5M12 16.2v.3"/>'),
+  pizza: svg('<path d="M11 4a8 8 0 1 0 9 9h-9z"/><path d="M14 2.5a8 8 0 0 1 7.5 7.5H14z"/>'),
+  freq: svg('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 15l2.5 2.5L16 12"/>'),
+  ferias: svg('<path d="M3 11a9 9 0 0 1 18 0z"/><path d="M12 11v8.2a1.8 1.8 0 0 1-3.6 0"/>'),
+  planilha: svg('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14.5h18M9 4v16"/>'),
+  percent: svg('<path d="M19 5L5 19"/><circle cx="7" cy="7" r="2.5"/><circle cx="17" cy="17" r="2.5"/>'),
+  texto: svg('<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
+  grade: svg('<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>'),
+  medidor: svg('<path d="M4 17a8 8 0 0 1 16 0"/><path d="M12 17l4.5-5"/><circle cx="12" cy="17" r="1.3"/>'),
+  celular: svg('<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M12 7v5.5M12 15.6v.3"/>'),
+  turno: svg('<path d="M11 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4M3 9h16M7 2v4M15 2v4"/><circle cx="17" cy="17" r="4.5"/><path d="M17 15v2l1.5 1"/>'),
+  rota: svg('<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H16a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h7.5"/>'),
+  capacete: svg('<path d="M2 18.5h20"/><path d="M4.5 18.5V16a7.5 7.5 0 0 1 15 0v2.5"/><path d="M9.5 9.2V6.5h5v2.7M12 6.5v5"/>'),
+  arquivo: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>'),
+  etiqueta: svg('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>'),
+  equip: MOD_IC.equipamentos
+});
