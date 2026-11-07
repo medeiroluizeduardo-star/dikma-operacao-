@@ -167,16 +167,19 @@ export function ensureModulo() {
 export const ES_VIEWS = ['esdia', 'esdim', 'esbal', 'eshe', 'esjus'];
 // Abas que dependem do conjunto (Pátio ou Bateria): mostram o seletor no topo para quem tem os dois.
 export const SET_VIEWS = ['apontar', 'aprovar', 'pend', 'esdia', 'eshe', 'esjus', 'prog', 'imprimir', 'etiquetas', 'causas', 'esdim', 'esbal', 'painel', 'tvmodo'];
-// Barra de baixo (celular): até 4 atalhos do módulo + Mais. Os nomes vêm de nomeCurto (iguais aos do menu lateral).
+// Barra de baixo (celular): até 4 atalhos do módulo + Mais, na ordem de uso. Nome e ícone são os do menu lateral.
+// Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores; Causas fica no "Mais".
+const BARRA = {
+  operacao: () => (aprovador() && !isAdmin() ? ['meudia', 'apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['meudia', 'apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
+  gestao: () => ['meudia', 'prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
+  seguranca: () => ['meudia', 'sganom', 'sginter', 'sgpainel'],
+  rh: () => ['meudia', 'afreq', 'aferias', 'fpainel', 'aimport'],
+  administracao: () => ['cfgeral', 'cfconf', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos']
+};
 export function barraDe() {
-  const m = UI.modulo;
-  const tb = m === 'operacao' ? (aprovador() && !isAdmin() ? [['meudia', 'sol'], ['apontar', 'apontar'], ['aprovar', 'aprov'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar']] : [['meudia', 'sol'], ['apontar', 'apontar'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar'], ['eequipe', 'users'], ['einsp', 'plano']])
-    : m === 'gestao' ? [['meudia', 'sol'], ['prog', 'prog'], ['painel', 'painel'], ['causas', 'causas'], ['gcolab', 'users'], ['eaval', 'users'], ['gpainel', 'painel'], ['epainel', 'painel']]
-    : m === 'seguranca' ? [['meudia', 'sol'], ['sganom', 'pend'], ['sginter', 'plano'], ['sgpainel', 'painel']]
-    : m === 'rh' ? [['meudia', 'sol'], ['afreq', 'prog'], ['aferias', 'sol'], ['fpainel', 'painel'], ['aimport', 'dl']]
-    : [['cfgeral', 'painel'], ['cfconf', 'pend'], ['cfescala', 'escala'], ['usuarios', 'users'], ['config', 'config'], ['plano', 'plano'], ['econfig', 'config'], ['gtipos', 'config']];
-  const ok = new Set(abasDoMenu().map(v => v.id));
-  return [...tb.filter(x => ok.has(x[0])).slice(0, 4).map(([id, ic]) => [id, '', ic]), ['__more', 'Mais', 'more']];
+  const menu = abasDoMenu();
+  const lista = (BARRA[UI.modulo] || BARRA.administracao)().map(id => menu.find(v => v.id === id)).filter(Boolean).slice(0, 4);
+  return [...lista.map(v => [v.id, '', v.ic]), ['__more', 'Mais', 'more']];
 }
 // Atalho para uma tela de outro módulo (ex.: da Programação para o Apontar): troca de módulo mantendo o conjunto.
 export function irParaModuloDa(id) {
