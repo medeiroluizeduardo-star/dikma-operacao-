@@ -19,7 +19,9 @@ const conjuntos = () => SET_KEYS.filter(k => DB.dados && DB.dados(k) && DB.dados
 const SEM = FA.periodoSemana(TODAY, 0), ANT = FA.periodoSemana(TODAY, -1);
 
 // Estado da tela (só na memória).
-const A = { aba: 'periodo', conj: '', per: 'sem', de: SEM.de, ate: SEM.ate, rota: '', filtro: 'todas', mostrar: 48,
+// Quantas fotos aparecem de cada vez (no celular, menos: a lista fica curta).
+const PASSO = () => (matchMedia('(max-width:860px)').matches ? 12 : 48);
+const A = { aba: 'periodo', conj: '', per: 'sem', de: SEM.de, ate: SEM.ate, rota: '', filtro: 'todas', mostrar: PASSO(),
   fotos: null, chave: '', lendo: false, erro: '', semanas: null, chaveSem: '',
   incluirExportadas: false, tarefa: null, zip: null, aviso: '',
   lix: null, lixChave: '', lixLendo: false, incluirRecentes: false };
@@ -34,7 +36,7 @@ const semRede = () => !DEMO && !navigator.onLine;
 function carregar() {
   const k = conjAtual(); const p = periodo(); if (FA.validarPeriodo(p.de, p.ate)) return;
   const ch = `${k}|${p.de}|${p.ate}`; if (A.chave === ch && (A.fotos || A.lendo)) return;
-  A.chave = ch; A.fotos = null; A.lendo = true; A.erro = ''; A.zip = null; A.mostrar = 48;
+  A.chave = ch; A.fotos = null; A.lendo = true; A.erro = ''; A.zip = null; A.mostrar = PASSO();
   DB.listarEvidenciasPeriodo(k, p.de, p.ate).then(l => { if (A.chave !== ch) return; A.fotos = l; A.lendo = false; render(); },
     e => { if (A.chave !== ch) return; A.lendo = false; A.erro = (e && e.code === 'permission-denied') ? 'Sem permissão para ler as fotos.' : 'Não foi possível ler as fotos agora (sem sinal?).'; render(); });
 }
@@ -272,8 +274,8 @@ export function vArqFotos() {
 const acharFoto = id => (A.fotos || []).find(f => f.id === id) || (A.lix || []).find(f => f.id === id);
 acoes.faConj = (t, d) => { if (ocupado()) return; A.conj = d.k; A.rota = ''; A.zip = null; A.tarefa = null; A.aviso = ''; A.lixChave = ''; render(); };
 acoes.faAba = (t, d) => { A.aba = d.a; render(); };
-acoes.faFiltro = (t, d) => { A.filtro = d.s; A.mostrar = 48; render(); };
-acoes.faMais = () => { A.mostrar += 96; render(); };
+acoes.faFiltro = (t, d) => { A.filtro = d.s; A.mostrar = PASSO(); render(); };
+acoes.faMais = () => { A.mostrar += PASSO() * 2; render(); };
 acoes.faPptx = () => gerarRelatorio();
 acoes.faZip = () => exportarZip();
 acoes.faSalvo = () => confirmarSalvo();

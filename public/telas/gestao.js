@@ -173,9 +173,12 @@ export function criarGestao(X) {
       <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k === 'ativos' || U.filtro === k || (k === 'todos' ? n('todos') !== n('ativos') : n(k) > 0)).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
     if (adm && SEL.size) h += `<div class="selbar" role="region" aria-label="Selecionados"><b>${SEL.size} selecionado(s)</b><button class="btn danger" data-g="excluirSel">Excluir selecionados</button><button class="btn" data-g="limparSel">Limpar seleção</button></div>`;
     if (!lista.length) return h + '<div class="card"><div class="empty">Ninguém com esse filtro.</div></div>';
-    // Celular: cartões em vez da tabela larga
+    // Celular: uma linha por pessoa (nome e situação; embaixo matrícula, função e só o que pede atenção) e "Mostrar mais"
     if (matchMedia('(max-width:860px)').matches) {
-      return h + `<div class="mlist colabm">${lista.slice(0, 300).map(x => `<button type="button" class="mcard" data-g="ficha" data-mat="${x.c.mat}"><div class="row-between"><b class="t">${esc(title(x.c.nome))}</b>${pillSt(x.status)}</div><div class="muted small">${x.c.mat}${x.c.funcao ? ' · ' + esc(title(x.c.funcao)) : ''}${x.exp ? ' · <span class="pill ext">experiência</span>' : ''}</div><div class="small">${esc((L.get(String(x.c.mat)) || {}).txt || x.c.subsetor || '')}</div><div class="cmet"><span>Integração <b>${x.c.intAnt ? 'anterior' : `${x.nInt}/${f1.length}`}</b></span><span>Folha 2 <b>${x.f2.length}</b></span>${x.pend.length ? `<span class="warn-t">Aguardando <b>${x.pend.length}</b>${x.pend.some(o => souEu(o.recolhe)) ? ' · com você' : ''}</span>` : ''}${x.rec.length ? `<span class="bad-t">Recusas <b>${x.rec.length}</b></span>` : ''}</div></button>`).join('')}</div>${lista.length > 300 ? `<p class="muted small">Mostrando 300 de ${lista.length}. Use a busca.</p>` : ''}`;
+      const lim = UI.more || 40;
+      const linha = x => { const av = [x.exp ? '<span class="pill ext">experiência</span>' : '', !x.c.intAnt && !x.intOk && x.ativo ? `<span class="warn-t">Integração <b>${x.nInt}/${f1.length}</b></span>` : '', x.pend.length ? `<span class="warn-t">Aguardando <b>${x.pend.length}</b>${x.pend.some(o => souEu(o.recolhe)) ? ' · com você' : ''}</span>` : '', x.rec.length ? `<span class="bad-t">Recusas <b>${x.rec.length}</b></span>` : ''].filter(Boolean).join(' · ');
+        return `<button type="button" class="mcard colabl" data-g="ficha" data-mat="${x.c.mat}"><span class="row-between"><b class="t">${esc(title(x.c.nome))}</b>${pillSt(x.status)}</span><span class="muted small">${x.c.mat}${x.c.funcao ? ' · ' + esc(title(x.c.funcao)) : ''}${av ? ' · ' : ''}${av}</span></button>`; };
+      return h + `<div class="mlist colabm">${lista.slice(0, lim).map(linha).join('')}</div>${lista.length > lim ? `<div class="row-gap colabmais"><button class="btn center" data-act="more" data-n="${lim + 60}">Mostrar mais ${Math.min(60, lista.length - lim)} (faltam ${lista.length - lim})</button></div>` : ''}`;
     }
     const intTxt = x => x.c.intAnt ? '<span class="muted">Anterior</span>' : `<span class="${x.intOk ? '' : 'warn-t'}" title="${esc(f1.map((t, i) => `${t.tipo}: ${x.integ[i] === 'Anterior' ? 'anterior' : x.integ[i] ? dBR(x.integ[i]) : 'pendente'}`).join('\n'))}">${x.nInt}/${f1.length}</span>`;
     h += `<div class="card"><div class="tw"><table class="hoverable colabt"><thead><tr>${adm ? `<th class="c selc"><input type="checkbox" data-g="selTodos" aria-label="Marcar todos da lista" ${todosMarc ? 'checked' : ''}></th>` : ''}<th>Matrícula</th><th>Nome</th><th>Área de atuação</th><th>Admissão</th><th class="c">Integração</th><th class="c">Folha 2</th><th class="c">Aguard. assinatura</th><th class="c">Recusas</th><th>Ficha</th></tr></thead><tbody>
@@ -589,7 +592,7 @@ export function criarGestao(X) {
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-g],[data-gf],[data-gst]'); if (!t || t.closest('#layer')) return;
     const d = t.dataset;
-    if (d.gf) { U.filtro = d.gf; return render(); }
+    if (d.gf) { U.filtro = d.gf; UI.more = 0; return render(); }
     if (d.gst != null) { U.ocSt = d.gst; U.ocMeu = false; return render(); }
     switch (d.g) {
       case 'ficha': UI.view = 'gcolab'; U.mat = d.mat; render(); scrollTo(0, 0); break;
@@ -647,12 +650,12 @@ export function criarGestao(X) {
   document.addEventListener('input', e => {
     const t = e.target; const map = { gQ: 'q', gOcQ: 'ocQ', gCQ: 'cq' };
     if (t.id === 'gImpQ') { U.impQ = t.value; filtrarListaImpr(); return; }
-    if (map[t.id]) { U[map[t.id]] = t.value; clearTimeout(window._gq); window._gq = setTimeout(() => { const pos = t.selectionStart; render(); const n = $(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 250); }
+    if (map[t.id]) { U[map[t.id]] = t.value; if (t.id === 'gQ') UI.more = 0; clearTimeout(window._gq); window._gq = setTimeout(() => { const pos = t.selectionStart; render(); const n = $(t.id); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 250); }
   });
   document.addEventListener('change', e => {
     const t = e.target;
     if (isAdmin() && UI.view === 'gimport' && IMP.onChange(t)) return;
-    if (t.dataset && t.dataset.gfa) { U.fa = t.value; render(); return; }
+    if (t.dataset && t.dataset.gfa) { U.fa = t.value; UI.more = 0; render(); return; }
     if (t.id === 'gDe') { U.de = t.value; render(); } else if (t.id === 'gAte') { U.ate = t.value; render(); }
     else if (t.id === 'gOcTipo') { U.ocTipo = t.value; render(); } else if (t.id === 'gCF') { U.cf = t.value; render(); }
     else if (t.id === 'gImpMat') { U.impMat = t.value; render(); } else if (t.id === 'gImpDoc') { U.impDoc = t.value; render(); }

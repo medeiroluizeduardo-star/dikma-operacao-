@@ -1239,6 +1239,7 @@ table.freq tr.grp-row .gcount{float:none;margin-left:14px}
 /* ---- celular: fluidez e acabamento ---- */
 .cmet{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3)}.cmet b{color:var(--ink);font-weight:600}
 .colabm .mcard{text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%}
+.colabm .colabl{padding:9px 12px;gap:2px}.colabl .t{min-width:0;overflow-wrap:anywhere}.colabmais{margin-top:10px}
 .mcard[role="button"]{cursor:pointer}
 button,a,.sit,.opt,.rchip,.dbtn,.chip,select,label{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .sheet{overscroll-behavior:contain}
@@ -1893,3 +1894,13 @@ label.btn.dis{opacity:.45;pointer-events:none}
 }
 .fainfo small:first-of-type{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 @media (max-width:860px){.fafiltros label:first-child{grid-column:1/-1}}
+/* Seções que abrem e fecham (ui/dobra.js): fechadas no celular para a tela ficar curta */
+.dobra>summary{list-style:none;cursor:pointer;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;padding:14px 44px 14px 16px;position:relative;border-radius:var(--r)}
+.dobra>summary::-webkit-details-marker{display:none}
+.dobra>summary h2{font-family:var(--f-display);font-size:19px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;margin:0}
+.dobra>summary p{margin:0;color:var(--ink-3);font-size:12.5px;flex-basis:100%}
+.dobra>summary::after{content:"";position:absolute;right:20px;top:20px;width:8px;height:8px;border-right:2px solid var(--ink-3);border-bottom:2px solid var(--ink-3);transform:rotate(45deg);transition:transform .15s}
+.dobra[open]>summary{padding-bottom:0}
+.dobra[open]>summary::after{transform:rotate(-135deg);top:24px}
+.dobra>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+@media (max-width:860px){.dobra>summary h2{font-size:17px}}
