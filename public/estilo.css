@@ -1670,14 +1670,7 @@ table.freq tr.grp-row th>*{vertical-align:middle}
 .md-hero .md-sd::first-letter{text-transform:uppercase}
 .md-hero h2 .num{color:#FFB08F}
 .md-hero h2.ok .num{color:#7EE2A8}
-.md-hero .md-rs{margin:6px 0 0;color:#D8D8EE;font-size:14px}
-.md-hero .md-rs b{color:#fff}
-.md-hero .md-rs .crit{color:#FFB08F;font-weight:600}
-.md-hero .md-ac{display:flex;gap:8px;flex-wrap:wrap}
-.md-hero .btn{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.08);color:#fff}
-.md-hero .btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.5)}
-.md-hero .btn.pri{background:var(--accent-btn);border-color:var(--accent-btn);color:#fff}
-@media (max-width:860px){.md-hero{padding:16px 16px 18px;border-radius:14px}.md-hero .md-ac{width:100%}.md-hero .md-ac .btn{flex:1;justify-content:center}}
+@media (max-width:860px){.md-hero{padding:16px 16px 18px;border-radius:14px}}
 
 /* 6. Segurança (telas/seguranca.js): formulários dos registros, fila de anomalias, fotos e painel */
 .sgsheet{gap:0;padding:0}

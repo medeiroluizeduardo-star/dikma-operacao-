@@ -111,7 +111,11 @@ export function criarMeuDia(X) {
       if (!areas.length) continue;
       const nomeAreas = areas.length === SETS[k].areas.length ? 'todas as áreas' : areas.map(a => AREA_S[a]).join(' e ');
       if (r.hoje.total) progresso.push({ nome: `${SETS[k].curto} · hoje`, sub: nomeAreas, feitas: r.hoje.R + r.hoje.E + r.hoje.N, total: r.hoje.total, go: [mod, 'apontar', areas.length === 1 ? areas[0] : ''] });
-      if (r.atrasadas) tiles.push({ n: r.atrasadas, t: `atrasadas · ${SETS[k].curto}`, s: 'dias que já passaram sem apontar (últimos 60 dias)', tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] });
+      if (r.atrasadas) { // número principal: últimos 7 dias, com as rotas onde estão; o total de 60 dias vai no detalhe
+        const rec = r.atrasadasRecentes; const rts = r.atrasadasRotas.slice(0, 3).map(x => `${x.rota} (${x.n})`).join(', ');
+        tiles.push(rec
+          ? { n: rec, t: `${rec === 1 ? 'atrasada' : 'atrasadas'} nos últimos 7 dias · ${SETS[k].curto}`, s: `${rts ? 'mais em ' + rts + ' · ' : ''}${r.atrasadas.toLocaleString('pt-BR')} nos últimos 60 dias`, tom: 'bad', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] }
+          : { n: r.atrasadas, t: `${r.atrasadas === 1 ? 'atrasada antiga' : 'atrasadas antigas'} · ${SETS[k].curto}`, s: `nenhuma nos últimos 7 dias · ${rts ? 'mais em ' + rts + ' · ' : ''}últimos 60 dias`, tom: 'warn', go: [mod, 'pend', areas.length === 1 ? areas[0] : ''] }); }
       { const st = DB.dados(k); // aprovação dos apontamentos: o supervisor vê o que falta aprovar; o líder, o que voltou para corrigir
         const noPlano = (ids => pid => ids.has(pid))(new Set(SETS[k].areas.flatMap(a => (st.plano[a] || []).map(p => p.id)))); // o mesmo filtro da Aprovação
         if (aprovaPapel(P('operacao'))) { const n = contarPendentes(st.semanas, st.aprov, areas, hoje, 'pend', noPlano); if (n) tiles.push({ n, t: `apontamentos para aprovar · ${SETS[k].curto}`, s: 'o líder apontou; confira e aprove', tom: 'warn', go: [mod, 'aprovar', ''], acao: 'Aprovar' }); }
@@ -135,7 +139,7 @@ export function criarMeuDia(X) {
         const fora = operadoresFora((E.cad && E.cad.operadores) || [], hoje);
         if (ab.length) tiles.push({ n: ab.length, t: 'paradas sem liberação', s: longas.length ? `${longas.length} há mais de 2 h` : 'todas com menos de 2 h', tom: longas.length ? 'bad' : 'warn', go: ['equipamentos', 'epar', ''] });
         blocos.push(`<div class="card md-card"><header><h2>Equipamentos</h2><p>Lançamentos, frota e operadores</p><span class="r">${ir('equipamentos', 'elanc', '', `${I.apontar} Lançar`, true)}</span></header><div class="body stackcol" style="gap:14px">
-          ${ab.length ? `<div><div class="md-sub ${longas.length ? 'bad' : ''}">Paradas sem liberação (${ab.length})</div><div class="plist">${ab.slice(0, 6).map(p => `<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')}</div><div class="l">desde ${ddmm(p.data)} às ${p.ini}${p.op ? ' · ' + esc(title(p.op)) : ''}</div></div><span class="pill ${p.horas >= 2 ? 'bad' : 'warn'}">há ${p.horas >= 24 ? Math.floor(p.horas / 24) + ' d' : h1(p.horas) + ' h'}</span></div>`).join('')}</div>${ab.length > 6 ? `<p class="muted small m0">+ ${ab.length - 6}</p>` : ''}<div class="row-gap" style="margin-top:8px">${ir('equipamentos', 'epar', '', 'Abrir paradas')}</div></div>` : vazio('Nenhuma parada sem liberação.')}
+          ${ab.length ? `<div><div class="md-sub ${longas.length ? 'bad' : ''}">Paradas sem liberação (${ab.length})</div><div class="plist">${ab.slice(0, 3).map(p => `<div class="pitem"><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span> · ${esc(p.causa || 'sem causa')}</div><div class="l">desde ${ddmm(p.data)} às ${p.ini}${p.op ? ' · ' + esc(title(p.op)) : ''}</div></div><span class="pill ${p.horas >= 2 ? 'bad' : 'warn'}">há ${p.horas >= 24 ? Math.floor(p.horas / 24) + ' d' : h1(p.horas) + ' h'}</span></div>`).join('')}</div>${ab.length > 3 ? `<p class="muted small m0">+ ${ab.length - 3}</p>` : ''}<div class="row-gap" style="margin-top:8px">${ir('equipamentos', 'epar', '', 'Abrir paradas')}</div></div>` : vazio('Nenhuma parada sem liberação.')}
           ${fora.length ? `<div><div class="md-sub">Operadores fora hoje (${fora.length})</div><div class="md-pessoas">${fora.map(f => `<span class="md-pessoa"><b>${esc(title(f.nome))}</b><small>${esc(title(f.cod))}</small></span>`).join('')}</div></div>` : ''}
         </div></div>`);
       }
@@ -152,7 +156,7 @@ export function criarMeuDia(X) {
         if (a.total) tiles.push({ n: a.total, t: 'assinaturas pendentes', s: a.velhas.length ? `${a.velhas.length} há mais de 7 dias` : 'todas recentes', tom: a.velhas.length ? 'bad' : 'warn', go: ['frequencia', 'gocorr', ''] });
         if (exp.length) tiles.push({ n: exp.length, t: 'experiências vencendo', s: '45 ou 90 dias nesta semana', tom: 'warn', go: ['paineis', 'gpainel', ''] });
         blocos.push(`<div class="card md-card"><header><h2>Fichas</h2><p>Fichas de acompanhamento</p><span class="r">${ir('frequencia', 'gnovaoc', '', `${I.plus} Ocorrência`, true)}</span></header><div class="body stackcol" style="gap:14px">
-          ${a.total ? `<div><div class="md-sub ${a.velhas.length ? 'bad' : ''}">Aguardando assinatura (${a.total})</div><div class="plist">${(a.velhas.length ? a.velhas : (G.ocorr || []).filter(o => o.status === 'pendente')).slice(0, 5).map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${ddmm(o.data)} · ${esc(o.tipo)}</div></div><span class="pill ${o.data <= add(hoje, -7) ? 'bad' : 'warn'}">${Math.round((new Date(hoje) - new Date(o.data)) / 864e5)} dias</span></div>`).join('')}</div></div>` : vazio('Nenhuma assinatura pendente.')}
+          ${a.total ? `<div><div class="md-sub ${a.velhas.length ? 'bad' : ''}">Aguardando assinatura (${a.total})</div><div class="plist">${(a.velhas.length ? a.velhas : (G.ocorr || []).filter(o => o.status === 'pendente')).slice(0, 3).map(o => `<div class="pitem"><div class="minw"><div class="t">${esc(title(o.nome))}</div><div class="l">${ddmm(o.data)} · ${esc(o.tipo)}</div></div><span class="pill ${o.data <= add(hoje, -7) ? 'bad' : 'warn'}">${Math.round((new Date(hoje) - new Date(o.data)) / 864e5)} dias</span></div>`).join('')}</div></div>` : vazio('Nenhuma assinatura pendente.')}
           ${exp.length ? `<div><div class="md-sub">Experiência vencendo</div><div class="md-pessoas">${exp.slice(0, 12).map(x => `<span class="md-pessoa"><b>${esc(title(x.c.nome))}</b><small>${x.d} dias de casa · fecha ${x.d <= 45 ? '45' : '90'} em ${(x.d <= 45 ? 45 : 90) - x.d} dia(s)</small></span>`).join('')}</div></div>` : ''}
         </div></div>`);
       }
@@ -172,18 +176,11 @@ export function criarMeuDia(X) {
     const linha = t => `<div class="md-task ${t.tom}"><span class="s" aria-hidden="true"></span><div class="minw"><b><span class="num">${t.n}</span> ${esc(t.t)}</b><small>${esc(t.s)}</small></div><button class="btn sm" data-md="${t.go.join('|')}">${soLer() ? 'Ver' : t.acao || ACAO[t.go[1]] || 'Abrir'}</button></div>`;
     const urgentes = tiles.filter(t => t.tom === 'bad' || t.tom === 'warn');
     const chips = tiles.filter(t => t.tom === 'neu');
-    // Faixa de abertura (como no Meu painel): saudação e data numa linha pequena, manchete com o número do que pede ação hoje,
-    // resumo com o mais crítico em destaque e até 2 botões.
+    // Faixa de abertura: só saudação, data e uma frase. Os números e os botões ficam no "Agora", sem repetir.
     const nU = urgentes.length;
     const dataTx = `${DIAS_L[d.getDay()]}, ${d.getDate()} de ${MESES_L[d.getMonth()].toLowerCase()}`;
     const manchete = !nU ? 'Tudo em dia' : soLer() ? `<span class="num">${nU}</span> ${nU === 1 ? 'ponto de atenção' : 'pontos de atenção'} hoje` : `<span class="num">${nU}</span> ${nU === 1 ? 'coisa pede' : 'coisas pedem'} ação hoje`;
-    const resumo = nU ? urgentes.slice(0, 2).map(t => `<span class="${t.tom === 'bad' ? 'crit' : ''}"><b class="num">${t.n.toLocaleString('pt-BR')}</b> ${esc(t.t)}</span>`).join(' · ') : 'Nada pendente nos seus módulos agora.';
-    // botões: o mais urgente (laranja) e o próximo de outro tipo; quando o nome repete, leva junto o lugar (ex.: "Apontar · Bateria")
-    const rotA = t => t.acao || ACAO[t.go[1]] || 'Abrir';
-    const segundo = urgentes.slice(1).find(t => t.go.join('|') !== (urgentes[0] && urgentes[0].go.join('|')) && t.go[1] !== urgentes[0].go[1]) || urgentes[1];
-    const doBotao = (t, i) => { const r0 = rotA(t); const r = ['Abrir', 'Ver'].includes(r0) ? `${r0} ${esc(t.t.split(' · ')[0])}` : r0; const rep = urgentes[0] && segundo && rotA(urgentes[0]) === rotA(segundo); return `<button class="btn${i ? '' : ' pri'}" data-md="${t.go.join('|')}">${rep && t.t.includes(' · ') ? `${r} · ${esc(t.t.split(' · ').pop())}` : r}</button>`; };
-    const acoes = soLer() ? (urgentes[0] ? `<button class="btn" data-md="${urgentes[0].go.join('|')}">Ver</button>` : '') : [urgentes[0], segundo].filter(Boolean).map(doBotao).join('');
-    let h = `<div class="md-hero"><div class="md-ht"><p class="md-sd">${saud}, ${esc(nome)} · ${dataTx}</p><h2${nU ? '' : ' class="ok"'}>${manchete}</h2><p class="md-rs">${resumo}</p></div>${acoes ? `<div class="md-ac">${acoes}</div>` : ''}</div>`;
+    let h = `<div class="md-hero"><div class="md-ht"><p class="md-sd">${saud}, ${esc(nome)} · ${dataTx}</p><h2${nU ? '' : ' class="ok"'}>${manchete}</h2></div></div>`;
     h += `<div class="md-top"><div class="card md-agora"><header><h2>Agora</h2><p>${urgentes.length ? 'Do mais urgente para o menos' : 'Nada pedindo ação'}</p></header><div class="body">${urgentes.length
       ? urgentes.slice(0, 3).map(linha).join('') + (urgentes.length > 3 ? `<details class="md-mais"><summary>Mais ${urgentes.length - 3}</summary>${urgentes.slice(3).map(linha).join('')}</details>` : '')
       : '<p class="md-ok m0"><b>Tudo em dia.</b> Nada pendente nos seus módulos agora.</p>'}</div></div>`;
