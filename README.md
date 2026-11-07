@@ -57,7 +57,7 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 ### 7. Enviar os arquivos e publicar
 1. Na página do repositório, clique em **uploading an existing file**.
 2. Extraia o .zip e arraste **todo o conteúdo da pasta** `dikma-operacao` (as pastas `public`, `.github` e os arquivos soltos). Clique em **Commit changes**.
-3. Abra a aba **Actions**. A publicação "Publicar no Firebase" roda sozinha e termina com ✓ verde em 1 a 2 minutos.
+3. Abra a aba **Actions** › **Publicar no Firebase** › **Run workflow**. Termina com ✓ verde em 1 a 2 minutos. (Daqui para frente ela roda sozinha a cada proposta aceita; envio direto para a `main` é barrado e não publica.)
 4. Acesse `https://ID-DO-PROJETO.web.app`.
 
 > Se a pasta `.github` não subir: no repositório, clique em **Add file > Create new file**, digite o nome `.github/workflows/blank.yml` e cole o conteúdo do arquivo do mesmo nome.
