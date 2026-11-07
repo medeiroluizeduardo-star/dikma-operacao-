@@ -10,6 +10,8 @@ const diaSemana = data => (new Date(data + 'T12:00:00').getDay() + 6) % 7; // 0 
 // a mesma no menu, em Pendências e no Meu dia (antes cada tela olhava o que estivesse carregado).
 export const JANELA_ATRASADAS = 60;
 export const inicioAtrasadas = hoje => add(hoje, -JANELA_ATRASADAS);
+// No Meu dia, o número principal é o dos últimos 7 dias; o dos 60 dias aparece como detalhe.
+export const ATRASADAS_RECENTES = 7;
 // semanas {id: doc} · areas (vazio = todas) · devolve [{ doc, i, k, dt }] da mais antiga para a mais nova
 export function listaAtrasadas(semanas, { areas, hoje, desde = inicioAtrasadas(hoje) }) {
   const out = [];
@@ -75,7 +77,18 @@ export function resumoAtividades(d) {
       if (c === 'P') { x.P++; P++; } else if (c === 'R') { x.R++; R++; } else if (c === 'N') { x.N++; N++; } else if (c === 'E') { x.E++; E++; }
     });
   }
-  atrasadas = listaAtrasadas(d.semanas, { areas: d.areas, hoje }).length;
+  const lista = listaAtrasadas(d.semanas, { areas: d.areas, hoje });
+  atrasadas = lista.length;
+  // As dos últimos 7 dias (o que dá para resolver agora) e em que rotas elas estão; as 60 dias ficam como detalhe.
+  const desde7 = add(hoje, -ATRASADAS_RECENTES);
+  const recentes = lista.filter(x => x.dt >= desde7);
+  const porRotaAtr = new Map();
+  for (const x of (recentes.length ? recentes : lista)) {
+    const p = PL.get(x.doc.ids[x.i]); const rota = p ? p.rota : '—'; const ch = x.doc.area + '|' + rota;
+    if (!porRotaAtr.has(ch)) porRotaAtr.set(ch, { area: x.doc.area, rota, n: 0 });
+    porRotaAtr.get(ch).n++;
+  }
+  const atrasadasRotas = [...porRotaAtr.values()].sort((a, b) => b.n - a.n || a.rota.localeCompare(b.rota));
   // quem falta hoje
   const faltas = [];
   for (const c of d.colabs) { if (!d.areas.includes(c.area)) continue; const cod = d.sit[c.id + '|' + hoje]; if (cod && AUSENCIA.has(cod)) faltas.push({ nome: c.nome, funcao: c.funcao, area: c.area, rota: c.rota, cod }); }
@@ -93,7 +106,7 @@ export function resumoAtividades(d) {
     if (e.deficit) deficit.push({ area: r.area, rota: r.rota, disp: e.disp, nec: e.nec, prog });
   }
   const rotas = [...porRota.values()].sort((a, b) => b.P - a.P || a.rota.localeCompare(b.rota));
-  return { hoje: { P, R, N, E, total: P + R + N + E }, rotas, atrasadas, faltas, deficit, amanha };
+  return { hoje: { P, R, N, E, total: P + R + N + E }, rotas, atrasadas, atrasadasRecentes: recentes.length, atrasadasRotas, faltas, deficit, amanha };
 }
 
 // Paradas de equipamento ainda sem liberação, com quantas horas estão abertas.

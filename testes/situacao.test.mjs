@@ -188,6 +188,20 @@ test('atrasadas: janela fixa de 60 dias, a mesma no menu, em Pendências e no Me
   assert.equal(resumoAtividades({ areas: ['A'], plano: [], semanas, colabs: [], sit: {}, rotas: [], hoje }).atrasadas, 4);
 });
 
+test('Meu dia: atrasadas dos últimos 7 dias em destaque, por rota, e o total de 60 dias como detalhe', () => {
+  const hoje = '2026-10-27';
+  const plano = [{ id: 'X', rota: 'R1' }, { id: 'Y', rota: 'R2' }];
+  const semanas = { a: { id: 'A|2026-08-31', area: 'A', ini: '2026-08-31', ids: ['X', 'Y'], d: ['PPPPPPP', 'PPPPPPP'] }, b: { id: 'A|2026-10-19', area: 'A', ini: '2026-10-19', ids: ['X', 'Y'], d: ['___PPPP', '______P'] } };
+  const r = resumoAtividades({ areas: ['A'], plano, semanas, colabs: [], sit: {}, rotas: [], hoje });
+  assert.equal(r.atrasadas, 19); // 14 de setembro + 5 da semana de 19/10
+  assert.equal(r.atrasadasRecentes, 5); // 20/10 em diante: X em 22 a 25/10, Y em 25/10
+  assert.deepEqual(r.atrasadasRotas, [{ area: 'A', rota: 'R1', n: 4 }, { area: 'A', rota: 'R2', n: 1 }]);
+  // sem nenhuma recente: as rotas contam a janela toda
+  const so = resumoAtividades({ areas: ['A'], plano, semanas: { a: semanas.a }, colabs: [], sit: {}, rotas: [], hoje });
+  assert.equal(so.atrasadasRecentes, 0);
+  assert.deepEqual(so.atrasadasRotas.map(x => x.n), [7, 7]);
+});
+
 test('aprovação: a mesma lista no app e no Meu dia, ignorando atividade fora do plano', () => {
   const doc = { id: 'A|2026-10-19', area: 'A', ini: '2026-10-19', ids: ['X', 'Y'], d: ['RRR____', 'R______'], m: {} };
   const aprov = { 'A|2026-10-19': { 'X|0': { s: 'A', c: 'R' } } };
