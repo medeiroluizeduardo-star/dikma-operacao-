@@ -11,6 +11,7 @@ import { supConjs } from '../contas/segcalc.js';
 // mod: all (Meu dia, em todos menos a Administração) · operacao · gestao · seguranca · rh · administracao
 // req(): condição pelo usuário logado · reqU(u): condição pelo usuário · ord: ordem na Administração.
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
+// junto: abas que ocupam um lugar só no menu (o da primeira que a pessoa vê), com um seletor no topo para trocar entre elas.
 // sup: aba da Segurança que o supervisor da área vê mesmo sem perfil na Segurança (ele trata as anomalias da área).
 // As telas de Equipamentos, fichas e Frequência ficam em equip.js, gestao.js e administrativo.js, carregados quando precisa.
 // Pátio e Bateria: o seletor no topo da Operação e da Gestão troca o conjunto (UI.esSet) e mantém a aba.
@@ -38,15 +39,16 @@ export const VIEWS = [
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets },
   { id: 'esdim', nome: 'Dimensionamento', ic: 'painel', grp: 'Efetivo', mod: 'gestao', req: geSets },
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'prog', grp: 'Efetivo', mod: 'gestao', req: geSets },
-  { id: 'gcolab', nome: 'Colaboradores', ic: 'users', grp: 'Fichas de acompanhamento', mod: 'gestao', req: () => temFichas(ME) },
-  { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas de acompanhamento', mod: 'gestao', req: () => temFichas(ME) },
+  { id: 'gcolab', nome: 'Colaboradores', ic: 'users', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME) },
+  { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'users', grp: 'Equipamentos', mod: 'gestao', req: geEq },
   { id: 'eanal', nome: 'Análises de equipamentos', ic: 'prog', grp: 'Equipamentos', mod: 'gestao', req: geEq },
-  { id: 'painel', nome: 'Atividades', ic: 'painel', grp: 'Indicadores', mod: 'gestao', req: geSets },
-  { id: 'epainel', nome: 'Equipamentos', ic: 'painel', grp: 'Indicadores', mod: 'gestao', req: geEq },
-  { id: 'gpainel', nome: 'Fichas', ic: 'users', grp: 'Indicadores', mod: 'gestao', req: () => temFichas(ME) },
-  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Para imprimir', mod: 'gestao', req: () => geSets() || geEq() },
-  { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Para imprimir', mod: 'gestao', req: geSets },
+  // Indicadores: um lugar só no menu; Atividades | Equipamentos | Fichas no topo da tela.
+  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geSets, junto: 'ind' },
+  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geEq, junto: 'ind' },
+  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), junto: 'ind' },
+  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Acompanhamento', mod: 'gestao', req: () => geSets() || geEq() },
+  { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Acompanhamento', mod: 'gestao', req: geSets },
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
   { id: 'sginter', nome: 'Interações', ic: 'plano', grp: 'Registros', mod: 'seguranca', sup: true },
   { id: 'sganom', nome: 'Anomalias', ic: 'pend', grp: 'Registros', mod: 'seguranca', sup: true },
@@ -101,7 +103,9 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores' };
+const CURTO = { esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
+// Nome no seletor do topo das abas juntas (junto).
+export const NOME_JUNTO = { painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas' };
 export const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
@@ -123,8 +127,17 @@ export const viewsDoModulo = () => {
   const l = VIEWS.filter(v => (v.mod === m || (v.mod === 'all' && m !== 'administracao')) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : podeVer(ME, v, permCfg(), m)));
   return m === 'administracao' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l;
 };
-// Abas que aparecem no menu (sem as que abrem por botão de outra aba).
-export const abasDoMenu = () => viewsDoModulo().filter(v => !v.fora);
+// Abas que aparecem no menu: sem as que abrem por botão de outra aba e, das juntas, só a primeira que a pessoa vê.
+export const abasDoMenu = () => { const vs = new Set(); return viewsDoModulo().filter(v => !v.fora && (!v.junto || (!vs.has(v.junto) && vs.add(v.junto)))); };
+// Abas juntas com esta (para o seletor do topo); vazio se não for junta ou se a pessoa só vê uma.
+export const juntasDe = v => { if (!v || !v.junto) return []; const l = viewsDoModulo().filter(x => x.junto === v.junto); return l.length > 1 ? l : []; };
+// Item do menu que fica marcado com esta aba aberta: a aba pai (Folha do líder → Programação) ou a junta que está no menu.
+export function abaMarcada(id) {
+  const v = VIEWS.find(x => x.id === id) || {};
+  if (v.pai) return v.pai;
+  if (v.junto) { const m = abasDoMenu().find(x => x.junto === v.junto); if (m) return m.id; }
+  return id;
+}
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
 const VIEW_NOVA = { sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab' };
 function normalizarView() {
@@ -158,7 +171,7 @@ export const SET_VIEWS = ['apontar', 'aprovar', 'pend', 'esdia', 'eshe', 'esjus'
 export function barraDe() {
   const m = UI.modulo;
   const tb = m === 'operacao' ? (aprovador() && !isAdmin() ? [['meudia', 'sol'], ['apontar', 'apontar'], ['aprovar', 'aprov'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar']] : [['meudia', 'sol'], ['apontar', 'apontar'], ['pend', 'pend'], ['esdia', 'escala'], ['elanc', 'apontar'], ['eequipe', 'users'], ['einsp', 'plano']])
-    : m === 'gestao' ? [['meudia', 'sol'], ['prog', 'prog'], ['painel', 'painel'], ['causas', 'causas'], ['gcolab', 'users'], ['eaval', 'users'], ['gpainel', 'users'], ['epainel', 'painel']]
+    : m === 'gestao' ? [['meudia', 'sol'], ['prog', 'prog'], ['painel', 'painel'], ['causas', 'causas'], ['gcolab', 'users'], ['eaval', 'users'], ['gpainel', 'painel'], ['epainel', 'painel']]
     : m === 'seguranca' ? [['meudia', 'sol'], ['sganom', 'pend'], ['sginter', 'plano'], ['sgpainel', 'painel']]
     : m === 'rh' ? [['meudia', 'sol'], ['afreq', 'prog'], ['aferias', 'sol'], ['fpainel', 'painel'], ['aimport', 'dl']]
     : [['cfgeral', 'painel'], ['cfconf', 'pend'], ['cfescala', 'escala'], ['usuarios', 'users'], ['config', 'config'], ['plano', 'plano'], ['econfig', 'config'], ['gtipos', 'config']];

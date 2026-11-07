@@ -1176,6 +1176,7 @@ table.freq .fnome .btn.link{color:var(--ink)}
 /* ---- correções de layout ---- */
 .row-gap.diastog{flex-wrap:nowrap}
 .seg.setsw{flex:none;width:max-content;grid-template-columns:repeat(2,auto)}
+.seg.indsw{flex:none;width:max-content;max-width:100%;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:auto}.seg.indsw button{padding:8px 12px;white-space:nowrap}
 table.tipos input.in[data-gt$="|tipo"]{min-width:170px}
 table.tipos textarea.in{min-width:240px}
 table.tipos .numin{width:64px}
