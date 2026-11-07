@@ -383,7 +383,7 @@ public/
                       Operação (equip.js), fichas do Efetivo (gestao.js, importar.js),
                       Frequência e férias (administrativo.js), Meu dia (meudia.js) e modo TV (tv.js)
   demo/               dados da demonstração, com nomes e matrículas fictícios
-  vendor/             bibliotecas (Firebase 10.14.1, SheetJS 0.20.3, PptxGenJS, QR code)
+  vendor/             bibliotecas (Firebase 13.2.0, gerado por ferramentas/firebase/gerar.mjs, SheetJS 0.20.3, PptxGenJS, QR code)
   img/                logo da Dikma
   sw.js, manifest.webmanifest, icons/   instalação no celular e uso sem sinal
 firestore.rules       regras de segurança por perfil e área
