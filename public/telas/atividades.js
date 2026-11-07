@@ -1,7 +1,7 @@
 // Telas de Atividades: Painel, Aprovação, Causas e ações, Etiquetas QR, Programação, Pendências e Folha do líder.
 import { SETS, AREA_S, DAYS, DL, MOTIVOS, pd, add, ddmm, weeksOfMonth, weekOf, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
-import { baixarExcel, dataBR } from '../exportar.js';
-import * as M from '../movimento.js';
+import { baixarExcel, dataBR } from '../ui/exportar.js';
+import * as M from '../ui/movimento.js';
 import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, framed, esc, pct, title, fmtAt, n0, $ } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, tipos, isAdmin, podeItem, todasAreas, myAreas, myArea, areaScope, canEdit, selMinhaArea } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

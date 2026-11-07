@@ -10,8 +10,8 @@ Arquivos:
 | `public/contas/fotos.js` | Contas sem tela: configuração padrão e validação, situação que exige foto, contador, `refs`, contagem por célula (`ft`), indicador e estimativa de armazenamento. Testado em `testes/fotos.test.mjs`. |
 | `public/ui/fotos.js` | No navegador: reduzir a foto (JPEG), miniatura, SHA-256 e a foto grande em tela cheia. A Segurança usa as mesmas funções. |
 | `public/telas/fotos.js` | Telas: passo de fotos, fotos de uma atividade, selo 📷, indicadores e Administração › Fotos das atividades. |
-| `public/data.js` | Gravação (`apontarComFotos`), leitura (`listarFotosCel`, `listarEvidenciasSemanas`, `abrirEvidencia`), `ajustarRefsFoto`, `salvarCfgFotos`. |
-| `public/data-mock.js` | Os mesmos nomes na demonstração (fotos de exemplo desenhadas em canvas). |
+| `public/nucleo/data.js` | Gravação (`apontarComFotos`), leitura (`listarFotosCel`, `listarEvidenciasSemanas`, `abrirEvidencia`), `ajustarRefsFoto`, `salvarCfgFotos`. |
+| `public/nucleo/data-mock.js` | Os mesmos nomes na demonstração (fotos de exemplo desenhadas em canvas). |
 | `firestore.rules` | Bloco "Fotos das atividades". Testado em `testes/regras.test.mjs`. |
 | `public/contas/fotos-arquivo.js` | **Parte 2**, contas sem tela: situação da foto, o que pode ir para a lixeira/apagar, lotes, confirmação, nomes do .zip, `indice.csv`, SHA-256, espaço e conteúdo do relatório. Testado em `testes/fotos-arquivo.test.mjs`. |
 | `public/telas/fotos-arquivo.js` | **Parte 2**, tela Administração › Relatórios e arquivo de fotos. |

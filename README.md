@@ -367,8 +367,11 @@ Edite o arquivo direto no GitHub (ícone de lápis) e salve com **Commit changes
 public/
   index.html, app.js  a página e o ponto de entrada (app.js explica a divisão do código)
   estilo.css, tema.js visual e tema claro/escuro
-  nucleo/             ambiente, estado, ações e carregamento dos módulos
-  ui/                 peças da interface (janelas, ícones, menu, fotos no navegador)
+  nucleo/             ambiente, estado, ações e carregamento dos módulos; navegacao.js (menu e abas),
+                      eventos.js (cliques e formulários), inicio.js (abertura), data.js (conexão com o Firebase:
+                      login e banco) e data-mock.js (modo demonstração, ?demo)
+  ui/                 peças da interface: janelas, ícones, menu, fotos no navegador, busca nas listas,
+                      baixar Excel, animações e o jeito único de lançar presença
   calc/               contas das telas de Atividades e presença (usam o estado da página)
   contas/             contas SEM tela e sem banco, as mesmas no site, nos testes e nas rotinas do GitHub:
                       cal.js (calendário: a semana pertence ao mês da quinta-feira), situacao.js e escala.js
@@ -376,15 +379,9 @@ public/
                       aprovacao.js, pessoas.js (cadastro único), planilhas-adm.js e lideres.js (planilhas do RH),
                       segcalc.js (Segurança), eqcalc.js (indicadores da Operação), feriados.js, planoaplica.js,
                       limpeza.js, fotos.js e fotos-arquivo.js
-  telas/              telas de Atividades, Efetivo, Segurança, Relatórios, Administração e fotos
-  equip.js            módulo Operação (equipamentos)
-  gestao.js           módulo Efetivo (fichas de acompanhamento); importar.js lê Excel e CSV
-  administrativo.js   módulo Frequência e férias; presenca.js é o jeito único de lançar presença
-  meudia.js, tv.js    tela Meu dia e modo TV
-  busca.js, exportar.js, movimento.js   busca nas listas, baixar Excel, animações
-  navegacao.js, eventos.js, inicio.js   menu e abas, cliques e formulários, abertura
-  data.js             conexão com o Firebase (login e banco)
-  data-mock.js        modo demonstração (?demo)
+  telas/              cada tela: Atividades, Efetivo, Segurança, Relatórios, Administração e fotos,
+                      Operação (equip.js), fichas do Efetivo (gestao.js, importar.js),
+                      Frequência e férias (administrativo.js), Meu dia (meudia.js) e modo TV (tv.js)
   demo/               dados da demonstração, com nomes e matrículas fictícios
   vendor/             bibliotecas (Firebase 10.14.1, SheetJS 0.20.3, PptxGenJS, QR code)
   img/                logo da Dikma

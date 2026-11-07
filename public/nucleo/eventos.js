@@ -1,23 +1,23 @@
 // Eventos da página: cliques (data-*), envio de formulários, mudança de campos, teclado, Voltar e avisos de saída.
 // Botões com data-act chamam a ação registrada em acoes (nucleo/acoes.js); cada tela registra as suas.
-import { planoNaProgramacao } from './telas/plano-prog.js';
-import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './contas/cal.js';
-import { pedirJus } from './presenca.js';
-import { letra, periodosDe } from './contas/escala.js';
-import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './nucleo/base.js';
-import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, modsDe, setsDe, aplicarSet, moduloNovo } from './nucleo/estado.js';
-import { acoes } from './nucleo/acoes.js';
-import { I, MOD_IC } from './ui/icones.js';
-import { setSt, tirarFora } from './calc/atividades.js';
-import { sitDia, curto, removerCobertura } from './calc/presenca.js';
+import { planoNaProgramacao } from '../telas/plano-prog.js';
+import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from '../contas/cal.js';
+import { pedirJus } from '../ui/presenca.js';
+import { letra, periodosDe } from '../contas/escala.js';
+import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './base.js';
+import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, modsDe, setsDe, aplicarSet, moduloNovo } from './estado.js';
+import { acoes } from './acoes.js';
+import { I, MOD_IC } from '../ui/icones.js';
+import { setSt, tirarFora } from '../calc/atividades.js';
+import { sitDia, curto, removerCobertura } from '../calc/presenca.js';
 import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
-import { sheet, formSheet, showErr, toggleEye, toast } from './ui/janelas.js';
-import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela } from './ui/shell.js';
-import { apArea, cellMenu, pedirJustificativa, apply } from './telas/apontar.js';
-import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from './telas/efetivo.js';
-import { ocorrOpc, salvarJus, horarioHE, heCfg } from './telas/horas-justificativas.js';
-import { rascEsc, abasPessoaSheet, rascunhoPerm, problemaSenha, senhaAleatoria, lerAcesso, validarAcesso, resumoAcesso, editarAcessoSheet, textoAcesso } from './telas/config.js';
-import { MD } from './nucleo/modulos.js';
+import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
+import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela } from '../ui/shell.js';
+import { apArea, cellMenu, pedirJustificativa, apply } from '../telas/apontar.js';
+import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from '../telas/efetivo.js';
+import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
+import { rascEsc, abasPessoaSheet, rascunhoPerm, problemaSenha, senhaAleatoria, lerAcesso, validarAcesso, resumoAcesso, editarAcessoSheet, textoAcesso } from '../telas/config.js';
+import { MD } from './modulos.js';
 
 // Botão Voltar (celular e navegador): fecha a janela aberta ou volta para a tela anterior, em vez de sair do sistema.
 let HIST_IGNORA = false;

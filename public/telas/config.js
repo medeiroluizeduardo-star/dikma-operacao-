@@ -2,7 +2,7 @@
 // Usuários, Perfis e permissões e o primeiro acesso (importar).
 import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
 import { competenciaDe, diasDaCompetencia } from '../contas/planilhas-adm.js';
-import { semAcento, casa, caixaBusca } from '../busca.js';
+import { semAcento, casa, caixaBusca } from '../ui/busca.js';
 import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe } from '../contas/acessos.js';
 import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../contas/escala.js';
 import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../contas/permissoes.js';
@@ -12,7 +12,7 @@ import { acoes } from '../nucleo/acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
 import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
-import { VIEWS } from '../navegacao.js';
+import { VIEWS } from '../nucleo/navegacao.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';

@@ -1,7 +1,7 @@
 // Dikma Gestão — lançar a presença de uma pessoa num dia. O MESMO jeito na Frequência (Administrativo)
 // e no Efetivo diário (Operação): toque no dia → escolha a situação → escolha até quando vale.
 // Quem chama decide onde grava (situacao, folha) e o que vem depois (substituto, hora extra).
-import { NOMES_CODIGO, CODIGOS_LANC, JUS_CODS } from './contas/situacao.js';
+import { NOMES_CODIGO, CODIGOS_LANC, JUS_CODS } from '../contas/situacao.js';
 
 const DIA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
 const dBR = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;

@@ -1,13 +1,13 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
-import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './contas/cal.js';
-import { legadoDoAcesso, marcasDe, ehAdminU } from './contas/acessos.js';
-import { prepararImportacao } from './contas/planilhas-adm.js';
-import { veRegSeg, fotosDoReg } from './contas/segcalc.js';
-import { aplicarCampos } from './contas/limpeza.js';
-import { mapaFeriados, aplicarNaSemana } from './contas/feriados.js';
-import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from './contas/fotos.js';
-import { shaDe } from './ui/fotos.js';
+import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
+import { legadoDoAcesso, marcasDe, ehAdminU } from '../contas/acessos.js';
+import { prepararImportacao } from '../contas/planilhas-adm.js';
+import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
+import { aplicarCampos } from '../contas/limpeza.js';
+import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
+import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
+import { shaDe } from '../ui/fotos.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });

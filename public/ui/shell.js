@@ -1,12 +1,12 @@
 // Moldura da tela: entrada (login), desenho da tela (render), menu lateral, barra de baixo, topo, filtros, busca e tema.
 import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
-import * as M from '../movimento.js';
-import { semAcento, filtrarLista } from '../busca.js';
+import * as M from './movimento.js';
+import { semAcento, filtrarLista } from './busca.js';
 import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../nucleo/navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -14,7 +14,7 @@ import { fecharSitPop, vEsDim, vEsBal, vEsDia } from '../telas/efetivo.js';
 import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
 import { resTipo, rConj, vResumoOutro, vResumo } from '../telas/relatorios.js';
 import { vConfigModulo, vPlano, vGerador, vUsuarios, vPerfis, problemaSenha, vConfig, vImportar } from '../telas/config.js';
-import { renderTV } from '../tv.js';
+import { renderTV } from '../telas/tv.js';
 import { MD, EQ, AD, GE, comModulo } from '../nucleo/modulos.js';
 
 // Telas da Segurança (telas/seguranca.js, carregado sob demanda); sgconfig fica na Administração.

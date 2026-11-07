@@ -1,7 +1,7 @@
 // Dikma Gestão — baixar listas como planilha do Excel (.xlsx). A biblioteca só é carregada na hora de exportar.
 // abas: [{ nome, linhas: [[cabeçalho...], [valores...]] }]
 export async function baixarExcel(arquivo, abas) {
-  const XLSX = await import('./vendor/xlsx.js');
+  const XLSX = await import('../vendor/xlsx.js');
   const wb = XLSX.utils.book_new();
   for (const a of abas) {
     const ws = XLSX.utils.aoa_to_sheet(a.linhas);

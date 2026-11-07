@@ -2,8 +2,8 @@
 // Lê uma planilha (Excel .xlsx/.xlsm/.xls ou CSV), acha sozinho a tabela de colaboradores (e a de ocorrências,
 // se houver), mostra o que vai mudar e só grava depois da confirmação. A área de atuação e a função
 // importadas vão também para Atividades Pátio, Atividades Bateria e Operação (pessoas.js).
-import { pad, today, AREA_S, AREAS_ATIV, SETS, setDaArea } from './contas/cal.js';
-import { AREA_GERAL, AREA_OP, norm } from './contas/pessoas.js';
+import { pad, today, AREA_S, AREAS_ATIV, SETS, setDaArea } from '../contas/cal.js';
+import { AREA_GERAL, AREA_OP, norm } from '../contas/pessoas.js';
 
 // Nomes de coluna aceitos (comparados sem acento, em maiúsculas).
 const CAMPOS = {
@@ -57,7 +57,7 @@ function lerCSV(t) {
 }
 async function lerArquivo(file) {
   if (/\.(csv|txt)$/i.test(file.name)) return [{ nome: file.name, rows: lerCSV(await file.text()) }];
-  const XLSX = await import('./vendor/xlsx.js');
+  const XLSX = await import('../vendor/xlsx.js');
   const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
   return wb.SheetNames.map(n => ({ nome: n, rows: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: true, defval: null, blankrows: false }) }));
 }
