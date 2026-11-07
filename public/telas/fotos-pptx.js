@@ -2,8 +2,8 @@
 // (a biblioteca é grande: fica fora do pacote que abre sem sinal). A biblioteca PptxGenJS (com o JSZip dentro) está em
 // vendor/pptxgen.bundle.js e entra por uma tag <script> criada aqui (a política de segurança só aceita scripts do
 // próprio site; nada inline). O conteúdo (indicadores, grupos de fotos, limite) vem de fotos-arquivo.js.
-import { DAYS } from '../cal.js';
-import * as FA from '../fotos-arquivo.js';
+import { DAYS } from '../contas/cal.js';
+import * as FA from '../contas/fotos-arquivo.js';
 
 let carregando = null;
 // Carrega a biblioteca uma vez só. Depois ficam window.PptxGenJS e window.JSZip.

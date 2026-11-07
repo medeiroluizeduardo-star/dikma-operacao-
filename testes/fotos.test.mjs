@@ -1,10 +1,10 @@
-// Testes das contas das fotos das atividades (public/fotos.js): configuração e validação, situação que exige foto,
+// Testes das contas das fotos das atividades (public/contas/fotos.js): configuração e validação, situação que exige foto,
 // contador do passo de fotos, refs compartilhadas (uma foto para várias atividades), contagem por célula (ft),
 // indicador "com foto" e estimativa de armazenamento. Não precisa do emulador: node --test testes/fotos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as F from '../public/fotos.js';
-import { add } from '../public/cal.js';
+import * as F from '../public/contas/fotos.js';
+import { add } from '../public/contas/cal.js';
 
 const HOJE = '2026-11-12'; // quinta-feira
 const AREA = 'RECEBIMENTO';

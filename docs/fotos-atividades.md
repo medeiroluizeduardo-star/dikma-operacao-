@@ -7,13 +7,13 @@ Arquivos:
 
 | Arquivo | O que tem |
 | --- | --- |
-| `public/fotos.js` | Contas sem tela: configuração padrão e validação, situação que exige foto, contador, `refs`, contagem por célula (`ft`), indicador e estimativa de armazenamento. Testado em `testes/fotos.test.mjs`. |
+| `public/contas/fotos.js` | Contas sem tela: configuração padrão e validação, situação que exige foto, contador, `refs`, contagem por célula (`ft`), indicador e estimativa de armazenamento. Testado em `testes/fotos.test.mjs`. |
 | `public/ui/fotos.js` | No navegador: reduzir a foto (JPEG), miniatura, SHA-256 e a foto grande em tela cheia. A Segurança usa as mesmas funções. |
 | `public/telas/fotos.js` | Telas: passo de fotos, fotos de uma atividade, selo 📷, indicadores e Administração › Fotos das atividades. |
 | `public/data.js` | Gravação (`apontarComFotos`), leitura (`listarFotosCel`, `listarEvidenciasSemanas`, `abrirEvidencia`), `ajustarRefsFoto`, `salvarCfgFotos`. |
 | `public/data-mock.js` | Os mesmos nomes na demonstração (fotos de exemplo desenhadas em canvas). |
 | `firestore.rules` | Bloco "Fotos das atividades". Testado em `testes/regras.test.mjs`. |
-| `public/fotos-arquivo.js` | **Parte 2**, contas sem tela: situação da foto, o que pode ir para a lixeira/apagar, lotes, confirmação, nomes do .zip, `indice.csv`, SHA-256, espaço e conteúdo do relatório. Testado em `testes/fotos-arquivo.test.mjs`. |
+| `public/contas/fotos-arquivo.js` | **Parte 2**, contas sem tela: situação da foto, o que pode ir para a lixeira/apagar, lotes, confirmação, nomes do .zip, `indice.csv`, SHA-256, espaço e conteúdo do relatório. Testado em `testes/fotos-arquivo.test.mjs`. |
 | `public/telas/fotos-arquivo.js` | **Parte 2**, tela Administração › Relatórios e arquivo de fotos. |
 | `public/telas/fotos-pptx.js` | **Parte 2**, monta o .pptx e o .zip no navegador (carregado só quando usado). |
 | `public/vendor/pptxgen.bundle.js` | PptxGenJS 3.12.0 (MIT) com JSZip dentro. Fora do pacote que abre sem sinal (é grande): entra por uma tag `<script>` criada na hora. |
@@ -68,7 +68,7 @@ o banco enche em cerca de 3 semanas. O "Marcar restantes" (uma foto para a rota)
 | `desde` | 'AAAA-MM-DD' | a partir de quando as realizadas sem foto contam como "sem foto" |
 | `atualizadoEm`, `por` | hora do servidor, nome | quem salvou |
 
-Sem o documento vale o padrão de `public/fotos.js` (`obrig` true, `min` 1, `max` 3, `R` e `E`, `desde`
+Sem o documento vale o padrão de `public/contas/fotos.js` (`obrig` true, `min` 1, `max` 3, `R` e `E`, `desde`
 `FOTOS_DESDE_PADRAO`). **Ao publicar, salve a configuração uma vez** para gravar a data real de início.
 
 ### Contagem por célula: `semanas/{id}.ft` (e `b_semanas`)

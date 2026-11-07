@@ -1,5 +1,5 @@
 // Trocar o líder: diagnostica e corrige o nome do líder gravado nas fichas, na folha de frequência e nas ocorrências.
-// A conta é a mesma da tela Gestão › Fichas › Líderes (public/lideres.js).
+// A conta é a mesma da tela Gestão › Fichas › Líderes (public/contas/lideres.js).
 //   --de "NOME"      líder que sai (aceita parte do nome, sem acento e sem diferença de maiúsculas)
 //   --para "NOME"    líder que entra (se casar com um líder que já existe, usa a grafia dele)
 //   --simular        (padrão) só lê e mostra no resumo da execução TODOS os líderes encontrados (fichas, grupos da folha
@@ -37,7 +37,7 @@ fs.mkdirSync(lib, { recursive: true });
   const fila = ['lideres', 'planilhas-adm'], feitos = new Set();
   while (fila.length) {
     const f = fila.shift(); if (feitos.has(f)) continue; feitos.add(f);
-    const src = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8');
+    const src = fs.readFileSync(path.join(raiz, 'public', 'contas', f + '.js'), 'utf8');
     for (const m of src.matchAll(/from '\.\/([\w-]+)\.js'/g)) fila.push(m[1]);
     fs.writeFileSync(path.join(lib, f + '.mjs'), src.replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
   }

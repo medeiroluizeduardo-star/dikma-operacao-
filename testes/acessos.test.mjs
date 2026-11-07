@@ -1,10 +1,10 @@
-// Testes da conversão do acesso por módulo (public/acessos.js): cadastro antigo → modelo novo → campos antigos.
+// Testes da conversão do acesso por módulo (public/contas/acessos.js): cadastro antigo → modelo novo → campos antigos.
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO } from '../public/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
-import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/segcalc.js';
+import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/contas/segcalc.js';
 
 const ord = l => [...l].sort();
 // Ida e volta: o que as telas e as regras de hoje enxergam (papel e módulos efetivos) não muda.
@@ -140,8 +140,8 @@ test('acessoDe: usa só o modelo novo; cadastro sem o campo acesso fica sem nenh
 });
 
 // ---- Fase 2: o perfil de cada módulo vale nas telas ----
-import { perfilDe, escoposDe, temFichasU, marcasDe, usuarioEm, ehAdminU } from '../public/acessos.js';
-import { podeVer, doPerfil, podeItemU, valorCfg, configuravel } from '../public/permissoes.js';
+import { perfilDe, escoposDe, temFichasU, marcasDe, usuarioEm, ehAdminU } from '../public/contas/acessos.js';
+import { podeVer, doPerfil, podeItemU, valorCfg, configuravel } from '../public/contas/permissoes.js';
 test('perfilDe: cada módulo tem o seu perfil; administrador é admin em tudo; bloqueado não tem nada', () => {
   const misto = { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'] };
   assert.equal(perfilDe(misto, 'operacao'), 'lider');
@@ -187,7 +187,7 @@ test('permissões por módulo: a configuração antiga (por perfil) vale para o 
   assert.equal(podeItemU(misto, 'i_exportar', { leitor: { i_exportar: false } }, 'gestao'), false, 'item antigo lido no módulo');
 });
 
-// ---------------- Segurança (public/segcalc.js): as mesmas contas das regras ----------------
+// ---------------- Segurança (public/contas/segcalc.js): as mesmas contas das regras ----------------
 test('Segurança: quem vê e quem trata cada registro', () => {
   const reg = { uid: 'r', papel: 'leitor', acesso: { seguranca: 'registra' }, escopos: [] };
   const tra = { uid: 't', papel: 'leitor', acesso: { seguranca: 'trata' }, escopos: [] };

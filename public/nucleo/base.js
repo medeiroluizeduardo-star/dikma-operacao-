@@ -1,6 +1,6 @@
 // Ambiente (demonstração, prévia, Modo TV), banco de dados (DB), data de hoje e utilidades de texto.
 // Não depende de nenhuma outra parte da interface: é carregado primeiro.
-import { pad, today, weekOf, monthOfWeek } from '../cal.js';
+import { pad, today, weekOf, monthOfWeek } from '../contas/cal.js';
 
 
 // Demonstração: ?demo, ou sempre que o site é uma prévia de proposta (endereço com "--", ex.: projeto--pr3-abc.web.app).

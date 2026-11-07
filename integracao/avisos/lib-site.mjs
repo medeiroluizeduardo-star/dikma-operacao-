@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const aqui = path.dirname(fileURLToPath(import.meta.url));
-const site = path.join(aqui, '..', '..', 'public');
+const site = path.join(aqui, '..', '..', 'public', 'contas');
 
 export function copiarDoSite(nomes, destino = path.join(aqui, 'lib')) {
   fs.mkdirSync(destino, { recursive: true });

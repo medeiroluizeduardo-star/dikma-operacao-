@@ -1,4 +1,4 @@
-// Plano padrão → Programação já gerada (public/planoaplica.js)
+// Plano padrão → Programação já gerada (public/contas/planoaplica.js)
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const lib = path.join(raiz, 'testes', '.lib-plano'); fs.mkdirSync(lib, { recursive: true });
-for (const f of ['planoaplica', 'cal', 'situacao', 'escala', 'acessos', 'planilhas-adm']) if (fs.existsSync(path.join(raiz, 'public', f + '.js'))) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
+for (const f of ['planoaplica', 'cal', 'situacao', 'escala', 'acessos', 'planilhas-adm']) if (fs.existsSync(path.join(raiz, 'public', 'contas', f + '.js'))) fs.writeFileSync(path.join(lib, f + '.mjs'), fs.readFileSync(path.join(raiz, 'public', 'contas', f + '.js'), 'utf8').replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
 const { planoNasSemanas, resumoMudanca } = await import(path.join(lib, 'planoaplica.mjs'));
 
 // semana de seg 02/11/2026 a dom 08/11/2026; hoje = qua 04/11

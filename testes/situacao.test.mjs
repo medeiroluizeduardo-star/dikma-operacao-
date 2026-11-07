@@ -1,18 +1,18 @@
-// Testes da conta única de presença (public/situacao.js) e das contas que dependem dela (hoje.js, aprovacao.js,
+// Testes da conta única de presença (public/contas/situacao.js) e das contas que dependem dela (hoje.js, aprovacao.js,
 // acessos.js). Não precisa do emulador: node --test testes/situacao.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CODIGOS, SITS, NOMES_CODIGO, AUSENTE, AUSENCIA, PARCIAL, AUS_COBRIVEL, CODIGOS_LANC, JUS_CODS, CONTA, SIT_OPERACAO,
   textoOperacao, presente, situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao
-} from '../public/situacao.js';
-import * as cal from '../public/cal.js';
+} from '../public/contas/situacao.js';
+import * as cal from '../public/contas/cal.js';
 import * as presenca from '../public/presenca.js';
-import { NOMES_CODIGO as NOMES_PLANILHA } from '../public/planilhas-adm.js';
-import { criarEscala } from '../public/escala.js';
-import { listaAtrasadas, efetivoRota, coberturasDoDia, resumoAtividades, resumoSemana, JANELA_ATRASADAS } from '../public/hoje.js';
-import { listarAprov, contarPendentes } from '../public/aprovacao.js';
-import { resumoFerias, indiceDesligados, resumoDesligados, indiceFerias } from '../public/acessos.js';
+import { NOMES_CODIGO as NOMES_PLANILHA } from '../public/contas/planilhas-adm.js';
+import { criarEscala } from '../public/contas/escala.js';
+import { listaAtrasadas, efetivoRota, coberturasDoDia, resumoAtividades, resumoSemana, JANELA_ATRASADAS } from '../public/contas/hoje.js';
+import { listarAprov, contarPendentes } from '../public/contas/aprovacao.js';
+import { resumoFerias, indiceDesligados, resumoDesligados, indiceFerias } from '../public/contas/acessos.js';
 
 // ---------- tabela única de códigos ----------
 test('tabela de códigos: as listas antigas saem dela, com o mesmo conteúdo e a mesma ordem', () => {

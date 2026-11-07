@@ -1,13 +1,13 @@
-// Testes das contas da Limpeza de dados (public/limpeza.js): a dispensa das pendências antigas não pode virar
+// Testes das contas da Limpeza de dados (public/contas/limpeza.js): a dispensa das pendências antigas não pode virar
 // "não realizada", nem entrar no programado, e as atrasadas caem exatamente o previsto. Não precisa do emulador:
 // node --test testes/limpeza.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as LP from '../public/limpeza.js';
-import { add } from '../public/cal.js';
-import { listaAtrasadas, resumoSemana, resumoAtividades, inicioAtrasadas } from '../public/hoje.js';
-import { listarAprov, estadoAprov } from '../public/aprovacao.js';
-import { fotosDoReg } from '../public/segcalc.js';
+import * as LP from '../public/contas/limpeza.js';
+import { add } from '../public/contas/cal.js';
+import { listaAtrasadas, resumoSemana, resumoAtividades, inicioAtrasadas } from '../public/contas/hoje.js';
+import { listarAprov, estadoAprov } from '../public/contas/aprovacao.js';
+import { fotosDoReg } from '../public/contas/segcalc.js';
 
 const HOJE = '2026-11-03'; // terça-feira
 const AREA = 'RECEBIMENTO';

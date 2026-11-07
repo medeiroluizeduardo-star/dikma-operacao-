@@ -1,5 +1,5 @@
 // Moldura da tela: entrada (login), desenho da tela (render), menu lateral, barra de baixo, topo, filtros, busca e tema.
-import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../cal.js';
+import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
 import * as M from '../movimento.js';
 import { semAcento, filtrarLista } from '../busca.js';
 import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';

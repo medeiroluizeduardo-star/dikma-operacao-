@@ -1,10 +1,10 @@
 // Contas da presença (sem tela): escala, situação de cada pessoa no dia, coberturas (substitutos) e hora extra.
 // A regra do dia fica em situacao.js (a mesma de todos os módulos); aqui ficam as ligações com os dados e a memória.
-import { SETS, SITS, AUSENTE, add } from '../cal.js';
-import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBRIVEL } from '../situacao.js';
-import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../hoje.js';
-import { indiceFerias, indiceDesligados } from '../acessos.js';
-import { criarEscala, normRegime, letra, fatorRota } from '../escala.js';
+import { SETS, SITS, AUSENTE, add } from '../contas/cal.js';
+import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBRIVEL } from '../contas/situacao.js';
+import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../contas/hoje.js';
+import { indiceFerias, indiceDesligados } from '../contas/acessos.js';
+import { criarEscala, normRegime, letra, fatorRota } from '../contas/escala.js';
 import { DB, title } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
 

@@ -1,14 +1,14 @@
 // Dikma Gestão — módulo EFETIVO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 // Telas: Painel, Colaboradores (cadastro + controle da ficha, com a ficha individual e as ocorrências), Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
-import { pd, add, pad, today, MESES_L, SETS, setDaArea } from './cal.js';
-import { AREA_GERAL, AREA_OP, ehAreaAtiv, veTodasFichas, areasFichaDe } from './pessoas.js';
+import { pd, add, pad, today, MESES_L, SETS, setDaArea } from './contas/cal.js';
+import { AREA_GERAL, AREA_OP, ehAreaAtiv, veTodasFichas, areasFichaDe } from './contas/pessoas.js';
 import { criarImportador } from './importar.js';
-import { REGIMES_PADRAO, normRegime } from './escala.js';
+import { REGIMES_PADRAO, normRegime } from './contas/escala.js';
 import { campoBusca, definirValor, semAcento } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
-import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from './lideres.js';
-import { canonLideres } from './planilhas-adm.js';
+import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from './contas/lideres.js';
+import { canonLideres } from './contas/planilhas-adm.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 

@@ -1,11 +1,11 @@
 // Partes criadas na entrada: pessoas (PES) e Meu dia (MD). As telas de Operação (EQ), Frequência e férias (AD) e
 // fichas do Efetivo (GE) e Segurança (SG) ficam em arquivos grandes que só são baixados quando precisa: ao abrir a tela, ou logo
 // depois do login para quem tem o módulo (em segundo plano). Sem sinal, vêm do service worker (estão no SHELL).
-import { SET_KEYS } from '../cal.js';
-import { criarPessoas, chaveFicha } from '../pessoas.js';
+import { SET_KEYS } from '../contas/cal.js';
+import { criarPessoas, chaveFicha } from '../contas/pessoas.js';
 import * as M from '../movimento.js';
 import { criarMeuDia } from '../meudia.js';
-import { fatorRota } from '../escala.js';
+import { fatorRota } from '../contas/escala.js';
 import { DB, framed, esc, title } from './base.js';
 import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './estado.js';
 import { I } from '../ui/icones.js';
@@ -14,7 +14,7 @@ import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js
 import { render, schedule, isMobile } from '../ui/shell.js';
 import { checkinPendentes } from '../telas/efetivo.js';
 import { jusPendentes } from '../telas/horas-justificativas.js';
-import { temSeg } from '../segcalc.js';
+import { temSeg } from '../contas/segcalc.js';
 import { semFotoPend } from '../telas/fotos.js';
 
 // Criadas por inicio.js (PES, MD) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.

@@ -1,11 +1,11 @@
 // Navegação: abas (VIEWS), os 5 módulos (MODS), barra de baixo do celular e troca de módulo.
 // Para mudar o menu, comece por aqui: VIEWS diz em que módulo e grupo cada aba aparece e quem a vê.
-import { podeVer } from './permissoes.js';
-import { editaAdm } from './acessos.js';
+import { podeVer } from './contas/permissoes.js';
+import { editaAdm } from './contas/acessos.js';
 import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './nucleo/estado.js';
 import { aprovador, acompanha } from './calc/atividades.js';
 import { trocarTela } from './ui/shell.js';
-import { supConjs } from './segcalc.js';
+import { supConjs } from './contas/segcalc.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
 // mod: all (Meu dia, em todos menos a Administração) · operacao · gestao · seguranca · rh · administracao

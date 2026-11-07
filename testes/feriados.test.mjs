@@ -1,11 +1,11 @@
-// Testes das atividades em feriado sem operação (public/feriados.js): aplicar e desfazer, sem gravar duas vezes,
+// Testes das atividades em feriado sem operação (public/contas/feriados.js): aplicar e desfazer, sem gravar duas vezes,
 // sem mexer no que já foi apontado, feriado com operação não conta e vale para todas as áreas e conjuntos.
 // Não precisa do emulador: node --test testes/feriados.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as FE from '../public/feriados.js';
-import { add, SETS } from '../public/cal.js';
-import { listaAtrasadas } from '../public/hoje.js';
+import * as FE from '../public/contas/feriados.js';
+import { add, SETS } from '../public/contas/cal.js';
+import { listaAtrasadas } from '../public/contas/hoje.js';
 
 const HOJE = '2026-11-04'; // quarta-feira
 const SEG = '2026-11-02'; // Finados (segunda-feira)

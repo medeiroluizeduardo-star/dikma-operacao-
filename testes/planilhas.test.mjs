@@ -3,9 +3,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
-import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
-import { casaParte, lideresDasFichas, trocarNasFichas, moverNaFolha } from '../public/lideres.js';
-import { indiceFerias, perfilDe, editaAdm, temFreq } from '../public/acessos.js';
+import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/contas/planilhas-adm.js';
+import { casaParte, lideresDasFichas, trocarNasFichas, moverNaFolha } from '../public/contas/lideres.js';
+import { indiceFerias, perfilDe, editaAdm, temFreq } from '../public/contas/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
 function livro(abas) {

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as XLSX from '../public/vendor/xlsx.js';
-import { lerFrequencia, lerFerias, abasDoXLSX } from '../public/planilhas-adm.js';
+import { lerFrequencia, lerFerias, abasDoXLSX } from '../public/contas/planilhas-adm.js';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [fp, fb, ff] = process.argv.slice(2);

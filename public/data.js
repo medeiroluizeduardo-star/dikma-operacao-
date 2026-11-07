@@ -70,13 +70,13 @@ import {
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
   getMessaging, getToken, deleteToken, mensagensSuportadas
 } from './vendor/firebase.js';
-import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './cal.js';
-import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU } from './acessos.js';
-import { competenciaDe } from './planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './segcalc.js';
-import { mapaFeriados, aplicarNaSemana } from './feriados.js';
-import { incrementosFt } from './fotos.js';
+import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './contas/cal.js';
+import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './contas/pessoas.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU } from './contas/acessos.js';
+import { competenciaDe } from './contas/planilhas-adm.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './contas/segcalc.js';
+import { mapaFeriados, aplicarNaSemana } from './contas/feriados.js';
+import { incrementosFt } from './contas/fotos.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.

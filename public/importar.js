@@ -2,8 +2,8 @@
 // Lê uma planilha (Excel .xlsx/.xlsm/.xls ou CSV), acha sozinho a tabela de colaboradores (e a de ocorrências,
 // se houver), mostra o que vai mudar e só grava depois da confirmação. A área de atuação e a função
 // importadas vão também para Atividades Pátio, Atividades Bateria e Operação (pessoas.js).
-import { pad, today, AREA_S, AREAS_ATIV, SETS, setDaArea } from './cal.js';
-import { AREA_GERAL, AREA_OP, norm } from './pessoas.js';
+import { pad, today, AREA_S, AREAS_ATIV, SETS, setDaArea } from './contas/cal.js';
+import { AREA_GERAL, AREA_OP, norm } from './contas/pessoas.js';
 
 // Nomes de coluna aceitos (comparados sem acento, em maiúsculas).
 const CAMPOS = {

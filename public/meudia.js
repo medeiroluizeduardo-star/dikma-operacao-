@@ -1,7 +1,7 @@
 // Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
-import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, ddmm } from './cal.js';
-import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './hoje.js';
-import { aprovaPapel, contarPendentes } from './aprovacao.js';
+import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, ddmm } from './contas/cal.js';
+import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from './contas/hoje.js';
+import { aprovaPapel, contarPendentes } from './contas/aprovacao.js';
 
 const DIAS_L = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true };

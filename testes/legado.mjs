@@ -1,7 +1,7 @@
 // Cadastro antigo (papel único + modulos + acessos) → acesso por módulo. Foi a conversão usada pela rotina
 // "Converter acessos" (todos os usuários reais foram convertidos em 2026-11). O site e as regras não leem mais o
 // cadastro antigo; esta cópia serve só aos testes: monta os usuários de exemplo do jeito que a conversão gravou.
-import { ESCOPOS, MODULO_ACESSO } from '../public/acessos.js';
+import { ESCOPOS, MODULO_ACESSO } from '../public/contas/acessos.js';
 
 const antigoAdm = u => Array.isArray(u.acessos) && u.acessos.includes('administrativo');
 // Módulo Frequência e férias do cadastro antigo: marcado no usuário (modulos) ou o antigo acesso Administrativo.

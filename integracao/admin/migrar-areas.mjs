@@ -1,6 +1,6 @@
 // Divide as fichas do Efetivo por área (gcolab/{ÁREA}) e marca a área em cada ocorrência e assinatura.
 // Roda na publicação, antes de o site novo entrar no ar. Depois da primeira vez não faz nada (lê 2 documentos).
-// A área de cada pessoa sai da mesma conta que o sistema usa (public/pessoas.js): onde ela está nas Atividades
+// A área de cada pessoa sai da mesma conta que o sistema usa (public/contas/pessoas.js): onde ela está nas Atividades
 // ou na Operação de equipamentos; sem lugar nos módulos, fica em GERAL.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,7 +14,7 @@ fs.mkdirSync(lib, { recursive: true });
   const fila = ['cal', 'pessoas'], feitos = new Set();
   while (fila.length) {
     const f = fila.shift(); if (feitos.has(f)) continue; feitos.add(f);
-    const bruto = fs.readFileSync(path.join(raiz, 'public', f + '.js'), 'utf8');
+    const bruto = fs.readFileSync(path.join(raiz, 'public', 'contas', f + '.js'), 'utf8');
     for (const m of bruto.matchAll(/from '\.\/([\w-]+)\.js'/g)) fila.push(m[1]);
     fs.writeFileSync(path.join(lib, f + '.mjs'), bruto.replace(/from '\.\/([\w-]+)\.js'/g, "from './$1.mjs'"));
   }

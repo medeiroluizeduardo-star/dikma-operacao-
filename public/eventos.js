@@ -1,9 +1,9 @@
 // Eventos da página: cliques (data-*), envio de formulários, mudança de campos, teclado, Voltar e avisos de saída.
 // Botões com data-act chamam a ação registrada em acoes (nucleo/acoes.js); cada tela registra as suas.
 import { planoNaProgramacao } from './telas/plano-prog.js';
-import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './cal.js';
+import { SETS, AREA_S, AUSENCIA, add, ddmm, today } from './contas/cal.js';
 import { pedirJus } from './presenca.js';
-import { letra, periodosDe } from './escala.js';
+import { letra, periodosDe } from './contas/escala.js';
 import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './nucleo/base.js';
 import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, modsDe, setsDe, aplicarSet, moduloNovo } from './nucleo/estado.js';
 import { acoes } from './nucleo/acoes.js';

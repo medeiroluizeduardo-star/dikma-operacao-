@@ -1,7 +1,7 @@
 // Fotos no navegador (comum às Atividades e à Segurança): abrir a imagem escolhida, reduzir para JPEG no próprio
 // aparelho (economiza o plano grátis do banco e o sinal do pátio), miniatura, impressão digital (SHA-256) e a foto
 // grande em tela cheia ao tocar na miniatura (carrega só ela).
-import { IMG } from '../fotos.js';
+import { IMG } from '../contas/fotos.js';
 
 // Abre o arquivo escolhido como imagem (a orientação da câmera já vem aplicada pelo navegador).
 export const carregarImg = file => new Promise((ok, ko) => {
