@@ -153,6 +153,11 @@ function renderNav() {
   // selos aparecem quando a tela do módulo já chegou: fichas (Gestão) e paradas (Operação)
   const gb = ge ? (temFichas(ME) && GE ? GE.badge() : 0) : op && temEquipEm(ME, 'operacao') && EQ ? EQ.badge() : 0;
   const apv = ativOp && aprovador() ? listaAprov(areasAprov()).length : 0;
+  // Avisos que pedem ação, por aba: o mesmo número no menu lateral, na barra de baixo e no "Mais".
+  for (const k in SELOS) delete SELOS[k];
+  if (atr) SELOS.pend = { n: atr, txt: 'atrasadas nos últimos 60 dias' };
+  if (apv) SELOS.aprovar = { n: apv, txt: 'aguardando aprovação' };
+  if (gb) SELOS[ge ? 'gcolab' : 'elanc'] = { n: gb, txt: ge ? 'pendências com mais de 7 dias' : 'equipamentos parados' };
   const ms = modsMenu();
   const cur = MODS[UI.modulo];
   const linha = (m, atual) => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${atual ? MODS[m].sub : subMod(m)}</small></span>`; // no botão: o conjunto aberto; na lista: a área inteira
@@ -163,8 +168,8 @@ function renderNav() {
   const pai = abaMarcada(UI.view); // aba aberta por botão (Folha do líder, Etiquetas) ou junta (Indicadores): marca o item do menu
   for (const v of abasDoMenu()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
-    const badge = v.id === 'pend' && atr ? atr : v.id === 'aprovar' && apv ? apv : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
-    h += `<button data-go="${v.id}" ${UI.view === v.id || pai === v.id ? 'aria-current="page"' : ''}${nomeCurto(v) !== v.nome ? ` title="${esc(v.nome)}"` : ''}>${I[v.ic]}<span>${nomeCurto(v)}</span>${badge ? `<span class="badge num" title="${v.id === 'pend' ? 'Atrasadas nos últimos 7 dias' : v.id === 'aprovar' ? 'Aguardando aprovação' : ''}">${badge > 99 ? '99+' : badge}</span>` : ''}</button>`;
+    const sl = SELOS[v.id];
+    h += `<button data-go="${v.id}" ${UI.view === v.id || pai === v.id ? 'aria-current="page"' : ''}${nomeCurto(v) !== v.nome ? ` title="${esc(v.nome)}"` : ''}>${I[v.ic]}<span>${nomeCurto(v)}</span>${sl ? `<span class="badge num" title="${sl.n} ${sl.txt}">${numSelo(sl.n)}</span>` : ''}</button>`;
   }
   pintar('nav', h);
   pintar('who', DEMO
@@ -173,16 +178,23 @@ function renderNav() {
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
   // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
   { const w = $('who'); if (w && !w.querySelector('[data-painel]') && isAdmin()) w.insertAdjacentHTML('afterbegin', `<a class="btn rail-btn" data-painel href="${PAINEL_URL}" target="_blank" rel="noopener">${I.painel} Meu painel</a>`); }
-  const tb = barraDe();
-  pintarBarra(tb, atr, gb, apv);
+  pintarBarra(barraDe());
 }
-function pintarBarra(tb, atr, gb, apv = 0) {
+export const SELOS = {};
+export const numSelo = n => (n > 99 ? '99+' : n);
+// Barra de baixo: o selo de cada atalho; no "Mais", só um ponto quando alguma aba lá dentro tem aviso (o número aparece ao abrir).
+function pintarBarra(tb) {
   const pai = abaMarcada(UI.view);
   const aqui = id => UI.view === id || pai === id;
   const inMore = !tb.some(x => aqui(x[0]));
-  const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
+  const naBarra = new Set(tb.map(x => x[0]));
+  const noMais = abasDoMenu().filter(v => SELOS[v.id] && !naBarra.has(v.id)).map(v => nomeCurto(v));
   const rot = (id, n) => (id === '__more' ? n : nomeCurto(VIEWS.find(v => v.id === id)) || n);
-  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && perfil('operacao') !== 'leitor' ? 'big' : ''}" ${(aqui(id) || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${id === '__more' && moreBadge ? `<span class="badge">${moreBadge > 99 ? '99+' : moreBadge}</span>` : ''}${(id === 'elanc' || id === 'gcolab') && gb ? `<span class="badge">${gb}</span>` : ''}${id === 'aprovar' && apv ? `<span class="badge">${apv > 99 ? '99+' : apv}</span>` : ''}${id === 'pend' && atr ? `<span class="badge">${atr > 99 ? '99+' : atr}</span>` : ''}</button>`).join(''));
+  const selo = id => {
+    if (id === '__more') return noMais.length ? `<span class="badge ponto" role="img" aria-label="Avisos em: ${esc(noMais.join(', '))}" title="Avisos em: ${esc(noMais.join(', '))}"></span>` : '';
+    const sl = SELOS[id]; return sl ? `<span class="badge" title="${sl.n} ${sl.txt}">${numSelo(sl.n)}</span>` : '';
+  };
+  pintar('tabbar', tb.map(([id, n, ic]) => `<button data-go="${id}" class="${(id === 'apontar' || id === 'elanc') && ME && perfil('operacao') !== 'leitor' ? 'big' : ''}" ${(aqui(id) || (id === '__more' && inMore)) ? 'aria-current="page"' : ''}><span class="ic">${I[ic]}</span>${rot(id, n)}${selo(id)}</button>`).join(''));
 }
 export function syncPill() {
   const n = DB.pendingWrites(); const off = !navigator.onLine;
