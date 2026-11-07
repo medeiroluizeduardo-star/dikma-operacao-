@@ -19,6 +19,7 @@ import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 
 // ---- Perguntas dos formulários (ordem, textos e obrigatórias iguais aos do Google) ----
 // t: date | time | text | area (texto longo) | radio (uma opção) | checks (várias) | fotos · obr: obrigatória
+// sn: pergunta de Sim ou Não; o campo só abre no Sim (Não grava vazio, como antes). snFalta: aviso se Sim e vazio.
 const P_DATA = { k: 'data', rot: 'DATA', t: 'date', obr: 1 };
 const P_AREA = { k: 'area', rot: 'ÁREA', t: 'radio', ops: L => L.areas.map(a => a.nome), obr: 1 };
 const P_LOCAL = { k: 'local', rot: 'LOCAL', t: 'text', obr: 1, max: 120, sug: 1, ajuda: 'Escolha uma rota da área ou escreva o local' };
@@ -29,8 +30,8 @@ const FORMS = {
     col: 'seginter', nome: 'Registro de interação', curto: 'interação',
     campos: [P_DATA, P_AREA, P_LOCAL,
       { k: 'tipoAtiv', rot: 'TIPO DE ATIVIDADE', t: 'radio', ops: L => L.tipos, obr: 1 },
-      { k: 'risco', rot: 'HÁ RISCOS DE SO-PSIF ASSOCIADO? SE SIM, QUAL RISCO?', t: 'text', max: 500 },
-      { k: 'desvios', rot: 'HOUVE DESVIOS? SE SIM, QUAL DESVIO?', t: 'checks', ops: L => L.desvios },
+      { k: 'risco', rot: 'HÁ RISCOS DE SO-PSIF ASSOCIADO? SE SIM, QUAL RISCO?', t: 'text', max: 500, sn: 1, snFalta: 'Escreva qual é o risco.' },
+      { k: 'desvios', rot: 'HOUVE DESVIOS? SE SIM, QUAL DESVIO?', t: 'checks', ops: L => L.desvios, sn: 1, snFalta: 'Marque pelo menos um desvio.' },
       { k: 'desc', rot: 'DESCRIÇÃO', t: 'area', max: 3000 },
       { k: 'acao', rot: 'AÇÃO IMEDIATA', t: 'area', max: 3000 },
       { k: 'resp', rot: 'RESPONSÁVEL', t: 'text', obr: 1, max: 120, eu: 1 },
@@ -133,13 +134,19 @@ export function criarSeguranca() {
     else if (c.t === 'radio') ctl = `<div class="sgops" role="radiogroup" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="radio" name="${id}" value="${esc(o)}" ${o === v ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
     else if (c.t === 'checks') { const sel = new Set(v || []); ctl = `<div class="sgops chk" role="group" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="checkbox" name="${id}" value="${esc(o)}" ${sel.has(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div><label class="sel sgoutro" id="sgOutroW" ${sel.has('OUTROS') ? '' : 'hidden'}><span>Qual outro desvio?</span><input class="in" id="sgf_desvioOutro" maxlength="200" value="${esc((F && F.outro) || '')}"></label>`; }
     else if (c.t === 'fotos') ctl = F.reg ? `<div class="sgfotos">${minis(F.reg, 9)}</div><p class="muted small m0">As fotos já enviadas não mudam na correção.</p>` : `<div class="sgfotos" id="sgFotosL"></div><div class="row-gap"><label class="btn" for="sgf_fotos_in">${I.cam} Tirar ou escolher foto</label><span class="muted small">Até ${MAX_FOTOS} fotos · reduzidas no aparelho</span></div><input type="file" id="sgf_fotos_in" accept="image/*" multiple hidden>`;
+    if (c.sn) {
+      const sim = Array.isArray(v) ? v.length > 0 : !!v;
+      ctl = `<div class="sgops sgsn" role="radiogroup" aria-labelledby="sgr_${c.k}">${['Não', 'Sim'].map(o => `<label class="sgop"><input type="radio" name="sgsn_${c.k}" value="${o}" ${(o === 'Sim') === sim ? 'checked' : ''}><span>${o}</span></label>`).join('')}</div><div class="sgsn-c" id="sgsnc_${c.k}" ${sim ? '' : 'hidden'}>${ctl}</div>`;
+    }
     return `<div class="sgq" id="q_${c.k}"><div class="sgq-rot" id="sgr_${c.k}"><span class="sgq-n">${i + 1}</span><span class="minw"><b>${esc(c.rot)}</b>${c.obr ? '<span class="obr" title="Obrigatória"> *</span>' : ''}${c.ajuda ? `<small>${esc(c.ajuda)}</small>` : ''}</span></div>${ctl}<p class="sgq-erro" id="e_${c.k}" role="alert" hidden></p></div>`;
   }
+  const simEm = (c, raiz = document) => !!raiz.querySelector(`input[name="sgsn_${c.k}"][value="Sim"]:checked`);
   const valorDe = (c, raiz = document) => {
     const id = 'sgf_' + c.k;
     if (c.t === 'radio') { const x = raiz.querySelector(`input[name="${id}"]:checked`); return x ? x.value : ''; }
     if (c.t === 'checks') return [...raiz.querySelectorAll(`input[name="${id}"]:checked`)].map(x => x.value);
     if (c.t === 'fotos') return null;
+    if (c.sn && !simEm(c, raiz)) return c.t === 'checks' ? [] : '';
     const el = raiz.querySelector('#' + id); return el ? el.value.trim() : '';
   };
   const lerValores = def => { const o = {}; for (const c of def.campos) if (c.t !== 'fotos') o[c.k] = valorDe(c); if (def === FORMS.inter) o.desvioOutro = (($('sgf_desvioOutro') || {}).value || '').trim(); return o; };
@@ -185,6 +192,10 @@ export function criarSeguranca() {
         pintarFotos(); limparErro($('sgFotosL')); F.mexeu = true; gravarRasc(tipo, lerValores(def), F.fotos); return;
       }
       if (t.name === 'sgf_area') atualizarSugestoes();
+      if (t.name && t.name.startsWith('sgsn_')) {
+        const w = $('sgsnc_' + t.name.slice(5)); if (w) w.hidden = t.value !== 'Sim';
+        const x = w && !w.hidden && w.querySelector('input.in,textarea'); if (x && !x.closest('[hidden]')) x.focus({ preventScroll: true });
+      }
       if (t.name === 'sgf_desvios') { const w = $('sgOutroW'); if (w) w.hidden = !el.querySelector('input[name="sgf_desvios"][value="OUTROS"]:checked'); }
       limparErro(t); salvarLogo();
     });
@@ -209,6 +220,7 @@ export function criarSeguranca() {
       else if (c.obr && (Array.isArray(v[c.k]) ? !v[c.k].length : !v[c.k])) msg = c.t === 'radio' ? 'Escolha uma opção.' : 'Preencha este campo.';
       else if (c.t === 'date' && v[c.k] && !/^\d{4}-\d{2}-\d{2}$/.test(v[c.k])) msg = 'Data inválida.';
       else if (c.t === 'date' && v[c.k] > add(hoje(), 1)) msg = 'A data não pode ser no futuro.';
+      if (c.sn && !msg && simEm(c) && !(Array.isArray(v[c.k]) ? v[c.k].length : v[c.k])) msg = c.snFalta;
       if (c.t === 'checks' && (v.desvios || []).includes('OUTROS') && !v.desvioOutro) msg = 'Escreva qual é o outro desvio.';
       const q = $('q_' + c.k), e = $('e_' + c.k);
       if (q) q.classList.toggle('inval', !!msg); if (e) { e.textContent = msg; e.hidden = !msg; }
@@ -217,7 +229,7 @@ export function criarSeguranca() {
     }
     const er = $('sgErr');
     if (faltam.length) {
-      er.textContent = `Falta${faltam.length > 1 ? 'm' : ''} ${faltam.length} ${faltam.length > 1 ? 'perguntas obrigatórias' : 'pergunta obrigatória'}: ${faltam.map(c => c.rot.split('?')[0]).join(', ')}.`; er.hidden = false;
+      er.textContent = `Falta${faltam.length > 1 ? 'm' : ''} ${faltam.length} ${faltam.length > 1 ? 'respostas' : 'resposta'}: ${faltam.map(c => c.rot.split('?')[0]).join(', ')}.`; er.hidden = false;
       const q = $('q_' + faltam[0].k); if (q) { q.scrollIntoView({ block: 'center' }); const x = q.querySelector('input:not([type=hidden]),textarea'); if (x && x.type !== 'file') x.focus({ preventScroll: true }); }
       return false;
     }
