@@ -68,8 +68,9 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
-  getMessaging, getToken, deleteToken, mensagensSuportadas
+  getMessaging, getToken, deleteToken, mensagensSuportadas, initializeAppCheck, ReCaptchaEnterpriseProvider
 } from '../vendor/firebase.js';
+import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
@@ -156,6 +157,10 @@ export async function start(callbacks) {
   cfg = await loadConfig();
   if (!cfg) { cb.onAuth({ status: 'noConfig' }); return; }
   const app = fbApp = initializeApp(cfg);
+  // App Check (nucleo/appcheck.js): só com chave e só no endereço oficial (no computador de teste não funciona).
+  if (CHAVE_SITE && /(^|\.)(web\.app|firebaseapp\.com)$/.test(location.hostname)) {
+    try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(CHAVE_SITE), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check não ligou', e); }
+  }
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
   getRedirectResult(auth).catch(e => cb.onError && cb.onError(e));
