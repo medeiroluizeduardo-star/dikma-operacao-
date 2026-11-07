@@ -13,7 +13,7 @@ import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
 import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
 import { VIEWS } from '../nucleo/navegacao.js';
-import { formSheet, toast } from '../ui/janelas.js';
+import { formSheet, sheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
 import { listasSeg } from '../contas/segcalc.js';
@@ -161,9 +161,29 @@ function vCfUso() {
     <div class="tw"><table><thead><tr><th>Coleção</th><th class="r">Documentos</th></tr></thead><tbody>${cols.map(([c, n]) => `<tr><td class="mono">${esc(c)}</td><td class="r num">${n.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>
   </div></div>${lim}`;
 }
+// Erros nos aparelhos (nucleo/erros.js): os 100 mais recentes, agrupados pela mensagem.
+function vCfErros() {
+  const lista = DB.cache.erros || [];
+  const nomeDe = uid => { const u = (DB.cache.usuarios || []).find(x => x.uid === uid); return u ? u.nome : 'Usuário removido'; };
+  const quando = e => { const d = e.quando && e.quando.toDate ? e.quando.toDate() : e.quando instanceof Date ? e.quando : null; return d ? d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'; };
+  const ajuda = `<div class="card"><header><h2>Para que serve</h2></header><div class="body"><p class="small m0">Quando uma tela falha no celular ou no computador de alguém, o sistema anota aqui o erro, a tela e o tipo de aparelho (no máximo 5 por vez que a pessoa abre o sistema). Não guarda fotos, senhas nem o que a pessoa digitou. Se um erro aparecer muitas vezes, mostre esta lista ao Claude para corrigir. Depois de corrigido, pode apagar.</p></div></div>`;
+  if (!lista.length) return `<div class="card"><div class="empty">Nenhum erro registrado. Tudo certo nos aparelhos.</div></div>${ajuda}`;
+  const pessoas = new Set(lista.map(e => e.uid)).size;
+  return `<div class="mini"><div><b class="num">${lista.length}</b><span>Registros${lista.length >= 100 ? ' (últimos 100)' : ''}</span></div><div><b class="num">${pessoas}</b><span>Pessoas</span></div></div>
+  <div class="card"><header><h2>Erros mais recentes</h2><p>Do mais novo para o mais antigo</p><span class="r"><button class="btn sm" data-act="errApagar">${I.lixo} Apagar</button></span></header><div class="body"><div class="tw"><table><thead><tr><th>Quando</th><th>Quem</th><th>Tela</th><th>Erro</th><th>Aparelho</th><th class="r">Vezes</th></tr></thead><tbody>${lista.map(e => `<tr><td class="num">${quando(e)}</td><td>${esc(nomeDe(e.uid))}</td><td>${esc((VIEWS.find(v => v.id === e.tela) || {}).nome || e.tela || '')}</td><td><div>${esc(e.msg)}</div><div class="small mono">${esc(e.onde || '')}${e.versao ? ' · ' + esc(e.versao) : ''}</div></td><td class="small">${esc(e.aparelho || '')}</td><td class="r num">${e.vezes || 1}</td></tr>`).join('')}</tbody></table></div></div></div>${ajuda}`;
+}
+acoes.errApagar = async () => {
+  const ids = (DB.cache.erros || []).map(e => e.id);
+  if (!ids.length) return;
+  sheet(`Apagar os ${ids.length} registro(s) de erro?`, 'Faça isso depois que o problema foi corrigido.', [{ t: 'Apagar todos', id: 'sim', ic: I.lixo }, { t: 'Cancelar', id: 'nao' }], async o => {
+    if (o.id !== 'sim') return;
+    try { await DB.apagarErros(ids); toast('Registros de erro apagados.'); } catch (e) { toast('Não foi possível apagar: ' + e.message); }
+  });
+};
 export function vConfigModulo(view) {
   if (view === 'cfconf') return vCfConf();
   if (view === 'cfuso') return vCfUso();
+  if (view === 'cferros') return vCfErros();
   if (view === 'cflimpa') return vLimpeza();
   if (view === 'cffotos') return vCfFotos();
   if (view === 'cfarqfotos') return vArqFotos();

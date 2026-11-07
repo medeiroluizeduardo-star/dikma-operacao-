@@ -84,6 +84,9 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - Quem muda de área leva junto a ficha, as ocorrências e as assinaturas. O sistema reorganiza sozinho quando o administrador abre o Efetivo.
 - Na primeira publicação depois desta mudança, a rotina `integracao/admin/migrar-areas.mjs` dividiu a lista antiga por área. Desde 07/11/2026 ela não roda mais a cada publicação (já tinha feito tudo); só roda depois de restaurar uma cópia de segurança, para converter cópias antigas.
 
+## Erros nos aparelhos
+- Quando uma tela falha no celular ou no computador de alguém, o sistema anota o erro, a tela e o tipo de aparelho na coleção `erros` (`public/nucleo/erros.js`). No máximo 5 registros por vez que a pessoa abre o sistema, sem fotos, senhas ou o que foi digitado. Só o administrador vê e apaga: **Administração › Erros nos aparelhos**.
+
 ## Segurança dos dados
 - **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) **não ficam no repositório** (desde 07/11/2026). Eles estão só no banco (`seeds/`), onde apenas a administração do módulo correspondente lê, e entram na cópia de segurança diária. Os botões de importação continuam iguais. Para atualizar: coloque os arquivos na pasta `dados-importacao/` do seu computador (o Git ignora essa pasta) e rode `integracao/admin/enviar-dados.mjs` com o segredo do Firebase.
 - **A demonstração (`?demo`) usa nomes e matrículas fictícios** (pasta `public/demo`). Se as planilhas mudarem, coloque-as em `dados-importacao/` no seu computador e gere de novo com `node ferramentas/gerar-demo.mjs`.

@@ -2,6 +2,7 @@
 // Os dados vêm de nucleo/data.js (Firebase) ou nucleo/data-mock.js (abrir com ?demo). O código fica dividido assim:
 //   nucleo/base.js      ambiente (demonstração, TV), banco de dados (DB), data de hoje e utilidades de texto
 //   nucleo/estado.js    estado da tela (UI), quem entrou (ME), conjunto aberto (SK) e o que a pessoa pode ver e fazer
+//   nucleo/erros.js     anota os erros que acontecem no aparelho e grava no banco (Administração › Erros nos aparelhos)
 //   nucleo/acoes.js     registro das ações dos botões (data-act)
 //   nucleo/modulos.js   Meu dia, pessoas e as telas de Operação, fichas do Efetivo e Frequência (carregadas quando precisa)
 //   calc/               contas das telas: atividades (programado, atrasadas, aprovação) e presença (escala, situação do dia)
@@ -15,6 +16,7 @@
 // A ordem dos imports abaixo é a ordem em que cada parte fica pronta.
 import './nucleo/base.js';
 import './nucleo/estado.js';
+import './nucleo/erros.js';
 import './nucleo/acoes.js';
 import './ui/icones.js';
 import './calc/atividades.js';

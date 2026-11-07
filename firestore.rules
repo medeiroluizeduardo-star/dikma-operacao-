@@ -542,5 +542,21 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if admin();   // Limpeza de dados (histórico antigo)
     }
+    // Erros que aconteceram no aparelho de quem usa (nucleo/erros.js). Cada um grava só os próprios, com campos curtos;
+    // só o administrador lê e apaga (Administração › Erros nos aparelhos).
+    match /erros/{id} {
+      allow read, delete: if admin();
+      allow create: if hasProfile()
+        && request.resource.data.keys().hasOnly(['quando', 'uid', 'msg', 'onde', 'tela', 'versao', 'aparelho', 'vezes'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.quando == request.time
+        && request.resource.data.msg is string && request.resource.data.msg.size() <= 300
+        && request.resource.data.get('onde', '') is string && request.resource.data.get('onde', '').size() <= 200
+        && request.resource.data.get('tela', '') is string && request.resource.data.get('tela', '').size() <= 40
+        && request.resource.data.get('versao', '') is string && request.resource.data.get('versao', '').size() <= 40
+        && request.resource.data.get('aparelho', '') is string && request.resource.data.get('aparelho', '').size() <= 200
+        && request.resource.data.get('vezes', 1) is int && request.resource.data.get('vezes', 1) <= 1000;
+      allow update: if false;
+    }
   }
 }

@@ -962,3 +962,18 @@ test('Feriados: o administrador marca e desfaz a atividade em feriado (Pátio e 
   // a Administração Dos módulos (gera os meses) cria a semana já marcada
   await assertSucceeds(setDoc(doc(db('admModulo'), 'semanas', 'RECEBIMENTO|2026-11-16'), { area: 'RECEBIMENTO', mes: '2026-11', ini: '2026-11-16', ids: ['X1'], s: { X1: 'PPPP___' }, fe: { 'X1|4': 'Consciência Negra' }, m: {} }));
 });
+
+test('Erros nos aparelhos: quem tem cadastro grava o próprio erro (campos curtos); só o administrador lê e apaga', async () => {
+  const e = (uid, extra = {}) => ({ quando: serverTimestamp(), uid, msg: 'TypeError: x is undefined', onde: 'telas/apontar.js:10', tela: 'apontar', versao: 'dikma-operacao-v96', aparelho: 'Android', vezes: 1, ...extra });
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'erros', 'e1'), e('liderRec')));
+  await assertFails(setDoc(doc(db('liderRec'), 'erros', 'e2'), e('admin')), 'não grava em nome de outro');
+  await assertFails(setDoc(doc(db('liderRec'), 'erros', 'e3'), e('liderRec', { msg: 'x'.repeat(301) })), 'mensagem longa demais');
+  await assertFails(setDoc(doc(db('liderRec'), 'erros', 'e4'), e('liderRec', { senha: '123' })), 'campo a mais');
+  await assertFails(setDoc(doc(db('liderRec'), 'erros', 'e5'), e('liderRec', { quando: Timestamp.fromMillis(0) })), 'data falsa');
+  await assertFails(setDoc(doc(db(null), 'erros', 'e6'), { ...e('x') }), 'sem login');
+  await assertFails(setDoc(doc(db('semPerfil'), 'erros', 'e7'), e('semPerfil')), 'conta sem cadastro');
+  await assertFails(getDoc(doc(db('liderRec'), 'erros', 'e1')), 'líder não lê');
+  await assertFails(updateDoc(doc(db('admin'), 'erros', 'e1'), { msg: 'outro' }), 'ninguém altera');
+  await assertSucceeds(getDocs(collection(db('admin'), 'erros')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'erros', 'e1')));
+});
