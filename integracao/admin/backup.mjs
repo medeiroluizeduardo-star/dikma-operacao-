@@ -16,7 +16,7 @@ fs.mkdirSync(destino, { recursive: true });
 
 const SO_SEMANAL = ['historico', 'evidencias', 'b_evidencias'];
 const SO_COMPLETA = ['evidenciasArquivo', 'b_evidenciasArquivo'];
-const NUNCA = ['seeds']; // já estão no repositório (pasta dados-importacao)
+const NUNCA = []; // seeds (planilhas originais) entram: não ficam mais no repositório
 const entra = c => !NUNCA.includes(c) && (tipo === 'completa' || (!SO_COMPLETA.includes(c) && (tipo === 'semanal' || !SO_SEMANAL.includes(c))));
 
 const { db, F, auth, projeto } = await conectar();

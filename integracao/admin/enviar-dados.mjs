@@ -1,12 +1,14 @@
 // Envia os dados das planilhas (pasta dados-importacao) para o Firestore, em seeds/{nome}.
-// Roda na publicação. Os arquivos não vão para o site: só quem administra o módulo lê pelo sistema.
+// As planilhas não ficam mais no repositório (dados pessoais): para atualizar, coloque os arquivos seed*.json
+// na pasta dados-importacao/ do seu computador e rode este script com o segredo FIREBASE_SERVICE_ACCOUNT.
+// Na publicação a pasta vem vazia e o script não faz nada. Só quem administra o módulo lê pelo sistema.
 // Só grava o que mudou (compara um resumo do conteúdo).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { conectar, raiz, resumo, tamanho } from './comum.mjs';
 
-const pasta = path.join(raiz, 'dados-importacao');
+const pasta = process.env.DADOS_IMPORTACAO || path.join(raiz, 'dados-importacao');
 const arquivos = fs.existsSync(pasta) ? fs.readdirSync(pasta).filter(f => /^seed[\w-]*\.json$/.test(f)) : [];
 if (!arquivos.length) { console.log('::notice::Nenhum arquivo em dados-importacao. Nada a enviar.'); process.exit(0); }
 

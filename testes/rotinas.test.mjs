@@ -41,11 +41,16 @@ const senhaDe = saida => (saida.match(/Senha provisória: (\S+)/) || [])[1];
 before(limpar);
 
 test('publicação: envia os dados de importação ao banco e não regrava o que não mudou', async () => {
-  const s1 = rodar('enviar-dados.mjs');
+  // dados de exemplo (nomes fictícios), no lugar das planilhas reais que não ficam no repositório
+  const pasta = fs.mkdtempSync(path.join(os.tmpdir(), 'dikma-dados-'));
+  const exemplo = path.join(raiz, 'public', 'demo', 'exemplo-efetivo.json');
+  fs.copyFileSync(exemplo, path.join(pasta, 'seed-efetivo.json'));
+  const env = { DADOS_IMPORTACAO: pasta };
+  const s1 = rodar('enviar-dados.mjs', env);
   assert.match(s1, /seed-efetivo \| [^|]+ \| enviado/);
   const d = await db.doc('seeds/seed-efetivo').get();
-  assert.equal(d.get('json'), fs.readFileSync(path.join(raiz, 'dados-importacao', 'seed-efetivo.json'), 'utf8'));
-  const s2 = rodar('enviar-dados.mjs');
+  assert.equal(d.get('json'), fs.readFileSync(exemplo, 'utf8'));
+  const s2 = rodar('enviar-dados.mjs', env);
   assert.match(s2, /seed-efetivo \| [^|]+ \| sem mudança/);
 });
 
@@ -91,12 +96,14 @@ test('cópia de segurança e restauração: voltam os dados com os tipos certos,
   await db.doc('gocorr/y').set({ n: 10 });
   await db.doc('historico/h1').set({ at: quando, t: 'x' });
   await db.doc('evidenciasArquivo/f1').set({ dados: 'foto' });
+  await db.doc('seeds/seed-teste').set({ json: '{}', hash: 'x' });
 
   const pasta = path.join(tmp, 'copia');
   const s = rodar('backup.mjs', { BACKUP_TIPO: 'diaria', BACKUP_PASTA: pasta });
   const man = JSON.parse(fs.readFileSync(path.join(pasta, 'manifesto.json'), 'utf8'));
   assert.equal(man.colecoes.gocorr.documentos, 2);
-  assert.ok(!man.colecoes.historico && !man.colecoes.evidenciasArquivo && !man.colecoes.seeds, 'diária deixa de fora histórico, fotos e dados de importação');
+  assert.ok(!man.colecoes.historico && !man.colecoes.evidenciasArquivo, 'diária deixa de fora histórico e fotos');
+  assert.ok(man.colecoes.seeds, 'diária inclui os dados de importação (não ficam mais no repositório)');
   assert.match(s, /documentos lidos/);
   rodar('backup.mjs', { BACKUP_TIPO: 'semanal', BACKUP_PASTA: path.join(tmp, 'sem') });
   const sem = JSON.parse(fs.readFileSync(path.join(tmp, 'sem', 'manifesto.json'), 'utf8'));
