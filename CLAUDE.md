@@ -6,7 +6,7 @@
 
 ## Como entregar (obrigatório)
 1. Nunca mexer direto na `main` (a `main` publica no ar sozinha). Criar uma branch nova (conferir antes com `git ls-remote --heads origin NOME` que o nome não existe), commit, push e **pull request**.
-2. Esperar a CI do PR (`testar` e `previa`) e mandar ao usuário o **link da prévia** (comentário do PR com `...web.app`).
+2. Esperar a CI do PR (`testar`, `telas` e `previa`) e mandar ao usuário o **link da prévia** (comentário do PR com `...web.app`).
 3. Só fazer o merge (squash) quando o usuário disser **"pode publicar"**. Depois conferir que o workflow **"Publicar no Firebase"** terminou com sucesso.
 4. A cada mudança em `public/`, subir a versão `V` em `public/sw.js` (`dikma-operacao-vNN`) e incluir arquivos novos da tela no `SHELL`.
 5. Ao terminar, resumir para o usuário: o que mudou, como usar e o que foi testado. Curto.
@@ -26,7 +26,8 @@
 - Rotinas no GitHub Actions (`.github/workflows/`): publicar, prévia, testes, avisos, backup, feriados, trocar líder etc.
 
 ## Testes (proporcionais ao tamanho da mudança)
-- Sempre: `node --check` nos .js alterados, `node --test` dos testes de lógica em `testes/` (lista em `testes/package.json`, sem `regras`/`rotinas`, que precisam do emulador) e `conferir-site`.
+- Sempre: `node --check` nos .js alterados, `node --test` dos testes de lógica em `testes/` (lista em `testes/package.json`, sem `regras`/`rotinas`, que precisam do emulador, e sem `telas`) e `conferir-site`.
+- Teste das telas (`testes/telas.test.mjs`, job `telas` da CI): passa por todas as abas no `?demo` em 1366 e 390 (erros de JS, CSP, 404, tela em branco, rolagem lateral). Rodar com `npm run telas` em `testes/` quando mexer em telas; aba nova entra sozinha (vem do menu).
 - Ajuste pequeno ("teste rápido"): conferir só a tela mexida no `?demo`.
 - Mudança grande: Playwright no `?demo` em 1366 e 390 de largura, sem erros de JS e sem rolagem lateral.
 
