@@ -7,7 +7,7 @@ import {
   textoOperacao, presente, situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao
 } from '../public/contas/situacao.js';
 import * as cal from '../public/contas/cal.js';
-import * as presenca from '../public/presenca.js';
+import * as presenca from '../public/ui/presenca.js';
 import { NOMES_CODIGO as NOMES_PLANILHA } from '../public/contas/planilhas-adm.js';
 import { criarEscala } from '../public/contas/escala.js';
 import { listaAtrasadas, efetivoRota, coberturasDoDia, resumoAtividades, resumoSemana, JANELA_ATRASADAS } from '../public/contas/hoje.js';

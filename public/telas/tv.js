@@ -1,14 +1,14 @@
 // Modo TV (?tv): tela cheia para a sala de controle, com cenas que se revezam sozinhas.
-import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, AUSENCIA, add, ddmm, addMonth } from './contas/cal.js';
-import * as M from './movimento.js';
-import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, esc, pct, title, n0, $ } from './nucleo/base.js';
-import { AUTH, ME, PL, SK, AREAS, UI, myAreas, setsDe, aplicarSet, perfil } from './nucleo/estado.js';
-import { docsFor, stats, rotasDa, atrasadasAll, listaAprov } from './calc/atividades.js';
-import { sitDia, desligadoNoDia, periodoDe, SIT_NOME, colabsDa } from './calc/presenca.js';
-import { formSheet, toast } from './ui/janelas.js';
-import { pintar, render, syncPill } from './ui/shell.js';
-import { contarCausas } from './telas/atividades.js';
-import { EQ, carregarModulo } from './nucleo/modulos.js';
+import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, AUSENCIA, add, ddmm, addMonth } from '../contas/cal.js';
+import * as M from '../ui/movimento.js';
+import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, esc, pct, title, n0, $ } from '../nucleo/base.js';
+import { AUTH, ME, PL, SK, AREAS, UI, myAreas, setsDe, aplicarSet, perfil } from '../nucleo/estado.js';
+import { docsFor, stats, rotasDa, atrasadasAll, listaAprov } from '../calc/atividades.js';
+import { sitDia, desligadoNoDia, periodoDe, SIT_NOME, colabsDa } from '../calc/presenca.js';
+import { formSheet, toast } from '../ui/janelas.js';
+import { pintar, render, syncPill } from '../ui/shell.js';
+import { contarCausas } from './atividades.js';
+import { EQ, carregarModulo } from '../nucleo/modulos.js';
 
 
 /* ---------------- MODO TV ---------------- */

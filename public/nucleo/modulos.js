@@ -3,8 +3,8 @@
 // depois do login para quem tem o módulo (em segundo plano). Sem sinal, vêm do service worker (estão no SHELL).
 import { SET_KEYS } from '../contas/cal.js';
 import { criarPessoas, chaveFicha } from '../contas/pessoas.js';
-import * as M from '../movimento.js';
-import { criarMeuDia } from '../meudia.js';
+import * as M from '../ui/movimento.js';
+import { criarMeuDia } from '../telas/meudia.js';
 import { fatorRota } from '../contas/escala.js';
 import { DB, framed, esc, title } from './base.js';
 import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './estado.js';
@@ -40,10 +40,10 @@ export function criarModulos() {
 const CARGA = {
   // Cada tela recebe a pessoa vista no módulo em que está (o papel vira o perfil daquele módulo): Equipamentos na
   // Operação (lançar) ou na Gestão (Avaliação mensal e Análises), Frequência no RH e fichas na Gestão.
-  EQ: () => import('../equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(UI.modulo === 'gestao' ? 'gestao' : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
-  AD: () => import('../administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
+  EQ: () => import('../telas/equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(UI.modulo === 'gestao' ? 'gestao' : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
+  AD: () => import('../telas/administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
   SG: () => import('../telas/seguranca.js').then(m => { SG = m.criarSeguranca(); }),
-  GE: () => import('../gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
+  GE: () => import('../telas/gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
 const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG };
 const pedidos = {};

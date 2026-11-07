@@ -1,8 +1,8 @@
 // Efetivo: Justificativas (faltas, atrasos e atestados) e Banco de horas extras.
 import { SETS, AREA_S, DAYS, pd, add, ddmm, monthLabel } from '../contas/cal.js';
-import { JUS_CODS, textoJus } from '../presenca.js';
-import { baixarExcel, dataBR } from '../exportar.js';
-import { semAcento } from '../busca.js';
+import { JUS_CODS, textoJus } from '../ui/presenca.js';
+import { baixarExcel, dataBR } from '../ui/exportar.js';
+import { semAcento } from '../ui/busca.js';
 import { DB, TODAY, framed, esc, title, $ } from '../nucleo/base.js';
 import { ME, SK, UI, isAdmin, podeItem, admDe, todasAreas, areaScope, canEditSit, temFichas, perfil } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

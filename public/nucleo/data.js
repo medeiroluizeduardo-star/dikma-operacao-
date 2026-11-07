@@ -69,14 +69,14 @@ import {
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
   getMessaging, getToken, deleteToken, mensagensSuportadas
-} from './vendor/firebase.js';
-import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './contas/cal.js';
-import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './contas/pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU } from './contas/acessos.js';
-import { competenciaDe } from './contas/planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './contas/segcalc.js';
-import { mapaFeriados, aplicarNaSemana } from './contas/feriados.js';
-import { incrementosFt } from './contas/fotos.js';
+} from '../vendor/firebase.js';
+import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
+import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
+import { competenciaDe } from '../contas/planilhas-adm.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
+import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
+import { incrementosFt } from '../contas/fotos.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -141,7 +141,7 @@ async function loadConfig() {
     if (r.ok) { const c = await r.json(); try { localStorage.setItem('coqueria-fbcfg', JSON.stringify(c)); } catch (e) { /* ignora */ } return c; }
   } catch (e) { /* sem sinal ou fora do Firebase Hosting */ }
   try { const c = JSON.parse(localStorage.getItem('coqueria-fbcfg') || 'null'); if (c && c.apiKey) return c; } catch (e) { /* ignora */ }
-  try { const m = await import('./firebase-config.js'); if (m.default && m.default.apiKey) return m.default; } catch (e) { /* sem arquivo local */ }
+  try { const m = await import('../firebase-config.js'); if (m.default && m.default.apiKey) return m.default; } catch (e) { /* sem arquivo local */ }
   return null;
 }
 
