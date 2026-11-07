@@ -285,6 +285,7 @@ export function criarAdministrativo(X) {
     const comecam = L.filter(f => f.inicio && f.inicio > TODAY && f.inicio <= add(TODAY, 30)).length;
     const marcadasT = new Set(L.filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || normNome(f.nome)));
     const vencendo = L.filter(f => f.limite && f.limite <= add(TODAY, 60) && !marcadasT.has(f.mat || normNome(f.nome))).length;
+    const limF = X.isMobile() ? Math.min(UI.more || 20, 300) : 300; // celular: 20 por vez
     const meses = []; for (let i = -2; i <= 12; i++) meses.push(compMais(TODAY.slice(0, 7), i));
     return `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${emFerias}</b><span>Em férias hoje</span></div><div><b class="num">${comecam}</b><span>Começam em 30 dias</span></div><div><b class="num" style="color:var(--st-nreal)">${vencendo}</b><span>Limite vencido ou em 60 dias, sem data</span></div></div>
       <div class="card"><div class="body lbar">
@@ -295,7 +296,7 @@ export function criarAdministrativo(X) {
         ${pode() ? `<button class="btn pri" data-a="novaFerias">${I.plus} Férias</button>` : ''}
         ${!X.framed ? `<button class="btn sm" data-a="exportarFerias">${I.dl} Exportar</button>` : ''}
       </div>
-      ${l.length ? `<div class="plist ferlist">${l.slice(0, 300).map(f => { const s = situacaoFerias(f); const lim = f.limite && !f.inicio ? diasEntre(TODAY, f.limite) : null; return `<button class="pitem ferit" data-a="ferias" data-v="${esc(f.id)}"><div class="minw"><div class="t">${esc(title(f.nome))} <span class="muted small">${f.mat ? '· ' + esc(f.mat) : ''}</span></div><div class="l">${esc(f.setor || '')}${f.funcao ? ' · ' + esc(title(f.funcao)) : ''}${f.horario ? ' · ' + esc(f.horario) : ''}</div><div class="l">${f.inicio ? `<b>${dBR(f.inicio)} a ${dBR(f.termino)}</b> (${f.dias || ''} dias) · retorno ${dBR(f.retorno)}` : `Planejada para ${f.mesPlanejado ? nomeComp(f.mesPlanejado) : '—'}`}${f.substituto ? ' · ' + esc(f.substituto) : ''}</div></div><div class="fer-r"><span class="pill ${s.cls}">${esc(s.t)}</span>${f.limite ? `<small class="${lim != null && lim <= 60 ? 'bad' : 'muted'}">limite ${dBR(f.limite)}</small>` : ''}</div></button>`; }).join('')}</div>${l.length > 300 ? `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o setor.</p>` : ''}` : `<div class="empty">${U.fAba === 'limite' ? 'Ninguém com data limite nos próximos 90 dias sem férias marcadas.' : 'Nenhuma férias com esses filtros.'}</div>`}</div>`;
+      ${l.length ? `<div class="plist ferlist">${l.slice(0, limF).map(f => { const s = situacaoFerias(f); const lim = f.limite && !f.inicio ? diasEntre(TODAY, f.limite) : null; return `<button class="pitem ferit" data-a="ferias" data-v="${esc(f.id)}"><div class="minw"><div class="t">${esc(title(f.nome))} <span class="muted small">${f.mat ? '· ' + esc(f.mat) : ''}</span></div><div class="l">${esc(f.setor || '')}${f.funcao ? ' · ' + esc(title(f.funcao)) : ''}${f.horario ? ' · ' + esc(f.horario) : ''}</div><div class="l">${f.inicio ? `<b>${dBR(f.inicio)} a ${dBR(f.termino)}</b> (${f.dias || ''} dias) · retorno ${dBR(f.retorno)}` : `Planejada para ${f.mesPlanejado ? nomeComp(f.mesPlanejado) : '—'}`}${f.substituto ? ' · ' + esc(f.substituto) : ''}</div></div><div class="fer-r"><span class="pill ${s.cls}">${esc(s.t)}</span>${f.limite ? `<small class="${lim != null && lim <= 60 ? 'bad' : 'muted'}">limite ${dBR(f.limite)}</small>` : ''}</div></button>`; }).join('')}</div>${l.length > limF ? (limF < 300 ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${limF + 40}">Mostrar mais ${Math.min(40, l.length - limF)} (faltam ${l.length - limF})</button></div>` : `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o setor.</p>`) : ''}` : `<div class="empty">${U.fAba === 'limite' ? 'Ninguém com data limite nos próximos 90 dias sem férias marcadas.' : 'Nenhuma férias com esses filtros.'}</div>`}</div>`;
   }
   function formFerias(id) {
     const f = id ? A().ferias.find(x => x.id === id) : null;
@@ -521,7 +522,7 @@ export function criarAdministrativo(X) {
       await DB.admSalvarComp(U.conj, U.comp, { ini: datas[0], fim: datas[datas.length - 1], grupos, d: {} }); toast(`Folha de ${periodoComp(U.comp)} aberta`); render();
     }
     else if (a === 'exportar') exportar();
-    else if (a === 'fAba') { U.fAba = v; render(); }
+    else if (a === 'fAba') { U.fAba = v; UI.more = 0; render(); }
     else if (a === 'novaFerias') formFerias(null);
     else if (a === 'ferias') formFerias(v);
     else if (a === 'exportarFerias') baixarExcel('ferias', [{ nome: 'Férias', linhas: [['Matrícula', 'Nome', 'Setor', 'Função', 'Horário', 'Admissão', 'Data limite', 'Início', 'Dias', 'Término', 'Retorno', 'Substituto / observação'], ...A().ferias.slice().sort((x, y) => String(x.inicio || '9').localeCompare(String(y.inicio || '9')) || x.nome.localeCompare(y.nome)).map(f => [f.mat, f.nome, f.setor, f.funcao, f.horario, dataBR(f.admissao), dataBR(f.limite), dataBR(f.inicio), f.inicio ? f.dias : '', dataBR(f.termino), dataBR(f.retorno), f.substituto])] }]).catch(e => toast('Não foi possível exportar: ' + e.message));
@@ -539,13 +540,13 @@ export function criarAdministrativo(X) {
   document.addEventListener('input', e => {
     if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aQ') { U.q = e.target.value; (X.agendar || render)(); }
-    if (e.target.id === 'aFQ') { U.fQ = e.target.value; (X.agendar || render)(); }
+    if (e.target.id === 'aFQ') { U.fQ = e.target.value; UI.more = 0; (X.agendar || render)(); }
   });
   document.addEventListener('change', e => {
     if (UI.modulo !== 'rh') return;
-    if (e.target.id === 'aFSetor') { U.fSetor = e.target.value; render(); }
+    if (e.target.id === 'aFSetor') { U.fSetor = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
-    if (e.target.id === 'aFMes') { U.fMes = e.target.value; render(); }
+    if (e.target.id === 'aFMes') { U.fMes = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'aImpArq' && e.target.files[0]) impArquivo(e.target.files[0]);
   });
 
