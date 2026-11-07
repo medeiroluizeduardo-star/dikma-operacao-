@@ -11,7 +11,7 @@ import * as presenca from '../public/ui/presenca.js';
 import { NOMES_CODIGO as NOMES_PLANILHA } from '../public/contas/planilhas-adm.js';
 import { criarEscala } from '../public/contas/escala.js';
 import { listaAtrasadas, efetivoRota, coberturasDoDia, resumoAtividades, resumoSemana, JANELA_ATRASADAS } from '../public/contas/hoje.js';
-import { listarAprov, contarPendentes } from '../public/contas/aprovacao.js';
+import { listarAprov, contarPendentes, agruparAprov } from '../public/contas/aprovacao.js';
 import { resumoFerias, indiceDesligados, resumoDesligados, indiceFerias } from '../public/contas/acessos.js';
 
 // ---------- tabela única de códigos ----------
@@ -205,4 +205,20 @@ test('resumo semanal conta as mesmas ausências do Balanço (inclui treinamento 
 test('resumo de férias: de 2 meses antes a 6 meses depois de hoje', () => {
   const l = [{ nome: 'A', inicio: '2026-07-01', termino: '2026-07-30' }, { nome: 'B', inicio: '2026-08-10', termino: '2026-08-20' }, { nome: 'C', inicio: '2027-04-25', termino: '2027-05-10' }, { nome: 'D', inicio: '2027-05-01', termino: '2027-05-10' }, { nome: 'E', inicio: '', termino: '2026-10-01' }];
   assert.deepEqual(resumoFerias(l, '2026-10-27').map(x => x.nome), ['B', 'C']);
+});
+
+// Aprovação: a fila agrupada por dia (mais antigo primeiro) e rota, com as contas de realizadas, não realizadas e extras.
+test('agruparAprov junta por dia e rota, mais antigo primeiro', () => {
+  const g = agruparAprov([
+    { dt: '2026-11-03', area: 'B', rota: 'Rota 2', c: 'R' },
+    { dt: '2026-11-02', area: 'A', rota: 'Rota 1', c: 'N' },
+    { dt: '2026-11-03', area: 'A', rota: 'Rota 1', c: 'E' },
+    { dt: '2026-11-03', area: 'B', rota: 'Rota 2', c: 'N' },
+    { dt: '2026-11-03', area: 'A', rota: 'Rota 1', c: 'R' },
+  ]);
+  assert.deepEqual(g.map(d => [d.dt, d.n, d.rotas.length]), [['2026-11-02', 1, 1], ['2026-11-03', 4, 2]]);
+  const [r1, r2] = g[1].rotas;
+  assert.deepEqual([r1.key, r1.n, r1.R, r1.N, r1.E], ['2026-11-03|A|Rota 1', 2, 1, 0, 1]);
+  assert.deepEqual([r2.key, r2.n, r2.R, r2.N, r2.E, r2.itens.length], ['2026-11-03|B|Rota 2', 2, 1, 1, 0, 2]);
+  assert.deepEqual(agruparAprov([]), []);
 });

@@ -50,3 +50,17 @@ function somaDias(s, n) {
   r = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   if (SOMA.size > 5000) SOMA.clear(); SOMA.set(ch, r); return r;
 }
+// Agrupa a fila da Aprovação por dia (mais antigo primeiro) e, dentro do dia, por rota.
+// itens: [{ dt, area, rota, c }] (c = R realizada · N não realizada · E extra; o resto do item vai junto em itens).
+// Devolve [{ dt, n, rotas: [{ key: 'dia|área|rota', area, rota, n, R, N, E, itens }] }]
+export function agruparAprov(itens) {
+  const dias = new Map();
+  for (const x of itens || []) {
+    let d = dias.get(x.dt); if (!d) dias.set(x.dt, d = { dt: x.dt, n: 0, rotas: new Map() });
+    const key = x.dt + '|' + x.area + '|' + x.rota;
+    let r = d.rotas.get(key); if (!r) d.rotas.set(key, r = { key, area: x.area, rota: x.rota, n: 0, R: 0, N: 0, E: 0, itens: [] });
+    d.n++; r.n++; if (x.c in r && x.c.length === 1) r[x.c]++; r.itens.push(x);
+  }
+  return [...dias.values()].sort((a, b) => (a.dt < b.dt ? -1 : a.dt > b.dt ? 1 : 0))
+    .map(d => ({ dt: d.dt, n: d.n, rotas: [...d.rotas.values()].sort((a, b) => a.rota.localeCompare(b.rota, 'pt-BR') || a.area.localeCompare(b.area)) }));
+}

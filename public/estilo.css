@@ -243,7 +243,10 @@ table.bal td.tot{background:var(--surface-2);font-weight:600}
 .act .m .link{font-size:12px;padding:0 4px;min-height:0;height:auto;vertical-align:baseline}
 .paper td.obs{font-size:10px;line-height:1.25}
 .act .m.devm{color:var(--st-nreal);font-weight:600}
-.card.aprov .pitem .bt{display:flex;gap:6px;align-items:center}
+.card.aprov .pitem .bt{display:flex;gap:6px;align-items:center;flex:none}
+.card.aprov .pitem.aitem{padding-left:18px;background:var(--surface-2,transparent)}
+.card.aprov>header .r{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.card.aprov .nreal{color:var(--st-nreal);font-weight:600}
 .aviso{margin:0;padding:8px 10px;border-radius:8px;font-size:12.5px;background:color-mix(in srgb,var(--st-atr) 13%,transparent);color:var(--ink);border-left:3px solid var(--st-atr)}
 .conf .body{display:flex;flex-direction:column;gap:10px}
 .conf-l{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.conf-l small{color:var(--ink-3)}
