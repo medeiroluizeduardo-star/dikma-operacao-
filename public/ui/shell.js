@@ -6,7 +6,7 @@ import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '..
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo } from '../nucleo/navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo, abaMarcada, juntasDe, NOME_JUNTO } from '../nucleo/navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -160,7 +160,7 @@ function renderNav() {
     <button class="modbtn" ${ms.length > 1 ? `data-modmenu="1" aria-haspopup="menu" aria-expanded="${!!UI.modOpen}" aria-label="Módulo atual: ${cur.nome}. Trocar de módulo"` : 'tabindex="-1" aria-disabled="true"'}>${linha(UI.modulo, true)}${ms.length > 1 ? `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 10l4-4 4 4M8 14l4 4 4-4"/></svg>` : ''}</button>
     ${ms.length > 1 ? `<div class="modmenu" role="menu" aria-label="Módulos">${ms.map(m => `<button role="menuitemradio" aria-checked="${mesmoItem(UI.modulo, m)}" data-mod="${m}">${linha(m)}${mesmoItem(UI.modulo, m) ? '<svg class="ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>' : ''}</button>`).join('')}</div>` : ''}
   </div>`, g = '';
-  const pai = (VIEWS.find(v => v.id === UI.view) || {}).pai; // aba aberta por botão (Folha do líder, Etiquetas): marca a aba pai
+  const pai = abaMarcada(UI.view); // aba aberta por botão (Folha do líder, Etiquetas) ou junta (Indicadores): marca o item do menu
   for (const v of abasDoMenu()) {
     if (v.grp !== g) { g = v.grp; h += `<div class="grp">${g}</div>`; }
     const badge = v.id === 'pend' && atr ? atr : v.id === 'aprovar' && apv ? apv : (v.id === 'gcolab' || v.id === 'elanc') && gb ? gb : 0;
@@ -177,7 +177,7 @@ function renderNav() {
   pintarBarra(tb, atr, gb, apv);
 }
 function pintarBarra(tb, atr, gb, apv = 0) {
-  const pai = (VIEWS.find(v => v.id === UI.view) || {}).pai;
+  const pai = abaMarcada(UI.view);
   const aqui = id => UI.view === id || pai === id;
   const inMore = !tb.some(x => aqui(x[0]));
   const moreBadge = (tb.some(x => x[0] === 'pend') ? 0 : atr) + (tb.some(x => x[0] === 'aprovar') ? 0 : apv);
@@ -308,7 +308,7 @@ function renderTop() {
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', AD ? AD.topo(v.id) : ''); return; }
-  if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id]); return; }
+  if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
   const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
@@ -317,13 +317,22 @@ function renderTop() {
   // Seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular: troca o conjunto e fica na mesma aba.
   const ss = setsDe(ME, UI.modulo);
   if (SET_VIEWS.includes(v.id) && (v.id !== 'resumo' || ['ativ', 'he'].includes(resTipo())) && ss.length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${ss.map(k => `<button type="button" role="tab" data-atset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
-  // Programação: Folha do líder e Etiquetas QR abrem por botões no topo (saíram do menu); nelas, um botão volta para a Programação.
-  if (UI.modulo === 'gestao' && (UI.view === 'prog' || v.pai === 'prog')) {
-    const vs = viewsDoModulo();
-    const bt = UI.view === 'prog' ? [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']].filter(([id]) => vs.some(x => x.id === id)) : vs.some(x => x.id === 'prog') ? [['prog', 'Programação', 'prog']] : [];
-    if (bt.length) ctr += `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>`;
-  }
-  pintarTopo(v.nome, sub, ctr);
+  pintarTopo(v.nome, sub, seletorJuntas(v) + ctr + atalhosDe(v));
+}
+// Abas juntas (Indicadores): Atividades | Equipamentos | Fichas no topo, só com as que a pessoa vê.
+function seletorJuntas(v) {
+  const l = juntasDe(v); if (!l.length) return '';
+  return `<div class="seg indsw" role="tablist" aria-label="Indicadores de">${l.map(x => `<button type="button" role="tab" data-go="${x.id}" aria-selected="${x.id === v.id}">${NOME_JUNTO[x.id] || nomeCurto(x)}</button>`).join('')}</div>`;
+}
+// Abas fora do menu abrem por botões no topo da aba pai; nelas, um botão volta para a aba pai.
+// Programação: Folha do líder e Etiquetas QR. Colaboradores: Impressão das fichas.
+const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']] };
+const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'] };
+function atalhosDe(v) {
+  if (UI.modulo !== 'gestao') return '';
+  const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);
+  const bt = ATALHOS[v.id] ? ATALHOS[v.id].filter(([id]) => tem(id)) : VOLTA[v.pai] && tem(v.pai) ? [[v.pai, ...VOLTA[v.pai]]] : [];
+  return bt.length ? `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>` : '';
 }
 
 // Tela estreita (celular): filtros compactos, barra de baixo.
@@ -394,7 +403,7 @@ function afterRender() {
 // e a tela nova é desenhada no quadro seguinte. Assim o celular não parece travado enquanto monta a tela.
 let trocaRaf = 0;
 export function trocarTela(id = UI.view) {
-  const pai = (VIEWS.find(v => v.id === id) || {}).pai; // Folha do líder e Etiquetas marcam a Programação
+  const pai = abaMarcada(id); // Folha do líder e Etiquetas marcam a Programação; Indicadores, o item do menu
   document.querySelectorAll('#nav [data-go], #tabbar [data-go]').forEach(b => { if (b.dataset.go === id || b.dataset.go === pai) b.setAttribute('aria-current', 'page'); else if (b.dataset.go !== '__more') b.removeAttribute('aria-current'); });
   M.moverIndicador();
   const v = $('view'); if (v) v.classList.add('saindo');

@@ -81,13 +81,21 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
     for (const m of modulos) {
       await clicar(page, `[data-mod="${m}"]`);
       await esperar(page);
-      const ids = await page.$$eval('#nav [data-go]', bs => bs.map(b => b.dataset.go));
+      // Abas do menu e, logo depois de cada uma, as que abrem por botão no topo dela (Indicadores, Folha do líder, Impressão das fichas).
+      const ids = (await page.$$eval('#nav [data-go]', bs => bs.map(b => b.dataset.go))).map(id => [id, '']);
       assert.ok(ids.length > 0, `módulo ${m} sem abas no menu`);
-      for (const id of ids) {
-        await t.test(`${m} › ${id}`, async () => {
+      const vistas = new Set(ids.map(([id]) => id));
+      for (let i = 0; i < ids.length; i++) {
+        const [id, pai] = ids[i];
+        await t.test(`${m} › ${pai ? pai + ' › ' : ''}${id}`, async () => {
           erros.length = 0;
-          assert.ok(await clicar(page, `#nav [data-go="${id}"]`), 'aba sumiu do menu');
+          if (pai) { assert.ok(await clicar(page, `#nav [data-go="${pai}"]`), 'aba pai sumiu do menu'); await esperar(page); }
+          assert.ok(await clicar(page, pai ? `#fbarra [data-go="${id}"]` : `#nav [data-go="${id}"]`), pai ? 'botão sumiu do topo' : 'aba sumiu do menu');
           await esperar(page);
+          if (!pai) {
+            const novas = (await page.$$eval('#fbarra [data-go]', bs => bs.map(b => b.dataset.go))).filter(x => !vistas.has(x));
+            novas.forEach(x => vistas.add(x)); ids.splice(i + 1, 0, ...novas.map(x => [x, id]));
+          }
           const r = await page.evaluate(w => ({
             texto: (document.getElementById('view')?.innerText || '').trim().length,
             carregando: !!document.querySelector('#view [aria-busy="true"]'),
