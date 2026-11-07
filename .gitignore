@@ -7,3 +7,10 @@ antes/
 backup/
 resultado.tap
 integracao/admin/lib/
+
+# planilhas com dados pessoais: nunca no repositório (ficam só no banco, em seeds/)
+dados-importacao/*
+!dados-importacao/LEIA-ME.md
+*.xlsx
+*.xlsm
+*.xls

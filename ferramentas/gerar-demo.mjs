@@ -1,6 +1,7 @@
 // Gera os dados da demonstração (public/demo/exemplo*.json) a partir das planilhas reais (dados-importacao/),
 // trocando nomes, apelidos, líderes e matrículas por fictícios. Ocorrências viram exemplos genéricos.
-// Rodar de novo sempre que os arquivos de dados-importacao mudarem:  node ferramentas/gerar-demo.mjs
+// As planilhas reais não ficam no repositório: coloque os seed*.json em dados-importacao/ (só no seu computador)
+// e rode:  node ferramentas/gerar-demo.mjs
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

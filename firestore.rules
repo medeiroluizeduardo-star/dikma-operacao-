@@ -119,8 +119,8 @@ service cloud.firestore {
       allow list, create, update, delete: if false;
     }
 
-    // Dados das planilhas originais para a importação (pasta dados-importacao do repositório).
-    // A publicação grava com a chave de serviço; só a administração do módulo correspondente lê.
+    // Dados das planilhas originais para a importação (não ficam no repositório; entram no backup).
+    // Gravados com a chave de serviço (integracao/admin/enviar-dados.mjs); só a administração do módulo correspondente lê.
     match /seeds/{nome} {
       allow get: if (nome == 'seed' && admMod('operacao'))
         || (nome == 'seed-bateria' && admMod('bateria'))

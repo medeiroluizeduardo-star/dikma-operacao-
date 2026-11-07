@@ -610,7 +610,7 @@ export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
 export async function seed(nome) {
   const id = String(nome).replace(/\.json$/, '');
   const d = await getDoc(doc(db, 'seeds', id));
-  if (!d.exists()) throw new Error(`Os dados de importação (${id}) ainda não foram enviados ao banco. Rode de novo a publicação no GitHub (Actions › Publicar no Firebase › Run workflow).`);
+  if (!d.exists()) throw new Error(`Os dados de importação (${id}) ainda não foram enviados ao banco. Restaure a cópia de segurança ou envie de novo as planilhas (integracao/admin/enviar-dados.mjs).`);
   return JSON.parse(d.data().json);
 }
 

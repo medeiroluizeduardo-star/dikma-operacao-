@@ -85,9 +85,9 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - Na primeira publicação depois desta mudança, a rotina `integracao/admin/migrar-areas.mjs` dividiu a lista antiga por área.
 
 ## Segurança dos dados
-- **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) ficam na pasta `dados-importacao` do repositório. Na publicação, eles são gravados no banco (`seeds/`), e só a administração do módulo correspondente lê. Os botões de importação continuam iguais.
-- **A demonstração (`?demo`) usa nomes e matrículas fictícios** (pasta `public/demo`). Se os arquivos de `dados-importacao` mudarem, gere de novo com `node ferramentas/gerar-demo.mjs`.
-- **Conferência antes de publicar:** se algum arquivo de planilha ou nome real de colaborador aparecer na pasta `public`, a publicação para com erro.
+- **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) **não ficam no repositório** (desde 07/11/2026). Eles estão só no banco (`seeds/`), onde apenas a administração do módulo correspondente lê, e entram na cópia de segurança diária. Os botões de importação continuam iguais. Para atualizar: coloque os arquivos na pasta `dados-importacao/` do seu computador (o Git ignora essa pasta) e rode `integracao/admin/enviar-dados.mjs` com o segredo do Firebase.
+- **A demonstração (`?demo`) usa nomes e matrículas fictícios** (pasta `public/demo`). Se as planilhas mudarem, coloque-as em `dados-importacao/` no seu computador e gere de novo com `node ferramentas/gerar-demo.mjs`.
+- **Conferência antes de publicar:** se algum arquivo de planilha ou nome real de colaborador aparecer na pasta `public`, a publicação para com erro. Os nomes não ficam no repositório: `ferramentas/nomes-protegidos.json` guarda só um resumo (SHA-256) de cada um. Para atualizar a lista: `node ferramentas/conferir-site.mjs --atualizar-nomes` (com as planilhas em `dados-importacao/`).
 - **Testes automáticos das regras:** antes de cada publicação, o GitHub roda os testes de `testes/` no emulador do Firebase. Eles conferem, perfil por perfil, quem lê e quem altera cada parte do banco (ex.: líder sem o Efetivo não lê ocorrências; ninguém se promove a administrador; assinatura gravada não muda). Se algum falhar, nada é publicado. Mudou as regras de propósito? Ajuste o teste correspondente em `testes/regras.test.mjs`.
 - **Propostas de mudança (pull request):** os mesmos testes rodam na proposta, antes de ela entrar na `main`.
 - **Senhas:** no mínimo 8 caracteres, sem sequências óbvias (12345678, senha123, dikma123…) e sem o próprio usuário ou nome. Vale para senhas novas.
@@ -398,9 +398,8 @@ firebase.json         configuração do Hosting
 .github/workflows/restaurar.yml    restaurar uma cópia
 .github/workflows/administrador.yml   criar ou recuperar administrador
 .github/workflows/limpar-contas.yml   apagar contas de login sem usuário (todo mês)
-dados-importacao/     planilhas originais (seed.json, seed-bateria.json, seed-equip.json, seed-gestao.json,
-                      seed-efetivo.json, seed-freq-patio.json, seed-freq-bateria.json, seed-ferias.json);
-                      vão para o banco na publicação, nunca para o site
+dados-importacao/     só no seu computador (o Git ignora): planilhas originais seed*.json para enviar ao banco
+                      com integracao/admin/enviar-dados.mjs; nunca vão para o repositório nem para o site
 integracao/admin/     rotinas do GitHub: dados de importação, administrador, cópia e restauração
 testes/               testes automáticos no emulador do Firebase
 ferramentas/          gerar-demo.mjs (demonstração com nomes fictícios), gerar-adm.mjs (planilhas de frequência e férias) e conferir-site.mjs

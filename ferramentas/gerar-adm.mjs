@@ -1,6 +1,7 @@
 // Gera os dados de importação do Administrativo a partir das planilhas originais (que NÃO entram no repositório):
 //   node ferramentas/gerar-adm.mjs <FREQUENCIA_PATIO.xlsx> <FREQUENCIA_BATERIA.xlsx> <FERIAS_GERAL.xlsx>
-// Grava dados-importacao/seed-freq-patio.json, seed-freq-bateria.json e seed-ferias.json
+// Grava dados-importacao/seed-freq-patio.json, seed-freq-bateria.json e seed-ferias.json (só no seu computador:
+// a pasta não vai para o repositório; envie ao banco com integracao/admin/enviar-dados.mjs)
 // e mostra um resumo (pessoas, competências, códigos desconhecidos).
 import fs from 'node:fs';
 import path from 'node:path';

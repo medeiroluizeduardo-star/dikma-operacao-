@@ -13,7 +13,7 @@
 
 ## Segurança e dados
 - Nada de dados pessoais, nomes reais ou planilhas em `public/`. Antes de cada PR: `node ferramentas/conferir-site.mjs` precisa passar.
-- Planilhas e dados de carga ficam em `dados-importacao/` (não vão para o site).
+- Planilhas e dados de carga **não vão para o repositório nem para o site**: ficam só no banco (`seeds/`, entram no backup). `dados-importacao/` é ignorada pelo Git e serve só no computador de quem for enviar (`integracao/admin/enviar-dados.mjs`).
 - Nunca mostrar nem enviar segredos (chaves, senhas, tokens).
 - Política de segurança (CSP em `firebase.json`): sem `<script>` inline e sem `onclick=` no HTML; scripts só deste site, bibliotecas em `public/vendor/`.
 - **Mudança em dados reais** (migração, gravar/apagar no Firestore, rodar workflow que grava) só com autorização explícita do usuário e com cópia de segurança antes (workflow `backup`).
