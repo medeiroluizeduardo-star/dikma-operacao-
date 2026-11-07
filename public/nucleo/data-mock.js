@@ -157,6 +157,10 @@ export async function start(callbacks) {
 }
 // Módulo Administração: na demonstração tudo já está em memória.
 export function iniciarAdministracao() { /* nada a carregar */ }
+// Erros nos aparelhos: na demonstração ficam só na memória (um de exemplo para ver a tela).
+cache.erros = [{ id: 'ex1', quando: new Date(Date.now() - 36e5), uid: 'gest', msg: 'TypeError: Cannot read properties of undefined (exemplo da demonstração)', onde: 'telas/apontar.js:120', tela: 'apontar', versao: 'demonstração', aparelho: 'Android 14 · Chrome/130 · 390x844', vezes: 2 }];
+export function registrarErro(e) { if (!me) return false; cache.erros.unshift({ id: 'e' + Date.now(), quando: new Date(), uid: me.uid, ...e }); changed(); return true; }
+export async function apagarErros(ids) { const t = new Set(ids); cache.erros = cache.erros.filter(e => !t.has(e.id)); changed(); }
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });

@@ -8,6 +8,7 @@ import { toast } from '../ui/janelas.js';
 import { render, schedule, syncPill } from '../ui/shell.js';
 import { iniciarTV } from '../telas/tv.js';
 import { criarModulos, precarregarModulos } from './modulos.js';
+import { enviar as enviarErros } from './erros.js';
 
 criarModulos();
 
@@ -35,7 +36,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
 });
 M.iniciarJanelas(); M.iniciarTopo();
 DB.start({
-  onAuth: a => { definirAuth(a); if (ME && a.status === 'ready') precarregarModulos(ME); if (ME && myArea()) UI.area = myArea(); render(); },
+  onAuth: a => { definirAuth(a); if (ME && a.status === 'ready') { precarregarModulos(ME); enviarErros(); } if (ME && myArea()) UI.area = myArea(); render(); },
   onData: () => { mudouDados(); if (AUTH.status === 'ready') schedule(); },
   onSync: () => { const e = $('sync'); if (e && AUTH.status === 'ready') e.innerHTML = syncPill(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }

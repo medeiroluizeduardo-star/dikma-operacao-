@@ -12,3 +12,5 @@ export {
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment
 } from 'firebase/firestore';
 export { getMessaging, getToken, deleteToken, isSupported as mensagensSuportadas } from 'firebase/messaging';
+// App Check (só liga quando há chave em public/nucleo/appcheck.js)
+export { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';

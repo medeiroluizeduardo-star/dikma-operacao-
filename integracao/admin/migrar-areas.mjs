@@ -1,5 +1,6 @@
 // Divide as fichas do Efetivo por área (gcolab/{ÁREA}) e marca a área em cada ocorrência e assinatura.
-// Roda na publicação, antes de o site novo entrar no ar. Depois da primeira vez não faz nada (lê 2 documentos).
+// Rodou nas publicações até 07/11/2026; hoje só roda depois de restaurar uma cópia (restaurar.yml), para converter cópias antigas.
+// Com dados já no formato novo não faz nada (lê poucos documentos).
 // A área de cada pessoa sai da mesma conta que o sistema usa (public/contas/pessoas.js): onde ela está nas Atividades
 // ou na Operação de equipamentos; sem lugar nos módulos, fica em GERAL.
 import fs from 'node:fs';

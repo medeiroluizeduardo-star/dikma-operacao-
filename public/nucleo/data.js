@@ -68,8 +68,9 @@ import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
-  getMessaging, getToken, deleteToken, mensagensSuportadas
+  getMessaging, getToken, deleteToken, mensagensSuportadas, initializeAppCheck, ReCaptchaEnterpriseProvider
 } from '../vendor/firebase.js';
+import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
@@ -156,6 +157,10 @@ export async function start(callbacks) {
   cfg = await loadConfig();
   if (!cfg) { cb.onAuth({ status: 'noConfig' }); return; }
   const app = fbApp = initializeApp(cfg);
+  // App Check (nucleo/appcheck.js): só com chave e só no endereço oficial (no computador de teste não funciona).
+  if (CHAVE_SITE && /(^|\.)(web\.app|firebaseapp\.com)$/.test(location.hostname)) {
+    try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(CHAVE_SITE), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check não ligou', e); }
+  }
   auth = getAuth(app);
   db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
   getRedirectResult(auth).catch(e => cb.onError && cb.onError(e));
@@ -310,6 +315,17 @@ export function iniciarAdministracao() {
   }
   const comp = competenciaDe(today());
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
+  on(query(collection(db, 'erros'), orderBy('quando', 'desc'), limit(100)), qs => { cache.erros = qs.docs.map(d => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) })); changed(); });
+}
+// Erros nos aparelhos (nucleo/erros.js). Sem login não grava (devolve false e tenta de novo depois).
+// Não espera o banco responder: sem sinal, o registro fica guardado no aparelho e sobe quando voltar.
+export function registrarErro(e) {
+  if (!db || !me) return false;
+  addDoc(collection(db, 'erros'), { quando: serverTimestamp(), uid: me.uid, msg: e.msg, onde: e.onde || '', tela: e.tela || '', versao: e.versao || '', aparelho: e.aparelho || '', vezes: e.vezes || 1 }).catch(() => {});
+  return true;
+}
+export async function apagarErros(ids) {
+  for (let i = 0; i < ids.length; i += 400) { const b = writeBatch(db); ids.slice(i, i + 400).forEach(id => b.delete(doc(db, 'erros', id))); await track(b.commit()); }
 }
 // Alguma coisa para abrir: perfil em algum módulo.
 const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao));
