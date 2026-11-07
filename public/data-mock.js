@@ -1,7 +1,7 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from './cal.js';
-import { acessoDoLegado, legadoDoAcesso, marcasDe, ehAdminU, modulosDe } from './acessos.js';
+import { legadoDoAcesso, marcasDe, ehAdminU } from './acessos.js';
 import { prepararImportacao } from './planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from './segcalc.js';
 import { aplicarCampos } from './limpeza.js';
@@ -85,23 +85,22 @@ async function fresh() {
   const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
   const usados = new Set();
   const loginDe = n => { const p = slug(n); let l = p[0] + '.' + p[p.length - 1], i = 2; while (usados.has(l)) l = p[0] + '.' + p[p.length - 1] + i++; usados.add(l); return l; };
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'] },
-    { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'] },
-    { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'] },
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], ...ac({ operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' }, ['patio', 'bateria', 'equipamentos']) },
+    { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'], ...ac({ operacao: 'supervisor' }, ['equipamentos']) },
+    { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'], ...ac({ gestao: 'supervisor' }, []) },
     ...lideres.map(c => liderGestao({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
-    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'] },
-    { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'] },
-    { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'] },
-    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'] },
-    { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'] },
-    { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'] },
+    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], ...ac({ operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'modulo' }, ['patio', 'bateria', 'equipamentos']) },
+    { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'coordenador', gestao: 'coordenador' }, ['patio', 'bateria']) },
+    { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'], ...ac({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria']) },
+    { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'leitor', rh: 'leitor' }, ['patio']) },
+    { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'], ...ac({ rh: 'administrativo' }, []) },
+    { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'administrativo', rh: 'administrativo' }, ['patio']) },
     ...usuariosSeguranca(), ...usuariosMistos(),
-    { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, trocarSenha: true },
-    { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null }].map(comAcesso);
+    { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao'], trocarSenha: true, ...ac({ operacao: 'leitor', gestao: 'leitor' }, ['patio']) },
+    { uid: 'bloq', nome: 'Usuário bloqueado', login: 'bloqueado', senha: '123456', papel: 'bloqueado', area: null, ...ac({}, []) }];
 }
-// Acesso por módulo: os usuários de demonstração já vêm convertidos (como a rotina do GitHub faria), menos o
-// "Novo usuário", que fica no modelo antigo para mostrar o selo "a converter" na tela de usuários.
-const comAcesso = u => { if (u.acesso || u.uid === 'novo') return u; const r = acessoDoLegado(u); return { ...u, acesso: r.acesso, escopos: r.escopos }; };
+// Acesso por módulo de cada usuário de demonstração (campos acesso e escopos).
+const ac = (acesso, escopos) => ({ acesso, escopos });
 // Segurança: um técnico que registra, um supervisor de área que trata as anomalias e uma consulta (somente leitura).
 // Os campos antigos (papel, modulos, área) saem do acesso, como a tela de usuários grava.
 function usuariosSeguranca() {
@@ -115,10 +114,11 @@ function usuariosSeguranca() {
 }
 
 // Líderes: como os reais, Operação · Líder e Gestão · Líder (Programação, Folha do líder), sem as Fichas.
+// Supervisores: Operação e Gestão · Supervisor, com as Fichas.
 function liderGestao(u) {
-  if (u.papel !== 'lider') return u;
   const k = setDaArea(u.area) || 'patio';
-  return { ...u, acesso: { operacao: 'lider', gestao: 'lider' }, escopos: [k] };
+  const p = u.papel === 'lider' ? 'lider' : 'supervisor';
+  return { ...u, acesso: { operacao: p, gestao: p }, escopos: [k] };
 }
 // Perfis diferentes por módulo: aponta na Operação como líder e só consulta a Gestão; e uma Administração
 // "Dos módulos" de quem é Gestor só na Gestão do Pátio.
@@ -160,7 +160,7 @@ export function iniciarAdministracao() { /* nada a carregar */ }
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
-  if (!(ehAdminU(me) || marcasDe(me).length || (me.acesso && (me.acesso.seguranca || me.acesso.administracao)) || (!me.acesso && modulosDe(me).length))) return cb.onAuth({ status: 'semAcesso', user: me });
+  if (!(ehAdminU(me) || marcasDe(me).length || (me.acesso && (me.acesso.seguranca || me.acesso.administracao)))) return cb.onAuth({ status: 'semAcesso', user: me });
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
   cb.onAuth({ status: 'ready', user: me });
 }

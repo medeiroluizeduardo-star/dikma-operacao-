@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
+import { acessoDoLegado } from './legado.mjs';
 import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField, increment } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,8 +60,16 @@ const USUARIOS = {
   supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
   supSemArea: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['operacao'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
   admModSeg: { papel: 'gestor', modulos: ['seguranca'], acesso: { seguranca: 'gestor', administracao: 'modulo' }, escopos: [] },
-  bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] }
+  bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] },
+  // Cadastro só no modelo antigo (sem o campo acesso): não vale mais nada. Os demais usuários escritos acima no
+  // modelo antigo ganham o acesso por módulo como a conversão gravou nos cadastros reais (testes/legado.mjs).
+  soAntigo: { papel: 'gestor', area: 'RECEBIMENTO', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], semConverter: true },
+  soAntigoAdmin: { papel: 'admin', semConverter: true }
 };
+for (const [k, u] of Object.entries(USUARIOS)) {
+  if (u.semConverter) { const { semConverter, ...x } = u; USUARIOS[k] = x; continue; }
+  if (!u.acesso) { const r = acessoDoLegado(u); USUARIOS[k] = { ...u, acesso: r.acesso, escopos: r.escopos }; }
+}
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
 // db('liderRec') = banco visto por essa pessoa; db(null) = sem login; db('semPerfil') = conta sem cadastro no sistema
@@ -107,6 +116,20 @@ before(async () => {
 after(async () => { if (env) await env.cleanup(); });
 
 // ---------------- administrador e cadastro ----------------
+test('cadastro só no modelo antigo (sem o campo acesso) não abre nenhum módulo, nem com papel admin', async () => {
+  for (const uid of ['soAntigo', 'soAntigoAdmin']) {
+    const d = db(uid);
+    await assertSucceeds(getDoc(doc(d, 'usuarios', uid)), 'lê o próprio cadastro');
+    await assertFails(getDoc(doc(d, 'semanas', SEM)));
+    await assertFails(getDoc(doc(d, 'b_semanas', SEM_B1)));
+    await assertFails(getDoc(doc(d, 'gestao', 'colaboradores')));
+    await assertFails(getDoc(doc(d, 'eq', 'cadastro')));
+    await assertFails(getDoc(doc(d, 'config', 'sistema')));
+    await assertFails(updateDoc(doc(d, 'semanas', SEM), { s: { x: 1 } }));
+    await assertFails(getDoc(doc(d, 'usuarios', 'liderRec')));
+    await assertFails(getDoc(doc(d, 'seeds', 'seed')));
+  }
+});
 test('sem administrador marcado, ninguém cria o config/bootstrap pelo site (nem sem cadastro, nem o próprio admin)', async () => {
   await assertSucceeds(getDoc(doc(db(null), 'config', 'bootstrap')));
   await assertFails(setDoc(doc(db('semPerfil'), 'config', 'bootstrap'), { uid: 'semPerfil' }));
@@ -548,7 +571,7 @@ test('acesso: líder com Operação e Administrativo entra nos dois', async () =
 test('acesso por módulo: ninguém muda o próprio acesso nem os escopos; só o administrador grava', async () => {
   await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { acesso: { operacao: 'gestor', gestao: 'gestor', administracao: 'admin' } }));
   await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { escopos: ['patio', 'bateria', 'equipamentos'] }));
-  await assertFails(updateDoc(doc(db('liderRec'), 'usuarios', 'liderRec'), { acesso: { operacao: 'lider' }, escopos: ['patio'] }), 'nem quem ainda não foi convertido');
+  await assertFails(updateDoc(doc(db('liderRec'), 'usuarios', 'liderRec'), { acesso: { operacao: 'gestor' }, escopos: ['patio', 'bateria'] }));
   await assertFails(updateDoc(doc(db('segReg'), 'usuarios', 'segReg'), { acesso: { seguranca: 'gestor' } }));
   await assertFails(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { acesso: { operacao: 'lider' }, ultimoAcesso: serverTimestamp() }), 'nem junto com o último acesso');
   await assertSucceeds(updateDoc(doc(db('liderNovo'), 'usuarios', 'liderNovo'), { ultimoAcesso: serverTimestamp() }));
