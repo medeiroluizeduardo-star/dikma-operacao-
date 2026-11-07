@@ -1,12 +1,12 @@
 // Dikma Gestão — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 // Telas: Painel, Lançamentos e paradas (uma aba só), Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
-import { add, pad, today, MESES_L, addMonth, DAYS, SETS, AREA_S } from './cal.js';
+import { add, pad, today, MESES_L, addMonth, DAYS, SETS, AREA_S } from './contas/cal.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from './busca.js';
 import { baixarExcel, dataBR } from './exportar.js';
-import { criarBusca, competenciaDe } from './planilhas-adm.js';
-import { indiceFerias } from './acessos.js';
-import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './eqcalc.js';
-import { situacaoDoDia, textoOperacao, feriadosOperacao } from './situacao.js';
+import { criarBusca, competenciaDe } from './contas/planilhas-adm.js';
+import { indiceFerias } from './contas/acessos.js';
+import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from './contas/eqcalc.js';
+import { situacaoDoDia, textoOperacao, feriadosOperacao } from './contas/situacao.js';
 // Feriado sem operação mudou: o administrador já aplica nas atividades do Pátio e da Bateria (feriados.js);
 // para os demais, a rotina do GitHub faz o mesmo em até 1 hora.
 const ferAtiv = salvo => Promise.resolve(salvo).then(() => import('./telas/config.js')).then(m => m.aplicarFeriadosAtividades()).catch(() => {});

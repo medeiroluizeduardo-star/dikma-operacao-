@@ -1,11 +1,11 @@
 // Estado da interface: login (AUTH, ME), conjunto de atividades aberto (SK, AREAS), plano e colaboradores do conjunto,
 // versão dos dados (DATAV), a memória da tela (UI) e o que a pessoa pode ver e fazer (módulos, áreas, itens).
 // As variáveis são lidas pelos outros arquivos; só este arquivo as troca (definirAuth, rebuild, aplicarSet, mudouDados).
-import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../cal.js';
-import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm } from '../acessos.js';
-import { podeItemU } from '../permissoes.js';
-import { competenciaDe } from '../planilhas-adm.js';
-import { temSeg } from '../segcalc.js';
+import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../contas/cal.js';
+import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm } from '../contas/acessos.js';
+import { podeItemU } from '../contas/permissoes.js';
+import { competenciaDe } from '../contas/planilhas-adm.js';
+import { temSeg } from '../contas/segcalc.js';
 import { TV, DB, TODAY, CUR_WEEK, CUR_MONTH } from './base.js';
 
 

@@ -1,11 +1,11 @@
-// Testes das contas da Parte 2 das fotos (public/fotos-arquivo.js): situação de cada foto, o que pode ir para a
+// Testes das contas da Parte 2 das fotos (public/contas/fotos-arquivo.js): situação de cada foto, o que pode ir para a
 // lixeira e ser apagado de vez, lotes, confirmação digitada, nomes de pastas do .zip, índice CSV, conferência do
 // SHA-256, espaço e o conteúdo do relatório em PowerPoint. Não precisa do emulador:
 // node --test testes/fotos-arquivo.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as FA from '../public/fotos-arquivo.js';
-import { refCel } from '../public/fotos.js';
+import * as FA from '../public/contas/fotos-arquivo.js';
+import { refCel } from '../public/contas/fotos.js';
 
 const HOJE = '2026-11-12'; // quinta-feira
 const SEM = 'RECEBIMENTO|2026-11-09';

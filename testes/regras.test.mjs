@@ -943,7 +943,7 @@ test('Limpeza de dados: a Administração Dos módulos continua gerando meses, m
   await assertSucceeds(deleteDoc(doc(db('admin'), 'semanas', 'RECEBIMENTO|2027-03-01')));
 });
 
-// ---------------- Feriados nas atividades (marca fe; public/feriados.js) ----------------
+// ---------------- Feriados nas atividades (marca fe; public/contas/feriados.js) ----------------
 test('Feriados: o administrador marca e desfaz a atividade em feriado (Pátio e Bateria); líder e supervisor não', async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     const d = ctx.firestore();

@@ -1,7 +1,7 @@
 // Painel › Resumos: Atividades, Horas extras, Operação e Frequência, do dia ou da semana, prontos para imprimir.
-import { SETS, AREA_S, DAYS, AUSENCIA, pd, add, ddmm, weekLabel } from '../cal.js';
+import { SETS, AREA_S, DAYS, AUSENCIA, pd, add, ddmm, weekLabel } from '../contas/cal.js';
 import { JUS_CODS, textoJus } from '../presenca.js';
-import { PARCIAL } from '../situacao.js';
+import { PARCIAL } from '../contas/situacao.js';
 import * as M from '../movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, n0 } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, areaScope, modsReais, setsDe, temEquipEm } from '../nucleo/estado.js';

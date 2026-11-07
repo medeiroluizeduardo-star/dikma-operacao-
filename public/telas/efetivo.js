@@ -1,13 +1,13 @@
 // Telas do Efetivo (escala e presença): cartões de ausências e balanço, Efetivo diário, check-in do turno,
 // lançamento da situação do dia com substituto, Dimensionamento e Balanço.
-import { SETS, AREA_S, DAYS, DL, SITS, AUSENTE, AUSENCIA, pd, add, ddmm, weekLabel } from '../cal.js';
-import { canonLideres, criarBusca as buscaNomes } from '../planilhas-adm.js';
+import { SETS, AREA_S, DAYS, DL, SITS, AUSENTE, AUSENCIA, pd, add, ddmm, weekLabel } from '../contas/cal.js';
+import { canonLideres, criarBusca as buscaNomes } from '../contas/planilhas-adm.js';
 import { abrirLancamento, JUS_CODS, pedirJus, textoJus, CODIGOS_LANC } from '../presenca.js';
-import { situacaoDoDia, PARCIAL, AUS_COBRIVEL } from '../situacao.js';
+import { situacaoDoDia, PARCIAL, AUS_COBRIVEL } from '../contas/situacao.js';
 import { baixarExcel, dataBR } from '../exportar.js';
 import * as M from '../movimento.js';
 import { semAcento, casa, caixaBusca, campoBusca } from '../busca.js';
-import { PERIODO } from '../escala.js';
+import { PERIODO } from '../contas/escala.js';
 import { DB, TODAY, framed, esc, pct, title, $ } from '../nucleo/base.js';
 import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEditSit, temFichas, setsDe, aplicarSet, perfil, admDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

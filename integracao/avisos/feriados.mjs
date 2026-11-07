@@ -1,6 +1,6 @@
 // Aplicar feriados nas atividades (Pátio e Bateria), pela chave de serviço. Usado pela rotina "Avisos no celular"
 // (de hora em hora; avisos.mjs) e pelo workflow manual "Aplicar feriados" (aplicar-feriados.mjs).
-// As contas são as do site (public/feriados.js, copiado para lib/): em feriado sem operação, a atividade programada
+// As contas são as do site (public/contas/feriados.js, copiado para lib/): em feriado sem operação, a atividade programada
 // e não apontada sai da conta (célula '_' com a marca fe); feriado removido, ela volta. Só grava o que muda.
 //
 // fonte = de onde ler: fonteBanco(db) (Firestore) ou fonteArquivo(json) (dados locais, para testar).

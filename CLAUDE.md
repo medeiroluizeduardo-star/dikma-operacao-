@@ -21,7 +21,7 @@
 
 ## Estrutura (resumo)
 - Página estática sem build, JavaScript puro (módulos ES) em `public/`: `nucleo/`, `calc/`, `ui/`, `telas/`, `navegacao.js`, `eventos.js`, `data.js` (Firestore) e `data-mock.js` (modo `?demo`, dados de exemplo).
-- 5 módulos: Operação, Gestão, Segurança, RH e Administração; acesso por módulo em `usuarios/{uid}.acesso` (ver `public/acessos.js`).
+- 5 módulos: Operação, Gestão, Segurança, RH e Administração; acesso por módulo em `usuarios/{uid}.acesso` (ver `public/contas/acessos.js`).
 - Fotos das atividades: ver `docs/fotos-atividades.md`.
 - Rotinas no GitHub Actions (`.github/workflows/`): publicar, prévia, testes, avisos, backup, feriados, trocar líder etc.
 

@@ -3,8 +3,8 @@
 // exclusão das fotos completas do banco (só das já exportadas; o apontamento e o documento leve com a miniatura ficam).
 // As contas ficam em fotos-arquivo.js; o PowerPoint e o .zip em telas/fotos-pptx.js (carregado sob demanda);
 // a leitura e a gravação em data.js (ou data-mock.js na demonstração). Explicação em docs/fotos-atividades.md.
-import { SETS, SET_KEYS, DAYS } from '../cal.js';
-import * as FA from '../fotos-arquivo.js';
+import { SETS, SET_KEYS, DAYS } from '../contas/cal.js';
+import * as FA from '../contas/fotos-arquivo.js';
 import { DB, DEMO, TODAY, esc, title, $ } from '../nucleo/base.js';
 import { ME, isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

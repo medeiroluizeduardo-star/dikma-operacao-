@@ -1,8 +1,8 @@
 // Contas das atividades (sem tela): semanas do período, totais, atrasadas, apontamentos e aprovação.
-import { SETS, DAYS, add, ddmm } from '../cal.js';
-import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov, listarAprov } from '../aprovacao.js';
-import { listaAtrasadas } from '../hoje.js';
-import { perfilDe, escoposDe } from '../acessos.js';
+import { SETS, DAYS, add, ddmm } from '../contas/cal.js';
+import { APROV_DESDE, aprovaPapel, acompanhaPapel, estadoAprov, listarAprov } from '../contas/aprovacao.js';
+import { listaAtrasadas } from '../contas/hoje.js';
+import { perfilDe, escoposDe } from '../contas/acessos.js';
 import { DB, TODAY, esc } from '../nucleo/base.js';
 import { ME, PL, SK, AREAS, DATAV, mudouDados, UI, rotas, podeItem, todasAreas, myAreas, canEdit, podeForaProg, perfil, isAdmin, modAqui } from '../nucleo/estado.js';
 import { sheet, toast } from '../ui/janelas.js';

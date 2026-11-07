@@ -1,5 +1,5 @@
 // Efetivo: Justificativas (faltas, atrasos e atestados) e Banco de horas extras.
-import { SETS, AREA_S, DAYS, pd, add, ddmm, monthLabel } from '../cal.js';
+import { SETS, AREA_S, DAYS, pd, add, ddmm, monthLabel } from '../contas/cal.js';
 import { JUS_CODS, textoJus } from '../presenca.js';
 import { baixarExcel, dataBR } from '../exportar.js';
 import { semAcento } from '../busca.js';

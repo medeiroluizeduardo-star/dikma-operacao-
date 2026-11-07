@@ -4,11 +4,11 @@
 // o banco, em data.js (seginter, seganom, segfotos e config/seguranca).
 // Celular primeiro: o formulário ocupa a tela inteira, guarda o rascunho no aparelho enquanto a pessoa preenche e
 // funciona sem sinal (o registro e as fotos ficam na fila do aparelho e sobem quando a conexão voltar).
-import { MESES_L, SETS, add, addMonth, today } from '../cal.js';
+import { MESES_L, SETS, add, addMonth, today } from '../contas/cal.js';
 import { campoBusca } from '../busca.js';
 import { baixarExcel, dataBR } from '../exportar.js';
 import { ESQUELETO } from '../movimento.js';
-import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg } from '../segcalc.js';
+import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg } from '../contas/segcalc.js';
 import { DB, framed, esc, title, $ } from '../nucleo/base.js';
 import { ME, UI, isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

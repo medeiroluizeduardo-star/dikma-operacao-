@@ -1,5 +1,5 @@
 // Decide quem recebe qual aviso agora. Função pura: recebe os dados já lidos e devolve as mensagens.
-// Usa as mesmas contas da tela "Meu dia" (public/hoje.js), copiadas para esta pasta na hora de rodar.
+// Usa as mesmas contas da tela "Meu dia" (public/contas/hoje.js), copiadas para esta pasta na hora de rodar.
 import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';

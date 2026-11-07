@@ -2,14 +2,14 @@
 // A presença de quem está nas Atividades é a mesma do Efetivo diário (situacao): o líder marca na Operação,
 // a Frequência vê e corrige aqui. Quem não está nas Atividades (gestão, apoio) fica só na folha (freqcomp).
 // Férias marcadas aqui aparecem sozinhas como FE no Efetivo diário e na folha.
-import { SETS, today, add, ddmm, MESES_L } from './cal.js';
-import { normRegime, letra } from './escala.js';
-import { editaAdm, indiceFerias } from './acessos.js';
+import { SETS, today, add, ddmm, MESES_L } from './contas/cal.js';
+import { normRegime, letra } from './contas/escala.js';
+import { editaAdm, indiceFerias } from './contas/acessos.js';
 import { baixarExcel, dataBR } from './exportar.js';
-import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from './planilhas-adm.js';
+import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from './contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from './presenca.js';
 import { caixaBusca } from './busca.js';
-import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from './situacao.js';
+import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from './contas/situacao.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 

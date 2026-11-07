@@ -1,5 +1,5 @@
 // Modo TV (?tv): tela cheia para a sala de controle, com cenas que se revezam sozinhas.
-import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, AUSENCIA, add, ddmm, addMonth } from './cal.js';
+import { SETS, AREAS_ATIV, setDaArea, AREA_S, DAYS, AUSENCIA, add, ddmm, addMonth } from './contas/cal.js';
 import * as M from './movimento.js';
 import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, esc, pct, title, n0, $ } from './nucleo/base.js';
 import { AUTH, ME, PL, SK, AREAS, UI, myAreas, setsDe, aplicarSet, perfil } from './nucleo/estado.js';

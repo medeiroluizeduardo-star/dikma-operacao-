@@ -1,5 +1,5 @@
 // Tela Apontar: o líder marca o que foi feito no dia (e a justificativa do que não foi).
-import { AREA_S, DAYS, MOTIVOS, pd, add, ddmm } from '../cal.js';
+import { AREA_S, DAYS, MOTIVOS, pd, add, ddmm } from '../contas/cal.js';
 import { DB, TODAY, esc, title, $ } from '../nucleo/base.js';
 import { PL, AREAS, UI, admDe, myAreas, myArea, areaScope, canEdit, podeForaProg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -9,7 +9,7 @@ import { curto } from '../calc/presenca.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, desenharLogo } from '../ui/shell.js';
 import { precisaFotos, passoFotos, passoFotosCel, montarFotos, seloFotos, verFotosCel, cfgF } from './fotos.js';
-import { exigeFoto, fotosDaCel } from '../fotos.js';
+import { exigeFoto, fotosDaCel } from '../contas/fotos.js';
 
 /* ---------------- APONTAR ---------------- */
 // Área aberta no Apontar (quem vê todas as áreas usa a última escolhida).

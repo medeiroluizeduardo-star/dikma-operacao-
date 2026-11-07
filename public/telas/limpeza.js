@@ -3,8 +3,8 @@
 // baixado no computador) · 4) confirmação (digitar APAGAR) e execução em lotes de até 400, com barra de progresso.
 // As contas ficam em limpeza.js; a leitura e a gravação, em data.js (ou data-mock.js na demonstração).
 // Não entram aqui: ocorrências das fichas (gocorr, documentos assinados), folhas de frequência (freqcomp) e férias.
-import { SETS, SET_KEYS, add, addMonth, monthLabel } from '../cal.js';
-import * as LP from '../limpeza.js';
+import { SETS, SET_KEYS, add, addMonth, monthLabel } from '../contas/cal.js';
+import * as LP from '../contas/limpeza.js';
 import { DB, DEMO, TODAY, esc } from '../nucleo/base.js';
 import { isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';

@@ -48,7 +48,7 @@ let fichas = null;
 }
 
 // Feriados nas atividades (Pátio e Bateria): em feriado sem operação, o que estava programado e não foi apontado sai
-// da conta; feriado removido, volta (public/feriados.js). Antes dos avisos, para não avisar de atividade em feriado.
+// da conta; feriado removido, volta (public/contas/feriados.js). Antes dos avisos, para não avisar de atividade em feriado.
 // Lê todos os meses gerados só quando os feriados ou os meses mudaram, e uma vez por dia por garantia; só grava o que muda.
 {
   const { planejarFeriados, gravarFeriados, fonteBanco, relatorio } = await import('./feriados.mjs');
@@ -100,7 +100,7 @@ for (const k of SET_KEYS) {
   sets[k] = { plano, colabs, semanas, sit, jus, cob, aprov, rotas: cfg.data().rotas || [] };
 }
 
-// A situação do dia é a mesma conta do site (public/situacao.js): lançado, demissão na ficha, férias, folga da escala
+// A situação do dia é a mesma conta do site (public/contas/situacao.js): lançado, demissão na ficha, férias, folga da escala
 // (com os feriados "sem operação" da Operação e a turma pela ficha quando falta a letra).
 const cfgEsc = (await db.doc('config/escalas').get()).data() || {};
 const eqCfg = (await db.doc('eq/config').get()).data() || {};

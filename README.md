@@ -365,29 +365,28 @@ Edite o arquivo direto no GitHub (ícone de lápis) e salve com **Commit changes
 
 ```
 public/
-  index.html          visual e estrutura da página
-  app.js              telas e regras de negócio (módulo Atividades Pátio)
-  equip.js, eqcalc.js módulo Operação (equipamentos) e as fórmulas dos indicadores
-  gestao.js           módulo Efetivo (fichas de acompanhamento)
-  pessoas.js          cadastro único: leva área de atuação e função para todos os módulos
-  importar.js         Efetivo › Importar dados (lê Excel e CSV)
-  meudia.js, hoje.js  tela Meu dia e as contas que ela usa (as mesmas dos avisos)
-  permissoes.js       abas por perfil e exceção por pessoa
-  busca.js            busca com lista abaixo do campo (operadores, equipamentos) e filtro das listas
-  escala.js           escala de turno: regime, turma, folga automática (também usada pelos avisos)
-  acessos.js          o acesso por módulo (perfil em cada módulo, escopos) e as férias em comum
-  aprovacao.js        aprovação dos apontamentos do líder pelo supervisor
-  presenca.js         o jeito único de lançar presença (Frequência e Efetivo diário)
-  administrativo.js   módulo Frequência e férias (frequência, férias, importar)
-  planilhas-adm.js    leitura das planilhas de frequência e férias
-  exportar.js         baixar listas como planilha do Excel
-  movimento.js        animações e fluidez (entrada de tela, menu, janelas, números, rolagem)
-  vendor/xlsx.js      leitor de planilhas SheetJS 0.20.3 (carregado só na importação)
+  index.html, app.js  a página e o ponto de entrada (app.js explica a divisão do código)
+  estilo.css, tema.js visual e tema claro/escuro
+  nucleo/             ambiente, estado, ações e carregamento dos módulos
+  ui/                 peças da interface (janelas, ícones, menu, fotos no navegador)
+  calc/               contas das telas de Atividades e presença (usam o estado da página)
+  contas/             contas SEM tela e sem banco, as mesmas no site, nos testes e nas rotinas do GitHub:
+                      cal.js (calendário: a semana pertence ao mês da quinta-feira), situacao.js e escala.js
+                      (presença e turno), hoje.js (Meu dia e avisos), acessos.js e permissoes.js (quem vê o quê),
+                      aprovacao.js, pessoas.js (cadastro único), planilhas-adm.js e lideres.js (planilhas do RH),
+                      segcalc.js (Segurança), eqcalc.js (indicadores da Operação), feriados.js, planoaplica.js,
+                      limpeza.js, fotos.js e fotos-arquivo.js
+  telas/              telas de Atividades, Efetivo, Segurança, Relatórios, Administração e fotos
+  equip.js            módulo Operação (equipamentos)
+  gestao.js           módulo Efetivo (fichas de acompanhamento); importar.js lê Excel e CSV
+  administrativo.js   módulo Frequência e férias; presenca.js é o jeito único de lançar presença
+  meudia.js, tv.js    tela Meu dia e modo TV
+  busca.js, exportar.js, movimento.js   busca nas listas, baixar Excel, animações
+  navegacao.js, eventos.js, inicio.js   menu e abas, cliques e formulários, abertura
   data.js             conexão com o Firebase (login e banco)
   data-mock.js        modo demonstração (?demo)
-  cal.js              calendário operacional (semana pertence ao mês da quinta-feira)
   demo/               dados da demonstração, com nomes e matrículas fictícios
-  vendor/firebase.js  biblioteca do Firebase 10.14.1
+  vendor/             bibliotecas (Firebase 10.14.1, SheetJS 0.20.3, PptxGenJS, QR code)
   img/                logo da Dikma
   sw.js, manifest.webmanifest, icons/   instalação no celular e uso sem sinal
 firestore.rules       regras de segurança por perfil e área

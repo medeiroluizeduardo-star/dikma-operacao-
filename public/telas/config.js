@@ -1,11 +1,11 @@
 // Módulo Configurações: Visão geral, Escalas e turnos, Conferência, Uso do plano, Rotas, Plano padrão, Gerador,
 // Usuários, Perfis e permissões e o primeiro acesso (importar).
-import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../cal.js';
-import { competenciaDe, diasDaCompetencia } from '../planilhas-adm.js';
+import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
+import { competenciaDe, diasDaCompetencia } from '../contas/planilhas-adm.js';
 import { semAcento, casa, caixaBusca } from '../busca.js';
-import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe } from '../acessos.js';
-import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../escala.js';
-import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../permissoes.js';
+import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe } from '../contas/acessos.js';
+import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../contas/escala.js';
+import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../contas/permissoes.js';
 import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -16,12 +16,12 @@ import { VIEWS } from '../navegacao.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { comModulo } from '../nucleo/modulos.js';
-import { listasSeg } from '../segcalc.js';
+import { listasSeg } from '../contas/segcalc.js';
 import { planoNaProgramacao } from './plano-prog.js';
 import { vLimpeza } from './limpeza.js';
 import { vCfFotos } from './fotos.js';
 import { vArqFotos } from './fotos-arquivo.js';
-import * as FE from '../feriados.js';
+import * as FE from '../contas/feriados.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui

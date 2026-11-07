@@ -1,7 +1,7 @@
 // Fotos das atividades (telas): passo de fotos antes de concluir o apontamento, fotos de uma atividade (miniaturas e
 // foto grande), selo 📷 nas listas e a configuração (Administração › Fotos das atividades, só o administrador).
 // As contas ficam em fotos.js; a gravação (um lote só com o apontamento), em data.js › apontarComFotos.
-import { DAYS, SETS, add, ddmm, setDaArea } from '../cal.js';
+import { DAYS, SETS, add, ddmm, setDaArea } from '../contas/cal.js';
 import { DB, TODAY, esc, title, n0, $ } from '../nucleo/base.js';
 import { ME, PL, UI, SK, canEdit, isAdmin, setsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -9,9 +9,9 @@ import { I } from '../ui/icones.js';
 import { sheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
-import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../fotos.js';
+import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../contas/fotos.js';
 import { gravarApont, diasDe } from '../calc/atividades.js';
-import { statusFoto, STATUS } from '../fotos-arquivo.js';
+import { statusFoto, STATUS } from '../contas/fotos-arquivo.js';
 
 // Configuração em vigor (config/fotos ou o padrão).
 export const cfgF = () => cfgFotos(DB.cache.fotosCfg);

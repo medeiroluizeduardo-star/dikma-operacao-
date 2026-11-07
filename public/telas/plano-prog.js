@@ -1,6 +1,6 @@
 // Plano padrão → Programação: depois de mudar os dias, tirar ou incluir uma atividade no plano, ajusta as semanas
 // já geradas da área, de hoje em diante (as contas ficam em planoaplica.js).
-import { planoNasSemanas, resumoMudanca } from '../planoaplica.js';
+import { planoNasSemanas, resumoMudanca } from '../contas/planoaplica.js';
 import { DB, TODAY } from '../nucleo/base.js';
 import { escala } from '../calc/presenca.js';
 import { toast } from '../ui/janelas.js';
