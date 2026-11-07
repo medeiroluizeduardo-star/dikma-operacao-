@@ -1,0 +1,56 @@
+name: Limpar branches antigos
+
+# Manual (Actions > Limpar branches antigos > Run workflow).
+# Apaga só os branches cujo PR já foi mesclado e que não receberam nada depois do merge.
+# Nunca apaga a main, branch com PR aberto ou branch que nunca foi mesclado.
+# Sem marcar "Apagar", só mostra a lista (nada muda).
+on:
+  workflow_dispatch:
+    inputs:
+      apagar:
+        description: 'Apagar os branches encontrados (desmarcado = só listar)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  limpar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/github-script@v7
+        env:
+          APAGAR: ${{ inputs.apagar && 'sim' || 'nao' }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const apagar = process.env.APAGAR === 'sim';
+            const principal = context.payload.repository.default_branch;
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'all', per_page: 100 });
+            const branches = await github.paginate(github.rest.repos.listBranches, { owner, repo, per_page: 100 });
+            const doRepo = p => p.head.repo && p.head.repo.full_name === `${owner}/${repo}`;
+            const abertos = new Set(prs.filter(p => p.state === 'open' && doRepo(p)).map(p => p.head.ref));
+            const sai = [], fica = [];
+            for (const b of branches) {
+              if (b.name === principal || b.protected) { fica.push(`${b.name} (principal/protegido)`); continue; }
+              if (abertos.has(b.name)) { fica.push(`${b.name} (tem PR aberto)`); continue; }
+              const pr = prs.find(p => doRepo(p) && p.merged_at && p.head.ref === b.name && p.head.sha === b.commit.sha);
+              if (!pr) { fica.push(`${b.name} (sem PR mesclado ou com mudanças depois do merge)`); continue; }
+              sai.push({ nome: b.name, pr: pr.number });
+            }
+            core.info(`${apagar ? 'Apagando' : 'Seriam apagados'} ${sai.length} branches:`);
+            for (const s of sai) {
+              core.info(` - ${s.nome} (PR #${s.pr})`);
+              if (apagar) await github.rest.git.deleteRef({ owner, repo, ref: `heads/${s.nome}` });
+            }
+            core.info(`Ficam ${fica.length}:`);
+            for (const f of fica) core.info(` - ${f}`);
+            await core.summary
+              .addHeading(apagar ? `Apagados: ${sai.length} branches` : `Só listagem: ${sai.length} branches seriam apagados`)
+              .addList(sai.map(s => `${s.nome} (PR #${s.pr})`))
+              .addHeading(`Ficaram: ${fica.length}`, 3)
+              .addList(fica)
+              .write();
