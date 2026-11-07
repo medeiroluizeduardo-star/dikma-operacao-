@@ -2,7 +2,8 @@
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { acessoDoLegado, legadoDoAcesso, acessoDe, modulosDe, selosAcesso, MODULOS_ACESSO } from '../public/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO } from '../public/acessos.js';
+import { acessoDoLegado, modulosDe } from './legado.mjs';
 import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/segcalc.js';
 
 const ord = l => [...l].sort();
@@ -129,11 +130,12 @@ test('ida e volta: administrador, bloqueado, sem modulos e antigo acesso Adminis
   const gestorG = idaEVolta({ papel: 'gestor', modulos: ['gestao'] });
   assert.equal(gestorG.v.papel, 'gestor'); assert.deepEqual(gestorG.v.modulos, ['gestao']);
 });
-test('acessoDe: usa o modelo novo quando existe, senão mostra a conversão', () => {
+test('acessoDe: usa só o modelo novo; cadastro sem o campo acesso fica sem nenhum módulo', () => {
   const novo = acessoDe({ papel: 'lider', modulos: ['operacao'], acesso: { operacao: 'lider', seguranca: 'registra' }, escopos: ['patio'] });
-  assert.equal(novo.convertido, true); assert.equal(novo.acesso.seguranca, 'registra');
+  assert.equal(novo.convertido, true); assert.equal(novo.acesso.seguranca, 'registra'); assert.equal(novo.fichas, false);
+  assert.equal(acessoDe({ papel: 'lider', modulos: ['operacao', 'gestao'], acesso: { gestao: 'lider' }, escopos: ['patio'] }).fichas, true, "Fichas = 'gestao' em modulos");
   const velho = acessoDe({ papel: 'lider', modulos: ['operacao'] });
-  assert.equal(velho.convertido, false); assert.deepEqual(velho.acesso, { operacao: 'lider' });
+  assert.equal(velho.convertido, false); assert.deepEqual(velho.acesso, {}); assert.deepEqual(velho.escopos, []);
   assert.deepEqual(selosAcesso({ operacao: 'lider', gestao: 'supervisor', administracao: 'modulo' }), [['Operação', 'Líder', 'operacao'], ['Gestão', 'Supervisor', 'gestao'], ['Administração', 'Dos módulos', 'administracao']]);
 });
 
@@ -147,13 +149,15 @@ test('perfilDe: cada módulo tem o seu perfil; administrador é admin em tudo; b
   assert.equal(perfilDe(misto, 'rh'), null);
   assert.equal(temFichasU(misto), false, 'Gestão sem as Fichas');
   assert.deepEqual(marcasDe(misto), ['operacao']);
-  assert.equal(perfilDe({ papel: 'admin' }, 'seguranca'), 'admin');
+  assert.equal(perfilDe({ papel: 'admin', acesso: { administracao: 'admin' } }, 'seguranca'), 'admin');
+  assert.equal(ehAdminU({ papel: 'admin' }), false, 'papel admin sem o acesso por módulo não é administrador');
   assert.equal(ehAdminU({ papel: 'gestor', acesso: { administracao: 'admin' } }), true);
   assert.equal(perfilDe({ papel: 'bloqueado', acesso: { operacao: 'gestor' }, escopos: ['patio'] }, 'operacao'), null);
   assert.deepEqual(escoposDe({ papel: 'bloqueado', acesso: { operacao: 'gestor' }, escopos: ['patio'] }), []);
-  // cadastro antigo (sem acesso): converte na hora
-  assert.equal(perfilDe({ papel: 'supervisor', modulos: ['frequencia'] }, 'rh'), 'administrativo');
-  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao'] }, 'administracao'), 'modulo');
+  // cadastro antigo (sem acesso): não vale mais nada
+  assert.equal(perfilDe({ papel: 'supervisor', modulos: ['frequencia'] }, 'rh'), null);
+  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao'] }, 'administracao'), null);
+  assert.deepEqual(marcasDe({ papel: 'gestor', modulos: ['operacao', 'bateria'] }), []);
 });
 test('usuarioEm: a pessoa vista no módulo tem o papel do módulo (usado pelas telas de Equipamentos, Fichas e Frequência)', () => {
   const u = { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'supervisor', rh: 'leitor' }, escopos: ['patio'] };
@@ -191,7 +195,7 @@ test('Segurança: quem vê e quem trata cada registro', () => {
   const sup = { uid: 's', papel: 'supervisor', area: 'PREPARAÇÃO', acesso: { operacao: 'supervisor' }, escopos: ['patio'] };
   const supAntigo = { uid: 's2', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'BATERIA 1', modulos: ['operacao', 'bateria'] };
   const lider = { uid: 'd', papel: 'lider', area: 'PREPARAÇÃO', acesso: { operacao: 'lider' }, escopos: ['patio'] };
-  assert.deepEqual(supConjs(sup), ['patio']); assert.deepEqual(supConjs(supAntigo), ['patio', 'bateria']); assert.deepEqual(supConjs(lider), []);
+  assert.deepEqual(supConjs(sup), ['patio']); assert.deepEqual(supConjs(supAntigo), [], 'cadastro antigo (sem acesso) não conta'); assert.deepEqual(supConjs(lider), []);
   assert.ok(temSeg(sup) && temSeg(reg) && !temSeg(lider));
   const a = { por: 'r', conj: 'patio', status: 'aberta', em: 1000 }, b = { por: 'x', conj: 'bateria', status: 'aberta', em: 1000 };
   assert.ok(veRegSeg(reg, a) && !veRegSeg(reg, b), 'quem registra vê só os próprios');

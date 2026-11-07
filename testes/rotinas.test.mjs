@@ -61,6 +61,8 @@ test('administrador: cria o primeiro, recupera a senha e promove um usuário exi
   const lg = (await db.doc('logins/chefe').get()).data();
   const u = (await db.doc(`usuarios/${lg.uid}`).get()).data();
   assert.equal(u.papel, 'admin');
+  assert.equal(u.acesso.administracao, 'admin', 'acesso por módulo: Administração completa');
+  assert.deepEqual(u.escopos, ['patio', 'bateria', 'equipamentos']);
   assert.equal(u.trocarSenha, true);
   assert.equal((await db.doc('config/bootstrap').get()).get('uid'), lg.uid);
   assert.ok(await entrar(lg.email, senha1), 'entra com a senha provisória');
@@ -84,7 +86,7 @@ test('administrador: cria o primeiro, recupera a senha e promove um usuário exi
   const lg3 = (await db.doc('logins/lider1').get()).data();
   assert.notEqual(lg3.uid, 'uidSumido');
   const u3 = (await db.doc(`usuarios/${lg3.uid}`).get()).data();
-  assert.equal(u3.papel, 'admin');
+  assert.equal(u3.papel, 'admin'); assert.equal(u3.acesso.administracao, 'admin');
   assert.equal(u3.nome, 'Líder Um');
   assert.ok(!(await db.doc('usuarios/uidSumido').get()).exists, 'perfil antigo sem conta é removido');
   assert.ok(await entrar(lg3.email, senhaDe(s3)));
@@ -200,29 +202,6 @@ test('publicação: quem tinha o acesso Administrativo passa a ter o módulo Fre
   assert.deepEqual((await db.doc('usuarios/antigoAdm').get()).get('modulos'), ['frequencia']);
   assert.deepEqual((await db.doc('usuarios/antigoAmbos').get()).get('modulos'), ['operacao', 'frequencia']);
   assert.deepEqual((await db.doc('usuarios/antigoAmbos').get()).get('acessos'), ['operacao']);
-});
-
-test('converter acessos: simular não grava; gravar faz a cópia e grava só acesso e escopos, pulando quem já tem', async () => {
-  await db.doc('usuarios/cvLider').set({ nome: 'Líder Conv', login: 'lider.conv', papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'] });
-  await db.doc('usuarios/cvSup').set({ nome: 'Sup Conv', login: 'sup.conv', papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria', 'gestao'] });
-  await db.doc('usuarios/cvJa').set({ nome: 'Já Conv', login: 'ja.conv', papel: 'lider', modulos: ['operacao'], acesso: { seguranca: 'registra' }, escopos: [] });
-  const sim = rodar('converter-acessos.mjs');
-  assert.match(sim, /simulação \(nada foi gravado\)/);
-  assert.match(sim, /Líder Conv \(lider\.conv\) \| Líder · módulos: Pátio · área: Recebimento \| Operação: Líder · escopos: Pátio/);
-  assert.equal((await db.doc('usuarios/cvLider').get()).get('acesso'), undefined, 'simular não grava');
-  const g = rodar('converter-acessos.mjs', { CONVERTER_MODO: 'gravar', BACKUP_PASTA: 'copia-usuarios' });
-  assert.match(g, /Gravado: acesso e escopos em \d+ usuário/);
-  const l = (await db.doc('usuarios/cvLider').get()).data();
-  assert.deepEqual(l.acesso, { operacao: 'lider' }); assert.deepEqual(l.escopos, ['patio']);
-  assert.equal(l.papel, 'lider'); assert.deepEqual(l.modulos, ['operacao'], 'papel e módulos ficam como estão');
-  const s = (await db.doc('usuarios/cvSup').get()).data();
-  assert.deepEqual(s.acesso, { operacao: 'supervisor', gestao: 'supervisor' }); assert.deepEqual(s.escopos, ['bateria']);
-  assert.deepEqual((await db.doc('usuarios/cvJa').get()).get('acesso'), { seguranca: 'registra' }, 'quem já tem acesso é pulado');
-  const bk = await db.collection('backups').get();
-  assert.ok(bk.docs.some(d => JSON.parse(d.get('json')).cvLider), 'cópia dos usuários no banco');
-  assert.ok(fs.readdirSync(path.join(tmp, 'copia-usuarios')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
-  const de_novo = rodar('converter-acessos.mjs', { CONVERTER_MODO: 'gravar', BACKUP_PASTA: 'copia-usuarios' });
-  assert.match(de_novo, /0 a converter/);
 });
 
 // Nomes inventados. Caso: o líder "Bento Andrade" não existe; as pessoas dele são do líder Kauê.

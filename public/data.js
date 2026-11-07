@@ -72,7 +72,7 @@ import {
 } from './vendor/firebase.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from './cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from './pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU, modulosDe } from './acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU } from './acessos.js';
 import { competenciaDe } from './planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from './segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from './feriados.js';
@@ -311,8 +311,8 @@ export function iniciarAdministracao() {
   const comp = competenciaDe(today());
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
 }
-// Alguma coisa para abrir: perfil em algum módulo (ou o cadastro antigo com algum módulo).
-const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao)) || (!u.acesso && modulosDe(u).length > 0);
+// Alguma coisa para abrir: perfil em algum módulo.
+const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao));
 function stopData() {
   dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false; admSisOn = false;
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();

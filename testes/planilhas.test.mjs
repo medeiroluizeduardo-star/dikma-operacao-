@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
 import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/planilhas-adm.js';
 import { casaParte, lideresDasFichas, trocarNasFichas, moverNaFolha } from '../public/lideres.js';
-import { indiceFerias, perfilDe, editaAdm, modulosDe, temFreq } from '../public/acessos.js';
+import { indiceFerias, perfilDe, editaAdm, temFreq } from '../public/acessos.js';
 
 const dias = [...Array(16).keys()].map(i => 16 + i).concat([...Array(15).keys()].map(i => i + 1)); // 16..31, 1..15 (outubro: 16/09 a 15/10)
 function livro(abas) {
@@ -92,16 +92,15 @@ test('férias em comum: o índice acha pela matrícula ou pelo nome, só dentro 
 });
 
 test('acessos: Administração completa só o administrador; Frequência e férias são do RH', () => {
-  assert.equal(perfilDe({ papel: 'lider', modulos: ['operacao'] }, 'administracao'), null);
-  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'administracao'), 'modulo');
-  assert.equal(perfilDe({ papel: 'admin' }, 'administracao'), 'admin');
-  assert.equal(perfilDe({ papel: 'gestor', modulos: ['operacao', 'frequencia'] }, 'rh'), 'administrativo');
-  assert.equal(temFreq({ papel: 'lider', modulos: ['operacao'] }), false);
-  assert.equal(temFreq({ papel: 'supervisor', modulos: ['frequencia'] }), true);
-  assert.deepEqual(modulosDe({ papel: 'supervisor', acessos: ['administrativo'], modulos: [] }), ['frequencia'], 'antigo Administrativo: só o módulo novo');
-  assert.deepEqual(modulosDe({ papel: 'lider' }), ['operacao']);
-  assert.equal(editaAdm({ papel: 'leitor', modulos: ['frequencia'] }), false);
-  assert.equal(editaAdm({ papel: 'supervisor', acessos: ['administrativo'] }), true);
+  assert.equal(perfilDe({ papel: 'lider', acesso: { operacao: 'lider' }, escopos: ['patio'] }, 'administracao'), null);
+  assert.equal(perfilDe({ papel: 'gestor', acesso: { operacao: 'gestor', rh: 'administrativo', administracao: 'modulo' }, escopos: ['patio'] }, 'administracao'), 'modulo');
+  assert.equal(perfilDe({ papel: 'admin', acesso: { administracao: 'admin' } }, 'administracao'), 'admin');
+  assert.equal(perfilDe({ papel: 'gestor', acesso: { operacao: 'gestor', rh: 'administrativo' }, escopos: ['patio'] }, 'rh'), 'administrativo');
+  assert.equal(temFreq({ papel: 'lider', acesso: { operacao: 'lider' }, escopos: ['patio'] }), false);
+  assert.equal(temFreq({ papel: 'administrativo', acesso: { rh: 'administrativo' }, escopos: [] }), true);
+  assert.equal(temFreq({ papel: 'supervisor', modulos: ['frequencia'] }), false, 'cadastro antigo (sem acesso) não vale');
+  assert.equal(editaAdm({ papel: 'leitor', acesso: { rh: 'leitor' }, escopos: [] }), false);
+  assert.equal(editaAdm({ papel: 'administrativo', acesso: { rh: 'administrativo' }, escopos: [] }), true);
 });
 test('líder com o nome escrito de jeitos diferentes vira um grupo só (como Kauan / Kauan Souza / Kauan Suza)', () => {
   const g = (nome, ...ps) => ({ nome, pessoas: ps.map(n => ({ k: n, nome: n })) });

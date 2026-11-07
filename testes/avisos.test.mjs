@@ -3,6 +3,7 @@ import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { acessoDoLegado } from './legado.mjs';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let planejar, weekOf;
@@ -16,14 +17,16 @@ before(async () => {
 });
 
 const HOJE = '2026-10-14'; // quarta-feira
+// Usuários escritos no cadastro antigo ganham o acesso por módulo como a conversão gravou nos reais.
+const conv = us => Object.fromEntries(Object.entries(us).map(([k, u]) => [k, u.acesso ? u : { ...u, ...acessoDoLegado(u) }]));
 const tok = { tokens: ['t'] };
-const usuarios = {
+const usuarios = conv({
   admin: { papel: 'admin', nome: 'Administrador' },
   liderRec: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], nome: 'Ana Líder' },
   liderPrep: { papel: 'lider', area: 'PREPARAÇÃO', modulos: ['operacao', 'gestao'], nome: 'Beto Líder' },
   leitor: { papel: 'leitor', modulos: ['gestao'], nome: 'Leitor' },
   semAviso: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], nome: 'Sem Aviso' }
-};
+});
 const avisos = { admin: tok, liderRec: tok, liderPrep: tok, leitor: tok, semAviso: { tokens: [] } };
 const ocorr = [
   { id: 'o1', status: 'pendente', data: '2026-10-01', area: 'RECEBIMENTO', recolhe: 'ANA LÍDER', nome: 'FULANO DA SILVA' },
@@ -81,7 +84,7 @@ test('resumo da semana: segunda às 7h, só administrador, gestor e coordenador,
   const S = { plano: [{ id: 'R1', rota: 'RECEBIMENTO' }], rotas: [], colabs: [{ id: 'C1', area: 'RECEBIMENTO', rota: 'RECEBIMENTO', nome: 'FULANO DA SILVA' }],
     sit: { 'C1|2026-10-13': 'FT', 'C1|2026-10-14': 'AT', 'C1|2026-10-15': 'AT' },
     semanas: { [`RECEBIMENTO|${ini}`]: { area: 'RECEBIMENTO', ini, ids: ['R1', 'R2'], s: { R1: 'RRRRN__', R2: 'RRRPE__' } } } };
-  const us = { ...usuarios, gest: { papel: 'gestor', modulos: ['operacao', 'gestao'], nome: 'Gestor' } };
+  const us = { ...usuarios, ...conv({ gest: { papel: 'gestor', modulos: ['operacao', 'gestao'], nome: 'Gestor' } }) };
   const av = { ...avisos, gest: tok };
   const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr, sets: { patio: S }, enviados: {}, agora: new Date(`${SEG}T07:10:00`), hoje: SEG });
   const g = de(r, 'gest', 'semanal');
@@ -106,7 +109,7 @@ test('aprovação: líder recebe o que foi devolvido (uma vez); supervisor receb
   const S = { plano: [{ id: 'R1', rota: 'RECEBIMENTO' }, { id: 'R2', rota: 'RECEBIMENTO' }], rotas: [], colabs: [], sit: {},
     semanas: { [`RECEBIMENTO|${ini}`]: { area: 'RECEBIMENTO', ini, ids: ['R1', 'R2'], s: { R1: 'RNP____', R2: 'RPP____' } } },
     aprov: { [`RECEBIMENTO|${ini}`]: { 'R2|0': { s: 'A', c: 'R' }, 'R2|1': { s: 'D', c: 'P', mot: 'Não foi feita', em: 'e1' } } } };
-  const us = { ...usuarios, supRec: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Sup' } };
+  const us = { ...usuarios, ...conv({ supRec: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Sup' } }) };
   const av = { ...avisos, supRec: tok };
   const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${H}T08:10:00`), hoje: H });
   const ana = de(r, 'liderRec', 'aprovacao');
@@ -157,7 +160,7 @@ test('Painel Coqueria: dia útil, 7h tarefas do dia e atrasadas; 16h abertas e M
 });
 
 test('justificativas: às 16h o supervisor recebe a contagem das faltas e atrasos sem justificativa da área, sem nomes', () => {
-  const us = { ...usuarios, sup: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], nome: 'Sup' } };
+  const us = { ...usuarios, ...conv({ sup: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], nome: 'Sup' } }) };
   const av = { ...avisos, sup: tok };
   const S = setPatio();
   S.colabs = [{ id: 'C1', area: 'RECEBIMENTO', nome: 'FULANO DA SILVA' }, { id: 'C2', area: 'RECEBIMENTO', nome: 'CICLANO SOUZA' }, { id: 'C3', area: 'PREPARAÇÃO', nome: 'BELTRANO LIMA' }];
@@ -181,7 +184,7 @@ test('Segurança: anomalia nova avisa quem trata e o supervisor da área (não o
     supPat: { papel: 'supervisor', nome: 'Sup Pátio', area: 'PREPARAÇÃO', acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
     supBat: { papel: 'supervisor', nome: 'Sup Bateria', area: 'BATERIA 1', acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
     lider: { papel: 'lider', nome: 'Líder', area: 'PREPARAÇÃO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
-    admin: { papel: 'admin', nome: 'Administrador' }
+    admin: { papel: 'admin', nome: 'Administrador', acesso: { administracao: 'admin' }, escopos: [] }
   };
   const av = Object.fromEntries(Object.keys(us).map(k => [k, tok]));
   const agora = new Date(`${HOJE}T10:00:00`);

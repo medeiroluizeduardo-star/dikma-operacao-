@@ -22,9 +22,9 @@ rules_version = '2';
 //     docs/fotos-atividades.md.
 //   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
-// TRANSIÇÃO: cadastro sem o campo acesso usa as regras de antes (papel único + modulos), como alternativa.
-// Perfis antigos: admin, gestor, coordenador, supervisor (até 2 áreas: area e area2), lider (1 área),
-// administrativo, leitor, bloqueado. A tela Usuários continua gravando também os campos antigos (papel, modulos).
+// Só vale o acesso por módulo: cadastro sem o campo acesso não tem acesso a nenhum módulo. Do cadastro antigo ficam
+// só papel (qualquer perfil = ativo; 'bloqueado' = sem acesso nenhum) e 'gestao' em modulos (= com as Fichas).
+// Áreas: area (líder e supervisor) e area2 (só supervisor), conforme o perfil do módulo.
 // A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -34,22 +34,15 @@ service cloud.firestore {
     function perfil() { return get(uref()).data; }
     function ativo() { return hasProfile() && perfil().papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']; }
     // ---- Acesso por módulo ----
-    function nvU(u) { return 'acesso' in u; }                                       // cadastro já no modelo novo
     function pmU(u, m) { return u.get('acesso', {}).get(m, ''); }                    // perfil no módulo ('' = sem acesso)
     function escU(u, e) { return e in u.get('escopos', []); }
-    function adminU(u) { return u.papel == 'admin' || (u.papel != 'bloqueado' && nvU(u) && pmU(u, 'administracao') == 'admin'); }
-    function nv() { return nvU(perfil()); }
+    function adminU(u) { return u.papel != 'bloqueado' && pmU(u, 'administracao') == 'admin'; }
+    function fichasU(u) { return 'gestao' in u.get('modulos', []); }                // Gestão com as Fichas de acompanhamento
     function pEm(m) { return pmU(perfil(), m); }
     function esc(e) { return escU(perfil(), e); }
-    // Pátio → módulo antigo 'operacao'; Bateria → 'bateria' (para a regra de antes).
-    function modDe(e) { return e == 'patio' ? 'operacao' : e; }
     function admin() { return hasProfile() && adminU(perfil()); }
-    function gestor() { return hasProfile() && perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider']; }   // quem aponta (antigo)
-    function todasAreas() { return hasProfile() && perfil().papel in ['gestor', 'coordenador']; }
-    function minhaArea(area) { return perfil().get('area', '') == area || (perfil().papel == 'supervisor' && perfil().get('area2', '') == area); }
     // Área no perfil de um módulo: líder 1 área; supervisor também a 2ª; gestor e coordenador todas.
     function areaEm(p, area) { return p in ['gestor', 'coordenador'] || (p in ['supervisor', 'lider'] && (perfil().get('area', '') == area || (p == 'supervisor' && perfil().get('area2', '') == area))); }
-    function mods() { return perfil().get('modulos', ['operacao']); }
     // Administração dos módulos: administrador; ou 'Dos módulos' sendo Gestor (Gestão) no escopo — Equipamentos aceita
     // também o Gestor da Operação; as Fichas pedem a Gestão com as Fichas.
     function admModNovo(m) {
@@ -57,52 +50,47 @@ service cloud.firestore {
         (m == 'operacao' && pEm('gestao') == 'gestor' && esc('patio'))
         || (m == 'bateria' && pEm('gestao') == 'gestor' && esc('bateria'))
         || (m == 'equipamentos' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor') && esc('equipamentos'))
-        || (m == 'gestao' && pEm('gestao') == 'gestor' && 'gestao' in mods()));
+        || (m == 'gestao' && pEm('gestao') == 'gestor' && fichasU(perfil())));
     }
-    function admMod(m) { return admin() || (ativo() && (nv() ? admModNovo(m) : (acOp() && perfil().papel == 'gestor' && m in mods()))); }   // administração do módulo
-    // Acessos antigos (portas de entrada): operacao (padrão de quem não tem o campo), administrativo.
-    function acessos() { return perfil().get('acessos', ['operacao']); }
-    function acOp() { return admin() || 'operacao' in acessos() || 'administrativo' in acessos(); }
+    function admMod(m) { return admin() || (ativo() && admModNovo(m)); }   // administração do módulo
     // RH: Frequência e férias (ler) e quem grava (Administrativo).
-    function acAdm() { return ativo() && (admin() || (nv() ? pEm('rh') != '' : (perfil().papel == 'administrativo' || 'frequencia' in mods() || 'administrativo' in acessos()))); }
-    function admEdita() { return acAdm() && (admin() || (nv() ? pEm('rh') == 'administrativo' : perfil().papel != 'leitor')); }
+    function acAdm() { return ativo() && (admin() || pEm('rh') != ''); }
+    function admEdita() { return acAdm() && (admin() || pEm('rh') == 'administrativo'); }
     // Lê as Atividades de um conjunto (e = patio | bateria): Operação ou Gestão com o escopo.
-    function lePB(e) { return ativo() && (admin() || (nv() ? ((pEm('operacao') != '' || pEm('gestao') != '') && esc(e)) : (acOp() && modDe(e) in mods()))); }
+    function lePB(e) { return ativo() && (admin() || ((pEm('operacao') != '' || pEm('gestao') != '') && esc(e))); }
     function op() { return lePB('patio'); }        // Atividades Pátio
     function ba() { return lePB('bateria'); }      // Atividades Bateria
     function ge() { return hasProfile() && geU(perfil()); }          // Fichas (Gestão)
     // Equipamentos: ler = escopo Equipamentos com Operação ou Gestão; gravar = Operação (líder a gestor).
-    function eqm() { return ativo() && (admin() || (nv() ? ((pEm('operacao') != '' || pEm('gestao') != '') && esc('equipamentos')) : (acOp() && 'equipamentos' in mods()))); }
-    function eqEdita() { return eqm() && (admin() || (nv() ? pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] : perfil().papel in ['gestor', 'coordenador', 'supervisor', 'lider'])); }
+    function eqm() { return ativo() && (admin() || ((pEm('operacao') != '' || pEm('gestao') != '') && esc('equipamentos'))); }
+    function eqEdita() { return eqm() && (admin() || pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
     // Avaliação mensal (fica na Gestão): também quem lança pela Gestão.
-    function eqAvalEdita() { return eqEdita() || (eqm() && nv() && pEm('gestao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
+    function eqAvalEdita() { return eqEdita() || (eqm() && pEm('gestao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
     function geEdita() { return hasProfile() && geEditaU(perfil()); }
     // Aponta e lança a presença na área (Operação · líder a gestor, com o escopo).
-    function apontaDa(area, e) { return nv() ? (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] && areaEm(pEm('operacao'), area))
-      : (gestor() && acOp() && modDe(e) in mods() && (todasAreas() || minhaArea(area))); }
+    function apontaDa(area, e) { return ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] && areaEm(pEm('operacao'), area); }
     function gestorDa(area) { return apontaDa(area, 'patio'); }
     function gestorDaB(area) { return apontaDa(area, 'bateria'); }
     // Atividade fora da programação (campo fp da semana): só coordenador e supervisor da área (e o administrador).
-    function criaFora(area, e) { return apontaDa(area, e) && (nv() ? pEm('operacao') in ['coordenador', 'supervisor'] : perfil().papel in ['coordenador', 'supervisor']); }
+    function criaFora(area, e) { return apontaDa(area, e) && pEm('operacao') in ['coordenador', 'supervisor']; }
     function criaForaDa(area) { return criaFora(area, 'patio'); }
     function criaForaDaB(area) { return criaFora(area, 'bateria'); }
     // Presença do dia (situacao): quem aponta no conjunto (Operação), o RH (Administrativo) e o administrador.
-    function lancaSit(e) { return admin() || admEdita() || (nv() ? (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']) : (gestor() && modDe(e) in mods() && acOp())); }
+    function lancaSit(e) { return admin() || admEdita() || (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
     // Efetivo por área: administrador, gestor, coordenador, administrativo e somente leitura veem todas as áreas;
     // supervisor, as 2 dele; líder, a dele; quem tem o escopo Equipamentos, também os operadores.
     function todasFichas() { return hasProfile() && todasFichasU(perfil()); }
     function minhaFicha(area) { return hasProfile() && minhaFichaU(perfil(), area); }
     // As mesmas contas, recebendo o perfil já lido (u): cada regra lê o perfil uma vez só e fica dentro do limite
-    // de expressões do Firestore. No modelo novo, vale o perfil da Gestão e as Fichas (gestao em modulos).
-    function pgU(u) { return adminU(u) ? 'admin' : (nvU(u) ? pmU(u, 'gestao') : u.papel); }   // perfil nas fichas
+    // de expressões do Firestore. Vale o perfil da Gestão e as Fichas (gestao em modulos).
+    function pgU(u) { return adminU(u) ? 'admin' : pmU(u, 'gestao'); }   // perfil nas fichas
     function geU(u) { return u.papel in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']
-      && (adminU(u) || (nvU(u) ? (pmU(u, 'gestao') != '' && 'gestao' in u.get('modulos', [])) : ('operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao'])))); }
+      && (adminU(u) || (pmU(u, 'gestao') != '' && fichasU(u))); }
     function geEditaU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo']; }
     function todasFichasU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor']; }
     function minhaAreaU(u, area) { return u.get('area', '') == area || (pgU(u) == 'supervisor' && u.get('area2', '') == area); }
-    function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && (nvU(u) ? escU(u, 'equipamentos') : 'equipamentos' in u.get('modulos', ['operacao'])))); }
-    function admGestaoU(u) { return adminU(u) || (nvU(u) ? (pmU(u, 'administracao') == 'modulo' && pmU(u, 'gestao') == 'gestor' && 'gestao' in u.get('modulos', []))
-      : (u.papel == 'gestor' && 'operacao' in u.get('acessos', ['operacao']) && 'gestao' in u.get('modulos', ['operacao']))); }
+    function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && escU(u, 'equipamentos'))); }
+    function admGestaoU(u) { return adminU(u) || (pmU(u, 'administracao') == 'modulo' && pmU(u, 'gestao') == 'gestor' && fichasU(u)); }
     function veOcorrU(u, o) { return todasFichasU(u) || (geU(u) && (minhaFichaU(u, o.area) || o.criadoPor == request.auth.uid || o.recolhe == u.get('nomeUp', '#'))); }
     // Perfil no módulo (para Segurança e para os testes): null/'' = sem acesso.
     function perfilEm(mod) { return pEm(mod); }
@@ -184,12 +172,11 @@ service cloud.firestore {
 
     // Aprovação dos apontamentos: o supervisor da área aprova ou devolve o que foi apontado; o administrador é a reserva.
     // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
-    function aprova(area, e) { return (apontaDa(area, e) && (nv() ? pEm('operacao') == 'supervisor' : perfil().papel == 'supervisor')) || admin(); }
+    function aprova(area, e) { return (apontaDa(area, e) && pEm('operacao') == 'supervisor') || admin(); }
     function aprovaDa(area) { return aprova(area, 'patio'); }
     // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também. Pela Operação
     // ou pela Gestão (a tela Causas e ações fica na Gestão).
-    function acompanha(area, e) { return admin() || (nv() ? (ativo() && esc(e) && ((pEm('operacao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('operacao'), area)) || (pEm('gestao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('gestao'), area))))
-      : (apontaDa(area, e) && perfil().papel in ['gestor', 'coordenador', 'supervisor'])); }
+    function acompanha(area, e) { return admin() || (ativo() && esc(e) && ((pEm('operacao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('operacao'), area)) || (pEm('gestao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('gestao'), area)))); }
     function acompanhaDa(area) { return acompanha(area, 'patio'); }
     match /aprov/{id} {
       allow read: if op();
@@ -199,7 +186,7 @@ service cloud.firestore {
 
     // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
     function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
-    function acaoTodas(e) { return admin() || (nv() ? (ativo() && esc(e) && (pEm('operacao') in ['gestor', 'coordenador'] || pEm('gestao') in ['gestor', 'coordenador'])) : (todasAreas() && acOp() && modDe(e) in mods())); }
+    function acaoTodas(e) { return admin() || (ativo() && esc(e) && (pEm('operacao') in ['gestor', 'coordenador'] || pEm('gestao') in ['gestor', 'coordenador'])); }
     function acaoPode(area, m) { return area == 'TODAS' ? acaoTodas(m == 'operacao' ? 'patio' : 'bateria') : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
     match /acoes/{id} {
       allow read: if op();
@@ -395,7 +382,7 @@ service cloud.firestore {
     // Escala de turno (regimes, turmas e feriados) usada por todos os módulos. Todos leem; administrador e gestor alteram.
     match /config/escalas {
       allow read: if ativo();
-      allow write: if admin() || (ativo() && (nv() ? (pEm('administracao') == 'modulo' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor')) : perfil().papel == 'gestor'));
+      allow write: if admin() || (ativo() && pEm('administracao') == 'modulo' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor'));
     }
 
     // Abas que cada perfil vê (tela Perfis e permissões). Todos leem; só o administrador muda.
@@ -456,13 +443,13 @@ service cloud.firestore {
     // corrige o próprio registro por 24 h (a anomalia, só enquanto aberta). Apagar = administrador. As fotos (segfotos)
     // levam o autor e o conjunto do registro e seguem as mesmas regras de leitura.
     function segP() { return pEm('seguranca'); }
-    function segRegistra() { return admin() || (ativo() && nv() && segP() in ['registra', 'trata', 'gestor']); }
-    function segTudo() { return admin() || (ativo() && nv() && segP() in ['trata', 'gestor', 'leitor']); }
-    function segTrata() { return admin() || (ativo() && nv() && segP() in ['trata', 'gestor']); }
+    function segRegistra() { return admin() || (ativo() && segP() in ['registra', 'trata', 'gestor']); }
+    function segTudo() { return admin() || (ativo() && segP() in ['trata', 'gestor', 'leitor']); }
+    function segTrata() { return admin() || (ativo() && segP() in ['trata', 'gestor']); }
     function areasDoConj(conj) { return conj == 'patio' ? ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] : ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ']; }
     function supSeg(conj) {
       return conj in ['patio', 'bateria'] && ativo()
-        && (nv() ? (pEm('operacao') == 'supervisor' && esc(conj)) : (perfil().papel == 'supervisor' && acOp() && modDe(conj) in mods()))
+        && pEm('operacao') == 'supervisor' && esc(conj)
         && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj));
     }
     function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj); }
@@ -537,7 +524,7 @@ service cloud.firestore {
     // Administração 'Dos módulos' de quem é Gestor da Segurança alteram.
     match /config/seguranca {
       allow read: if ativo();
-      allow write: if admin() || (ativo() && nv() && pEm('administracao') == 'modulo' && segP() == 'gestor');
+      allow write: if admin() || (ativo() && pEm('administracao') == 'modulo' && segP() == 'gestor');
     }
 
     // Painel Coqueria (repositório Gest-o-Eduardo, gestao-eduardo.web.app): espaço pessoal de cada usuário ativo (tarefas, Medição, Queda Zero).

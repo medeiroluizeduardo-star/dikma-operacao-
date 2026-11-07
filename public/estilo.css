@@ -960,7 +960,6 @@ td.uacts .btn+.btn{margin-left:4px}
 .acm .acfi{grid-column:1/-1;align-items:center;gap:8px}
 .acm .acfi input{width:16px;height:16px;margin:0}
 .acres{line-height:1.45}
-.acaviso{color:var(--st-atr)}
 .sheet:has(.acf){width:min(600px,100%)}
 .sheet .acf .ur.r2{grid-template-columns:minmax(0,1fr)}
 .selos{display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:360px}
