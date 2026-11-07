@@ -82,7 +82,7 @@ Para ver sem configurar nada, abra `index.html?demo` depois de publicado. Esse m
 - As fichas ficam divididas por área de atuação (`gcolab/{ÁREA}`): cada área das Atividades, **Operação de equipamentos** e **GERAL** (sem área no sistema: Coqueria sem rota, Alto Forno, Sinter, Sede…). Ocorrências e assinaturas guardam a mesma área.
 - **Quem vê:** administrador, gestor, coordenador e somente leitura (com o Efetivo) veem todas as áreas. Supervisor vê as 2 áreas dele; líder, a área dele. Quem tem a Operação de equipamentos também vê os operadores. Líder e supervisor veem ainda as ocorrências que registraram e as que vão recolher.
 - Quem muda de área leva junto a ficha, as ocorrências e as assinaturas. O sistema reorganiza sozinho quando o administrador abre o Efetivo.
-- Na primeira publicação depois desta mudança, a rotina `integracao/admin/migrar-areas.mjs` dividiu a lista antiga por área.
+- Na primeira publicação depois desta mudança, a rotina `integracao/admin/migrar-areas.mjs` dividiu a lista antiga por área. Desde 07/11/2026 ela não roda mais a cada publicação (já tinha feito tudo); só roda depois de restaurar uma cópia de segurança, para converter cópias antigas.
 
 ## Segurança dos dados
 - **Planilhas originais fora do site.** Os dados das planilhas (`seed*.json`, com nomes, matrículas e ocorrências) **não ficam no repositório** (desde 07/11/2026). Eles estão só no banco (`seeds/`), onde apenas a administração do módulo correspondente lê, e entram na cópia de segurança diária. Os botões de importação continuam iguais. Para atualizar: coloque os arquivos na pasta `dados-importacao/` do seu computador (o Git ignora essa pasta) e rode `integracao/admin/enviar-dados.mjs` com o segredo do Firebase.

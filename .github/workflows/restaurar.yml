@@ -65,6 +65,14 @@ jobs:
           npm install --no-audit --no-fund --prefix integracao/admin
           node integracao/admin/restaurar.mjs
 
+      # Cópias antigas (de antes de 20/10/2026) ainda têm a lista do Efetivo num documento só e o acesso
+      # "Administrativo". Esta rotina converte para o formato atual; com cópia nova, só confere e não faz nada.
+      - name: Converter formato antigo, se a cópia for antiga
+        if: ${{ inputs.aplicar }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node integracao/admin/migrar-areas.mjs
+
       - name: Guardar o estado de antes (para desfazer)
         if: ${{ inputs.aplicar }}
         uses: actions/upload-artifact@v4
