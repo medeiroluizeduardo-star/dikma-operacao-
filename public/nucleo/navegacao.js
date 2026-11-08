@@ -42,8 +42,8 @@ export const VIEWS = [
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
   { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Atividades', mod: 'gestao', req: () => geSets() && (acompanha('gestao') || admDe('ativ')), fora: true, pai: 'prog', filtros: 'a', conj: true },
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'ma', conj: true },
-  { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
-  { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
+  { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
+  { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
   { id: 'gcolab', nome: 'Colaboradores', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ' },
@@ -110,11 +110,11 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
 // Nome no seletor do topo das abas juntas (junto).
-export const NOME_JUNTO = { painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha' };
+export const NOME_JUNTO = { painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
-export const ROTULO_JUNTO = { ind: 'Indicadores de', fotos: 'Fotos', fichas: 'Fichas' };
+export const ROTULO_JUNTO = { ind: 'Indicadores de', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas' };
 export const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
