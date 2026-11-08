@@ -1,4 +1,4 @@
-// Ambiente (demonstração, prévia, Modo TV), banco de dados (DB), data de hoje e utilidades de texto.
+// Ambiente (demonstração, prévia), banco de dados (DB), data de hoje e utilidades de texto.
 // Não depende de nenhuma outra parte da interface: é carregado primeiro.
 import { pad, today, weekOf, monthOfWeek } from '../contas/cal.js';
 
@@ -7,8 +7,6 @@ import { pad, today, weekOf, monthOfWeek } from '../contas/cal.js';
 // Assim a prévia nunca mexe nos dados reais.
 const PREVIA = location.hostname.includes('--');
 export const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
-// Modo TV (?tv): tela cheia para a sala de controle, com cenas que se revezam sozinhas (veja tv.js).
-export const TV = new URLSearchParams(location.search).has('tv');
 // Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
 { const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 export const DB = await import(DEMO ? './data-mock.js' : './data.js');

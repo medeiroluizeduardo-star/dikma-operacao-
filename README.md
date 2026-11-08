@@ -185,7 +185,7 @@ Ao abrir o sistema aparece só a tela de usuário e senha. Depois de entrar, o s
 | Módulo | Abas | Perfis |
 |---|---|---|
 | **Operação** | Meu dia · Apontar · Aprovação · Pendências · Equipamentos (Lançamentos, Equipe e frota, Inspeções) · Efetivo (Presença do dia, Horas extras, Justificativas). Seletor Pátio \| Bateria no topo | líder, supervisor, coordenador, gestor, somente leitura |
-| **Gestão** | Meu dia · Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos · Modo TV | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
+| **Gestão** | Meu dia · Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
 | **Segurança** | Meu dia · Interações · Anomalias (fila com acompanhamento) · Painel · Exportar para o Excel | registra (vê só o que registrou), trata e gestor (veem e tratam tudo), somente leitura; o supervisor da área (Operação · Supervisor) vê e trata as anomalias da área dele |
 | **RH** | Meu dia · Frequência · Férias · Importar planilhas (só Administrativo) · Indicadores e resumo da frequência | administrativo, somente leitura |
 | **Administração** | Visão geral, Conferência, Uso do plano, Escalas e turnos, Rotas, Plano padrão, Gerador, Equipamentos, Tipos de ocorrência, Segurança (listas dos formulários), Importar dados, Usuários e Perfis | Completa (administrador: tudo) ou Dos módulos (as configurações dos módulos em que a pessoa é Gestor) |
@@ -387,7 +387,7 @@ public/
                       limpeza.js, fotos.js e fotos-arquivo.js
   telas/              cada tela: Atividades, Efetivo, Segurança, Relatórios, Administração e fotos,
                       Operação (equip.js), fichas do Efetivo (gestao.js, importar.js),
-                      Frequência e férias (administrativo.js), Meu dia (meudia.js) e modo TV (tv.js)
+                      Frequência e férias (administrativo.js), e Meu dia (meudia.js)
   demo/               dados da demonstração, com nomes e matrículas fictícios
   vendor/             bibliotecas (Firebase 13.2.0, gerado por ferramentas/firebase/gerar.mjs, SheetJS 0.20.3, PptxGenJS, QR code)
   img/                logo da Dikma

@@ -6,7 +6,7 @@
 // A atividade programada (P) e nunca apontada até a data escolhida volta a ser '_' (sem programação) e a semana
 // guarda a marca em dx['atividade|dia'] = data da limpeza. Assim ela deixa de contar como programada, atrasada,
 // pendente e não realizada em TODAS as contas que já existem (Programação, Painel, Pendências, Meu dia, Aprovação,
-// Dimensionamento, Resumos, Modo TV, avisos no celular e o Painel Coqueria), sem precisar ensinar um código novo a
+// Dimensionamento, Resumos, avisos no celular e o Painel Coqueria), sem precisar ensinar um código novo a
 // cada uma delas. Só a Programação olha a marca dx, para mostrar o traço "Dispensada na limpeza".
 import { add, weekOf, monthOfWeek, addMonth } from './cal.js';
 import { inicioAtrasadas } from './hoje.js';

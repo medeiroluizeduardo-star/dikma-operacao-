@@ -19,8 +19,8 @@ import { semFotoPend } from '../telas/fotos.js';
 
 // Criadas por inicio.js (PES, MD) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
 export let PES = null, MD = null, EQ = null, AD = null, GE = null, SG = null;
-// Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), Resumos (RE) e Modo TV (TV).
-let CF = null, RE = null, TVM = null;
+// Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), e Resumos (RE).
+let CF = null, RE = null;
 
 // Pessoas e Meu dia (antes de abrir o link recebido).
 export function criarModulos() {
@@ -47,10 +47,9 @@ const CARGA = {
   SG: () => import('../telas/seguranca.js').then(m => { SG = m.criarSeguranca(); }),
   CF: () => import('../telas/config.js').then(m => { CF = m; }),
   RE: () => import('../telas/relatorios.js').then(m => { RE = m; }),
-  TV: () => import('../telas/tv.js').then(m => { TVM = m; m.iniciarTV(); }),
   GE: () => import('../telas/gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
-const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, TV: () => TVM };
+const pronto = { EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE };
 const pedidos = {};
 // Baixa (uma vez só) o arquivo da tela; quando chega, a tela é redesenhada. Devolve uma promessa.
 export function carregarModulo(k) {
