@@ -1910,3 +1910,4 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .dobra[open]>summary::after{transform:rotate(-135deg);top:24px}
 .dobra>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 @media (max-width:860px){.dobra>summary h2{font-size:17px}}
+.pendrota{margin-bottom:10px}
