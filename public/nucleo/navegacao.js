@@ -65,21 +65,23 @@ export const VIEWS = [
   { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'rh', req: temRH },
   { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'rh', req: temRH },
   // ---- Administração: ajustes de todos os módulos. 'Completa' vê tudo; 'Dos módulos', só os dos módulos em que é Gestor ----
+  // Conferência, Uso do plano e Erros abrem por botões no topo da Visão geral; Gerador de meses, no topo do Plano padrão.
+  // Fotos (regras e arquivo) e Fichas (tipos e importar) ocupam um lugar só no menu, com seletor no topo.
   { id: 'cfgeral', nome: 'Visão geral', ic: 'grade', grp: 'Geral', mod: 'administracao', ord: 1, req: () => isAdmin(), tela: 'CF' },
-  { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'lupa', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin(), tela: 'CF' },
-  { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'medidor', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin(), tela: 'CF' },
-  { id: 'cferros', nome: 'Erros nos aparelhos', ic: 'celular', grp: 'Geral', mod: 'administracao', ord: 1.5, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'lupa', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
+  { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'medidor', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
+  { id: 'cferros', nome: 'Erros nos aparelhos', ic: 'celular', grp: 'Geral', mod: 'administracao', ord: 1.5, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin(), tela: 'CF' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Atividades', mod: 'administracao', ord: 4, req: () => admDe('ativ') },
-  { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Atividades', mod: 'administracao', ord: 5, req: () => admDe('ativ') },
-  { id: 'cffotos', nome: 'Fotos das atividades', ic: 'cam', grp: 'Atividades', mod: 'administracao', ord: 5.5, req: () => isAdmin(), tela: 'CF' },
-  { id: 'cfarqfotos', nome: 'Relatórios e arquivo de fotos', ic: 'arquivo', grp: 'Atividades', mod: 'administracao', ord: 5.6, req: () => isAdmin(), tela: 'CF' },
+  { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Atividades', mod: 'administracao', ord: 5, req: () => admDe('ativ'), fora: true, pai: 'plano' },
+  { id: 'cffotos', nome: 'Fotos das atividades', ic: 'cam', grp: 'Atividades', mod: 'administracao', ord: 5.5, req: () => isAdmin(), tela: 'CF', junto: 'fotos' },
+  { id: 'cfarqfotos', nome: 'Relatórios e arquivo de fotos', ic: 'arquivo', grp: 'Atividades', mod: 'administracao', ord: 5.6, req: () => isAdmin(), tela: 'CF', junto: 'fotos' },
   { id: 'econfig', nome: 'Equipamentos', ic: 'equip', grp: 'Equipamentos', mod: 'administracao', ord: 6, req: () => admDe('equip'), tela: 'EQ' },
-  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'etiqueta', grp: 'Fichas', mod: 'administracao', ord: 7, req: () => admDe('fichas'), tela: 'GE' },
+  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'etiqueta', grp: 'Fichas', mod: 'administracao', ord: 7, req: () => admDe('fichas'), tela: 'GE', junto: 'fichas' },
   { id: 'sgconfig', nome: 'Segurança', ic: 'escudo', grp: 'Segurança', mod: 'administracao', ord: 8.5, req: () => admDe('seg'), tela: 'SG' },
-  { id: 'gimport', nome: 'Importar dados das fichas', ic: 'dl', grp: 'Fichas', mod: 'administracao', ord: 8, req: () => isAdmin(), tela: 'GE' },
+  { id: 'gimport', nome: 'Importar dados das fichas', ic: 'dl', grp: 'Fichas', mod: 'administracao', ord: 8, req: () => isAdmin(), tela: 'GE', junto: 'fichas' },
   { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Acesso', mod: 'administracao', ord: 9, req: () => isAdmin(), tela: 'CF' },
   { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Acesso', mod: 'administracao', ord: 10, req: () => isAdmin(), tela: 'CF' }
 ];
@@ -108,9 +110,11 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
 // Nome no seletor do topo das abas juntas (junto).
-export const NOME_JUNTO = { painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas' };
+export const NOME_JUNTO = { painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha' };
+// Nome do seletor (leitor de tela) de cada grupo de abas juntas.
+export const ROTULO_JUNTO = { ind: 'Indicadores de', fotos: 'Fotos', fichas: 'Fichas' };
 export const nomeCurto = v => (v && (CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
@@ -180,7 +184,7 @@ const BARRA = {
   gestao: () => ['meudia', 'prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
   seguranca: () => ['meudia', 'sganom', 'sginter', 'sgpainel'],
   rh: () => ['meudia', 'afreq', 'aferias', 'fpainel', 'aimport'],
-  administracao: () => ['cfgeral', 'cfconf', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos']
+  administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {
   const menu = abasDoMenu();
