@@ -13,6 +13,11 @@ import { supConjs } from '../contas/segcalc.js';
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
 // junto: abas que ocupam um lugar só no menu (o da primeira que a pessoa vê), com um seletor no topo para trocar entre elas.
 // sup: aba da Segurança que o supervisor da área vê mesmo sem perfil na Segurança (ele trata as anomalias da área).
+// filtros: o que aparece no topo para escolher: m = mês, s = semana, a = área (ex.: 'msa'; sem filtros = nada).
+// conj: a aba depende do conjunto (Pátio ou Bateria) e mostra o seletor no topo para quem tem os dois.
+// mesDados: a aba precisa das semanas do mês carregadas mesmo sem filtro de mês (Aprovação).
+// tela: arquivo que desenha a aba (SG = Segurança, EQ = Equipamentos, GE = fichas, CF = configurações gerais);
+//   sem tela, a aba é das Atividades (ou do RH, que tem o próprio arquivo).
 // As telas de Equipamentos, fichas e Frequência ficam em equip.js, gestao.js e administrativo.js, carregados quando precisa.
 // Pátio e Bateria: o seletor no topo da Operação e da Gestão troca o conjunto (UI.esSet) e mantém a aba.
 const opSets = () => setsDe(ME, 'operacao').length > 0;
@@ -23,36 +28,36 @@ const temRH = () => !!perfil('rh');
 export const VIEWS = [
   { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all', sup: true },
   // ---- Operação: o dia a dia no campo ----
-  { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets },
-  { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao') },
-  { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Atividades', mod: 'operacao', req: opSets },
-  { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'lanc', grp: 'Equipamentos', mod: 'operacao', req: opEq },
-  { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'operacao', req: opEq },
-  { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'capacete', grp: 'Equipamentos', mod: 'operacao', req: opEq },
-  { id: 'esdia', nome: 'Presença do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets },
-  { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets },
-  { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets },
+  { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
+  { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao'), mesDados: true, conj: true },
+  { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Atividades', mod: 'operacao', req: opSets, conj: true },
+  { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'lanc', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ' },
+  { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ' },
+  { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'capacete', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ' },
+  { id: 'esdia', nome: 'Presença do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true },
+  { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true },
+  { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true },
   // ---- Gestão: planejar, acompanhar e analisar ----
-  { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets },
-  { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog' },
-  { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Atividades', mod: 'gestao', req: () => geSets() && (acompanha('gestao') || admDe('ativ')), fora: true, pai: 'prog' },
-  { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets },
-  { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets },
-  { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets },
-  { id: 'gcolab', nome: 'Colaboradores', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME) },
-  { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab' },
-  { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq },
-  { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Equipamentos', mod: 'gestao', req: geEq },
+  { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
+  { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
+  { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Atividades', mod: 'gestao', req: () => geSets() && (acompanha('gestao') || admDe('ativ')), fora: true, pai: 'prog', filtros: 'a', conj: true },
+  { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'ma', conj: true },
+  { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
+  { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
+  { id: 'gcolab', nome: 'Colaboradores', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
+  { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
+  { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ' },
+  { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ' },
   // Indicadores: um lugar só no menu; Atividades | Equipamentos | Fichas no topo da tela.
-  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geSets, junto: 'ind' },
-  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geEq, junto: 'ind' },
-  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), junto: 'ind' },
-  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Acompanhamento', mod: 'gestao', req: () => geSets() || geEq() },
-  { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Acompanhamento', mod: 'gestao', req: geSets },
+  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geSets, junto: 'ind', filtros: 'msa', conj: true },
+  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geEq, junto: 'ind', tela: 'EQ' },
+  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), junto: 'ind', tela: 'GE' },
+  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Acompanhamento', mod: 'gestao', req: () => geSets() || geEq(), filtros: 'msa' },
+  { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Acompanhamento', mod: 'gestao', req: geSets, conj: true },
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
-  { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true },
-  { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true },
-  { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true },
+  { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
   // ---- RH: frequência e férias (administrativo.js) ----
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência e férias', mod: 'rh', req: temRH },
   { id: 'aferias', nome: 'Férias', ic: 'ferias', grp: 'Frequência e férias', mod: 'rh', req: temRH },
@@ -60,23 +65,23 @@ export const VIEWS = [
   { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'rh', req: temRH },
   { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'rh', req: temRH },
   // ---- Administração: ajustes de todos os módulos. 'Completa' vê tudo; 'Dos módulos', só os dos módulos em que é Gestor ----
-  { id: 'cfgeral', nome: 'Visão geral', ic: 'grade', grp: 'Geral', mod: 'administracao', ord: 1, req: () => isAdmin() },
-  { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'lupa', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin() },
-  { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'medidor', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin() },
-  { id: 'cferros', nome: 'Erros nos aparelhos', ic: 'celular', grp: 'Geral', mod: 'administracao', ord: 1.5, req: () => isAdmin() },
-  { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin() },
-  { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala') },
+  { id: 'cfgeral', nome: 'Visão geral', ic: 'grade', grp: 'Geral', mod: 'administracao', ord: 1, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'lupa', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'medidor', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cferros', nome: 'Erros nos aparelhos', ic: 'celular', grp: 'Geral', mod: 'administracao', ord: 1.5, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Atividades', mod: 'administracao', ord: 4, req: () => admDe('ativ') },
   { id: 'gerador', nome: 'Gerador de meses', ic: 'gerador', grp: 'Atividades', mod: 'administracao', ord: 5, req: () => admDe('ativ') },
-  { id: 'cffotos', nome: 'Fotos das atividades', ic: 'cam', grp: 'Atividades', mod: 'administracao', ord: 5.5, req: () => isAdmin() },
-  { id: 'cfarqfotos', nome: 'Relatórios e arquivo de fotos', ic: 'arquivo', grp: 'Atividades', mod: 'administracao', ord: 5.6, req: () => isAdmin() },
-  { id: 'econfig', nome: 'Equipamentos', ic: 'equip', grp: 'Equipamentos', mod: 'administracao', ord: 6, req: () => admDe('equip') },
-  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'etiqueta', grp: 'Fichas', mod: 'administracao', ord: 7, req: () => admDe('fichas') },
-  { id: 'sgconfig', nome: 'Segurança', ic: 'escudo', grp: 'Segurança', mod: 'administracao', ord: 8.5, req: () => admDe('seg') },
-  { id: 'gimport', nome: 'Importar dados das fichas', ic: 'dl', grp: 'Fichas', mod: 'administracao', ord: 8, req: () => isAdmin() },
-  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Acesso', mod: 'administracao', ord: 9, req: () => isAdmin() },
-  { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Acesso', mod: 'administracao', ord: 10, req: () => isAdmin() }
+  { id: 'cffotos', nome: 'Fotos das atividades', ic: 'cam', grp: 'Atividades', mod: 'administracao', ord: 5.5, req: () => isAdmin(), tela: 'CF' },
+  { id: 'cfarqfotos', nome: 'Relatórios e arquivo de fotos', ic: 'arquivo', grp: 'Atividades', mod: 'administracao', ord: 5.6, req: () => isAdmin(), tela: 'CF' },
+  { id: 'econfig', nome: 'Equipamentos', ic: 'equip', grp: 'Equipamentos', mod: 'administracao', ord: 6, req: () => admDe('equip'), tela: 'EQ' },
+  { id: 'gtipos', nome: 'Tipos de ocorrência', ic: 'etiqueta', grp: 'Fichas', mod: 'administracao', ord: 7, req: () => admDe('fichas'), tela: 'GE' },
+  { id: 'sgconfig', nome: 'Segurança', ic: 'escudo', grp: 'Segurança', mod: 'administracao', ord: 8.5, req: () => admDe('seg'), tela: 'SG' },
+  { id: 'gimport', nome: 'Importar dados das fichas', ic: 'dl', grp: 'Fichas', mod: 'administracao', ord: 8, req: () => isAdmin(), tela: 'GE' },
+  { id: 'usuarios', nome: 'Usuários e acessos', ic: 'users', grp: 'Acesso', mod: 'administracao', ord: 9, req: () => isAdmin(), tela: 'CF' },
+  { id: 'perfis', nome: 'Perfis e permissões', ic: 'key', grp: 'Acesso', mod: 'administracao', ord: 10, req: () => isAdmin(), tela: 'CF' }
 ];
 // Subtítulo (topo) das abas de Equipamentos, fichas e Frequência.
 export const SUB_E = {
@@ -164,9 +169,10 @@ export function ensureModulo() {
   const vs = viewsDoModulo();
   if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs.find(v => v.id !== 'meudia' && !v.fora) || vs[0] || { id: MODS[UI.modulo].inicio }).id;
 }
-export const ES_VIEWS = ['esdia', 'esdim', 'esbal', 'eshe', 'esjus'];
-// Abas que dependem do conjunto (Pátio ou Bateria): mostram o seletor no topo para quem tem os dois.
-export const SET_VIEWS = ['apontar', 'aprovar', 'pend', 'esdia', 'eshe', 'esjus', 'prog', 'imprimir', 'etiquetas', 'causas', 'esdim', 'esbal', 'painel', 'tvmodo'];
+// Declaração da aba pelo id (vazio se não existir).
+export const aba = id => VIEWS.find(v => v.id === id) || {};
+// Filtros da aba: { mes, semana, area } (true = aparece no topo).
+export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: f.includes('m'), semana: f.includes('s'), area: f.includes('a') }; };
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais, na ordem de uso. Nome e ícone são os do menu lateral.
 // Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores; Causas fica no "Mais".
 const BARRA = {

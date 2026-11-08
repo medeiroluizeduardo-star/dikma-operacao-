@@ -6,7 +6,7 @@ import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '..
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, SET_VIEWS, barraDe, trocarModulo, abaMarcada, juntasDe, NOME_JUNTO } from '../nucleo/navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, aba, filtrosDe, barraDe, trocarModulo, abaMarcada, juntasDe, NOME_JUNTO } from '../nucleo/navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -18,7 +18,6 @@ import { renderTV } from '../telas/tv.js';
 import { MD, EQ, AD, GE, comModulo } from '../nucleo/modulos.js';
 
 // Telas da Segurança (telas/seguranca.js, carregado sob demanda); sgconfig fica na Administração.
-const SG_VIEWS = ['sginter', 'sganom', 'sgpainel', 'sgconfig'];
 
 export function menuModulos(abrir) {
   UI.modOpen = abrir;
@@ -101,10 +100,6 @@ export function render() {
     const ap = view.querySelector(`[data-ap^="${f.i}|${f.k}|"]`); if (ap) M.pulsar(ap.closest('.act'));
   }
 }
-// Telas de cada arquivo carregado sob demanda: Equipamentos (EQ), fichas (GE) e Frequência (AD).
-const EQ_VIEWS = ['elanc', 'eequipe', 'einsp', 'eaval', 'eanal', 'epainel', 'econfig'];
-const GE_VIEWS = ['gcolab', 'gimpr', 'gpainel', 'gtipos', 'gimport'];
-const CF_VIEWS = ['cfgeral', 'cfconf', 'cfuso', 'cferros', 'cflimpa', 'cfescala', 'cffotos', 'cfarqfotos', 'usuarios', 'perfis'];
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
@@ -113,22 +108,22 @@ function renderTela() {
   if (TV) { renderTV(); return; }
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo, sem recarregar.
   if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
-  const v = UI.view;
+  const v = UI.view, arq = aba(v).tela; // arquivo que desenha a aba (campo tela em VIEWS, navegacao.js)
   const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
   if (v === 'meudia') return tela(MD.view());
-  if (SG_VIEWS.includes(v)) return tela(comModulo('SG', m => m.render(v)));
+  if (arq === 'SG') return tela(comModulo('SG', m => m.render(v)));
   if (v === 'tvmodo') return tela(vModoTV());
   if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? vResumoOutro() : comModulo('AD', m => m.render(v)));
-  if (GE_VIEWS.includes(v)) return tela(comModulo('GE', m => m.render(v)));
-  if (EQ_VIEWS.includes(v)) return tela(comModulo('EQ', m => m.render(v)));
-  if (CF_VIEWS.includes(v)) return tela(vConfigModulo(v));
+  if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
+  if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));
+  if (arq === 'CF') return tela(vConfigModulo(v));
   if (v === 'resumo' && !['ativ', 'he'].includes(resTipo())) return tela(vResumoOutro());
   // Atividades (Pátio ou Bateria): Operação, Gestão e as configurações de rotas, plano e gerador.
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', vImportar()); return; }
   ensurePeriod();
   renderNav(); renderTop();
-  const needWeeks = ['painel', 'prog', 'apontar', 'aprovar', 'esdia', 'esdim', 'esbal', 'imprimir', 'causas', 'resumo', 'eshe', 'esjus'].includes(v);
+  const needWeeks = filtrosDe(v).mes || !!aba(v).mesDados;
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
   pintar('view', fn ? fn() : MD.view());
@@ -223,13 +218,14 @@ function mudarFiltro(id, v) {
 }
 const semanaCurta = ini => { const f = add(ini, 6); return ini === CUR_WEEK ? `Esta semana · ${ini.slice(8)} a ${ddmm(f)}` : `${ini.slice(8)}/${ini.slice(5, 7)} a ${ddmm(f)}`; };
 function filtroCompacto() {
-  const area = ['apontar', 'imprimir'].includes(UI.view) ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
-  const partes = [UI.view === 'etiquetas' ? '' : ['causas', 'eshe', 'esjus'].includes(UI.view) ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
+  const f = filtrosDe(UI.view);
+  const area = !f.area ? '' : myArea() ? (myAreas().length > 1 ? AREA_S[myArea()] : '') : (UI.area === 'TODAS' ? 'Todas as áreas' : AREA_S[UI.area]);
+  const partes = [!f.mes ? '' : !f.semana ? monthLabel(UI.mes) : semanaCurta(UI.ini), area].filter(Boolean);
   return `<button type="button" class="fcomp" data-act="filtros" aria-label="Filtros: ${esc(partes.join(', '))}. Tocar para mudar"><span>${esc(partes.join(' · '))}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>`;
 }
 export function filtroSheet() {
   const L = $('layer');
-  const corpo = () => `${periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' })}`;
+  const corpo = () => periodControls(filtrosDe(UI.view));
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet" role="dialog" aria-modal="true" aria-label="Filtros"><h3>Mostrar</h3><div id="fsCorpo" class="stackcol">${corpo()}</div><button class="btn pri center" data-close>Pronto</button></div></div>`;
   const kd = e => { if (e.key === 'Escape') fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -323,12 +319,12 @@ function renderTop() {
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
-  const comFiltro = ['painel', 'prog', 'esdia', 'esdim', 'esbal', 'imprimir', 'apontar', 'causas', 'resumo', 'etiquetas', 'eshe', 'esjus'].includes(UI.view);
+  const comFiltro = !!v.filtros; // filtros declarados na aba (VIEWS, navegacao.js)
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
-  else if (comFiltro) ctr = periodControls({ area: !['apontar', 'imprimir'].includes(UI.view), semana: !['causas', 'etiquetas', 'eshe', 'esjus'].includes(UI.view), mes: UI.view !== 'etiquetas' });
+  else if (comFiltro) ctr = periodControls(filtrosDe(v.id));
   // Seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular: troca o conjunto e fica na mesma aba.
   const ss = setsDe(ME, UI.modulo);
-  if (SET_VIEWS.includes(v.id) && (v.id !== 'resumo' || ['ativ', 'he'].includes(resTipo())) && ss.length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${ss.map(k => `<button type="button" role="tab" data-atset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
+  if (v.conj && ss.length > 1) ctr = `<div class="seg setsw" role="tablist" aria-label="Conjunto de atividades">${ss.map(k => `<button type="button" role="tab" data-atset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` + ctr;
   pintarTopo(v.nome, sub, seletorJuntas(v) + ctr + atalhosDe(v));
 }
 // Abas juntas (Indicadores): Atividades | Equipamentos | Fichas no topo, só com as que a pessoa vê.
