@@ -2,7 +2,7 @@
 import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
 import * as M from './movimento.js';
 import { semAcento, filtrarLista } from './busca.js';
-import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
+import { DEMO, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
@@ -14,7 +14,7 @@ import { fecharSitPop, vEsDim, vEsBal, vEsDia } from '../telas/efetivo.js';
 import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
 import { problemaSenha } from '../contas/senha.js';
 import { MD, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
-// Resumos (relatorios.js), configurações (config.js) e Modo TV (tv.js) chegam só quando abertos (modulos.js: RE, CF, TV).
+// Resumos (relatorios.js) e configurações (config.js) chegam só quando abertos (modulos.js: RE, CF).
 const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
 const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
 const comCF = fn => () => comModulo('CF', fn);
@@ -105,16 +105,14 @@ export function render() {
 function renderTela() {
   if (AUTH.status !== 'ready') return renderGate();
   $('gate').hidden = true; $('shell').hidden = false;
-  { const antes = UI.modulo + '|' + UI.view; ensureModulo(); if (antes !== UI.modulo + '|' + UI.view && !TV) gravarUI(); } // levou para outro lugar: guarda no aparelho
+  { const antes = UI.modulo + '|' + UI.view; ensureModulo(); if (antes !== UI.modulo + '|' + UI.view) gravarUI(); } // levou para outro lugar: guarda no aparelho
   aplicarSet(); rebuild();
-  if (TV) { const m = modulo('TV'); if (m) m.renderTV(); else pintar('view', M.ESQUELETO); return; }
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo, sem recarregar.
   if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
   const v = UI.view, arq = aba(v).tela; // arquivo que desenha a aba (campo tela em VIEWS, navegacao.js)
   const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
   if (v === 'meudia') return tela(MD.view());
   if (arq === 'SG') return tela(comModulo('SG', m => m.render(v)));
-  if (v === 'tvmodo') return tela(vModoTV());
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? modulo('RE').vResumoOutro() : comModulo('AD', m => m.render(v)));
@@ -132,13 +130,6 @@ function renderTela() {
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: () => modulo('RE').vResumo(), etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: comCF(m => m.vPlano()), gerador: comCF(m => m.vGerador()), config: comCF(m => m.vConfig()), esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
   pintar('view', fn ? fn() : MD.view());
   afterRender();
-}
-// Modo TV: tela cheia para a sala de controle, numa janela nova (o link pode ficar salvo na TV).
-function vModoTV() {
-  const url = `?tv${DEMO ? '&demo' : ''}`;
-  return `<div class="card"><header><h2>Modo TV</h2><p>Tela cheia para a sala de controle: as cenas (hoje, rotas, semana, efetivo, equipamentos, atenção e causas) se revezam sozinhas.</p></header><div class="body stackcol">
-    <p class="muted small m0">Abra numa janela nova e deixe na TV. Dentro do Modo TV, a engrenagem escolhe as cenas, a área e o tempo de cada cena, e copia o link já configurado.</p>
-    <div class="row-gap"><a class="btn pri" href="${url}" target="_blank" rel="noopener">${I.tv} Abrir o Modo TV</a></div></div></div>`;
 }
 let raf = 0;
 // Atualizações de dados chegam em rajadas (várias coleções de uma vez): junta tudo num só desenho.
@@ -316,7 +307,6 @@ function renderTop() {
   }
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id]); return; }
-  if (v.id === 'tvmodo') { pintarTopo(v.nome, 'Indicadores na tela da sala de controle'); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', AD ? AD.topo(v.id) : ''); return; }

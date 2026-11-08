@@ -2,7 +2,7 @@
 import { SETS, AREA_S, DAYS, DL, MOTIVOS, pd, add, ddmm, weeksOfMonth, weekOf, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import * as M from '../ui/movimento.js';
-import { DEMO, TV, DB, TODAY, CUR_WEEK, CUR_MONTH, framed, esc, pct, title, fmtAt, n0, $ } from '../nucleo/base.js';
+import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, fmtAt, n0, $ } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, tipos, isAdmin, podeItem, todasAreas, myAreas, myArea, areaScope, canEdit, selMinhaArea } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
@@ -18,12 +18,7 @@ import { abre } from '../ui/dobra.js';
 
 
 /* ---------------- PAINEL ---------------- */
-let tvT = 0;
-function tvGirar() {
-  clearTimeout(tvT); if (DB.marcarUso) DB.marcarUso(); // a TV fica ligada o dia todo: conta como uso tvT = setTimeout(() => { if (AUTH.status === 'ready' && UI.view === 'painel' && !myArea()) { const l = ['TODAS', ...AREAS]; UI.area = l[(l.indexOf(UI.area) + 1) % l.length]; render(); } tvGirar(); }, 30000);
-}
 export function vPainel() {
-  if (TV) { UI.escopo = 'semana'; if (UI.ini !== CUR_WEEK) { UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; } if (!tvT) tvGirar(); }
   const area = areaScope();
   const scope = UI.escopo === 'semana' ? { ini: UI.ini, area } : { mes: UI.mes, area };
   const docs = docsFor(scope); const s = stats(docs);
@@ -32,9 +27,7 @@ export function vPainel() {
   const sAnt = stats(docsFor(UI.escopo === 'semana' ? { ini: add(UI.ini, -7), area } : { mes: addMonth(UI.mes, -1), area })); const efAnt = sAnt.progHoje ? pct(sAnt.Rhoje, sAnt.progHoje) : null;
   const difEf = efAnt == null || !s.progHoje ? '' : `<small class="dif ${ef >= efAnt ? 'up' : 'down'}" title="${UI.escopo === 'semana' ? 'Semana' : 'Mês'} anterior: ${efAnt}%">${ef === efAnt ? '=' : ef > efAnt ? '▲ ' + (ef - efAnt) : '▼ ' + (efAnt - ef)} pts</small>`;
   const seg = `<div class="filters" role="group" aria-label="Período"><button class="btn ${UI.escopo === 'semana' ? 'dark' : ''}" data-esc="semana">Semana</button><button class="btn ${UI.escopo === 'mes' ? 'dark' : ''}" data-esc="mes">Mês inteiro</button></div>`;
-  const hm = new Date().toTimeString().slice(0, 5);
-  let h = TV ? `<div class="tvhead"><b>${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]}</b><span>${SETS[SK].nome} · ${weekLabel(UI.ini)} · atualizado às ${hm}</span><a class="btn sm ghost" href="${location.pathname}${DEMO ? '?demo' : ''}">Sair do modo TV</a></div>`
-    : `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span>${!framed && !isMobile() ? `<a class="btn sm ghost" href="${location.pathname}?tv${DEMO ? '&demo' : ''}" target="_blank" rel="noopener" title="Painel em tela cheia, trocando de área sozinho (sala de controle)">Modo TV</a>` : ''}</div>`;
+  let h = `<div class="row-between">${seg}<span class="muted">${UI.escopo === 'semana' ? weekLabel(UI.ini) : monthLabel(UI.mes)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span></div>`;
   if (!docs.length) return h + '<div class="card"><div class="empty">Nenhuma programação gerada para este período.</div></div>';
   {
     const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(d => d.id)); // só o período que o Painel mostra

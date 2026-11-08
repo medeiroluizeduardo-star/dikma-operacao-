@@ -53,7 +53,6 @@ export const VIEWS = [
   { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geEq, junto: 'ind', tela: 'EQ' },
   { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), junto: 'ind', tela: 'GE' },
   { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Acompanhamento', mod: 'gestao', req: () => geSets() || geEq(), filtros: 'msa' },
-  { id: 'tvmodo', nome: 'Modo TV', ic: 'tv', grp: 'Acompanhamento', mod: 'gestao', req: geSets, conj: true },
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },

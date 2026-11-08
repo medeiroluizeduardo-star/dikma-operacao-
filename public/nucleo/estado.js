@@ -6,7 +6,7 @@ import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm } from '
 import { podeItemU } from '../contas/permissoes.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg } from '../contas/segcalc.js';
-import { TV, DB, TODAY, CUR_WEEK, CUR_MONTH } from './base.js';
+import { DB, TODAY, CUR_WEEK, CUR_MONTH } from './base.js';
 
 
 /* ---------------- estado ---------------- */
@@ -42,7 +42,6 @@ try {
 } catch (e) { /* ignora */ }
 // O antigo acesso separado "Administração do sistema" virou o módulo Administração: quem estava nele abre lá.
 try { if (localStorage.getItem('dikma-acesso') === 'sistema') { UI.modulo = 'administracao'; if (!UI.view) UI.view = 'cfgeral'; } localStorage.removeItem('dikma-acesso'); } catch (e) { /* ignora */ }
-if (TV) { document.body.classList.add('tv'); UI.view = 'painel'; UI.modulo = 'gestao'; }
 // Memória das telas de Operação (UI.e), fichas do Efetivo (UI.g) e Frequência (UI.a). Fica aqui, e não nos arquivos
 // dessas telas, porque eles chegam depois (sob demanda) e a busca e o Meu dia já mexem nela antes (ex.: abrir uma ficha).
 UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null };

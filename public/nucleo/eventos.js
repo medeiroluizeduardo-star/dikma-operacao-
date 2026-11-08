@@ -265,7 +265,7 @@ window.addEventListener('pagehide', salvarUI);
 if (DB.marcarUso) ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { if (AUTH.status === 'ready') DB.marcarUso(); }, { passive: true }));
 
 // Virada do dia: TODAY é fixado ao abrir. Quem deixa o sistema aberto de um dia para o outro
-// (Modo TV, celular do líder) passaria a ver a data de ontem; recarrega sozinho quando a data muda,
+// (computador da sala de controle, celular do líder) passaria a ver a data de ontem; recarrega sozinho quando a data muda,
 // desde que ninguém esteja editando nem haja gravação pendente.
 {
   const livre = () => !DB.pendingWrites() && !$('layer').children.length && !(document.activeElement && document.activeElement.matches('input:not([type=checkbox]):not([type=radio]),textarea,select'));
