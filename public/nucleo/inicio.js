@@ -1,13 +1,12 @@
 // Entrada: cria as partes, abre o link recebido (avisos, QR), liga o banco de dados e o service worker.
 import { weekOf, monthOfWeek, setDaArea } from '../contas/cal.js';
 import * as M from '../ui/movimento.js';
-import { DEMO, DB, CUR_WEEK, CUR_MONTH, $ } from './base.js';
+import { DEMO, TV, DB, CUR_WEEK, CUR_MONTH, $ } from './base.js';
 import { AUTH, ME, mudouDados, definirAuth, UI, salvarUI, myArea, aplicarSet, moduloNovo } from './estado.js';
 import { ensureModulo } from './navegacao.js';
 import { toast } from '../ui/janelas.js';
 import { render, schedule, syncPill } from '../ui/shell.js';
-import { iniciarTV } from '../telas/tv.js';
-import { criarModulos, precarregarModulos } from './modulos.js';
+import { criarModulos, precarregarModulos, carregarModulo } from './modulos.js';
 import { enviar as enviarErros } from './erros.js';
 
 criarModulos();
@@ -65,4 +64,4 @@ if ('serviceWorker' in navigator && !DEMO && location.protocol === 'https:') {
   }).catch(() => {});
 }
 
-iniciarTV();
+if (TV) carregarModulo('TV'); // Modo TV (?tv): a tela da TV só é baixada nesse caso

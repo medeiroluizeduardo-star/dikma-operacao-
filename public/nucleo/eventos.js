@@ -16,8 +16,10 @@ import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, fi
 import { apArea, cellMenu, pedirJustificativa, apply } from '../telas/apontar.js';
 import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from '../telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
-import { rascEsc, abasPessoaSheet, rascunhoPerm, problemaSenha, senhaAleatoria, lerAcesso, validarAcesso, resumoAcesso, editarAcessoSheet, textoAcesso } from '../telas/config.js';
-import { MD } from './modulos.js';
+import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
+import { MD, modulo } from './modulos.js';
+// Telas de configuração (config.js): chegam quando a tela é aberta; os botões abaixo só existem nessas telas.
+const CF = () => modulo('CF');
 
 // Botão Voltar (celular e navegador): fecha a janela aberta ou volta para a tela anterior, em vez de sair do sistema.
 let HIST_IGNORA = false;
@@ -73,12 +75,12 @@ document.addEventListener('click', async e => {
   if (d.cfset) { UI.cfSet = d.cfset; salvarUI(); render(); return; }
   if (d.permmod) { UI.permMod = d.permmod; render(); return; }
   // Escalas e turnos (rascunho até salvar)
-  if (d.escdel) { const [k, l] = d.escdel.split('|'); delete rascEsc().regimes[k].turmas[l]; render(); return; }
-  if (d.escper) { const [k, i] = d.escper.split('|'); const r = rascEsc().regimes[k]; const a = [...periodosDe(r)]; a[+i] = a[+i] === 'N' ? 'D' : 'N'; r.periodos = a.join(''); render(); return; }
-  if (d.escadd) { const inp = document.querySelector(`[data-escnova="${d.escadd}"]`); const l = letra(inp && inp.value); if (!l) { toast('Informe a letra da turma (A a Z)'); return; } const tt = rascEsc().regimes[d.escadd].turmas || (rascEsc().regimes[d.escadd].turmas = {}); if (tt[l] !== undefined) { toast('Essa turma já existe'); return; } tt[l] = ''; render(); return; }
-  if (d.escfer) { const dt = $('escFerD').value, ds = $('escFerT').value.trim(); if (!dt) { toast('Informe a data do feriado'); return; } const R = rascEsc(); R.feriados = R.feriados.filter(f => f.data !== dt).concat([{ data: dt, desc: ds || 'Feriado', semOp: true }]); render(); return; }
-  if (d.escferdel) { const R = rascEsc(); R.feriados = R.feriados.filter(f => f.data !== d.escferdel); render(); return; }
-  if (d.escfereq) { const R = rascEsc(); const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data)); R.feriados = R.feriados.concat(eqF.map(f => ({ data: f.data, desc: f.desc, semOp: true }))); render(); toast(`${eqF.length} feriado(s) copiados · salve para valer`); return; }
+  if (d.escdel) { const [k, l] = d.escdel.split('|'); delete CF().rascEsc().regimes[k].turmas[l]; render(); return; }
+  if (d.escper) { const [k, i] = d.escper.split('|'); const r = CF().rascEsc().regimes[k]; const a = [...periodosDe(r)]; a[+i] = a[+i] === 'N' ? 'D' : 'N'; r.periodos = a.join(''); render(); return; }
+  if (d.escadd) { const inp = document.querySelector(`[data-escnova="${d.escadd}"]`); const l = letra(inp && inp.value); if (!l) { toast('Informe a letra da turma (A a Z)'); return; } const tt = CF().rascEsc().regimes[d.escadd].turmas || (CF().rascEsc().regimes[d.escadd].turmas = {}); if (tt[l] !== undefined) { toast('Essa turma já existe'); return; } tt[l] = ''; render(); return; }
+  if (d.escfer) { const dt = $('escFerD').value, ds = $('escFerT').value.trim(); if (!dt) { toast('Informe a data do feriado'); return; } const R = CF().rascEsc(); R.feriados = R.feriados.filter(f => f.data !== dt).concat([{ data: dt, desc: ds || 'Feriado', semOp: true }]); render(); return; }
+  if (d.escferdel) { const R = CF().rascEsc(); R.feriados = R.feriados.filter(f => f.data !== d.escferdel); render(); return; }
+  if (d.escfereq) { const R = CF().rascEsc(); const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data)); R.feriados = R.feriados.concat(eqF.map(f => ({ data: f.data, desc: f.desc, semOp: true }))); render(); toast(`${eqF.length} feriado(s) copiados · salve para valer`); return; }
   if (d.mdAv) { MD.onClick(t); return; }
   if (d.md) {
     const [mod0, view, area, conj] = d.md.split('|');
@@ -155,8 +157,8 @@ document.addEventListener('click', async e => {
       await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
     });
   }
-  if (d.uabas) { abasPessoaSheet(d.uabas); return; }
-  if (d.uacesso) { editarAcessoSheet(d.uacesso); return; }
+  if (d.uabas) { CF().abasPessoaSheet(d.uabas); return; }
+  if (d.uacesso) { CF().editarAcessoSheet(d.uacesso); return; }
   if (d.udel) {
     const u = DB.cache.usuarios.find(x => x.uid === d.udel); if (!u) return;
     if (u.papel === 'admin' && DB.cache.usuarios.filter(x => x.papel === 'admin').length < 2) { toast('Não dá para apagar o único administrador'); return; }
@@ -191,10 +193,10 @@ document.addEventListener('submit', async e => {
       if (!DB.loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado (sem espaço e sem acento).');
       if (senha.length < 8) throw new Error('A senha provisória precisa ter pelo menos 8 caracteres.');
       // Acesso por módulo: grava o modelo novo e os campos antigos tirados dele (gravação dupla da transição).
-      const ac = validarAcesso(lerAcesso('nu'), null);
+      const ac = CF().validarAcesso(CF().lerAcesso('nu'), null);
       UI.busy = true;
       await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, ...ac });
-      DB.log(`Cadastrou o usuário ${login} (${textoAcesso(ac.acesso)})`);
+      DB.log(`Cadastrou o usuário ${login} (${CF().textoAcesso(ac.acesso)})`);
       UI.busy = false; UI.senhaSug = null; UI.nuAcesso = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Copiar dados', async () => {
         // copia endereço, usuário e senha prontos para colar no WhatsApp ou no e-mail
@@ -211,18 +213,18 @@ document.addEventListener('submit', async e => {
 });
 document.addEventListener('change', e => {
   { const t = e.target; const dd = t.dataset || {};
-    if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
-    if (dd.escn) { const [k, f] = dd.escn.split('|'); rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
-    if (dd.esct) { const [k, l] = dd.esct.split('|'); rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
+    if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = CF().rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
+    if (dd.escn) { const [k, f] = dd.escn.split('|'); CF().rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
+    if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
     if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? { ...c, turma: t.value } : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
   if (t.dataset.mdPref) { MD.onChange(t); return; }
   if (t.dataset.permperfil !== undefined) { UI.permPerfil = t.value; render(); return; }
-  if (t.dataset.perm) { const [m, p, id] = t.dataset.perm.split('|'); const R = rascunhoPerm(); (R[m + '|' + p] ||= {})[id] = t.checked; render(); return; }
+  if (t.dataset.perm) { const [m, p, id] = t.dataset.perm.split('|'); const R = CF().rascunhoPerm(); (R[m + '|' + p] ||= {})[id] = t.checked; render(); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
   // Formulário de acesso por módulo (novo usuário e editar acesso): atualiza o resumo de como fica hoje.
-  if (t.dataset.acf) { const px = t.dataset.acf; const st = lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = resumoAcesso(st); return; }
+  if (t.dataset.acf) { const px = t.dataset.acf; const st = CF().lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = CF().resumoAcesso(st); return; }
   // Plano padrão: rota, local, atividade e tipo editáveis na própria linha
   if (t.dataset.prota || t.dataset.pcampo) {
     if (!admDe('ativ')) return;

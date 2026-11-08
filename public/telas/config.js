@@ -9,6 +9,7 @@ import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao
 import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
+import { senhaAleatoria } from '../contas/senha.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
 import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
@@ -417,18 +418,6 @@ export function vPerfis() {
   ${comExc.length ? `<div class="tw"><table><thead><tr><th>Pessoa</th><th>Acesso</th><th>Abas</th></tr></thead><tbody>${comExc.map(u => `<tr><td><b>${esc(title(u.nome))}</b></td><td>${esc(textoAcesso(acessoDe(u).acesso))}</td><td>${celulaAbas(u)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="body"><p class="muted m0">Ninguém com exceção. Todos seguem o padrão do perfil.</p></div>'}</div>`;
 }
 
-// Senha: no mínimo 8 caracteres, sem sequência óbvia e sem o próprio usuário ou nome. Devolve o problema ou ''.
-const SENHAS_OBVIAS = ['12345678', '123456789', '1234567890', '87654321', '11111111', '00000000', 'senha123', 'senha1234', 'password', 'qwertyui', 'qwerty123', 'abc12345', 'abcd1234', 'dikma123', 'dikma1234', 'coqueria', 'arcelor1', 'mudar123', 'trocar123'];
-export function problemaSenha(n, u = ME) {
-  const s = String(n || '');
-  if (s.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.';
-  const b = semAcento(s).toLowerCase();
-  if (/^(.)\1+$/.test(b) || SENHAS_OBVIAS.includes(b) || '0123456789012345678901234567890'.includes(b) || 'abcdefghijklmnopqrstuvwxyz'.includes(b)) return 'Essa senha é fácil de adivinhar. Misture letras e números.';
-  const pessoais = [u && u.login, ...String((u && u.nome) || '').split(/\s+/)].map(x => semAcento(String(x || '')).toLowerCase()).filter(x => x.length >= 4);
-  if (pessoais.some(x => b.includes(x))) return 'A senha não pode conter o seu usuário ou o seu nome.';
-  return '';
-}
-export function senhaAleatoria() { const c = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; const r = crypto.getRandomValues(new Uint32Array(10)); for (const n of r) s += c[n % c.length]; return s; }
 
 /* ---------------- CONFIG ---------------- */
 export function vConfig() {

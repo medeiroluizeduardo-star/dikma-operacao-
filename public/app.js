@@ -13,6 +13,7 @@
 //                       busca nas listas, baixar Excel, animações e o lançamento de presença
 //   telas/              cada tela: atividades, apontar, efetivo, horas extras e justificativas, relatórios, configurações,
 //                       Operação (equip), fichas do Efetivo (gestao, importar), Frequência (administrativo), Meu dia, TV
+//                       Resumos, configurações da Administração e Modo TV só são baixados quando abertos (nucleo/modulos.js).
 // A ordem dos imports abaixo é a ordem em que cada parte fica pronta.
 import './nucleo/base.js';
 import './nucleo/estado.js';
@@ -28,9 +29,6 @@ import './telas/atividades.js';
 import './telas/apontar.js';
 import './telas/efetivo.js';
 import './telas/horas-justificativas.js';
-import './telas/relatorios.js';
-import './telas/config.js';
-import './telas/tv.js';
 import './nucleo/modulos.js';
 import './nucleo/eventos.js';
 import './nucleo/inicio.js';
