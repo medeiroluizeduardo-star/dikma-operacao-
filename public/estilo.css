@@ -403,6 +403,12 @@ td > .in.pin[data-rnome]{min-width:220px;font-weight:600}
 table.perm td.c,table.perm th.c{text-align:center}
 table.perm th.c small{font-weight:400;text-transform:none;letter-spacing:0}
 table.perm tr.grp-row th{background:var(--surface-2);text-align:left;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;padding-top:10px;padding-bottom:10px}
+/* Seletor de módulo numa linha só (5 botões); no celular, um perfil por vez escolhido na lista */
+.seg.permseg{grid-template-columns:repeat(5,minmax(0,1fr))}.seg.permseg button{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.permseg .pm-cu{display:none}
+.permpf{display:none}
+@media (max-width:860px){.seg.permseg{grid-template-columns:repeat(5,auto)}.seg.permseg button{font-size:12px;padding:8px 4px}.permseg .pm-lg{display:none}.permseg .pm-cu{display:inline}
+  .permpf{display:flex;align-items:center;gap:8px}.permpf select{flex:1;min-width:0}
+  table.perm .pa,table.perm .pc:not(.on){display:none}table.perm td.pc,table.perm th.pc{width:76px}}
 .tag-adm{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--ink-2);margin-left:4px;vertical-align:1px}
 .abas-p{display:flex;flex-direction:column;gap:14px;max-height:52vh;overflow:auto;margin:4px 0 12px;padding-right:4px}
 .abas-g{display:flex;flex-direction:column;gap:2px}
