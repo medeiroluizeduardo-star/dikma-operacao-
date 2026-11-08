@@ -231,3 +231,16 @@ test('Segurança: prazo amanhã e prazo vencido avisam só o responsável pelo t
   assert.equal(rodarS(9, { 'sgp1|p1|2026-10-15': HOJE, 'sgpv|p2|2026-10-10': HOJE }).msgs.filter(m => m.tag === 'seguranca').length, 0, 'uma vez por prazo');
   for (const m of r.msgs) assert.ok(!/FULANO|Fulano/.test(m.titulo + m.corpo));
 });
+
+test('perfil por módulo: cada aviso segue o perfil do módulo do assunto, não o cargo antigo (papel)', () => {
+  // Gestor na Gestão e Líder na Operação (o papel antigo grava o maior: gestor).
+  const misto = { papel: 'gestor', nome: 'Duda Mista', area: 'RECEBIMENTO', modulos: [], acesso: { operacao: 'lider', gestao: 'gestor' }, escopos: ['patio'] };
+  // Só Gestão (gestor): não aponta nem aprova na Operação.
+  const soGe = { papel: 'gestor', nome: 'Gil Gestão', area: 'RECEBIMENTO', modulos: [], acesso: { gestao: 'gestor' }, escopos: ['patio'] };
+  const us = { ...usuarios, misto, soGe };
+  const r = planejar({ usuarios: us, avisos: { ...avisos, misto: tok, soGe: tok }, paradas: [], ocorr, sets: { patio: setPatio() }, enviados: {}, agora: new Date(`${HOJE}T15:30:00`), hoje: HOJE });
+  assert.equal(de(r, 'misto', 'atividades').length, 1, 'líder na Operação recebe o lembrete de apontar');
+  assert.equal(de(r, 'soGe', 'atividades').length, 0, 'sem Operação não recebe o lembrete de apontar');
+  const seg = planejar({ usuarios: us, avisos: { ...avisos, misto: tok, soGe: tok }, paradas: [], ocorr, sets: { patio: setPatio() }, enviados: {}, agora: new Date('2026-10-19T07:30:00'), hoje: '2026-10-19' });
+  assert.equal(de(seg, 'soGe', 'semanal').length, 1, 'gestor na Gestão recebe o resumo da semana');
+});
