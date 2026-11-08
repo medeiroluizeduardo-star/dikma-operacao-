@@ -10,6 +10,7 @@ import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js
 import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { senhaAleatoria } from '../contas/senha.js';
+import { cartaoAjustesHE } from './horas-justificativas.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
 import { escala, turmaFicha, turmaDe } from '../calc/presenca.js';
@@ -122,8 +123,8 @@ function vCfConf() {
   if (fichas.length) {
     const fn = new Set(fichas.map(f => nk(f.nome)));
     const semFicha = todos.filter(c => !fn.has(nk(c.nome)));
-    if (semFicha.length) item('warn', 'Nas Atividades sem ficha no RH', 'O nome não bate com nenhuma ficha (apelido, abreviação ou ainda não cadastrado). Corrija em RH › Colaboradores.', semFicha.map(c => title(c.nome)), null);
-    if (DB.areaDaFicha) { const ger = fichas.filter(f => DB.areaDaFicha(f.mat) === 'GERAL'); if (ger.length) item('warn', 'Fichas na área GERAL', 'Não foi possível saber a área de atuação. Só quem vê todas as áreas enxerga essas fichas. Corrija em RH › Colaboradores.', ger.map(f => title(f.nome)), null); }
+    if (semFicha.length) item('warn', 'Nas Atividades sem ficha no RH', 'O nome não bate com nenhuma ficha (apelido, abreviação ou ainda não cadastrado). Corrija em Gestão › Colaboradores.', semFicha.map(c => title(c.nome)), null);
+    if (DB.areaDaFicha) { const ger = fichas.filter(f => DB.areaDaFicha(f.mat) === 'GERAL'); if (ger.length) item('warn', 'Fichas na área GERAL', 'Não foi possível saber a área de atuação. Só quem vê todas as áreas enxerga essas fichas. Corrija em Gestão › Colaboradores.', ger.map(f => title(f.nome)), null); }
   }
   // 4) usuários
   const us = DB.cache.usuarios || [];
@@ -425,7 +426,8 @@ export function vConfig() {
   ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><input class="in pin" data-rnome="${i}" value="${esc(r.rota)}" maxlength="60" aria-label="Nome da rota ${esc(r.rota)}" title="Mudar o nome troca também no plano padrão e nos colaboradores da rota"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
   </tbody></table></div></div>
 
-  <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>`;
+  <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>
+  ${cartaoAjustesHE()}`;
 }
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */

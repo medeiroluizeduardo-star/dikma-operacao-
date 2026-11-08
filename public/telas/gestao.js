@@ -238,7 +238,7 @@ export function criarGestao(X) {
       <div class="fsign"><div><div class="ln"></div>Assinatura do colaborador<br><b>${esc(c.nome)}</b><br>Matrícula: ${c.mat}<br>Data: ____/____/________</div><div><div class="ln"></div>Assinatura do responsável Dikma<br><b>${esc(resp || '')}</b><br>Cargo: ____________________<br>Data: ____/____/________</div></div>
       <p class="small">Em caso de recusa do colaborador em assinar, preencher com duas testemunhas:</p>
       <div class="fsign"><div><div class="ln"></div>Testemunha 1 – nome e matrícula</div><div><div class="ln"></div>Testemunha 2 – nome e matrícula</div></div>
-      <p class="small muted">Via vinculada à ficha ${esc(cfg().codigo || 'FO-RED-COQ-004')}. Depois de assinada, fotografe e registre em Dikma Gestão › Gestão › Assinar › Via em papel.</p></div>`;
+      <p class="small muted">Via vinculada à ficha ${esc(cfg().codigo || 'FO-RED-COQ-004')}. Depois de assinada, fotografe e registre em Dikma Gestão › Gestão › Colaboradores › Assinar › Via em papel.</p></div>`;
   }
   // Impressão: lista de fichas com busca (nome, matrícula, função, área) ao lado do documento.
   // A busca filtra a lista na hora, sem redesenhar a tela (o cursor não sai do campo).
