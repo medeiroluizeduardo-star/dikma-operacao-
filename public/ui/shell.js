@@ -6,7 +6,7 @@ import { DEMO, TV, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '..
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
-import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, aba, filtrosDe, barraDe, trocarModulo, abaMarcada, juntasDe, NOME_JUNTO } from '../nucleo/navegacao.js';
+import { VIEWS, SUB_E, SUB_G, SUB_A, SUB_S, nomeCurto, MODS, viewsDoModulo, abasDoMenu, modsMenu, mesmoItem, subMod, ensureModulo, aba, filtrosDe, barraDe, trocarModulo, abaMarcada, juntasDe, NOME_JUNTO, ROTULO_JUNTO } from '../nucleo/navegacao.js';
 import { senhaField, sheet, formSheet, toast } from './janelas.js';
 import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from '../telas/atividades.js';
 import { vApontar } from '../telas/apontar.js';
@@ -312,7 +312,7 @@ function renderTop() {
   if (UI.modulo === 'administracao') {
     const sub = { ...SUB_ADM, config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, sgconfig: SUB_S.sgconfig }[v.id] || '';
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
-    pintarTopo(v.nome, sub, sw); return;
+    pintarTopo(v.nome, sub, sw + seletorJuntas(v) + atalhosDe(v)); return;
   }
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id]); return; }
@@ -334,14 +334,15 @@ function renderTop() {
 // Abas juntas (Indicadores): Atividades | Equipamentos | Fichas no topo, só com as que a pessoa vê.
 function seletorJuntas(v) {
   const l = juntasDe(v); if (!l.length) return '';
-  return `<div class="seg indsw" role="tablist" aria-label="Indicadores de">${l.map(x => `<button type="button" role="tab" data-go="${x.id}" aria-selected="${x.id === v.id}">${NOME_JUNTO[x.id] || nomeCurto(x)}</button>`).join('')}</div>`;
+  return `<div class="seg indsw" role="tablist" aria-label="${ROTULO_JUNTO[v.junto] || ''}">${l.map(x => `<button type="button" role="tab" data-go="${x.id}" aria-selected="${x.id === v.id}">${NOME_JUNTO[x.id] || nomeCurto(x)}</button>`).join('')}</div>`;
 }
 // Abas fora do menu abrem por botões no topo da aba pai; nelas, um botão volta para a aba pai.
 // Programação: Folha do líder e Etiquetas QR. Colaboradores: Impressão das fichas.
-const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']] };
-const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'] };
+// Administração: Visão geral → Conferência, Uso do plano e Erros; Plano padrão → Gerador de meses.
+const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']],
+  cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
+const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'] };
 function atalhosDe(v) {
-  if (UI.modulo !== 'gestao') return '';
   const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);
   const bt = ATALHOS[v.id] ? ATALHOS[v.id].filter(([id]) => tem(id)) : VOLTA[v.pai] && tem(v.pai) ? [[v.pai, ...VOLTA[v.pai]]] : [];
   return bt.length ? `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>` : '';
