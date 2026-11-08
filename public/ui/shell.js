@@ -12,10 +12,12 @@ import { vPainel, vAprovar, vCausas, vEtiquetas, vProg, vPend, vImprimir } from 
 import { vApontar } from '../telas/apontar.js';
 import { fecharSitPop, vEsDim, vEsBal, vEsDia } from '../telas/efetivo.js';
 import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
-import { resTipo, rConj, vResumoOutro, vResumo } from '../telas/relatorios.js';
-import { vConfigModulo, vPlano, vGerador, vUsuarios, vPerfis, problemaSenha, vConfig, vImportar } from '../telas/config.js';
-import { renderTV } from '../telas/tv.js';
-import { MD, EQ, AD, GE, comModulo } from '../nucleo/modulos.js';
+import { problemaSenha } from '../contas/senha.js';
+import { MD, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
+// Resumos (relatorios.js), configurações (config.js) e Modo TV (tv.js) chegam só quando abertos (modulos.js: RE, CF, TV).
+const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
+const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
+const comCF = fn => () => comModulo('CF', fn);
 
 // Telas da Segurança (telas/seguranca.js, carregado sob demanda); sgconfig fica na Administração.
 
@@ -105,7 +107,7 @@ function renderTela() {
   $('gate').hidden = true; $('shell').hidden = false;
   { const antes = UI.modulo + '|' + UI.view; ensureModulo(); if (antes !== UI.modulo + '|' + UI.view && !TV) gravarUI(); } // levou para outro lugar: guarda no aparelho
   aplicarSet(); rebuild();
-  if (TV) { renderTV(); return; }
+  if (TV) { const m = modulo('TV'); if (m) m.renderTV(); else pintar('view', M.ESQUELETO); return; }
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo, sem recarregar.
   if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
   const v = UI.view, arq = aba(v).tela; // arquivo que desenha a aba (campo tela em VIEWS, navegacao.js)
@@ -113,19 +115,21 @@ function renderTela() {
   if (v === 'meudia') return tela(MD.view());
   if (arq === 'SG') return tela(comModulo('SG', m => m.render(v)));
   if (v === 'tvmodo') return tela(vModoTV());
-  if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? vResumoOutro() : comModulo('AD', m => m.render(v)));
+  // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
+  if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
+  if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? modulo('RE').vResumoOutro() : comModulo('AD', m => m.render(v)));
   if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
   if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));
-  if (arq === 'CF') return tela(vConfigModulo(v));
-  if (v === 'resumo' && !['ativ', 'he'].includes(resTipo())) return tela(vResumoOutro());
+  if (arq === 'CF') return tela(comModulo('CF', m => m.vConfigModulo(v)));
+  if (v === 'resumo' && !['ativ', 'he'].includes(resTipo())) return tela(modulo('RE').vResumoOutro());
   // Atividades (Pátio ou Bateria): Operação, Gestão e as configurações de rotas, plano e gerador.
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
-  if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', vImportar()); return; }
+  if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', comModulo('CF', m => m.vImportar())); return; }
   ensurePeriod();
   renderNav(); renderTop();
   const needWeeks = filtrosDe(v).mes || !!aba(v).mesDados;
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: vResumo, etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: vPlano, gerador: vGerador, config: vConfig, esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: () => modulo('RE').vResumo(), etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: comCF(m => m.vPlano()), gerador: comCF(m => m.vGerador()), config: comCF(m => m.vConfig()), esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
   pintar('view', fn ? fn() : MD.view());
   afterRender();
 }
@@ -348,7 +352,7 @@ export const isMobile = () => matchMedia('(max-width:860px)').matches;
 export function alterarSenhaSheet() {
   formSheet('Alterar minha senha', esc(ME.login || ''), senhaField('asAtual', 'Senha atual', 'current-password') + senhaField('asNova', 'Nova senha (mínimo 8 caracteres, sem o seu nome)', 'new-password') + senhaField('asNova2', 'Repita a nova senha', 'new-password'), 'Salvar', async () => {
     const a = $('asAtual').value, n = $('asNova').value, n2 = $('asNova2').value;
-    { const p = problemaSenha(n); if (p) throw new Error(p); }
+    { const p = problemaSenha(n, ME); if (p) throw new Error(p); }
     if (n !== n2) throw new Error('As duas senhas novas não são iguais.');
     await DB.alterarSenha(a, n); toast('Senha alterada');
   });
