@@ -14,6 +14,7 @@ import { cardAusencias, cardBalanco } from './efetivo.js';
 import { fotosSemana, indicadorFotos, cfgF } from './fotos.js';
 import { fotosDaCel } from '../contas/fotos.js';
 import { agruparAprov } from '../contas/aprovacao.js';
+import { abre } from '../ui/dobra.js';
 
 
 /* ---------------- PAINEL ---------------- */
@@ -313,10 +314,11 @@ export function vPend() {
   h += '<div class="grid2"><div class="stackcol">';
   for (const [key, xs] of lista.slice(0, 12)) {
     const [a, r] = key.split('|'); const ed = canEdit(a);
-    h += `<div class="card"><header><h2>${esc(r)}</h2><p>${AREA_S[a]} · ${xs.length} atrasada${xs.length > 1 ? 's' : ''}</p>${ed ? `<span class="r">${UI.confirm === 'rota:' + key ? `<span class="confirm">Marcar todas como feitas? <button class="btn pri" data-act="rotaok" data-k="${esc(key)}">Confirmar</button><button class="btn" data-act="cancel">Cancelar</button></span>` : `<button class="btn" data-act="askRota" data-k="${esc(key)}">✓ Todas feitas</button>`}</span>` : ''}</header><div class="body"><div class="plist">
+    // Uma rota por seção: no celular começa fechada (só o nome e quantas atrasadas), no computador aberta (ui/dobra.js).
+    h += `<details class="card dobra" data-dobra="pend:${esc(key)}"${abre('pend:' + key)}><summary><h2>${esc(r)}</h2><p>${AREA_S[a]} · ${xs.length} atrasada${xs.length > 1 ? 's' : ''}</p></summary><div class="body">${ed ? `<div class="row-gap pendrota">${UI.confirm === 'rota:' + key ? `<span class="confirm">Marcar todas como feitas? <button class="btn pri" data-act="rotaok" data-k="${esc(key)}">Confirmar</button><button class="btn" data-act="cancel">Cancelar</button></span>` : `<button class="btn" data-act="askRota" data-k="${esc(key)}">✓ Todas feitas</button>`}</div>` : ''}<div class="plist">
     ${xs.slice(0, (UI.pendTodas || []).includes(key) ? xs.length : 6).map(x => { const p = PL.get(x.doc.ids[x.i]); return `<div class="pitem"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${DAYS[x.k]} ${ddmm(x.dt)} · ${esc(p.local)}</div></div>${ed ? `<div class="bt"><button class="ok-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|R" aria-label="Realizada">✓</button><button class="no-btn sm" data-pend="${esc(x.doc.id)}|${x.i}|${x.k}|N" aria-label="Não realizada">✕</button></div>` : ''}</div>`; }).join('')}
     ${xs.length > 6 ? `<div class="pitem"><span class="muted">${(UI.pendTodas || []).includes(key) ? `${xs.length} nesta rota` : `+ ${xs.length - 6} nesta rota`}</span><button class="btn" data-act="pendTodas" data-k="${esc(key)}">${(UI.pendTodas || []).includes(key) ? 'Mostrar menos' : 'Ver todas'}</button></div>` : ''}
-    </div></div></div>`;
+    </div></div></details>`;
   }
   h += '</div>';
   const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) { const key = MOTIVOS.includes(v) ? v : 'Outras justificativas (escritas)'; mot[key] = (mot[key] || 0) + 1; }
