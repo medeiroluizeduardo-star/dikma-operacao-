@@ -1,4 +1,5 @@
 // Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
+import { abre } from '../ui/dobra.js';
 import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, ddmm } from '../contas/cal.js';
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from '../contas/hoje.js';
 import { aprovaPapel, contarPendentes } from '../contas/aprovacao.js';
@@ -189,7 +190,12 @@ export function criarMeuDia(X) {
         ${chips.length ? `<div class="md-chips">${chips.map(t => `<button class="md-chip" data-md="${t.go.join('|')}"><b class="num">${t.n}</b> ${esc(t.t)}</button>`).join('')}</div>` : ''}</div></div>`;
     }
     h += '</div>';
-    h += `<div class="md-grid">${blocos.join('')}${cardAvisos()}</div>`;
+    // Detalhes por área e avisos: no computador, sempre à vista; no celular, ficam num "Ver detalhes" (tela mais curta),
+    // e o que importa agora (Agora e Hoje) aparece primeiro, sem rolar.
+    const grade = `<div class="md-grid">${blocos.join('')}${cardAvisos()}</div>`;
+    h += matchMedia('(max-width:860px)').matches
+      ? `<details class="md-det" data-dobra="mddet"${abre('mddet')}><summary>Detalhes por área e avisos</summary>${grade}</details>`
+      : grade;
     return h;
   }
 

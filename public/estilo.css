@@ -1051,6 +1051,7 @@ details.legdet[open]>summary{margin-bottom:6px}
 .md-task b .num{font-family:var(--f-display);font-size:19px;margin-right:2px}
 .md-task.bad b .num{color:var(--st-nreal)}.md-task.warn b .num{color:var(--st-atr)}
 .md-task small{display:block;color:var(--ink-3);font-size:12px}
+.md-det{margin-top:16px}.md-det>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink-2);padding:12px 14px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface)}.md-det[open]>summary{margin-bottom:4px}
 .md-mais>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:8px 0;border-top:1px solid var(--line-2)}
 .md-ok{color:var(--ink-2)}
 .md-prog{display:grid;gap:6px;width:100%;text-align:left;background:none;border:0;padding:0;color:var(--ink)}
