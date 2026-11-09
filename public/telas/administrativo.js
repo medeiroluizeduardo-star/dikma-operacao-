@@ -1,4 +1,4 @@
-// Dikma Gestão — módulo Frequência e férias (dentro da Operação): Frequência (folha de 16 a 15), Férias e Importar planilhas.
+// Dikma Gestão — módulo RH: Frequência (folha de 16 a 15), Férias, Importar planilhas e Treinamentos e ASO (telas/treinos.js).
 // A presença de quem está nas Atividades é a mesma do Efetivo diário (situacao): o líder marca na Operação,
 // a Frequência vê e corrige aqui. Quem não está nas Atividades (gestão, apoio) fica só na folha (freqcomp).
 // Férias marcadas aqui aparecem sozinhas como FE no Efetivo diário e na folha.
@@ -9,6 +9,7 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
 import { caixaBusca } from '../ui/busca.js';
+import { criarTreinos } from './treinos.js';
 import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from '../contas/situacao.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
@@ -550,7 +551,9 @@ export function criarAdministrativo(X) {
     if (e.target.id === 'aImpArq' && e.target.files[0]) impArquivo(e.target.files[0]);
   });
 
+  const TR = criarTreinos(X, A, pode, opcoesPessoa); // RH › Treinamentos e ASO (telas/treinos.js)
   function renderView(view) {
+    if (view === 'atrein') return TR.view();
     if (view === 'afreq') return vFreq();
     if (view === 'aferias') return vFerias();
     if (view === 'aimport') return vImport();

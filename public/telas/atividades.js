@@ -153,6 +153,13 @@ export function contarCausas(docs, rota) {
   for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p || (rota && p.rota !== rota)) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = d.m[id + '|' + k] || 'Sem justificativa'; const c = m === 'Sem justificativa' ? m : causaDe(m); por[c] = (por[c] || 0) + 1; total++; if (c === OUTRAS) escritas[m] = (escritas[m] || 0) + 1; } });
   return { por, escritas, total };
 }
+// Reincidência: a mesma causa (das listadas, não as escritas) na mesma rota 3 vezes ou mais no período.
+export const REINCIDE = 3;
+export function reincidencias(docs) {
+  const n = new Map();
+  for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = d.m[id + '|' + k]; if (!m || !MOTIVOS.includes(m)) continue; const key = p.area + '|' + p.rota + '|' + m; n.set(key, (n.get(key) || 0) + 1); } });
+  return [...n].filter(([, v]) => v >= REINCIDE).map(([k, v]) => { const [area, rota, causa] = k.split('|'); return { area, rota, causa, n: v }; }).sort((a, b) => b.n - a.n);
+}
 // Quantas vezes a causa apareceu por semana nas 4 semanas antes e depois de uma data (só os meses carregados)
 function efeitoAcao(causa, area, desde) {
   const ini = weekOf(desde.slice(0, 10)); let antes = 0, depois = 0, sa = 0, sd = 0;
@@ -173,6 +180,9 @@ export function vCausas() {
   const abertas = acoes.filter(a => a.status !== 'feita');
   const vencidas = abertas.filter(a => a.prazo && a.prazo < TODAY);
   let h = `<div class="mini"><div><b class="num" style="color:${total ? 'var(--st-nreal)' : 'inherit'}">${total}</b><span>Não realizadas no mês</span></div><div><b class="num">${lista.length}</b><span>Causas diferentes</span></div><div><b class="num">${atrasadas}</b><span>Atrasadas sem apontar</span></div><div><b class="num">${abertas.length}</b><span>Ações abertas</span></div><div><b class="num" style="color:${vencidas.length ? 'var(--st-nreal)' : 'inherit'}">${vencidas.length}</b><span>Ações com prazo vencido</span></div></div>`;
+  // Repetiu na mesma rota: pede uma ação (some quando já há ação aberta para a causa na área).
+  { const rep = reincidencias(docs).filter(r => !abertas.some(a => a.causa === r.causa && (a.area === r.area || a.area === 'TODAS')));
+    if (rep.length) h += `<div class="card"><header><h2>Repetiu ${REINCIDE} vezes ou mais</h2><p>Mesma causa na mesma rota em ${monthLabel(UI.mes)}, ainda sem ação aberta</p></header><div class="tw"><table><thead><tr><th>Causa</th><th>Rota</th><th class="r">Vezes</th><th></th></tr></thead><tbody>${rep.slice(0, 8).map(r => `<tr><td><b>${esc(r.causa)}</b></td><td>${esc(r.rota)} <span class="muted">· ${AREA_S[r.area] || esc(r.area)}</span></td><td class="r num">${r.n}</td><td class="r">${acompanha() ? `<button class="btn ghost link" data-act="novaAcao" data-k="${esc(r.causa)}">${I.plus} Ação</button>` : ''}</td></tr>`).join('')}</tbody></table></div>${rep.length > 8 ? `<p class="muted small body m0">E mais ${rep.length - 8}.</p>` : ''}</div>`; }
   if (!total) h += `<div class="card"><div class="empty">Nenhuma atividade não realizada em ${monthLabel(UI.mes)}${area === 'TODAS' ? '' : ' · ' + AREA_S[area]}.</div></div>`;
   else {
     const top = lista.slice(0, 3).reduce((n, x) => n + x[1], 0);

@@ -11,7 +11,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
@@ -129,7 +129,9 @@ const painel = {};
 // Segurança: anomalias em aberto (aberta ou em tratamento), para a anomalia nova e os prazos do tratamento.
 const segAnom = [];
 for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where('status', '==', st).get()).forEach(x => { const a = x.data(); segAnom.push({ ...a, id: x.id, em: a.em && a.em.toMillis ? a.em.toMillis() : +a.em || 0 }); });
-const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, agora: new Date() });
+// RH: treinamentos, NRs e ASO (só as datas e o tipo entram na conta; o aviso leva só números).
+const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() }));
+const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

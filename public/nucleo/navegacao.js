@@ -56,10 +56,12 @@ export const VIEWS = [
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  { id: 'sgdds', nome: 'DDS', ic: 'users', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
   // ---- RH: frequência e férias (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência e férias', mod: 'rh', req: temRH },
   { id: 'aferias', nome: 'Férias', ic: 'ferias', grp: 'Frequência e férias', mod: 'rh', req: temRH },
+  { id: 'atrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Treinamentos', mod: 'rh', req: temRH },
   { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência e férias', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
   { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'rh', req: temRH },
   { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'rh', req: temRH, fora: true, pai: 'fpainel' },
@@ -70,6 +72,7 @@ export const VIEWS = [
   { id: 'cfconf', nome: 'Conferência do cadastro', ic: 'lupa', grp: 'Geral', mod: 'administracao', ord: 1.2, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   { id: 'cfuso', nome: 'Uso do plano grátis', ic: 'medidor', grp: 'Geral', mod: 'administracao', ord: 1.4, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   { id: 'cferros', nome: 'Erros nos aparelhos', ic: 'celular', grp: 'Geral', mod: 'administracao', ord: 1.5, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
+  { id: 'cfhist', nome: 'Histórico de alterações', ic: 'relogio', grp: 'Geral', mod: 'administracao', ord: 1.55, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
@@ -100,16 +103,18 @@ export const SUB_G = {
 export const SUB_A = {
   afreq: 'Folha de frequência de 16 a 15, por grupo',
   aferias: 'Planejamento, quem está de férias e data limite',
-  aimport: 'Planilhas de frequência e de férias'
+  aimport: 'Planilhas de frequência e de férias',
+  atrein: 'NRs, ASO e outros treinamentos: quem está vencido e quem vence em 30 dias'
 };
 export const SUB_S = {
   sginter: 'Registros de interação: riscos e desvios vistos em campo',
   sganom: 'Fila das anomalias: situação, responsável e prazo',
+  sgdds: 'Diálogo diário de segurança: tema, área e quem participou',
   sgpainel: 'Interações, desvios e anomalias do mês',
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { atrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
@@ -121,8 +126,8 @@ export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nom
 export const MODS = {
   operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos e Efetivo', key: 'operacao', inicio: 'apontar' },
   gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas e Indicadores', key: 'gestao', inicio: 'prog' },
-  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias e indicadores', key: 'seguranca', inicio: 'sganom' },
-  rh: { nome: 'RH', curto: 'RH', sub: 'Frequência, férias e planilhas', key: 'rh', inicio: 'afreq' },
+  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, DDS e indicadores', key: 'seguranca', inicio: 'sganom' },
+  rh: { nome: 'RH', curto: 'RH', sub: 'Frequência, férias e treinamentos', key: 'rh', inicio: 'afreq' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
 // Itens do seletor de módulos: os módulos que a pessoa tem.
@@ -183,8 +188,8 @@ export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: 
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['meudia', 'apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['meudia', 'apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['meudia', 'prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
-  seguranca: () => ['meudia', 'sganom', 'sginter', 'sgpainel'],
-  rh: () => ['meudia', 'afreq', 'aferias', 'fpainel', 'aimport'],
+  seguranca: () => ['meudia', 'sganom', 'sginter', 'sgdds', 'sgpainel'],
+  rh: () => ['meudia', 'afreq', 'aferias', 'atrein', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {

@@ -14,6 +14,7 @@
 //                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
 //                             fe: { "REC-001|0": "Finados" } }     fe = feriado sem operação (a célula fica "_"; feriados.js)
 //   historico/{auto}          { at, uid, nome, t }
+//   treinos/{id}              { mat, nome, setor, tipo, realizado, validade, obs }  treinamentos, NRs e ASO (RH; contas/treinos.js)
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
 //   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
 //                             (área das Atividades, OPERAÇÃO DE EQUIPAMENTOS ou GERAL). Cada um lê só as áreas dele.
@@ -50,6 +51,7 @@
 //   Gravação: semana (s, m, ft) + evidencias + evidenciasArquivo no MESMO writeBatch (apontarComFotos): sem sinal fica tudo
 //   na fila do aparelho e sobe junto — nunca fica apontamento sem foto nem foto sem apontamento.
 //   config/seguranca          { areas[{nome, conj}], tipos[], regimes[], desvios[] }   listas dos formulários da Segurança
+//   segdds/{id}               DDS { data, mes, area, conj, tema, pessoas[], obs, por, porNome, em } (Segurança; telas/dds.js)
 //   seginter/{id}             registro de interação { data, mes, area, conj, local, tipoAtiv, risco, desvios[], desvioOutro,
 //                             desc, acao, resp, mat, fotos[ids], minis[], por, porNome, em }
 //   seganom/{id}              registro de anomalia { data, hora, mes, area, conj, local, regime, desc, conseq, acao, causas,
@@ -310,8 +312,9 @@ export function iniciarAdministracao() {
   admSisOn = true;
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   if (!admOn) {
-    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
     on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
+    on(collection(db, 'treinos'), qs => { cache.adm.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.tLoaded = true; changed(); });
   }
   const comp = competenciaDe(today());
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
@@ -580,6 +583,11 @@ export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permisso
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));
+// Histórico de alterações completo (Administração › Histórico): lido só quando a tela abre.
+export async function historicoLer(n = 500) {
+  const qs = await getDocs(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(n)));
+  return qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date() }; });
+}
 export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
 
 // Feriados sem operação lidos do servidor: Escalas e turnos (config/escalas) e os da Operação (eq/config).
@@ -646,12 +654,13 @@ export async function importar(seed, meses, aPartirDe) {
 //   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
 // ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
 // adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
 const admSubs = new Map();
 function startAdm(on) {
-  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
+  on(collection(db, 'treinos'), qs => { cache.adm.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.tLoaded = true; changed(); });
   on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
@@ -692,6 +701,15 @@ export async function feriasSalvar(id, dados) {
   return ref.id;
 }
 export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); const b = writeBatch(db); b.delete(doc(db, 'ferias', id)); track(b.commit()); gravarResumoFerias(); }
+// Treinamentos, NRs e ASO (RH): um documento por treinamento feito. A conta da situação fica em contas/treinos.js.
+export function treinoSalvar(id, dados) {
+  const ref = id ? doc(db, 'treinos', id) : doc(collection(db, 'treinos'));
+  const i = cache.adm.treinos.findIndex(t => t.id === ref.id);
+  if (i >= 0) cache.adm.treinos[i] = { ...cache.adm.treinos[i], ...dados }; else cache.adm.treinos.push({ id: ref.id, ...dados });
+  track(setDoc(ref, { ...dados, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
+  return ref.id;
+}
+export function treinoExcluir(id) { cache.adm.treinos = cache.adm.treinos.filter(t => t.id !== id); const b = writeBatch(db); b.delete(doc(db, 'treinos', id)); track(b.commit()); }
 // Importação das planilhas (administrador): folhas de frequência, presença de quem está nas Atividades e férias.
 // presenca: { patio: { 'C012|2026-10-03': 'AT' }, bateria: {...} } — só grava os dias que ainda estão vazios no banco.
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
@@ -952,14 +970,14 @@ export async function eImportar(seed) {
 // Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
 // As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
 // dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
-function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 }; }
+function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], dds: [], meses: new Set(), v: 0 }; }
 cache.seg = novoSeg();
 let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
 const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
 function segJuntar() {
-  const inter = {}, anom = {};
-  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : anom; for (const x of l) alvo[x.id] = x; }
-  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom);
+  const inter = {}, anom = {}, dds = {};
+  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segdds') ? dds : anom; for (const x of l) alvo[x.id] = x; }
+  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.dds = Object.values(dds);
   cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
 }
 function segOuvir(key, q) {
@@ -986,7 +1004,7 @@ export function segWatch(meses, inicial) {
   if (!db || !me || !segOn) return;
   for (const m of new Set(meses.filter(Boolean))) {
     if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
-    for (const col of ['seginter', 'seganom']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
+    for (const col of ['seginter', 'seganom', 'segdds']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
   }
 }
 // Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
@@ -1020,6 +1038,9 @@ export function segExcluir(col, r) {
   for (const f of fotosDoReg(r)) b.delete(doc(db, 'segfotos', f));
   return track(b.commit());
 }
+// DDS (diálogo diário de segurança): um documento por DDS, com a lista de quem participou (telas/dds.js).
+export function segDds(dados) { const r = doc(collection(db, 'segdds')); track(setDoc(r, { ...dados, por: me.uid, porNome: me.nome || me.login || '', em: serverTimestamp() })); return r.id; }
+export function segDdsExcluir(id) { const b = writeBatch(db); b.delete(doc(db, 'segdds', id)); return track(b.commit()); }
 export const segSalvarCfg = cfg => track(setDoc(doc(db, 'config', 'seguranca'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 
 // ---------- Limpeza de dados (Administração › Limpeza de dados, só o administrador) ----------

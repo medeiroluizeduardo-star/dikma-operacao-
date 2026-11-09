@@ -564,6 +564,18 @@ test('acesso Administrativo somente leitura: consulta e não altera', async () =
   await assertFails(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-03': 'FT' } }, { merge: true }));
   await assertFails(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
 });
+test('treinamentos, NRs e ASO: o RH Administrativo grava; o leitor do RH só lê; quem não tem RH não vê', async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'treinos', 't1'), { nome: 'PESSOA TESTE', tipo: 'ASO', validade: '2026-12-01' }); });
+  const a = db('admAn');
+  await assertSucceeds(getDocs(collection(a, 'treinos')));
+  await assertSucceeds(setDoc(doc(a, 'treinos', 't2'), { nome: 'OUTRA', tipo: 'NR-35', validade: '2027-01-01' }));
+  await assertFails(setDoc(doc(a, 'treinos', 't3'), { nome: 'SEM TIPO' }));
+  await assertSucceeds(deleteDoc(doc(a, 'treinos', 't2')));
+  await assertSucceeds(getDocs(collection(db('admLeitor'), 'treinos')));
+  await assertFails(setDoc(doc(db('admLeitor'), 'treinos', 't4'), { nome: 'X', tipo: 'ASO' }));
+  await assertFails(deleteDoc(doc(db('admLeitor'), 'treinos', 't1')));
+  await assertFails(getDocs(collection(db('liderRec'), 'treinos')));
+});
 test('acesso: líder com Operação e Administrativo entra nos dois', async () => {
   await assertSucceeds(getDoc(doc(db('liderAmbos'), 'semanas', SEM)));
   await assertSucceeds(getDocs(collection(db('liderAmbos'), 'ferias')));
@@ -813,6 +825,23 @@ test('Segurança: só registra quem tem registra, trata ou gestor, em nome próp
   await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n16'), novaAnom('segReg', { status: 'concluida' })), 'anomalia nasce aberta');
   await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n17'), novaAnom('segReg', { trat: { resp: 'eu' } })), 'quem registra não define o tratamento');
   await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n18'), novaInter('segReg', { extra: 1 })), 'só os campos do formulário');
+});
+test('Segurança · DDS: registra quem registra interações, em nome próprio; lê quem lê a Segurança e o supervisor da área; apaga o administrador', async () => {
+  const novo = (por, extra = {}) => ({ data: '2026-11-02', mes: '2026-11', ...PAT, tema: 'Trabalho em altura', pessoas: ['ANA', 'BRUNO'], obs: '', por, porNome: 'X', em: serverTimestamp(), ...extra });
+  await assertSucceeds(setDoc(doc(db('segReg'), 'segdds', 'd1'), novo('segReg')));
+  await assertSucceeds(setDoc(doc(db('segTrata'), 'segdds', 'd2'), novo('segTrata', BAT)));
+  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd3'), novo('segReg2')), 'não registra em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('segLeitor'), 'segdds', 'd4'), novo('segLeitor')), 'somente leitura não registra');
+  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5'), novo('liderRec')), 'sem a Segurança');
+  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd6'), novo('segReg', { pessoas: [] })), 'precisa de quem participou');
+  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd7'), novo('segReg', { tema: '' })), 'tema obrigatório');
+  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd8'), novo('segReg', { extra: 1 })), 'só os campos do formulário');
+  await assertSucceeds(getDoc(doc(db('segReg'), 'segdds', 'd1')));
+  await assertSucceeds(getDoc(doc(db('segLeitor'), 'segdds', 'd2')));
+  await assertFails(getDoc(doc(db('segReg'), 'segdds', 'd2')), 'quem só registra lê só os próprios');
+  await assertSucceeds(getDocs(query(collection(db('supPatio'), 'segdds'), where('mes', '==', '2026-11'), where('conj', '==', 'patio'))));
+  await assertFails(deleteDoc(doc(db('segReg'), 'segdds', 'd1')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'segdds', 'd1')));
 });
 test('Segurança: registro com fotos num lote só; a foto segue o registro e tem limite de tamanho', async () => {
   const d = db('segReg'); const b = writeBatch(d);
