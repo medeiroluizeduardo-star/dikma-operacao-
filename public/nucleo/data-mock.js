@@ -3,7 +3,7 @@
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
 import { legadoDoAcesso, marcasDe, ehAdminU } from '../contas/acessos.js';
 import { prepararImportacao } from '../contas/planilhas-adm.js';
-import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
+import { veRegSeg, veDds, fotosDoReg } from '../contas/segcalc.js';
 import { aplicarCampos } from '../contas/limpeza.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
@@ -425,7 +425,7 @@ export async function eImportar() { /* a demonstração já começa com a planil
 
 // ---------- Administrativo (demonstração): folhas e férias de exemplo, ligadas às Atividades da demonstração ----------
 const LSA = 'coqueria-demo-adm-v1';
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
 cache.feriasAtivas = []; cache.desligados = []; cache.uso = null;
 let admPronto = false;
 const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
@@ -451,16 +451,7 @@ async function iniciarAdm() {
       cache.adm.ferias = prep.ferias.map((f, i) => ({ id: 'fe' + i, ...f }));
     } catch (e) { admPronto = false; console.warn('Demonstração sem dados do Administrativo', e); } // tenta de novo na próxima entrada
   }
-  // Treinamentos de exemplo: ASO e NR-35 das primeiras pessoas, com validades espalhadas em volta de hoje.
-  if (!cache.adm.treinos.length) {
-    const hoje = today(), ps = (cache.adm.rh || []).filter(c => c.nome).slice(0, 14);
-    const desl = [-40, -5, 6, 18, 25, 60, 120, 200, 300, 15, -12, 90, 400, 33];
-    cache.adm.treinos = ps.flatMap((c, i) => [
-      { id: 'tr' + i + 'a', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'ASO', realizado: add(hoje, desl[i] - 365), validade: add(hoje, desl[i]), obs: '' },
-      ...(i % 2 ? [] : [{ id: 'tr' + i + 'b', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'NR-35', realizado: add(hoje, desl[(i + 5) % 14] - 730), validade: add(hoje, desl[(i + 5) % 14] + 30), obs: '' }])
-    ]);
-  }
-  cache.adm.loaded = cache.adm.fLoaded = cache.adm.tLoaded = true;
+  cache.adm.loaded = cache.adm.fLoaded = true;
   cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino }));
 }
 export function admWatch(conj, comp) { const k = conj + '|' + comp; if (!(k in cache.adm.comps)) cache.adm.comps[k] = null; }
@@ -475,8 +466,23 @@ export async function admSetJus(conj, comp, p, data, val) {
 export async function admSalvarComp(conj, comp, dados) { cache.adm.comps[conj + '|' + comp] = { ...(cache.adm.comps[conj + '|' + comp] || {}), ...dados, conj, competencia: comp }; admCh(); }
 export async function admSalvarGrupos(conj, comp, grupos) { cache.adm.comps[conj + '|' + comp].grupos = grupos; admCh(); }
 export async function feriasSalvar(id, dados) { const nid = id || 'fe' + Date.now().toString(36); const i = cache.adm.ferias.findIndex(f => f.id === nid); if (i >= 0) cache.adm.ferias[i] = { ...cache.adm.ferias[i], ...dados }; else cache.adm.ferias.push({ id: nid, ...dados }); cache.adm.ferias = [...cache.adm.ferias]; admCh(); return nid; }
-export async function treinoSalvar(id, dados) { const nid = id || 'tr' + Date.now().toString(36); const i = cache.adm.treinos.findIndex(t => t.id === nid); if (i >= 0) cache.adm.treinos[i] = { ...cache.adm.treinos[i], ...dados }; else cache.adm.treinos.push({ id: nid, ...dados }); changed(); return nid; }
-export function treinoExcluir(id) { cache.adm.treinos = cache.adm.treinos.filter(t => t.id !== id); changed(); }
+// Treinamentos de exemplo (RH e Segurança): ASO e NR-35 de pessoas fictícias, com validades espalhadas em volta de hoje.
+cache.treinos = []; cache.tLoaded = false;
+function treinosExemplo() {
+  if (cache.tLoaded) return; const hoje = today();
+  let ps = ((cache.g && cache.g.colabs) || []).filter(c => c.nome).slice(0, 14);
+  if (!ps.length) ps = ['ANA SOUZA', 'BRUNO LIMA', 'CARLA DIAS', 'DIEGO REIS', 'EDSON ROCHA', 'FABIO NUNES', 'GABRIEL MOTA', 'HELENA CRUZ', 'IGOR PAIVA', 'JULIA PRADO', 'KAIO MELO', 'LUCAS VAZ', 'MARCOS LIMA', 'NINA ROCHA'].map((nome, i) => ({ nome, mat: String(5000 + i), area: i % 2 ? 'BATERIA' : 'PÁTIO' }));
+  const desl = [-40, -5, 6, 18, 25, 60, 120, 200, 300, 15, -12, 90, 400, 33];
+  cache.treinos = ps.flatMap((c, i) => [
+    { id: 'tr' + i + 'a', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'ASO', realizado: add(hoje, desl[i] - 365), validade: add(hoje, desl[i]), obs: '' },
+    ...(i % 2 ? [] : [{ id: 'tr' + i + 'b', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'NR-35', realizado: add(hoje, desl[(i + 5) % 14] - 730), validade: add(hoje, desl[(i + 5) % 14] + 30), obs: '' }])
+  ]);
+  cache.tLoaded = true;
+}
+export async function treinoSalvar(id, dados) { treinosExemplo(); const nid = id || 'tr' + Date.now().toString(36); const i = cache.treinos.findIndex(t => t.id === nid); if (i >= 0) cache.treinos[i] = { ...cache.treinos[i], ...dados }; else cache.treinos.push({ id: nid, ...dados }); changed(); return nid; }
+export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); changed(); }
+export async function treinosImportar(itens) { treinosExemplo(); itens.forEach((t, i) => cache.treinos.push({ id: 'ti' + Date.now().toString(36) + i, ...t })); changed(); }
+export function treinosCarregar() { treinosExemplo(); }
 export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); admCh(); }
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
   for (const c of comps) cache.adm.comps[c.conj + '|' + c.competencia] = c;
@@ -560,7 +566,7 @@ function ddsExemplo() {
   const ar = [['PREPARAÇÃO', 'patio'], ['RECEBIMENTO', 'patio'], ['BATERIA 1', 'bateria'], ['CDQ', 'bateria']];
   const temas = ['Uso correto de EPI', 'Trabalho em altura', 'Bloqueio e etiquetagem', 'Calor e hidratação', 'Gases e atmosfera da coqueria', 'Movimentação de veículos e pedestres'];
   return [1, 2, 3, 6, 8, 9, 13, 15, 20, 22, 27, 34].map((n, i) => { const data = add(hoje, -n); const [area, conj] = ar[i % 4]; const k = 5 + (i % 6);
-    return { id: 'sd' + i, data, mes: data.slice(0, 7), area, conj, tema: temas[i % temas.length], pessoas: nomes.slice(i % 4, i % 4 + k), obs: '', por: i % 2 ? 'segr' : 'segt', porNome: i % 2 ? 'Técnico de Segurança' : 'Supervisor da Preparação (Segurança)', em: Date.now() - n * 864e5 }; });
+    return { id: 'sd' + i, data, mes: data.slice(0, 7), area, conj, tema: temas[i % temas.length], pessoas: nomes.slice(i % 4, i % 4 + k), humor: nomes.slice(i % 4, i % 4 + k).map((_, j) => 'BNBNCBPN'[(i + j) % 8]), obs: '', por: i % 2 ? 'segr' : 'segt', porNome: i % 2 ? 'Técnico de Segurança' : 'Supervisor da Preparação (Segurança)', em: Date.now() - n * 864e5 }; });
 }
 function iniciarSeg() {
   if (SEG) return;
@@ -573,13 +579,14 @@ Object.defineProperty(cache, 'seg', {
   get: () => {
     if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], dds: [], meses: new Set(), v: 0 };
     const k = segVer + '|' + (me ? me.uid : '');
-    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), dds: (SEG.dds || []).filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), dds: (SEG.dds || []).filter(r => veDds(me, r)), meses: new Set(), v: segVer } };
     return segMemo.v;
   },
   enumerable: false
 });
 const segId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 export function segWatch() { /* tudo já está em memória */ }
+export function ddsWatch() { /* tudo já está em memória */ }
 export function segNovo(col, dados, fotos) {
   const id = segId(col === 'seginter' ? 'si' : 'sa'); const ids = fotos.map(() => segId('sf'));
   fotos.forEach((f, i) => { SEG.fotos[ids[i]] = { reg: id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes }; });

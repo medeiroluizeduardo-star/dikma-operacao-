@@ -1,6 +1,6 @@
 // Dikma Gestão — "Meu dia": tudo o que é da pessoa hoje, de todos os módulos dela, numa tela só.
 import { abre } from '../ui/dobra.js';
-import { resumoTreinos } from '../contas/treinos.js';
+import { resumoTreinos, veTreinos } from '../contas/treinos.js';
 import { SETS, SET_KEYS, AREA_S, SITS, MESES_L, add, today, ddmm } from '../contas/cal.js';
 import { resumoAtividades, paradasAbertas, assinaturasPendentes, operadoresFora } from '../contas/hoje.js';
 import { aprovaPapel, contarPendentes } from '../contas/aprovacao.js';
@@ -70,7 +70,7 @@ export function criarMeuDia(X) {
       (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       X.seg && X.seg() && ['seguranca', X.seg().trata ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
-      P('rh') && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
+      veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
       ehAdm() && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
     ].filter(Boolean);
     let corpo;
@@ -167,9 +167,11 @@ export function criarMeuDia(X) {
     // Segurança: anomalias vencidas, com a pessoa e abertas na área dela (telas/seguranca.js)
     if (X.seg) { const sg = X.seg(); if (sg) { tiles.push(...sg.tiles); if (sg.bloco) blocos.push(sg.bloco); } }
     // RH: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (contas/treinos.js)
-    { const ad = DB.cache.adm; if (P('rh') && ad && ad.tLoaded) { const r = resumoTreinos(ad.treinos, hoje);
-      if (r.vencido) tiles.push({ n: r.vencido, t: r.vencido > 1 ? 'treinamentos ou ASO vencidos' : 'treinamento ou ASO vencido', s: 'NRs, ASO e outros: renovar ou afastar da atividade', tom: 'bad', go: ['rh', 'atrein'], acao: 'Ver' });
-      if (r.vence) tiles.push({ n: r.vence, t: r.vence > 1 ? 'treinamentos ou ASO vencem em 30 dias' : 'treinamento ou ASO vence em 30 dias', s: 'programe a renovação', tom: 'warn', go: ['rh', 'atrein'], acao: 'Ver' }); } }
+    if (veTreinos(ME()) && DB.treinosCarregar) DB.treinosCarregar();
+    { const go = P('rh') ? ['rh', 'atrein'] : ['seguranca', 'sgtrein'];
+      if (veTreinos(ME()) && DB.cache.tLoaded) { const r = resumoTreinos(DB.cache.treinos || [], hoje);
+      if (r.vencido) tiles.push({ n: r.vencido, t: r.vencido > 1 ? 'treinamentos ou ASO vencidos' : 'treinamento ou ASO vencido', s: 'NRs, ASO e outros: renovar ou afastar da atividade', tom: 'bad', go, acao: 'Ver' });
+      if (r.vence) tiles.push({ n: r.vence, t: r.vence > 1 ? 'treinamentos ou ASO vencem em 30 dias' : 'treinamento ou ASO vence em 30 dias', s: 'programe a renovação', tom: 'warn', go, acao: 'Ver' }); } }
     // Justificativas e check-in: contados por conjunto (Pátio e Bateria), não pelo módulo aberto antes
     for (const k of SET_KEYS) {
       if (X.jusPend) { const n = X.jusPend(k); if (n) tiles.push({ n, t: `${n > 1 ? 'faltas e atrasos sem justificativa' : 'falta ou atraso sem justificativa'} · ${SETS[k].curto}`, s: 'últimos 7 dias · abra Justificativas para resolver', tom: 'warn', go: ['gestao', 'esjus', '', k], acao: 'Justificar' }); }

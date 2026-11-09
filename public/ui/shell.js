@@ -306,7 +306,7 @@ function renderTop() {
     pintarTopo(v.nome, sub, sw + seletorJuntas(v) + atalhosDe(v)); return;
   }
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
-  if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id]); return; }
+  if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }

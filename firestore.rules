@@ -424,12 +424,15 @@ service cloud.firestore {
       allow read: if acAdm();
       allow write: if admEdita();
     }
-    // Treinamentos, NRs e ASO (RH › Treinamentos e ASO): um documento por treinamento feito. Quem tem RH lê; o perfil
-    // Administrativo do RH e o administrador gravam (as mesmas regras das férias).
+    // Treinamentos, NRs e ASO (RH e Segurança › Treinamentos e ASO): um documento por treinamento feito. Quem tem RH ou
+    // Segurança lê; o perfil Administrativo do RH, os técnicos de segurança (registra, trata, gestor) e o administrador
+    // gravam, um a um ou pela importação da planilha.
+    function treinoLe() { return acAdm() || (ativo() && pEm('seguranca') != ''); }
+    function treinoEdita() { return admEdita() || (ativo() && pEm('seguranca') in ['registra', 'trata', 'gestor']); }
     match /treinos/{id} {
-      allow read: if acAdm();
-      allow write: if admEdita() && request.resource.data.tipo is string && request.resource.data.nome is string;
-      allow delete: if admEdita();
+      allow read: if treinoLe();
+      allow write: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string;
+      allow delete: if treinoEdita();
     }
     // adm/feriasAtivas: resumo das férias de agora e dos próximos meses, lido pela Operação (marca FE sozinho).
     match /adm/{docId} {
@@ -512,16 +515,23 @@ service cloud.firestore {
     }
     // DDS (diálogo diário de segurança): quem registra interações registra o DDS; lê quem lê a Segurança, o autor e o
     // supervisor da área. O autor corrige por 24 h; apagar = administrador.
+    // A liderança da Operação (líder, supervisor, coordenador, gestor) também registra o DDS no conjunto do escopo dela;
+    // supervisor, coordenador e gestor da Operação leem os DDS do conjunto. humor = estado de espírito de cada pessoa
+    // (lista do mesmo tamanho de pessoas: B, N, C, P, T ou vazio).
+    function ddsOp(conj) { return ativo() && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && conj in ['patio', 'bateria'] && esc(conj); }
+    function ddsLe(r) { return segLe(r) || (ativo() && r.por == request.auth.uid) || (ddsOp(r.conj) && pEm('operacao') != 'lider'); }
     function ddsOk(d) {
-      return d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'tema', 'pessoas', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
+      return d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'tema', 'pessoas', 'humor', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
+        && d.get('humor', []) is list && d.get('humor', []).size() <= d.pessoas.size()
         && dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && txtOk(d, 'tema', 1, 200)
         && d.pessoas is list && d.pessoas.size() >= 1 && d.pessoas.size() <= 200 && txtOk(d, 'obs', 0, 1000)
         && d.por is string && txtOk(d, 'porNome', 0, 120);
     }
     match /segdds/{id} {
-      allow read: if segLe(resource.data);
-      allow create: if segRegistra() && ddsOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
-      allow update: if autorNoPrazo() && ddsOk(request.resource.data) && request.resource.data.por == resource.data.por && request.resource.data.em == resource.data.em;
+      allow read: if ddsLe(resource.data);
+      allow create: if (segRegistra() || ddsOp(request.resource.data.conj)) && ddsOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
+      allow update: if ativo() && resource.data.por == request.auth.uid && request.time < resource.data.em + duration.value(24, 'h')
+        && ddsOk(request.resource.data) && request.resource.data.por == resource.data.por && request.resource.data.em == resource.data.em;
       allow delete: if admin();
     }
     // Fotos: uma por documento (até ~700 KB). 'antes' = do registro, gravada pelo autor junto com ele; 'depois' = do

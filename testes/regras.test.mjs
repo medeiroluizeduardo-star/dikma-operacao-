@@ -576,6 +576,21 @@ test('treinamentos, NRs e ASO: o RH Administrativo grava; o leitor do RH só lê
   await assertFails(deleteDoc(doc(db('admLeitor'), 'treinos', 't1')));
   await assertFails(getDocs(collection(db('liderRec'), 'treinos')));
 });
+test('treinamentos: o técnico de segurança (registra) lê, grava e importa; o leitor da Segurança só lê', async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'treinos', 's1'), { nome: 'PESSOA TESTE', tipo: 'NR-33', validade: '2026-12-01' }); });
+  const t = db('segReg');
+  await assertSucceeds(getDocs(collection(t, 'treinos')));
+  const b = writeBatch(t);
+  b.set(doc(t, 'treinos', 's2'), { nome: 'UM', tipo: 'NR-35', validade: '2027-01-01' });
+  b.set(doc(t, 'treinos', 's3'), { nome: 'DOIS', tipo: 'ASO', validade: '2027-02-01' });
+  await assertSucceeds(b.commit());
+  await assertFails(setDoc(doc(t, 'treinos', 's4'), { tipo: 'ASO' }));
+  await assertSucceeds(deleteDoc(doc(t, 'treinos', 's3')));
+  await assertSucceeds(setDoc(doc(db('segGestor'), 'treinos', 's5'), { nome: 'TRES', tipo: 'NR-10' }));
+  await assertSucceeds(getDocs(collection(db('segLeitor'), 'treinos')));
+  await assertFails(setDoc(doc(db('segLeitor'), 'treinos', 's6'), { nome: 'X', tipo: 'ASO' }));
+  await assertFails(deleteDoc(doc(db('segLeitor'), 'treinos', 's1')));
+});
 test('acesso: líder com Operação e Administrativo entra nos dois', async () => {
   await assertSucceeds(getDoc(doc(db('liderAmbos'), 'semanas', SEM)));
   await assertSucceeds(getDocs(collection(db('liderAmbos'), 'ferias')));
@@ -832,7 +847,13 @@ test('Segurança · DDS: registra quem registra interações, em nome próprio; 
   await assertSucceeds(setDoc(doc(db('segTrata'), 'segdds', 'd2'), novo('segTrata', BAT)));
   await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd3'), novo('segReg2')), 'não registra em nome de outra pessoa');
   await assertFails(setDoc(doc(db('segLeitor'), 'segdds', 'd4'), novo('segLeitor')), 'somente leitura não registra');
-  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5'), novo('liderRec')), 'sem a Segurança');
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'segdds', 'd5'), novo('liderRec', { humor: ['B', 'N'] })), 'o líder da Operação registra no conjunto dele');
+  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5b'), novo('liderRec', BAT)), 'fora do escopo do líder');
+  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5c'), novo('liderRec', { humor: ['B', 'N', 'C'] })), 'humor maior que a lista de pessoas');
+  await assertSucceeds(getDoc(doc(db('liderRec'), 'segdds', 'd5')), 'o líder lê o que registrou');
+  await assertFails(getDoc(doc(db('liderRec'), 'segdds', 'd1')), 'o líder não lê o DDS dos outros');
+  await assertSucceeds(getDocs(query(collection(db('gestorP'), 'segdds'), where('mes', '==', '2026-11'), where('conj', '==', 'patio'))), 'gestor da Operação lê os do conjunto');
+  await assertFails(setDoc(doc(db('bloqNovo'), 'segdds', 'd5d'), novo('bloqNovo')));
   await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd6'), novo('segReg', { pessoas: [] })), 'precisa de quem participou');
   await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd7'), novo('segReg', { tema: '' })), 'tema obrigatório');
   await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd8'), novo('segReg', { extra: 1 })), 'só os campos do formulário');

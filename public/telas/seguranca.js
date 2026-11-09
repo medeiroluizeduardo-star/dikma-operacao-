@@ -17,6 +17,7 @@ import { toast, formSheet } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 import { criarDds } from './dds.js';
+import { telaTreinos } from './treinos.js';
 
 // ---- Perguntas dos formulários (ordem, textos e obrigatórias iguais aos do Google) ----
 // t: date | time | text | area (texto longo) | radio (uma opção) | checks (várias) | fotos · obr: obrigatória
@@ -559,6 +560,9 @@ export function criarSeguranca() {
 
   const DDS = criarDds(); // Segurança › DDS (telas/dds.js)
   function renderTela(v) {
+    // DDS: também para a liderança da Operação, que não tem a Segurança (a lista vem de ddsWatch, não do resto da Segurança).
+    if (v === 'opdds' || (v === 'sgdds' && !S().on)) return DDS.view();
+    if (v === 'sgtrein') return telaTreinos().view(); // a mesma tela do RH (telas/treinos.js)
     if (!S().on || !S().loaded) { if (!S().on && v !== 'sgconfig') return vazio('Sem acesso à Segurança', 'Fale com o administrador do sistema.'); if (!S().loaded && v !== 'sgconfig') return ESQUELETO; }
     if (v === 'sginter') return vInter();
     if (v === 'sganom') return vAnom();

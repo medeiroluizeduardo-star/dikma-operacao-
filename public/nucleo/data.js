@@ -14,7 +14,7 @@
 //                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
 //                             fe: { "REC-001|0": "Finados" } }     fe = feriado sem operação (a célula fica "_"; feriados.js)
 //   historico/{auto}          { at, uid, nome, t }
-//   treinos/{id}              { mat, nome, setor, tipo, realizado, validade, obs }  treinamentos, NRs e ASO (RH; contas/treinos.js)
+//   treinos/{id}              { mat, nome, setor, tipo, realizado, validade, obs }  treinamentos, NRs e ASO (RH e Segurança; contas/treinos.js)
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
 //   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
 //                             (área das Atividades, OPERAÇÃO DE EQUIPAMENTOS ou GERAL). Cada um lê só as áreas dele.
@@ -75,9 +75,10 @@ import {
 import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU, perfilDe } from '../contas/acessos.js';
+import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg, registraDds, ddsConjsOp } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt } from '../contas/fotos.js';
 
@@ -90,7 +91,7 @@ export const useSet = k => { if (S[k]) cur = k; };
 export const setAtual = () => cur;
 export const dados = k => S[k];
 const C = (n, k = cur) => SETS[k].pre + n;
-export const cache = { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
+export const cache = { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
 function novoE() { return { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }; }
 // Que dados carregar: tirado do acesso por módulo (escopos com Operação ou Gestão, Fichas, RH).
@@ -182,7 +183,7 @@ export async function start(callbacks) {
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
       // Sem nenhum módulo (nem perfil em algum módulo) não entra.
       if (!temAlgumModulo(me)) { stopData(); cb.onAuth({ status: 'semAcesso', user: me }); return; }
-      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); }
+      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); ddsIniciar(); }
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
@@ -289,6 +290,9 @@ function startData() {
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
   if (temSeg(me)) startSeg();
+  ddsIniciar();
+  // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js).
+  if (veTreinos(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
@@ -312,9 +316,8 @@ export function iniciarAdministracao() {
   admSisOn = true;
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   if (!admOn) {
-    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
     on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
-    on(collection(db, 'treinos'), qs => { cache.adm.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.tLoaded = true; changed(); });
   }
   const comp = competenciaDe(today());
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
@@ -339,9 +342,9 @@ function stopData() {
   monthSubs.clear();
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
-  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
+  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; ddsMeses.clear(); cache.seg = novoSeg();
   for (const k of SET_KEYS) S[k] = novoSet();
-  Object.assign(cache, { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
+  Object.assign(cache, { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
 function stopAll() { if (userSub) { userSub(); userSub = null; } stopData(); }
 
@@ -654,13 +657,12 @@ export async function importar(seed, meses, aPartirDe) {
 //   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
 // ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
 // adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
 const admSubs = new Map();
 function startAdm(on) {
-  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], treinos: [], tLoaded: false };
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
-  on(collection(db, 'treinos'), qs => { cache.adm.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.tLoaded = true; changed(); });
   on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
@@ -704,12 +706,20 @@ export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f
 // Treinamentos, NRs e ASO (RH): um documento por treinamento feito. A conta da situação fica em contas/treinos.js.
 export function treinoSalvar(id, dados) {
   const ref = id ? doc(db, 'treinos', id) : doc(collection(db, 'treinos'));
-  const i = cache.adm.treinos.findIndex(t => t.id === ref.id);
-  if (i >= 0) cache.adm.treinos[i] = { ...cache.adm.treinos[i], ...dados }; else cache.adm.treinos.push({ id: ref.id, ...dados });
+  const i = cache.treinos.findIndex(t => t.id === ref.id);
+  if (i >= 0) cache.treinos[i] = { ...cache.treinos[i], ...dados }; else cache.treinos.push({ id: ref.id, ...dados });
   track(setDoc(ref, { ...dados, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
   return ref.id;
 }
-export function treinoExcluir(id) { cache.adm.treinos = cache.adm.treinos.filter(t => t.id !== id); const b = writeBatch(db); b.delete(doc(db, 'treinos', id)); track(b.commit()); }
+export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); const b = writeBatch(db); b.delete(doc(db, 'treinos', id)); track(b.commit()); }
+// Importar treinamentos de uma planilha: lotes de até 400; espera o servidor confirmar cada lote.
+export async function treinosImportar(itens) {
+  for (let i = 0; i < itens.length; i += 400) {
+    const b = writeBatch(db);
+    for (const t of itens.slice(i, i + 400)) b.set(doc(collection(db, 'treinos')), { ...t, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+    await track(b.commit());
+  }
+}
 // Importação das planilhas (administrador): folhas de frequência, presença de quem está nas Atividades e férias.
 // presenca: { patio: { 'C012|2026-10-03': 'AT' }, bateria: {...} } — só grava os dias que ainda estão vazios no banco.
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
@@ -1004,9 +1014,27 @@ export function segWatch(meses, inicial) {
   if (!db || !me || !segOn) return;
   for (const m of new Set(meses.filter(Boolean))) {
     if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
-    for (const col of ['seginter', 'seganom', 'segdds']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
+    for (const col of ['seginter', 'seganom']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
   }
 }
+// DDS: lido por mês com os filtros que as regras pedem (quem vê a Segurança toda: sem filtro; senão os próprios, os do
+// supervisor da área e, na Operação, os do conjunto para quem não é líder). Vale também para quem não tem a Segurança.
+const ddsMeses = new Set();
+function filtrosDds() {
+  if (veTudoSeg(me)) return [[]];
+  const l = [[where('por', '==', me.uid)]];
+  const cs = new Set(supConjs(me)); if (perfilDe(me, 'operacao') !== 'lider') ddsConjsOp(me).forEach(k => cs.add(k));
+  for (const k of cs) l.push([where('conj', '==', k)]);
+  return l;
+}
+export function ddsWatch(meses) {
+  if (!db || !me || !(registraDds(me) || temSeg(me))) return;
+  for (const m of new Set(meses.filter(Boolean))) {
+    if (ddsMeses.has(m)) continue; ddsMeses.add(m);
+    filtrosDds().forEach((f, i) => segOuvir(`segdds|${m}|${i}`, query(collection(db, 'segdds'), where('mes', '==', m), ...f)));
+  }
+}
+function ddsIniciar() { const m = today().slice(0, 7); ddsWatch([addMonth(m, -1), m]); }
 // Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
 // quando a conexão voltar. fotos: [{ dados, mini }] já reduzidas pela tela.
 export function segNovo(col, dados, fotos) {
