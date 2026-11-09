@@ -297,7 +297,7 @@ function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
-const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
+const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {
@@ -307,11 +307,11 @@ function renderTop() {
   }
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id]); return; }
-  if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', AD ? AD.topo('fpainel') : ''); return; }
-  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''); return; }
-  if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', AD ? AD.topo(v.id) : ''); return; }
+  if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
+  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
+  if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
-  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia ou a semana numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
+  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
   const comFiltro = !!v.filtros; // filtros declarados na aba (VIEWS, navegacao.js)
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
@@ -327,14 +327,19 @@ function seletorJuntas(v) {
   return `<div class="seg indsw" role="tablist" aria-label="${ROTULO_JUNTO[v.junto] || ''}">${l.map(x => `<button type="button" role="tab" data-go="${x.id}" aria-selected="${x.id === v.id}">${NOME_JUNTO[x.id] || nomeCurto(x)}</button>`).join('')}</div>`;
 }
 // Abas fora do menu abrem por botões no topo da aba pai; nelas, um botão volta para a aba pai.
-// Programação: Folha do líder e Etiquetas QR. Colaboradores: Impressão das fichas.
-// Administração: Visão geral → Conferência, Uso do plano e Erros; Plano padrão → Gerador de meses.
+// Programação: Folha do líder e Etiquetas QR. Colaboradores: Impressão das fichas. Indicadores: Resumos para imprimir.
+// RH: Folha de frequência → Importar planilhas; Indicadores da frequência → Resumo da frequência.
+// Administração: Visão geral → Conferência, Uso do plano, Erros, Histórico e Limpeza; Plano padrão → Gerador de meses.
 const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']],
-  cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
-const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'] };
+  painel: [['resumo', 'Imprimir resumo', 'print']], epainel: [['resumo', 'Imprimir resumo', 'print']], gpainel: [['resumo', 'Imprimir resumo', 'print']],
+  afreq: [['aimport', 'Importar planilhas', 'planilha']], fpainel: [['fresumo', 'Imprimir resumo', 'print']],
+  cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular'], ['cfhist', 'Histórico', 'relogio'], ['cflimpa', 'Limpeza de dados', 'lixo']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
+const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Indicadores', 'painel'], afreq: ['Frequência', 'freq'], fpainel: ['Indicadores', 'percent'] };
 function atalhosDe(v) {
   const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);
-  const bt = ATALHOS[v.id] ? ATALHOS[v.id].filter(([id]) => tem(id)) : VOLTA[v.pai] && tem(v.pai) ? [[v.pai, ...VOLTA[v.pai]]] : [];
+  // Volta: para a aba pai ou, se a pessoa não a vê (Resumos de quem só tem Equipamentos), para o item marcado no menu.
+  const p = v.pai && (tem(v.pai) ? v.pai : abaMarcada(v.id));
+  const bt = ATALHOS[v.id] ? ATALHOS[v.id].filter(([id]) => tem(id)) : VOLTA[v.pai] && p && tem(p) ? [[p, ...VOLTA[v.pai]]] : [];
   return bt.length ? `<div class="row-gap atalhos">${bt.map(([id, n, ic]) => `<button type="button" class="btn sm" data-go="${id}">${I[ic] || ''} ${n}</button>`).join('')}</div>` : '';
 }
 

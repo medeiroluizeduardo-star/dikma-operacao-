@@ -7,9 +7,10 @@ import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 import { JUS_CODS, CODIGOS } from './lib/situacao.mjs';
 import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 import { usuarioEm } from './lib/acessos.mjs';
+import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true };
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -24,7 +25,7 @@ function areasDe(u, k) {
 }
 
 // d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date,
-//       seg: { anom[] } (anomalias da Segurança em aberto, com em em milissegundos) }
+//       seg: { anom[] } (anomalias da Segurança em aberto, com em em milissegundos), treinos[] (RH: treinamentos, NRs e ASO) }
 export function planejar(d) {
   const agora = d.agora || new Date(); const hoje = d.hoje || today(); const hora = agora.getHours();
   const msgs = [], marcar = new Set();
@@ -234,6 +235,20 @@ export function planejar(d) {
         : tipo === 'amanha' ? `Prazo amanhã: ${n} anomalia${s} com você` : `Prazo vencido: ${n} anomalia${s} com você`;
       const corpo = as.slice(0, 3).map(a => tipo === 'nova' ? `${onde(a)} · ${String(a.desc || '').slice(0, 60)}` : `${onde(a)} · ${STATUS_SEG[a.status] || a.status} · prazo ${a.trat.prazo.slice(8)}/${a.trat.prazo.slice(5, 7)}`).join('\n') + (n > 3 ? `\n+ ${n - 3}` : '');
       msgs.push({ uid, titulo, corpo, tag: 'seguranca', url: `/?m=seguranca&v=sganom` });
+    }
+  }
+  // 10) RH: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (segunda-feira, a partir das 7h, uma vez),
+  //     para quem tem o RH (qualquer perfil) e o administrador. Só números, sem nomes de colaboradores.
+  if (hora >= 7 && new Date(hoje + 'T12:00:00').getDay() === 1 && (d.treinos || []).length) {
+    const r = resumoTreinos(d.treinos, hoje);
+    for (const x of alvo) {
+      const chave = `trein|${x.uid}|${hoje}`;
+      const rh = usuarioEm(x.u, 'rh');
+      if (!x.prefs.treinos || d.enviados[chave] || !rh || !rh.papel || rh.papel === 'sem') continue;
+      marcar.add(chave);
+      if (!r.vencido && !r.vence) continue;
+      const partes = [r.vencido && `${r.vencido} vencido${r.vencido > 1 ? 's' : ''}`, r.vence && `${r.vence} vence${r.vence > 1 ? 'm' : ''} em ${ANTECEDENCIA} dias`].filter(Boolean);
+      msgs.push({ uid: x.uid, titulo: `Treinamentos e ASO: ${partes.join(', ')}`, corpo: 'Abra RH › Treinamentos e ASO para programar as renovações.', tag: 'treinos', url: '/?m=rh&v=atrein' });
     }
   }
   return { msgs, marcar: [...marcar] };

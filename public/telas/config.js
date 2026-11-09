@@ -22,6 +22,7 @@ import { abre } from '../ui/dobra.js';
 import { listasSeg } from '../contas/segcalc.js';
 import { planoNaProgramacao } from './plano-prog.js';
 import { vLimpeza } from './limpeza.js';
+import { vHistorico } from './historico.js';
 import { vCfFotos } from './fotos.js';
 import { vArqFotos } from './fotos-arquivo.js';
 import * as FE from '../contas/feriados.js';
@@ -188,6 +189,7 @@ export function vConfigModulo(view) {
   if (view === 'cfuso') return vCfUso();
   if (view === 'cferros') return vCfErros();
   if (view === 'cflimpa') return vLimpeza();
+  if (view === 'cfhist') return vHistorico();
   if (view === 'cffotos') return vCfFotos();
   if (view === 'cfarqfotos') return vArqFotos();
   if (view === 'cfescala') return vCfEscala();

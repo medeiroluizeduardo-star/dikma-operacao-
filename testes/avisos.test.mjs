@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -243,4 +243,20 @@ test('perfil por módulo: cada aviso segue o perfil do módulo do assunto, não 
   assert.equal(de(r, 'soGe', 'atividades').length, 0, 'sem Operação não recebe o lembrete de apontar');
   const seg = planejar({ usuarios: us, avisos: { ...avisos, misto: tok, soGe: tok }, paradas: [], ocorr, sets: { patio: setPatio() }, enviados: {}, agora: new Date('2026-10-19T07:30:00'), hoje: '2026-10-19' });
   assert.equal(de(seg, 'soGe', 'semanal').length, 1, 'gestor na Gestão recebe o resumo da semana');
+});
+
+test('treinamentos e ASO: segunda às 7h, só quem tem o RH, só números, uma vez', () => {
+  const SEG = '2026-10-19';
+  const us = conv({ rh: { papel: 'supervisor', nome: 'RH', acesso: { rh: 'administrativo' }, escopos: [] }, lider: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Líder' } });
+  const av = { rh: tok, lider: tok };
+  const treinos = [{ id: 'a', nome: 'FULANO DE TAL', mat: '1', tipo: 'ASO', validade: '2026-10-01' }, { id: 'b', nome: 'CICLANO', mat: '2', tipo: 'NR-35', validade: '2026-11-05' }, { id: 'c', nome: 'BELTRANO', mat: '3', tipo: 'NR-10', validade: '2028-01-01' }];
+  const base = { usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: {}, treinos };
+  const r = planejar({ ...base, agora: new Date(`${SEG}T07:10:00`), hoje: SEG });
+  const m = r.msgs.filter(x => x.tag === 'treinos');
+  assert.equal(m.length, 1); assert.equal(m[0].uid, 'rh');
+  assert.match(m[0].titulo, /1 vencido, 1 vence em 30 dias/);
+  assert.ok(!/FULANO|CICLANO/.test(m[0].titulo + m[0].corpo), 'sem nomes de colaboradores');
+  assert.equal(planejar({ ...base, agora: new Date('2026-10-20T07:10:00'), hoje: '2026-10-20' }).msgs.filter(x => x.tag === 'treinos').length, 0, 'só na segunda');
+  assert.equal(planejar({ ...base, enviados: { [`trein|rh|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos').length, 0, 'uma vez');
+  assert.equal(planejar({ ...base, avisos: { rh: { tokens: ['t'], prefs: { treinos: false } } }, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos').length, 0, 'desligado');
 });
