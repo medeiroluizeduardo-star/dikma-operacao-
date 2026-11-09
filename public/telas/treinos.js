@@ -1,21 +1,43 @@
-// Dikma Gestão — RH › Treinamentos e ASO: validade de cada treinamento (NRs, ASO etc.), quem está vencido e quem vence
-// nos próximos 30 dias. A conta da situação fica em contas/treinos.js (a mesma do Meu dia e da rotina de avisos).
-// Desenhada a partir de administrativo.js (mesmo módulo RH, mesmos dados em DB.cache.adm).
-import { today } from '../contas/cal.js';
-import { normNome, criarBusca } from '../contas/planilhas-adm.js';
-import { TIPOS_TREINO, mesesSugeridos, addMeses, vigentes, situacaoTreino, resumoTreinos, diasAte, ANTECEDENCIA } from '../contas/treinos.js';
+// Dikma Gestão — Treinamentos e ASO (no RH e na Segurança): validade de cada treinamento (NRs, ASO etc.), quem está
+// vencido e quem vence nos próximos 30 dias, cadastro um a um ou por planilha. A conta da situação e a leitura da planilha
+// ficam em contas/treinos.js (as mesmas do Meu dia e da rotina de avisos).
+import { today, SET_KEYS } from '../contas/cal.js';
+import { normNome, criarBusca, abasDoXLSX } from '../contas/planilhas-adm.js';
+import { TIPOS_TREINO, mesesSugeridos, addMeses, vigentes, situacaoTreino, resumoTreinos, diasAte, ANTECEDENCIA, editaTreinos, lerPlanilhaTreinos, MODELO_TREINOS, chaveTreino } from '../contas/treinos.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
+import { DB, framed, esc, title } from '../nucleo/base.js';
+import { ME, UI } from '../nucleo/estado.js';
+import { I } from '../ui/icones.js';
+import { sheet, formSheet, toast } from '../ui/janelas.js';
+import { render, isMobile, schedule } from '../ui/shell.js';
 
 const SIT = {
   vencido: ['Vencido', 'bad'], vence: ['Vence em breve', 'warn'], ok: ['Em dia', 'ok'], sem: ['Sem validade', 'neu'], renovado: ['Renovado', 'neu']
 };
+const VIEWS_TR = ['atrein', 'sgtrein'];
 
-export function criarTreinos(X, A, pode, opcoesPessoa) {
-  const { DB, esc, title, I, sheet, formSheet, toast, render, UI } = X;
+// Uma tela só para o RH e a Segurança (os ouvintes de clique são ligados uma vez).
+let TELA = null;
+export const telaTreinos = () => (TELA ||= criarTreinos());
+
+function criarTreinos() {
   const $ = id => document.getElementById(id);
   const U = { aba: 'atencao', q: '', tipo: '' };
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
-  const lista = () => A().treinos || [];
+  const lista = () => DB.cache.treinos || [];
+  const pode = () => editaTreinos(ME);
+  const aqui = () => VIEWS_TR.includes(UI.view);
+  // Nomes para sugerir no cadastro: fichas do RH, colaboradores das Atividades e quem já tem treinamento.
+  function opcoesPessoa() {
+    const out = [], vistos = new Set();
+    const add = (nome, mat) => { const k = normNome(nome || ''); if (!k || vistos.has(k)) return; vistos.add(k); out.push({ nome, mat: String(mat || '') }); };
+    for (const c of (DB.cache.adm && DB.cache.adm.rh) || []) add(c.nome, c.mat);
+    for (const c of (DB.cache.g && DB.cache.g.colabs) || []) add(c.nome, c.mat);
+    for (const l of Object.values((DB.cache.adm && DB.cache.adm.colabs) || {})) for (const c of l || []) add(c.nome, c.mat);
+    for (const k of SET_KEYS) { const d = DB.dados ? DB.dados(k) : null; for (const l of Object.values((d && d.colabs) || {})) for (const c of l || []) add(c.nome, c.mat); }
+    for (const t of lista()) add(t.nome, t.mat);
+    return out.sort((a, b) => a.nome.localeCompare(b.nome));
+  }
 
   function textoSit(t, s, hoje) {
     if (s === 'vencido') { const n = -diasAte(hoje, t.validade); return `Vencido há ${n} dia${n > 1 ? 's' : ''}`; }
@@ -24,7 +46,8 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
   }
 
   function view() {
-    if (!A().tLoaded) return '<div class="card skel"><i></i><i></i><i></i></div>';
+    if (DB.treinosCarregar) DB.treinosCarregar();
+    if (!DB.cache.tLoaded) return '<div class="card skel"><i></i><i></i><i></i></div>';
     const hoje = today(), L = lista(), vig = vigentes(L), r = resumoTreinos(L, hoje);
     const tipos = [...new Set([...TIPOS_TREINO.map(([t]) => t), ...L.map(t => t.tipo).filter(Boolean)])];
     const q = normNome(U.q || '');
@@ -34,7 +57,7 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
     else if (U.aba === 'vigentes') l = l.filter(({ s }) => s !== 'renovado');
     const ord = { vencido: 0, vence: 1, sem: 2, ok: 3, renovado: 4 };
     l.sort((a, b) => ord[a.s] - ord[b.s] || String(a.t.validade || '9').localeCompare(String(b.t.validade || '9')) || String(a.t.nome).localeCompare(String(b.t.nome)));
-    const lim = X.isMobile() ? Math.min(UI.more || 20, 300) : 300;
+    const lim = isMobile() ? Math.min(UI.more || 20, 300) : 300;
     const vazio = U.aba === 'atencao' ? 'Ninguém vencido nem vencendo nos próximos 30 dias.' : L.length ? 'Nenhum treinamento com esses filtros.' : 'Nenhum treinamento cadastrado ainda.';
     return `<div class="mini"><div><b class="num" style="color:var(--st-nreal)">${r.vencido}</b><span>Vencidos</span></div><div><b class="num" style="color:var(--st-atr)">${r.vence}</b><span>Vencem em ${ANTECEDENCIA} dias</span></div><div><b class="num">${r.ok}</b><span>Em dia</span></div></div>
       <div class="card"><div class="body lbar">
@@ -42,7 +65,8 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
         <label class="sel"><span>Tipo</span><select class="in" id="trTipo"><option value="">Todos</option>${tipos.map(t => `<option ${t === U.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
         <label class="sel grow"><span>Buscar</span><input class="in" id="trQ" type="search" placeholder="Nome ou matrícula" value="${esc(U.q)}"></label>
         ${pode() ? `<button class="btn pri" data-tr="novo">${I.plus} Treinamento</button>` : ''}
-        ${!X.framed && L.length ? `<button class="btn sm" data-tr="exportar">${I.dl} Exportar</button>` : ''}
+        ${pode() ? `<button class="btn sm" data-tr="importar">${I.dl} Importar planilha</button><input type="file" id="trArq" accept=".xlsx,.xls,.csv" hidden><button class="btn ghost sm" data-tr="modelo">Baixar modelo</button>` : ''}
+        ${!framed && L.length ? `<button class="btn sm" data-tr="exportar">${I.dl} Exportar</button>` : ''}
       </div>
       ${l.length ? `<div class="plist ferlist">${l.slice(0, lim).map(({ t, s }) => `<button class="pitem ferit" data-tr="abrir" data-v="${esc(t.id)}"><div class="minw"><div class="t">${esc(title(t.nome || ''))} <span class="muted small">${t.mat ? '· ' + esc(t.mat) : ''}</span></div><div class="l"><b>${esc(t.tipo || '')}</b>${t.setor ? ' · ' + esc(t.setor) : ''}${t.realizado ? ' · feito em ' + dBR(t.realizado) : ''}</div>${t.obs ? `<div class="l">${esc(t.obs)}</div>` : ''}</div><div class="fer-r"><span class="pill ${SIT[s][1]}">${esc(textoSit(t, s, hoje))}</span><small class="muted">validade ${dBR(t.validade)}</small></div></button>`).join('')}</div>${l.length > lim ? (lim < 300 ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${lim + 40}">Mostrar mais ${Math.min(40, l.length - lim)} (faltam ${l.length - lim})</button></div>` : `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o tipo.</p>`) : ''}` : `<div class="empty">${vazio}</div>`}</div>`;
   }
@@ -61,13 +85,13 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
       <label class="sel"><span>Observação</span><input class="in" id="trObs" value="${v('obs')}" placeholder="Ex.: instrutor, carga horária, restrição do ASO"></label>
       ${t ? `<button type="button" class="btn sm" id="trRenovar">${I.plus} Registrar renovação</button> <button type="button" class="btn ghost danger sm" id="trDel">Excluir</button>` : ''}`, 'Salvar', async () => {
       let nome = t ? t.nome : $('trNome').value.trim().toUpperCase(); let mat = t ? t.mat || '' : '';
-      if (!t) { if (normNome(nome).split(' ').length < 2) throw new Error('Informe o nome completo.'); const r = criarBusca(A().rh || [])(nome); if (r) { mat = String(r.item.mat || ''); nome = r.item.nome; } else { const o = ops.find(x => normNome(x.nome) === normNome(nome)); if (o) mat = o.mat || ''; } }
+      if (!t) { if (normNome(nome).split(' ').length < 2) throw new Error('Informe o nome completo.'); const r = criarBusca(ops.filter(o => o.mat))(nome); if (r) { mat = String(r.item.mat || ''); nome = r.item.nome; } else { const o = ops.find(x => normNome(x.nome) === normNome(nome)); if (o) mat = o.mat || ''; } }
       const tipo = $('trTp').value.trim(); if (!tipo) throw new Error('Informe o tipo (ex.: ASO, NR-35).');
       const realizado = $('trFeito').value || null, validade = $('trVal').value || null;
       if (realizado && validade && validade < realizado) throw new Error('A validade não pode ser antes da data em que foi feito.');
       const dados = { nome, mat, tipo, setor: $('trSetor').value.trim().toUpperCase(), realizado, validade, obs: $('trObs').value.trim() };
       await DB.treinoSalvar(t ? t.id : null, dados);
-      DB.log(`RH: ${tipo} de ${title(nome)}${validade ? ` válido até ${dBR(validade)}` : ''}`); toast('Treinamento salvo'); render();
+      DB.log(`Treinamentos: ${tipo} de ${title(nome)}${validade ? ` válido até ${dBR(validade)}` : ''}`); toast('Treinamento salvo'); render();
     });
     const sugerir = () => { const f = $('trFeito').value, m = mesesSugeridos($('trTp').value.trim()); if (f && m && !$('trVal').dataset.mexeu) $('trVal').value = addMeses(f, m); };
     ['trFeito', 'trTp'].forEach(k => $(k).addEventListener('input', sugerir));
@@ -75,7 +99,7 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
     const ren = $('trRenovar');
     if (ren) ren.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; novo({ nome: t.nome, mat: t.mat, tipo: t.tipo, setor: t.setor }); });
     const del = $('trDel');
-    if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.treinoExcluir(t.id); DB.log(`RH: excluiu ${t.tipo} de ${title(t.nome || '')}`); document.getElementById('layer').innerHTML = ''; toast('Treinamento excluído'); render(); });
+    if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.treinoExcluir(t.id); DB.log(`Treinamentos: excluiu ${t.tipo} de ${title(t.nome || '')}`); document.getElementById('layer').innerHTML = ''; toast('Treinamento excluído'); render(); });
   }
   // Renovação: novo registro da mesma pessoa e tipo (o antigo fica no histórico como "Renovado").
   function novo(base) {
@@ -86,7 +110,7 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
       const realizado = $('trFeito').value || null, validade = $('trVal').value || null;
       if (realizado && validade && validade < realizado) throw new Error('A validade não pode ser antes da data em que foi feito.');
       await DB.treinoSalvar(null, { nome: base.nome, mat: base.mat || '', tipo: base.tipo, setor: base.setor || '', realizado, validade, obs: $('trObs').value.trim() });
-      DB.log(`RH: renovou ${base.tipo} de ${title(base.nome || '')}${validade ? ` até ${dBR(validade)}` : ''}`); toast('Renovação salva'); render();
+      DB.log(`Treinamentos: renovou ${base.tipo} de ${title(base.nome || '')}${validade ? ` até ${dBR(validade)}` : ''}`); toast('Renovação salva'); render();
     });
   }
   function exportar() {
@@ -96,16 +120,52 @@ export function criarTreinos(X, A, pode, opcoesPessoa) {
     baixarExcel('treinamentos', [{ nome: 'Treinamentos', linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
+  // Importar planilha: lê, mostra o resumo (novos, já cadastrados, com erro) e só grava depois de confirmar.
+  async function importar(file) {
+    try {
+      const XLSX = await import('../vendor/xlsx.js');
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
+      const r = lerPlanilhaTreinos(abasDoXLSX(XLSX, wb));
+      const ja = new Set(lista().map(chaveTreino)); const busca = criarBusca(opcoesPessoa().filter(o => o.mat));
+      const novos = [], vistos = new Set(); let repetidos = 0;
+      for (const t of r.itens) {
+        if (!t.mat) { const b = busca(t.nome); if (b) { t.mat = String(b.item.mat || ''); t.nome = b.item.nome; } }
+        const k = chaveTreino(t); if (ja.has(k) || vistos.has(k)) { repetidos++; continue; } vistos.add(k); novos.push(t);
+      }
+      const erros = r.erros.length ? `<br><br>${r.erros.slice(0, 6).map(esc).join('<br>')}${r.erros.length > 6 ? '<br>…' : ''}` : '';
+      if (!novos.length) {
+        sheet('Importar planilha', `${esc(file.name)}<br>${r.itens.length ? `Todas as ${r.itens.length} linhas já estão cadastradas.` : 'Nenhum treinamento encontrado.'}${erros}<br><br>Use o modelo: colunas Matrícula, Nome, Setor, Tipo, Feito em, Validade e Observação.`,
+          [{ t: 'Baixar o modelo', v: 'm' }], o => { if (o.v === 'm') baixarModelo(); }, { fechar: 'Fechar' });
+        return;
+      }
+      const ex = novos.slice(0, 5).map(t => `${esc(title(t.nome))} · ${esc(t.tipo)} · validade ${dBR(t.validade)}`).join('<br>');
+      const n = novos.length, pl = (k, a, b) => (k > 1 ? b : a);
+      sheet('Importar planilha', `${esc(file.name)}${r.aba ? ` · aba ${esc(r.aba)}` : ''}<br><b>${n} ${pl(n, 'treinamento novo', 'treinamentos novos')}</b>${repetidos ? ` · ${repetidos} ${pl(repetidos, 'já cadastrado', 'já cadastrados')} (ficam como estão)` : ''}${r.erros.length ? ` · ${r.erros.length} ${pl(r.erros.length, 'linha com erro', 'linhas com erro')} (não entram)` : ''}<br><br>${ex}${n > 5 ? '<br>…' : ''}${erros}`,
+        [{ t: `Gravar ${n} ${pl(n, 'treinamento', 'treinamentos')}`, v: 'ok', cls: 'pri' }], async o => {
+          if (o.v !== 'ok') return;
+          try { await DB.treinosImportar(novos); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }
+          catch (e) { toast('Não foi possível gravar: ' + ((e && e.message) || e)); }
+        });
+    } catch (e) { toast('Não foi possível ler a planilha: ' + ((e && e.message) || e)); }
+  }
+  const baixarModelo = () => baixarExcel('modelo-treinamentos', [{ nome: 'Treinamentos', linhas: MODELO_TREINOS }]).catch(e => toast('Não foi possível baixar: ' + e.message));
+
   document.addEventListener('click', e => {
-    const t = e.target.closest('[data-tr]'); if (!t || t.closest('#layer') || UI.view !== 'atrein') return;
+    const t = e.target.closest('[data-tr]'); if (!t || t.closest('#layer') || !aqui()) return;
     const a = t.dataset.tr, v = t.dataset.v;
     if (a === 'aba') { U.aba = v; UI.more = 0; render(); }
     else if (a === 'novo') form(null);
     else if (a === 'abrir') form(v);
     else if (a === 'exportar') exportar();
+    else if (a === 'modelo') baixarModelo();
+    else if (a === 'importar') { const f = $('trArq'); if (f) { f.value = ''; f.click(); } }
   });
-  document.addEventListener('input', e => { if (UI.view === 'atrein' && e.target.id === 'trQ') { U.q = e.target.value; UI.more = 0; (X.agendar || render)(); } });
-  document.addEventListener('change', e => { if (UI.view === 'atrein' && e.target.id === 'trTipo') { U.tipo = e.target.value; UI.more = 0; render(); } });
+  document.addEventListener('input', e => { if (aqui() && e.target.id === 'trQ') { U.q = e.target.value; UI.more = 0; schedule(); } });
+  document.addEventListener('change', e => {
+    if (!aqui()) return;
+    if (e.target.id === 'trTipo') { U.tipo = e.target.value; UI.more = 0; render(); }
+    if (e.target.id === 'trArq' && e.target.files[0]) importar(e.target.files[0]);
+  });
 
   return { view };
 }

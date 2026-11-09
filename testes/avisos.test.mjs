@@ -260,3 +260,11 @@ test('treinamentos e ASO: segunda às 7h, só quem tem o RH, só números, uma v
   assert.equal(planejar({ ...base, enviados: { [`trein|rh|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos').length, 0, 'uma vez');
   assert.equal(planejar({ ...base, avisos: { rh: { tokens: ['t'], prefs: { treinos: false } } }, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos').length, 0, 'desligado');
 });
+test('treinamentos e ASO: o técnico de segurança também recebe, com o link da Segurança; o leitor da Segurança não', () => {
+  const SEG = '2026-10-19';
+  const us = conv({ tec: { papel: 'leitor', nome: 'Técnico', acesso: { seguranca: 'registra' }, escopos: [] }, segl: { papel: 'leitor', nome: 'Leitor', acesso: { seguranca: 'leitor' }, escopos: [] } });
+  const treinos = [{ id: 'a', nome: 'FULANO DE TAL', mat: '1', tipo: 'ASO', validade: '2026-10-01' }];
+  const m = planejar({ usuarios: us, avisos: { tec: tok, segl: tok }, paradas: [], ocorr: [], sets: {}, enviados: {}, treinos, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos');
+  assert.deepEqual(m.map(x => x.uid), ['tec']);
+  assert.equal(m[0].url, '/?m=seguranca&v=sgtrein');
+});

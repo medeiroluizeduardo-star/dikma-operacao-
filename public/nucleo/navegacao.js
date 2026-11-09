@@ -5,7 +5,8 @@ import { editaAdm } from '../contas/acessos.js';
 import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './estado.js';
 import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
-import { supConjs } from '../contas/segcalc.js';
+import { supConjs, registraDds, ddsConjsOp } from '../contas/segcalc.js';
+import { veTreinos } from '../contas/treinos.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
 // mod: all (Meu dia, em todos menos a Administração) · operacao · gestao · seguranca · rh · administracao
@@ -34,7 +35,8 @@ export const VIEWS = [
   { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'lanc', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
   { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
   { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'capacete', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
-  { id: 'esdia', nome: 'Presença do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true },
+  { id: 'esdia', nome: 'Presença do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true, junto: 'presenca' },
+  { id: 'opdds', nome: 'DDS', ic: 'users', grp: 'Efetivo', mod: 'operacao', req: () => registraDds(ME) || ddsConjsOp(ME).length > 0, tela: 'SG', junto: 'presenca' },
   { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
   { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
   // ---- Gestão: planejar, acompanhar e analisar ----
@@ -57,6 +59,7 @@ export const VIEWS = [
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgdds', nome: 'DDS', ic: 'users', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
   // ---- RH: frequência e férias (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência e férias', mod: 'rh', req: temRH },
@@ -107,20 +110,22 @@ export const SUB_A = {
   atrein: 'NRs, ASO e outros treinamentos: quem está vencido e quem vence em 30 dias'
 };
 export const SUB_S = {
+  sgtrein: 'NRs, ASO e outros treinamentos: quem está vencido, quem vence em 30 dias e importação por planilha',
   sginter: 'Registros de interação: riscos e desvios vistos em campo',
   sganom: 'Fila das anomalias: situação, responsável e prazo',
-  sgdds: 'Diálogo diário de segurança: tema, área e quem participou',
+  sgdds: 'Diálogo diário de segurança: tema, área, quem participou e o estado de espírito',
+  opdds: 'Diálogo diário de segurança: marque quem participou e o estado de espírito',
   sgpainel: 'Interações, desvios e anomalias do mês',
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { atrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { atrein: 'Treinamentos', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', gpainel: 'Indicadores' };
 // Nome no seletor do topo das abas juntas (junto).
-export const NOME_JUNTO = { eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
+export const NOME_JUNTO = { esdia: 'Presença do dia', opdds: 'DDS', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', painel: 'Atividades', epainel: 'Equipamentos', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
-export const ROTULO_JUNTO = { ind: 'Indicadores de', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
+export const ROTULO_JUNTO = { presenca: 'Presença e DDS', ind: 'Indicadores de', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
 // Nome no menu das abas juntas: o mesmo, qualquer que seja a primeira que a pessoa vê.
-const MENU_JUNTO = { ind: 'Indicadores', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
+const MENU_JUNTO = { presenca: 'Presença', ind: 'Indicadores', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
 export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
