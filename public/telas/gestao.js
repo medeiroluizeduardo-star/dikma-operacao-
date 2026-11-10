@@ -1,7 +1,7 @@
 // Dikma Gestão — módulo EFETIVO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 // Telas: Painel, Colaboradores (cadastro + controle da ficha, com a ficha individual e as ocorrências), Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
-import { pd, add, pad, today, MESES_L, SETS, setDaArea } from '../contas/cal.js';
+import { pd, add, pad, today, MESES_L, SETS, setDaArea, AREA_S, ehAreaGeral } from '../contas/cal.js';
 import { AREA_GERAL, AREA_OP, ehAreaAtiv, veTodasFichas, areasFichaDe } from '../contas/pessoas.js';
 import { criarImportador } from './importar.js';
 import { REGIMES_PADRAO, normRegime } from '../contas/escala.js';
@@ -207,7 +207,7 @@ export function criarGestao(X) {
   const cfg = () => G().config || {};
   const cab = (titulo, folha) => `<div class="fhd"><img src="img/dikma-logo.png" alt="Dikma" class="plogo"><div class="ft">${titulo}</div><div class="fc"><span>Código</span><b>${esc(cfg().codigo || 'FO-RED-COQ-004')}</b></div><div class="fc"><span>${folha ? 'Folha' : 'Revisão'}</span><b>${folha || esc(cfg().revisao || '00')}</b></div></div>`;
   const localFicha = c => (c.setor ? c.setor.split(' - ')[0] : 'Coqueria').toUpperCase();
-  const dadosColab = c => `<div class="fdados"><span><b>Nome:</b> ${esc(c.nome)}</span><span><b>Matrícula:</b> ${c.mat}</span><span><b>Área:</b> ${esc(c.subsetor ? c.subsetor.toUpperCase() : !c.area || c.area === AREA_GERAL ? 'COQUERIA' : 'COQUERIA – ' + (c.area === AREA_OP ? 'OPERAÇÃO DE EQUIPAMENTOS' : (setDaArea(c.area) ? SETS[setDaArea(c.area)].curto.toUpperCase() + ' ' : '') + c.area))}</span>${c.funcao ? `<span><b>Função:</b> ${esc(c.funcao)}</span>` : ''}<span><b>Admissão:</b> ${dBR(c.adm)}</span><span><b>Demissão:</b> ${dBR(c.dem)}</span></div>`;
+  const dadosColab = c => `<div class="fdados"><span><b>Nome:</b> ${esc(c.nome)}</span><span><b>Matrícula:</b> ${c.mat}</span><span><b>Área:</b> ${esc(c.subsetor ? c.subsetor.toUpperCase() : !c.area || c.area === AREA_GERAL ? 'COQUERIA' : ehAreaGeral(c.area) ? AREA_S[c.area].toUpperCase() : 'COQUERIA – ' + (c.area === AREA_OP ? 'OPERAÇÃO DE EQUIPAMENTOS' : (setDaArea(c.area) ? SETS[setDaArea(c.area)].curto.toUpperCase() + ' ' : '') + c.area))}</span>${c.funcao ? `<span><b>Função:</b> ${esc(c.funcao)}</span>` : ''}<span><b>Admissão:</b> ${dBR(c.adm)}</span><span><b>Demissão:</b> ${dBR(c.dem)}</span></div>`;
   const assinCel = (o, quem) => {
     if (!o) return '';
     if (o.status === 'recusada') return quem === 'f' ? '<span class="small">Recusou-se a assinar</span>' : esc(o.lider || '');
@@ -351,6 +351,8 @@ export function criarGestao(X) {
     const cur = normRegime(atual);
     return lista.map(x => `<option value="${esc(x)}" ${normRegime(x) === cur ? 'selected' : ''}>${esc(title(x))}</option>`).join('');
   }
+  // Área e setor (RH) que sempre aparecem na lista, além dos já usados nas fichas.
+  const RH_PADRAO = ['Coqueria - Geral', 'Coqueria - Pátio', 'Coqueria - Bateria'];
   function colabForm(mat, pre) {
     const c = mat ? indice().get(mat).c : { mat: '', nome: '', funcao: '', turma: '', lider: '', adm: TODAY, dem: '', intAnt: false, area: AREA_GERAL, ...(pre ? { nome: pre.nome, funcao: pre.funcao || '', area: pre.area || AREA_GERAL } : {}) };
     const L = mat ? PES.lotacao(c) : pre ? { area: pre.area || AREA_GERAL, patio: pre.rota ? { area: pre.area, rota: pre.rota, regime: pre.regime, funcao: pre.funcao } : null, op: pre.op ? { escala: pre.escala, turma: pre.turma, funcao: pre.funcao } : null } : { patio: null, op: null, area: AREA_GERAL };
@@ -359,8 +361,8 @@ export function criarGestao(X) {
     formSheet(mat ? 'Editar colaborador' : 'Novo colaborador', mat ? `${esc(title(c.nome))} · ${c.mat}` : '', `
       <div class="row2"><label class="sel"><span>Matrícula</span><input class="in" id="ncMat" value="${esc(c.mat)}" ${mat ? 'readonly' : ''} inputmode="numeric"></label><label class="sel"><span>Admissão</span><input class="in" type="date" id="ncAdm" value="${c.adm || ''}"></label></div>
       <label class="sel"><span>Nome completo</span><input class="in" id="ncNome" value="${esc(c.nome)}"></label>
-      <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="ncSetor" list="dlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio"><datalist id="dlSetor">${[...new Set(G().colabs.map(x => x.setor).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
-      <label class="sel"><span>Setor (RH)</span><input class="in" id="ncSub" list="dlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento"><datalist id="dlSub">${[...new Set(G().colabs.map(x => x.subsetor).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label></div>
+      <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="ncSetor" list="dlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio"><datalist id="dlSetor">${[...new Set([...RH_PADRAO, ...G().colabs.map(x => x.setor).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
+      <label class="sel"><span>Setor (RH)</span><input class="in" id="ncSub" list="dlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento"><datalist id="dlSub">${[...new Set([...RH_PADRAO, ...G().colabs.map(x => x.subsetor).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label></div>
       <div class="fsec"><b>Área de atuação e função</b><small>Vale para todas as áreas: fichas (RH), Atividades Pátio e Bateria, Pessoas no turno e Equipamentos.</small></div>
       <label class="sel"><span>Área de atuação</span><select class="in" id="ncArea">${PES.gruposArea().map(([g, l]) => `<optgroup label="${esc(g)}">${opt(l, L.area, PES.areaNome)}</optgroup>`).join('')}</select></label>
       <div class="row2" id="ncPatioBox"><label class="sel"><span id="ncRotaLbl">Rota</span><select class="in" id="ncRota"></select></label><label class="sel"><span>Regime</span><select class="in" id="ncReg">${regimeOpts((L.patio && L.patio.regime) || 'ADMINISTRATIVO')}</select></label></div>
@@ -373,6 +375,7 @@ export function criarGestao(X) {
       const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim() };
       if (!n.mat || !n.nome) throw new Error('Informe matrícula e nome.');
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '' };
+      if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Presença do dia)
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
       if ((o.op || o.area === AREA_OP) && o.escala === '4x4' && !o.turma) throw new Error('Escolha a turma da escala 4x4.');
       const itens = G().colabs.slice();
@@ -388,9 +391,9 @@ export function criarGestao(X) {
     });
     const ar = $('ncArea'), rt = $('ncRota'), op = $('ncOp');
     const atualizar = () => {
-      const a = ar.value, pat = ehAreaAtiv(a);
+      const a = ar.value, pat = ehAreaAtiv(a), ger = ehAreaGeral(a);
       if (pat) $('ncRotaLbl').textContent = 'Rota (' + SETS[setDaArea(a)].nome + ')';
-      $('ncPatioBox').hidden = !pat;
+      $('ncPatioBox').hidden = !pat && !ger; rt.closest('label').hidden = !pat; // área geral: só o regime (entra na Presença do dia)
       if (pat) { const rs = PES.rotasDe(a); const cur = L.patio && L.patio.area === a ? L.patio.rota : rt.value; rt.innerHTML = rs.map(r => `<option ${r === cur ? 'selected' : ''}>${esc(r)}</option>`).join(''); }
       if (op) { if (a === AREA_OP) { op.checked = true; op.disabled = true; } else op.disabled = false; $('ncOpBox').hidden = !op.checked; }
     };
