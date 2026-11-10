@@ -1051,7 +1051,6 @@ details.legdet[open]>summary{margin-bottom:6px}
 .md-task b .num{font-family:var(--f-display);font-size:19px;margin-right:2px}
 .md-task.bad b .num{color:var(--st-nreal)}.md-task.warn b .num{color:var(--st-atr)}
 .md-task small{display:block;color:var(--ink-3);font-size:12px}
-.ddslista{display:flex;flex-direction:column;max-height:46vh;overflow:auto;border:1px solid var(--line-2);border-radius:10px;margin-top:8px}.ddsp{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line-2)}.ddsp:last-child{border-bottom:0}.ddsnome{display:flex;align-items:center;gap:8px;flex:1;min-width:0;font-size:14px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500}.ddsnome input{width:20px;height:20px;flex:none}.ddsp select{width:auto;max-width:48%;flex:none;padding:6px 8px;font-size:13px}
 .md-det{margin-top:16px}.md-det>summary{cursor:pointer;font-size:14px;font-weight:600;color:var(--ink-2);padding:12px 14px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface)}.md-det[open]>summary{margin-bottom:4px}
 .md-mais>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:8px 0;border-top:1px solid var(--line-2)}
 .md-ok{color:var(--ink-2)}

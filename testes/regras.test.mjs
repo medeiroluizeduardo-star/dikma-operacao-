@@ -841,26 +841,15 @@ test('Segurança: só registra quem tem registra, trata ou gestor, em nome próp
   await assertFails(setDoc(doc(db('segReg'), 'seganom', 'n17'), novaAnom('segReg', { trat: { resp: 'eu' } })), 'quem registra não define o tratamento');
   await assertFails(setDoc(doc(db('segReg'), 'seginter', 'n18'), novaInter('segReg', { extra: 1 })), 'só os campos do formulário');
 });
-test('Segurança · DDS: registra quem registra interações, em nome próprio; lê quem lê a Segurança e o supervisor da área; apaga o administrador', async () => {
-  const novo = (por, extra = {}) => ({ data: '2026-11-02', mes: '2026-11', ...PAT, tema: 'Trabalho em altura', pessoas: ['ANA', 'BRUNO'], obs: '', por, porNome: 'X', em: serverTimestamp(), ...extra });
-  await assertSucceeds(setDoc(doc(db('segReg'), 'segdds', 'd1'), novo('segReg')));
-  await assertSucceeds(setDoc(doc(db('segTrata'), 'segdds', 'd2'), novo('segTrata', BAT)));
-  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd3'), novo('segReg2')), 'não registra em nome de outra pessoa');
-  await assertFails(setDoc(doc(db('segLeitor'), 'segdds', 'd4'), novo('segLeitor')), 'somente leitura não registra');
-  await assertSucceeds(setDoc(doc(db('liderRec'), 'segdds', 'd5'), novo('liderRec', { humor: ['B', 'N'] })), 'o líder da Operação registra no conjunto dele');
-  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5b'), novo('liderRec', BAT)), 'fora do escopo do líder');
-  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd5c'), novo('liderRec', { humor: ['B', 'N', 'C'] })), 'humor maior que a lista de pessoas');
-  await assertSucceeds(getDoc(doc(db('liderRec'), 'segdds', 'd5')), 'o líder lê o que registrou');
-  await assertFails(getDoc(doc(db('liderRec'), 'segdds', 'd1')), 'o líder não lê o DDS dos outros');
-  await assertSucceeds(getDocs(query(collection(db('gestorP'), 'segdds'), where('mes', '==', '2026-11'), where('conj', '==', 'patio'))), 'gestor da Operação lê os do conjunto');
-  await assertFails(setDoc(doc(db('bloqNovo'), 'segdds', 'd5d'), novo('bloqNovo')));
-  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd6'), novo('segReg', { pessoas: [] })), 'precisa de quem participou');
-  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd7'), novo('segReg', { tema: '' })), 'tema obrigatório');
-  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd8'), novo('segReg', { extra: 1 })), 'só os campos do formulário');
-  await assertSucceeds(getDoc(doc(db('segReg'), 'segdds', 'd1')));
+test('Segurança · DDS antigos: ficam guardados; lê quem lê a Segurança, ninguém grava mais e só o administrador apaga', async () => {
+  const velho = (por, extra = {}) => ({ data: '2026-11-02', mes: '2026-11', ...PAT, tema: 'Trabalho em altura', pessoas: ['ANA', 'BRUNO'], obs: '', por, porNome: 'X', em: Timestamp.fromMillis(Date.now()), ...extra });
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'segdds', 'd1'), velho('segReg')); await setDoc(doc(ctx.firestore(), 'segdds', 'd2'), velho('segTrata', BAT)); });
+  await assertFails(setDoc(doc(db('segReg'), 'segdds', 'd3'), { ...velho('segReg'), em: serverTimestamp() }), 'não registra DDS novo');
+  await assertFails(setDoc(doc(db('liderRec'), 'segdds', 'd4'), { ...velho('liderRec'), em: serverTimestamp() }), 'o líder também não');
+  await assertFails(updateDoc(doc(db('segReg'), 'segdds', 'd1'), { tema: 'outro' }), 'nem corrige os antigos');
   await assertSucceeds(getDoc(doc(db('segLeitor'), 'segdds', 'd2')));
-  await assertFails(getDoc(doc(db('segReg'), 'segdds', 'd2')), 'quem só registra lê só os próprios');
-  await assertSucceeds(getDocs(query(collection(db('supPatio'), 'segdds'), where('mes', '==', '2026-11'), where('conj', '==', 'patio'))));
+  await assertSucceeds(getDoc(doc(db('segReg'), 'segdds', 'd1')), 'o autor lê o que registrou');
+  await assertFails(getDoc(doc(db('liderRec'), 'segdds', 'd1')), 'quem não vê a Segurança não lê');
   await assertFails(deleteDoc(doc(db('segReg'), 'segdds', 'd1')));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'segdds', 'd1')));
 });

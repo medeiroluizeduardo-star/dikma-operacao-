@@ -51,7 +51,7 @@
 //   Gravação: semana (s, m, ft) + evidencias + evidenciasArquivo no MESMO writeBatch (apontarComFotos): sem sinal fica tudo
 //   na fila do aparelho e sobe junto — nunca fica apontamento sem foto nem foto sem apontamento.
 //   config/seguranca          { areas[{nome, conj}], tipos[], regimes[], desvios[] }   listas dos formulários da Segurança
-//   segdds/{id}               DDS { data, mes, area, conj, tema, pessoas[], obs, por, porNome, em } (Segurança; telas/dds.js)
+//   segdds/{id}               DDS antigos (a função saiu do site em 2026-11; os dados ficam guardados no banco)
 //   seginter/{id}             registro de interação { data, mes, area, conj, local, tipoAtiv, risco, desvios[], desvioOutro,
 //                             desc, acao, resp, mat, fotos[ids], minis[], por, porNome, em }
 //   seganom/{id}              registro de anomalia { data, hora, mes, area, conj, local, regime, desc, conseq, acao, causas,
@@ -75,10 +75,10 @@ import {
 import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU, perfilDe } from '../contas/acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
 import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg, registraDds, ddsConjsOp } from '../contas/segcalc.js';
+import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt } from '../contas/fotos.js';
 
@@ -183,7 +183,7 @@ export async function start(callbacks) {
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
       // Sem nenhum módulo (nem perfil em algum módulo) não entra.
       if (!temAlgumModulo(me)) { stopData(); cb.onAuth({ status: 'semAcesso', user: me }); return; }
-      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); ddsIniciar(); }
+      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); }
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
@@ -290,7 +290,6 @@ function startData() {
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
   if (temSeg(me)) startSeg();
-  ddsIniciar();
   // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js).
   if (veTreinos(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
@@ -342,7 +341,7 @@ function stopData() {
   monthSubs.clear();
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
-  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; ddsMeses.clear(); cache.seg = novoSeg();
+  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
@@ -980,14 +979,14 @@ export async function eImportar(seed) {
 // Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
 // As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
 // dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
-function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], dds: [], meses: new Set(), v: 0 }; }
+function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 }; }
 cache.seg = novoSeg();
 let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
 const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
 function segJuntar() {
-  const inter = {}, anom = {}, dds = {};
-  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segdds') ? dds : anom; for (const x of l) alvo[x.id] = x; }
-  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.dds = Object.values(dds);
+  const inter = {}, anom = {};
+  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : anom; for (const x of l) alvo[x.id] = x; }
+  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom);
   cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
 }
 function segOuvir(key, q) {
@@ -1017,24 +1016,6 @@ export function segWatch(meses, inicial) {
     for (const col of ['seginter', 'seganom']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
   }
 }
-// DDS: lido por mês com os filtros que as regras pedem (quem vê a Segurança toda: sem filtro; senão os próprios, os do
-// supervisor da área e, na Operação, os do conjunto para quem não é líder). Vale também para quem não tem a Segurança.
-const ddsMeses = new Set();
-function filtrosDds() {
-  if (veTudoSeg(me)) return [[]];
-  const l = [[where('por', '==', me.uid)]];
-  const cs = new Set(supConjs(me)); if (perfilDe(me, 'operacao') !== 'lider') ddsConjsOp(me).forEach(k => cs.add(k));
-  for (const k of cs) l.push([where('conj', '==', k)]);
-  return l;
-}
-export function ddsWatch(meses) {
-  if (!db || !me || !(registraDds(me) || temSeg(me))) return;
-  for (const m of new Set(meses.filter(Boolean))) {
-    if (ddsMeses.has(m)) continue; ddsMeses.add(m);
-    filtrosDds().forEach((f, i) => segOuvir(`segdds|${m}|${i}`, query(collection(db, 'segdds'), where('mes', '==', m), ...f)));
-  }
-}
-function ddsIniciar() { const m = today().slice(0, 7); ddsWatch([addMonth(m, -1), m]); }
 // Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
 // quando a conexão voltar. fotos: [{ dados, mini }] já reduzidas pela tela.
 export function segNovo(col, dados, fotos) {
@@ -1066,9 +1047,6 @@ export function segExcluir(col, r) {
   for (const f of fotosDoReg(r)) b.delete(doc(db, 'segfotos', f));
   return track(b.commit());
 }
-// DDS (diálogo diário de segurança): um documento por DDS, com a lista de quem participou (telas/dds.js).
-export function segDds(dados) { const r = doc(collection(db, 'segdds')); track(setDoc(r, { ...dados, por: me.uid, porNome: me.nome || me.login || '', em: serverTimestamp() })); return r.id; }
-export function segDdsExcluir(id) { const b = writeBatch(db); b.delete(doc(db, 'segdds', id)); return track(b.commit()); }
 export const segSalvarCfg = cfg => track(setDoc(doc(db, 'config', 'seguranca'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 
 // ---------- Limpeza de dados (Administração › Limpeza de dados, só o administrador) ----------

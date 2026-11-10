@@ -16,8 +16,8 @@ import { I } from '../ui/icones.js';
 import { toast, formSheet } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
-import { criarDds } from './dds.js';
 import { telaTreinos } from './treinos.js';
+import { veTreinos, resumoTreinos } from '../contas/treinos.js';
 
 // ---- Perguntas dos formulários (ordem, textos e obrigatórias iguais aos do Google) ----
 // t: date | time | text | area (texto longo) | radio (uma opção) | checks (várias) | fotos · obr: obrigatória
@@ -457,12 +457,12 @@ export function criarSeguranca() {
       <div class="kpi"><span class="lbl">Tempo médio de tratamento</span><span class="v vsm">${ind.tempoMedio == null ? '—' : fmtDias(ind.tempoMedio)}</span><span class="s">das concluídas no mês</span></div></div>`;
     h += `<div class="grid2"><div class="card"><header><h2>Por mês</h2><p>Últimos 6 meses</p></header><div class="body"><div class="legend"><span><i style="background:var(--focus)"></i>Interações</span><span><i style="background:var(--st-atr)"></i>Anomalias</span></div>${colunas(ind.porMes)}</div></div>
       <div class="card"><header><h2>Desvios mais frequentes</h2><p>${mesNome(U.pMes)} · nas interações</p></header><div class="body">${ind.desvios.length ? barras(ind.desvios.slice(0, 8), 'var(--st-nreal)', ind.interMes, x => x) : vazio('Nenhum desvio no mês', 'Os desvios marcados nas interações aparecem aqui.')}</div></div></div>`;
-    // Reincidência: o mesmo desvio na mesma área 3 vezes ou mais no mês (pede uma ação na área). E os DDS do mês.
+    // Reincidência: o mesmo desvio na mesma área 3 vezes ou mais no mês (pede uma ação na área). E a situação dos treinamentos.
     { const n = new Map(); for (const r of inter) if (r.mes === U.pMes) for (const dv of r.desvios || []) { const k = r.area + '|' + dv; n.set(k, (n.get(k) || 0) + 1); }
       const rep = [...n].filter(([, v]) => v >= 3).sort((a, b) => b[1] - a[1]);
-      const dds = (S().dds || []).filter(r => r.mes === U.pMes), part = dds.reduce((t, r) => t + (r.pessoas || []).length, 0);
+      const tr = veTreinos(ME) ? resumoTreinos(DB.cache.treinos, hoje()) : null;
       h += `<div class="grid2"><div class="card"><header><h2>Desvios que se repetem</h2><p>${mesNome(U.pMes)} · o mesmo desvio na mesma área 3 vezes ou mais</p></header>${rep.length ? `<div class="tw"><table><thead><tr><th>Desvio</th><th>Área</th><th class="r">Vezes</th></tr></thead><tbody>${rep.slice(0, 8).map(([k, v]) => { const [area, dv] = k.split('|'); return `<tr><td>${esc(dv)}</td><td>${esc(area)}</td><td class="r num">${v}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="body"><p class="muted small m0">Nenhum desvio repetido 3 vezes na mesma área.</p></div>'}</div>
-        <div class="card"><header><h2>DDS</h2><p>${mesNome(U.pMes)} · diálogos registrados</p><span class="r"><button class="btn sm" data-go="sgdds">Abrir</button></span></header><div class="body"><div class="mini"><div><b class="num">${dds.length}</b><span>DDS no mês</span></div><div><b class="num">${part}</b><span>Participações</span></div></div></div></div></div>`; }
+        ${tr ? `<div class="card"><header><h2>Treinamentos e ASO</h2><p>Situação hoje</p><span class="r"><button class="btn sm" data-go="sgtrein">Abrir</button></span></header><div class="body"><div class="mini"><div><b class="num" style="${tr.vencido ? 'color:var(--st-nreal)' : ''}">${tr.vencido}</b><span>Vencidos</span></div><div><b class="num">${tr.vence}</b><span>Vencem em 30 dias</span></div><div><b class="num">${tr.ok}</b><span>Em dia</span></div></div></div></div>` : ''}</div>`; }
     h += `<div class="grid2"><div class="card"><header><h2>Interações por pessoa</h2><p>${mesNome(U.pMes)} · pelo responsável</p></header><div class="body">${ind.porPessoa.length ? barras(ind.porPessoa.slice(0, 10), 'var(--focus)') : vazio('Nenhuma interação no mês', 'Quem registra aparece aqui.')}</div></div>
       <div class="card"><header><h2>Por área</h2><p>${mesNome(U.pMes)} · anomalias abertas × concluídas</p></header><div class="body">${ind.porArea.some(x => x.inter || x.abertas || x.concluidas) ? `<div class="legend"><span><i style="background:var(--st-nreal)"></i>Abertas</span><span><i style="background:var(--st-real)"></i>Concluídas</span></div><div class="bars">${ind.porArea.map(x => { const t = Math.max(1, ...ind.porArea.map(z => z.abertas + z.concluidas)); return `<div class="barrow"><span class="n">${esc(title(x.area))}<small class="num">${x.inter} interaç${x.inter === 1 ? 'ão' : 'ões'}</small></span><div class="stack">${x.abertas ? `<i style="width:${x.abertas / t * 100}%;background:var(--st-nreal)" title="${x.abertas} abertas"></i>` : ''}${x.concluidas ? `<i style="width:${x.concluidas / t * 100}%;background:var(--st-real)" title="${x.concluidas} concluídas"></i>` : ''}</div><span class="p num">${x.abertas + x.concluidas}</span></div>`; }).join('')}</div>` : vazio('Nada registrado no mês', 'As áreas aparecem aqui quando houver registros.')}</div></div></div>`;
     return h;
@@ -558,16 +558,12 @@ export function criarSeguranca() {
   });
   document.addEventListener('input', e => { if (e.target.id === 'sgQ') { U.q = e.target.value; clearTimeout(window._sgq); window._sgq = setTimeout(schedule, 220); } });
 
-  const DDS = criarDds(); // Segurança › DDS (telas/dds.js)
   function renderTela(v) {
-    // DDS: também para a liderança da Operação, que não tem a Segurança (a lista vem de ddsWatch, não do resto da Segurança).
-    if (v === 'opdds' || (v === 'sgdds' && !S().on)) return DDS.view();
     if (v === 'sgtrein') return telaTreinos().view(); // a mesma tela do RH (telas/treinos.js)
     if (!S().on || !S().loaded) { if (!S().on && v !== 'sgconfig') return vazio('Sem acesso à Segurança', 'Fale com o administrador do sistema.'); if (!S().loaded && v !== 'sgconfig') return ESQUELETO; }
     if (v === 'sginter') return vInter();
     if (v === 'sganom') return vAnom();
     if (v === 'sgpainel') return vPainel();
-    if (v === 'sgdds') return DDS.view();
     if (v === 'sgconfig') return vConfig();
     return vAnom();
   }
