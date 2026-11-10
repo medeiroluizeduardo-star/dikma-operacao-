@@ -166,9 +166,9 @@ export function criarMeuDia(X) {
     }
     // Segurança: anomalias vencidas, com a pessoa e abertas na área dela (telas/seguranca.js)
     if (X.seg) { const sg = X.seg(); if (sg) { tiles.push(...sg.tiles); if (sg.bloco) blocos.push(sg.bloco); } }
-    // RH: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (contas/treinos.js)
+    // Segurança: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (contas/treinos.js)
     if (veTreinos(ME()) && DB.treinosCarregar) DB.treinosCarregar();
-    { const go = P('rh') ? ['rh', 'atrein'] : ['seguranca', 'sgtrein'];
+    { const go = ['seguranca', 'sgtrein'];
       if (veTreinos(ME()) && DB.cache.tLoaded) { const r = resumoTreinos(DB.cache.treinos || [], hoje);
       if (r.vencido) tiles.push({ n: r.vencido, t: r.vencido > 1 ? 'treinamentos ou ASO vencidos' : 'treinamento ou ASO vencido', s: 'NRs, ASO e outros: renovar ou afastar da atividade', tom: 'bad', go, acao: 'Ver' });
       if (r.vence) tiles.push({ n: r.vence, t: r.vence > 1 ? 'treinamentos ou ASO vencem em 30 dias' : 'treinamento ou ASO vence em 30 dias', s: 'programe a renovação', tom: 'warn', go, acao: 'Ver' }); } }
