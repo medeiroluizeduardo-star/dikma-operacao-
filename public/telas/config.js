@@ -1,6 +1,6 @@
 // Módulo Configurações: Visão geral, Escalas e turnos, Conferência, Uso do plano, Rotas, Plano padrão, Gerador,
 // Usuários, Perfis e permissões e o primeiro acesso (importar).
-import { SETS, SET_KEYS, setDaArea, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
+import { SETS, SET_KEYS, setDaArea, areasDoSet, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
 import { competenciaDe, diasDaCompetencia } from '../contas/planilhas-adm.js';
 import { semAcento, casa, caixaBusca } from '../ui/busca.js';
 import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe } from '../contas/acessos.js';
@@ -36,7 +36,7 @@ function vCfGeral() {
   const kv = l => `<dl class="cfkv">${l.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
   let h = '<div class="cfgrid">';
   // Escalas
-  const semT = setsDe(ME).reduce((n, k) => n + SETS[k].areas.flatMap(a => (DB.dados(k).colabs || {})[a] || []).filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); }).length, 0);
+  const semT = setsDe(ME).reduce((n, k) => n + areasDoSet(k).flatMap(a => (DB.dados(k).colabs || {})[a] || []).filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); }).length, 0);
   const hoje = Object.entries(E.regimes).filter(([, r]) => r.tipo === 'ciclo').map(([k]) => { const l = E.turmasDoDia(k, TODAY); return `<span class="tchip">${esc(k)} · ${l.length ? l.join(' ') : '—'}</span>`; }).join('');
   h += card(I.escala, 'Escalas e turnos', 'Regimes, turmas e feriados de todos os módulos', `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${hoje}</div>${kv([['Regimes', Object.values(E.regimes).map(r => esc(r.nome)).join(', ')], ['Feriados cadastrados', E.feriados.size], ['Turno sem turma', semT ? `<span class="semt">${semT} pessoa${semT > 1 ? 's' : ''}</span>` : 'nenhum']])}`, ir('cfescala', 'Abrir escalas'));
   // Atividades
@@ -93,7 +93,7 @@ function vCfEscala() {
   const barra = ed ? `<div class="body row-gap savebar"><button class="btn pri" data-act="escSalvar" ${salvo ? 'disabled' : ''}>${salvo ? 'Tudo salvo' : 'Salvar escalas'}</button>${salvo ? '' : '<button class="btn ghost" data-act="escDescartar">Descartar mudanças</button><span class="muted small">As mudanças só valem depois de salvar.</span>'}</div>` : '';
   // pessoas de turno e suas turmas
   const q = UI.escQ || '';
-  const pessoas = []; for (const k of setsDe(ME)) for (const a of SETS[k].areas) for (const c of ((DB.dados(k).colabs || {})[a] || [])) { const rg = normRegime(c.regime, escala().regimes); const r = escala().regimes[rg]; if (r && r.tipo === 'ciclo') pessoas.push({ k, c, rg, r, t: letra(c.turma), tf: turmaFicha(c.nome) }); }
+  const pessoas = []; for (const k of setsDe(ME)) for (const a of areasDoSet(k)) for (const c of ((DB.dados(k).colabs || {})[a] || [])) { const rg = normRegime(c.regime, escala().regimes); const r = escala().regimes[rg]; if (r && r.tipo === 'ciclo') pessoas.push({ k, c, rg, r, t: letra(c.turma), tf: turmaFicha(c.nome) }); }
   pessoas.sort((x, y) => x.c.nome.localeCompare(y.c.nome));
   const kP = x => semAcento([x.c.nome, x.c.rota, AREA_S[x.c.area], SETS[x.k].curto, x.rg, x.t || x.tf || 'sem turma'].join(' '));
   const sem = pessoas.filter(x => !x.t && !x.tf).length; const daFicha = pessoas.filter(x => !x.t && x.tf).length;
@@ -116,7 +116,7 @@ function vCfConf() {
   const semData = Object.entries(E.regimes).filter(([, r]) => r.tipo === 'ciclo').flatMap(([k, r]) => Object.entries(r.turmas || {}).filter(([, d]) => !d).map(([l]) => `${r.nome || k} · turma ${l}`));
   if (semData.length) item('bad', 'Turmas sem data de início', 'Sem a data, a folga pela escala não é marcada sozinha para quem é dessas turmas.', semData, 'cfescala', 'Escalas e turnos');
   // 2) pessoas de turno sem turma
-  const todos = setsDe(ME).flatMap(k => SETS[k].areas.flatMap(a => ((DB.dados(k).colabs || {})[a] || []).map(c => ({ ...c, set: k }))));
+  const todos = setsDe(ME).flatMap(k => areasDoSet(k).flatMap(a => ((DB.dados(k).colabs || {})[a] || []).map(c => ({ ...c, set: k }))));
   const semTurma = todos.filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); });
   if (semTurma.length) item('bad', 'Pessoas de turno sem turma', 'Sem a letra da turma, o sistema não sabe as folgas delas.', semTurma.map(c => `${title(c.nome)} (${SETS[c.set].curto})`), 'cfescala', 'Escalas e turnos');
   // 3) Atividades × fichas do Efetivo (pelo nome)
@@ -498,7 +498,7 @@ export async function aplicarFeriadosAtividades() {
 acoes.escDescartar = (t, d) => { UI.escR = null; render(); };
 acoes.escFicha = (t, d) => {
   let n = 0;
-  for (const k of setsDe(ME)) for (const a of SETS[k].areas) {
+  for (const k of setsDe(ME)) for (const a of areasDoSet(k)) {
     const itens = (DB.dados(k).colabs || {})[a] || []; let mudou = false;
     const novos = itens.map(c => { const rg = escala().regimes[normRegime(c.regime, escala().regimes)]; if (rg && rg.tipo === 'ciclo' && !letra(c.turma)) { const tf = turmaFicha(c.nome); if (tf) { mudou = true; n++; return { ...c, turma: tf }; } } return c; });
     if (mudou) DB.salvarColabsArea(a, novos, k);

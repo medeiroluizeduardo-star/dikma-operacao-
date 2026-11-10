@@ -3,7 +3,7 @@
 // definidas lá são gravadas também no Atividades Pátio (colaboradores/{ÁREA}), no Atividades Bateria
 // (b_colaboradores/{ÁREA}) e na Operação (eq/cadastro.operadores). A ligação é pela matrícula e,
 // na falta dela, pelo nome.
-import { SETS, SET_KEYS, AREAS_ATIV, setDaArea, AREA_S } from './cal.js';
+import { SETS, SET_KEYS, AREAS_ATIV, AREAS_GERAIS, ehAreaGeral, areasDoSet, setDaArea, AREA_S } from './cal.js';
 import { perfilDe, temFichasU, escoposDe } from './acessos.js';
 
 export const AREA_GERAL = 'COQUERIA';
@@ -33,12 +33,14 @@ export function criarPessoas(DB) {
   const st = k => DB.dados(k);
   const temSetDados = k => !!st(k).config;
   const temOp = () => !!(DB.cache.e && DB.cache.e.config);
-  const ativ = () => SET_KEYS.flatMap(k => SETS[k].areas.flatMap(a => (st(k).colabs[a] || []).map(x => ({ set: k, x }))));
+  const ativ = () => SET_KEYS.flatMap(k => areasDoSet(k).flatMap(a => (st(k).colabs[a] || []).map(x => ({ set: k, x }))));
   const ops = () => (temOp() && DB.cache.e.cad && DB.cache.e.cad.operadores) || [];
   const efetivo = () => (DB.cache.g && DB.cache.g.colabs) || [];
   const casa = (x, c) => !!x && !!c && ((x.mat && c.mat && String(x.mat) === String(c.mat)) || (!!x.nome && norm(x.nome) === norm(c.nome)));
   const rotasDe = area => { const k = setDaArea(area); return k ? ((st(k).config && st(k).config.rotas) || []).filter(r => r.area === area).map(r => r.rota) : []; };
 
+  // Onde a pessoa está no conjunto: "Pátio · Recebimento · Rota 1" ou só "Coqueria Pátio" (área sem rota).
+  const txtAtiv = y => (ehAreaGeral(y.x.area) ? AREA_S[y.x.area] : `${SETS[y.set].curto} · ${AREA_S[y.x.area] || y.x.area} · ${y.x.rota}`);
   // ativ = { set, x } onde x é o item em colaboradores/{ÁREA} do conjunto
   function vinculo(c) { const a = ativ().find(y => casa(y.x, c)) || null; return { ativ: a, patio: a ? a.x : null, op: ops().find(x => casa(x, c)) || null }; }
 
@@ -47,7 +49,7 @@ export function criarPessoas(DB) {
     const v = vinculo(c);
     const area = v.ativ ? v.ativ.x.area : v.op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
     const partes = [];
-    if (v.ativ) partes.push(`${SETS[v.ativ.set].curto} · ${AREA_S[v.ativ.x.area] || v.ativ.x.area} · ${v.ativ.x.rota}`);
+    if (v.ativ) partes.push(txtAtiv(v.ativ));
     if (v.op) partes.push('Equipamentos');
     return { ...v, area, txt: partes.join(' + ') || areaNome(area) };
   }
@@ -60,19 +62,21 @@ export function criarPessoas(DB) {
     for (const c of lista) {
       const nn = norm(c.nome); const a = am.get(String(c.mat)) || an.get(nn) || null; const op = om.get(String(c.mat)) || on.get(nn) || null;
       const area = a ? a.x.area : op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
-      const partes = []; if (a) partes.push(`${SETS[a.set].curto} · ${AREA_S[a.x.area] || a.x.area} · ${a.x.rota}`); if (op) partes.push('Equipamentos');
+      const partes = []; if (a) partes.push(txtAtiv(a)); if (op) partes.push('Equipamentos');
       out.set(String(c.mat), { ativ: a, patio: a ? a.x : null, op, area, txt: partes.join(' + ') || areaNome(area) });
     }
     return out;
   }
   function areaNome(a) {
     if (a === AREA_OP) return 'Equipamentos';
-    if (!a || a === AREA_GERAL) return 'Coqueria (sem rota)';
+    if (!a || a === AREA_GERAL) return 'Sem área de atuação';
+    if (ehAreaGeral(a)) return AREA_S[a];
     const k = setDaArea(a); return k ? `${SETS[k].curto} · ${AREA_S[a] || a}` : a;
   }
-  const areasAtuacao = () => [AREA_GERAL, ...SET_KEYS.filter(temSetDados).flatMap(k => SETS[k].areas), ...(temOp() ? [AREA_OP] : [])];
+  const geraisComDados = () => AREAS_GERAIS.filter(a => temSetDados(setDaArea(a)));
+  const areasAtuacao = () => [...geraisComDados(), ...SET_KEYS.filter(temSetDados).flatMap(k => SETS[k].areas), ...(temOp() ? [AREA_OP] : []), AREA_GERAL];
   // Grupos para o <select> de área de atuação
-  const gruposArea = () => [['Geral', [AREA_GERAL]], ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Equipamentos', [AREA_OP]]] : [])];
+  const gruposArea = () => [...(geraisComDados().length ? [['Coqueria (sem rota de atividades)', geraisComDados()]] : []), ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Equipamentos', [AREA_OP]]] : []), ['Outros', [AREA_GERAL]]];
 
   function funcoes() {
     const s = new Set();
@@ -86,7 +90,7 @@ export function criarPessoas(DB) {
   // de sempre). Assim um número liberado nunca vai para outra pessoa, que herdaria faltas, coberturas e horas extras dela.
   function proximoId(k) {
     let m = DB.maiorIdUsado ? DB.maiorIdUsado(k) : 0;
-    for (const a of SETS[k].areas) for (const x of st(k).colabs[a] || []) { const n = parseInt(String(x.id).replace(/\D/g, ''), 10); if (n > m) m = n; }
+    for (const a of areasDoSet(k)) for (const x of st(k).colabs[a] || []) { const n = parseInt(String(x.id).replace(/\D/g, ''), 10); if (n > m) m = n; }
     st(k).maiorId = Math.max(st(k).maiorId || 0, m + 1); // reserva o número já na memória (vários cadastros seguidos)
     return SETS[k].idp + String(m + 1).padStart(3, '0');
   }
@@ -145,7 +149,7 @@ export function criarPessoas(DB) {
     const g = efetivo(); const i = g.findIndex(x => casa(x, pessoa));
     if (i >= 0 && g[i].funcao !== funcao) { const n = g.slice(); n[i] = { ...g[i], funcao }; t.push(DB.gSalvarColabs(n)); }
     const ref = i >= 0 ? g[i] : pessoa;
-    for (const k of SET_KEYS) for (const a of SETS[k].areas) {
+    for (const k of SET_KEYS) for (const a of areasDoSet(k)) {
       const l = st(k).colabs[a] || []; const j = l.findIndex(x => casa(x, ref) || casa(x, pessoa));
       if (j >= 0 && l[j].funcao !== funcao) { const n = l.slice(); n[j] = { ...l[j], funcao }; st(k).colabs[a] = n; t.push(DB.salvarColabsArea(a, n, k)); }
     }
@@ -155,7 +159,7 @@ export function criarPessoas(DB) {
   // Pessoas que estão nos módulos de atividades ou na Operação e ainda não têm ficha no Efetivo.
   function semFicha() {
     const g = efetivo(); const out = [];
-    for (const y of ativ()) if (!g.some(c => casa(y.x, c))) out.push({ nome: y.x.nome, funcao: y.x.funcao, area: y.x.area, rota: y.x.rota, regime: y.x.regime, onde: `${SETS[y.set].curto} · ${AREA_S[y.x.area]} · ${y.x.rota}` });
+    for (const y of ativ()) if (!g.some(c => casa(y.x, c))) out.push({ nome: y.x.nome, funcao: y.x.funcao, area: y.x.area, rota: y.x.rota, regime: y.x.regime, onde: txtAtiv(y) });
     for (const o of ops()) if (!g.some(c => casa(o, c)) && !out.some(p => norm(p.nome) === norm(o.nome))) out.push({ nome: o.nome, funcao: o.funcao, area: AREA_OP, op: true, escala: o.escala, turma: o.turma, onde: 'Equipamentos' });
     return out.sort((a, b) => a.nome.localeCompare(b.nome));
   }

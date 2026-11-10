@@ -113,7 +113,7 @@ export const papelNome = p => (PAPEIS.find(x => x[0] === p) || [p, p])[1];
 export function rebuild() {
   PLANO = AREAS.flatMap(a => DB.cache.plano[a] || []);
   PL = new Map(PLANO.map(p => [p.id, p]));
-  COLABS = AREAS.flatMap(a => DB.cache.colabs[a] || []);
+  COLABS = [...AREAS, ...SETS[SK].gerais].flatMap(a => DB.cache.colabs[a] || []); // pessoas das áreas de atividades e das áreas gerais (coordenação, técnicos)
 }
 export function ensurePeriod() {
   const ms = meses();

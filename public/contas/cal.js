@@ -4,14 +4,20 @@
 // Conjuntos de atividades: cada um é um módulo com as próprias áreas, plano, semanas e efetivo diário.
 // pre = prefixo das coleções no Firestore (o Pátio usa os nomes originais).
 export const SETS = {
-  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] },
-  bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'] }
+  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'], gerais: ['COQUERIA GERAL', 'COQUERIA PÁTIO'] },
+  bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'], gerais: ['COQUERIA BATERIA'] }
 };
 export const SET_KEYS = Object.keys(SETS);
 export const AREAS = SETS.patio.areas;
 export const AREAS_ATIV = SET_KEYS.flatMap(k => SETS[k].areas);
-export const setDaArea = a => SET_KEYS.find(k => SETS[k].areas.includes(a)) || null;
-export const AREA_S = { 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque', 'BATERIA 1': 'Bateria 1', 'BATERIA 2': 'Bateria 2', 'TRILHO': 'Trilho', 'CDQ': 'CDQ' };
+// Áreas de atuação sem rota de atividades (coordenação, técnicos, apoio): a pessoa entra na Presença do dia do
+// conjunto, mas a área não tem plano, apontamento nem indicador de atividades. Ficam em colaboradores/{ÁREA} como as outras.
+export const AREAS_GERAIS = SET_KEYS.flatMap(k => SETS[k].gerais);
+export const ehAreaGeral = a => AREAS_GERAIS.includes(a);
+// Todas as áreas onde ficam pessoas do conjunto (atividades + gerais).
+export const areasDoSet = k => [...SETS[k].areas, ...SETS[k].gerais];
+export const setDaArea = a => SET_KEYS.find(k => areasDoSet(k).includes(a)) || null;
+export const AREA_S = { 'COQUERIA GERAL': 'Coqueria Geral', 'COQUERIA PÁTIO': 'Coqueria Pátio', 'COQUERIA BATERIA': 'Coqueria Bateria', 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque', 'BATERIA 1': 'Bateria 1', 'BATERIA 2': 'Bateria 2', 'TRILHO': 'Trilho', 'CDQ': 'CDQ' };
 export const DAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 export const DL = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
