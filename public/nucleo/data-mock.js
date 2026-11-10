@@ -466,17 +466,26 @@ export async function admSetJus(conj, comp, p, data, val) {
 export async function admSalvarComp(conj, comp, dados) { cache.adm.comps[conj + '|' + comp] = { ...(cache.adm.comps[conj + '|' + comp] || {}), ...dados, conj, competencia: comp }; admCh(); }
 export async function admSalvarGrupos(conj, comp, grupos) { cache.adm.comps[conj + '|' + comp].grupos = grupos; admCh(); }
 export async function feriasSalvar(id, dados) { const nid = id || 'fe' + Date.now().toString(36); const i = cache.adm.ferias.findIndex(f => f.id === nid); if (i >= 0) cache.adm.ferias[i] = { ...cache.adm.ferias[i], ...dados }; else cache.adm.ferias.push({ id: nid, ...dados }); cache.adm.ferias = [...cache.adm.ferias]; admCh(); return nid; }
-// Treinamentos de exemplo (RH e Segurança): ASO e NR-35 de pessoas fictícias, com validades espalhadas em volta de hoje.
+// Treinamentos de exemplo (Segurança): pessoas fictícias, com validades espalhadas em volta de hoje.
 cache.treinos = []; cache.tLoaded = false;
 function treinosExemplo() {
   if (cache.tLoaded) return; const hoje = today();
   let ps = ((cache.g && cache.g.colabs) || []).filter(c => c.nome).slice(0, 14);
   if (!ps.length) ps = ['ANA SOUZA', 'BRUNO LIMA', 'CARLA DIAS', 'DIEGO REIS', 'EDSON ROCHA', 'FABIO NUNES', 'GABRIEL MOTA', 'HELENA CRUZ', 'IGOR PAIVA', 'JULIA PRADO', 'KAIO MELO', 'LUCAS VAZ', 'MARCOS LIMA', 'NINA ROCHA'].map((nome, i) => ({ nome, mat: String(5000 + i), area: i % 2 ? 'BATERIA' : 'PÁTIO' }));
   const desl = [-40, -5, 6, 18, 25, 60, 120, 200, 300, 15, -12, 90, 400, 33];
-  cache.treinos = ps.flatMap((c, i) => [
-    { id: 'tr' + i + 'a', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'ASO', realizado: add(hoje, desl[i] - 365), validade: add(hoje, desl[i]), obs: '' },
-    ...(i % 2 ? [] : [{ id: 'tr' + i + 'b', mat: c.mat || '', nome: c.nome, setor: c.area || '', tipo: 'NR-35', realizado: add(hoje, desl[(i + 5) % 14] - 730), validade: add(hoje, desl[(i + 5) % 14] + 30), obs: '' }])
-  ]);
+  // Os treinamentos da planilha de controle da empresa: alguns feitos, alguns 'não se aplica', um pendente.
+  const tipos = ['NR 35 TRABALHO EM ALTURA', 'NR 33 ESPAÇO CONFINADO', 'BENZENO (PPEOB)', 'PINE', 'GASES SIDERÚRGICOS', 'ASO'], meses = [24, 12, 24, 24, 36, 12];
+  cache.treinos = ps.flatMap((c, i) => {
+    const p = { mat: c.mat || '', nome: c.nome, setor: c.area || '', turno: i % 3 ? 'Adm' : 'Turno', funcao: i % 4 ? 'AJUDANTE' : 'OPERADOR DE PROCESSOS', admissao: add(hoje, -400 - i * 90) };
+    return tipos.flatMap((tipo, j) => {
+      const id = 'tr' + i + '_' + j, k = (i + j) % 7;
+      if (k === 6) return [];
+      if (k === 5) return [{ id, ...p, tipo, realizado: null, validade: null, obs: '', na: true }];
+      if (i === 3 && j === 2) return [{ id, ...p, tipo, realizado: null, validade: null, obs: 'INAPTO' }];
+      const venc = add(hoje, desl[(i + j) % 14]);
+      return [{ id, ...p, tipo, realizado: add(venc, -meses[j] * 30), validade: venc, obs: '' }];
+    });
+  });
   cache.tLoaded = true;
 }
 export async function treinoSalvar(id, dados) { treinosExemplo(); const nid = id || 'tr' + Date.now().toString(36); const i = cache.treinos.findIndex(t => t.id === nid); if (i >= 0) cache.treinos[i] = { ...cache.treinos[i], ...dados }; else cache.treinos.push({ id: nid, ...dados }); changed(); return nid; }
