@@ -513,25 +513,11 @@ service cloud.firestore {
         || (autorNoPrazo() && resource.data.status == 'aberta' && corrige('seganom') && anomOk(request.resource.data));
       allow delete: if admin();
     }
-    // DDS (diálogo diário de segurança): quem registra interações registra o DDS; lê quem lê a Segurança, o autor e o
-    // supervisor da área. O autor corrige por 24 h; apagar = administrador.
-    // A liderança da Operação (líder, supervisor, coordenador, gestor) também registra o DDS no conjunto do escopo dela;
-    // supervisor, coordenador e gestor da Operação leem os DDS do conjunto. humor = estado de espírito de cada pessoa
-    // (lista do mesmo tamanho de pessoas: B, N, C, P, T ou vazio).
-    function ddsOp(conj) { return ativo() && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && conj in ['patio', 'bateria'] && esc(conj); }
-    function ddsLe(r) { return segLe(r) || (ativo() && r.por == request.auth.uid) || (ddsOp(r.conj) && pEm('operacao') != 'lider'); }
-    function ddsOk(d) {
-      return d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'tema', 'pessoas', 'humor', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
-        && d.get('humor', []) is list && d.get('humor', []).size() <= d.pessoas.size()
-        && dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && txtOk(d, 'tema', 1, 200)
-        && d.pessoas is list && d.pessoas.size() >= 1 && d.pessoas.size() <= 200 && txtOk(d, 'obs', 0, 1000)
-        && d.por is string && txtOk(d, 'porNome', 0, 120);
-    }
+    // DDS antigos (diálogo diário de segurança): a função saiu do site em 2026-11. Os registros ficam guardados no banco:
+    // lê quem lê a Segurança, ninguém grava mais e só o administrador apaga.
     match /segdds/{id} {
-      allow read: if ddsLe(resource.data);
-      allow create: if (segRegistra() || ddsOp(request.resource.data.conj)) && ddsOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
-      allow update: if ativo() && resource.data.por == request.auth.uid && request.time < resource.data.em + duration.value(24, 'h')
-        && ddsOk(request.resource.data) && request.resource.data.por == resource.data.por && request.resource.data.em == resource.data.em;
+      allow read: if segLe(resource.data);
+      allow create, update: if false;
       allow delete: if admin();
     }
     // Fotos: uma por documento (até ~700 KB). 'antes' = do registro, gravada pelo autor junto com ele; 'depois' = do

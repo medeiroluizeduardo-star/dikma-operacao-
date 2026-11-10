@@ -143,10 +143,9 @@ export function vResumo() {
   ${mes ? segDoMes() : ''}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
-// Segurança no resumo do mês (só quem vê a Segurança): interações, anomalias e DDS, sem nomes.
+// Segurança no resumo do mês (só quem vê a Segurança): interações e anomalias, sem nomes.
 function segDoMes() {
   const S = DB.cache.seg; if (!S || !S.on || !S.loaded) return '';
   const i = indicadoresSeg({ inter: S.inter, anom: S.anom, mes: UI.mes, hoje: TODAY });
-  const dds = (S.dds || []).filter(r => r.mes === UI.mes), part = dds.reduce((t, r) => t + (r.pessoas || []).length, 0);
-  return `<h4>Segurança</h4><table><tbody><tr><td>Interações</td><td class="r">${i.interMes}</td></tr><tr><td>Anomalias registradas</td><td class="r">${i.anomMes}</td></tr><tr><td>Anomalias em aberto agora</td><td class="r">${i.abertasAgora}</td></tr><tr><td>DDS realizados</td><td class="r">${dds.length}</td></tr><tr><td>Participações nos DDS</td><td class="r">${part}</td></tr></tbody></table>`;
+  return `<h4>Segurança</h4><table><tbody><tr><td>Interações</td><td class="r">${i.interMes}</td></tr><tr><td>Anomalias registradas</td><td class="r">${i.anomMes}</td></tr><tr><td>Anomalias em aberto agora</td><td class="r">${i.abertasAgora}</td></tr></tbody></table>`;
 }

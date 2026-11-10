@@ -3,7 +3,7 @@
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
 import { legadoDoAcesso, marcasDe, ehAdminU } from '../contas/acessos.js';
 import { prepararImportacao } from '../contas/planilhas-adm.js';
-import { veRegSeg, veDds, fotosDoReg } from '../contas/segcalc.js';
+import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
 import { aplicarCampos } from '../contas/limpeza.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
@@ -560,33 +560,23 @@ function segExemplo() {
   for (const r of [...inter, ...anom]) r.minis = r.fotos.map(f => fotos[f].mini);
   return { cfg: null, inter, anom, fotos };
 }
-// DDS de exemplo: alguns por semana nas áreas da demonstração, com nomes fictícios.
-function ddsExemplo() {
-  const hoje = today(), nomes = ['ANA SOUZA', 'BRUNO LIMA', 'CARLA DIAS', 'DIEGO REIS', 'EDSON ROCHA', 'FABIO NUNES', 'GABRIEL MOTA', 'HELENA CRUZ', 'IGOR PAIVA', 'JULIA PRADO', 'KAIO MELO', 'LUCAS VAZ'];
-  const ar = [['PREPARAÇÃO', 'patio'], ['RECEBIMENTO', 'patio'], ['BATERIA 1', 'bateria'], ['CDQ', 'bateria']];
-  const temas = ['Uso correto de EPI', 'Trabalho em altura', 'Bloqueio e etiquetagem', 'Calor e hidratação', 'Gases e atmosfera da coqueria', 'Movimentação de veículos e pedestres'];
-  return [1, 2, 3, 6, 8, 9, 13, 15, 20, 22, 27, 34].map((n, i) => { const data = add(hoje, -n); const [area, conj] = ar[i % 4]; const k = 5 + (i % 6);
-    return { id: 'sd' + i, data, mes: data.slice(0, 7), area, conj, tema: temas[i % temas.length], pessoas: nomes.slice(i % 4, i % 4 + k), humor: nomes.slice(i % 4, i % 4 + k).map((_, j) => 'BNBNCBPN'[(i + j) % 8]), obs: '', por: i % 2 ? 'segr' : 'segt', porNome: i % 2 ? 'Técnico de Segurança' : 'Supervisor da Preparação (Segurança)', em: Date.now() - n * 864e5 }; });
-}
 function iniciarSeg() {
   if (SEG) return;
   try { SEG = JSON.parse(localStorage.getItem(LSS) || 'null'); } catch (e) { SEG = null; }
   if (!SEG || !Array.isArray(SEG.inter)) { SEG = segExemplo(); segPersist(); }
-  if (!Array.isArray(SEG.dds)) { SEG.dds = ddsExemplo(); segPersist(); }
   segVer++;
 }
 Object.defineProperty(cache, 'seg', {
   get: () => {
-    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], dds: [], meses: new Set(), v: 0 };
+    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 };
     const k = segVer + '|' + (me ? me.uid : '');
-    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), dds: (SEG.dds || []).filter(r => veDds(me, r)), meses: new Set(), v: segVer } };
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
     return segMemo.v;
   },
   enumerable: false
 });
 const segId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 export function segWatch() { /* tudo já está em memória */ }
-export function ddsWatch() { /* tudo já está em memória */ }
 export function segNovo(col, dados, fotos) {
   const id = segId(col === 'seginter' ? 'si' : 'sa'); const ids = fotos.map(() => segId('sf'));
   fotos.forEach((f, i) => { SEG.fotos[ids[i]] = { reg: id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes }; });
@@ -601,8 +591,6 @@ export function segTratar(a, patch, foto) {
   segCh();
 }
 export async function segFoto(id) { const f = SEG && SEG.fotos[id]; return f ? f.dados : null; }
-export function segDds(dados) { const id = segId('sd'); SEG.dds.push({ ...dados, id, por: me.uid, porNome: me.nome || me.login || '', em: Date.now() }); segCh(); return id; }
-export async function segDdsExcluir(id) { SEG.dds = SEG.dds.filter(x => x.id !== id); segCh(); }
 export async function segSalvarCfg(cfg) { SEG.cfg = { ...cfg }; segCh(); }
 // Apagar um registro e as fotos dele (a tela só oferece ao administrador).
 export async function segExcluir(col, r) {

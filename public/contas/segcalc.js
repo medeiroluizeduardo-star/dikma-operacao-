@@ -49,16 +49,6 @@ export const trataTudoSeg = u => ['admin', 'trata', 'gestor'].includes(perfilSeg
 export const temSeg = u => !!u && u.papel !== 'bloqueado' && (!!perfilSeg(u) || supConjs(u).length > 0);
 // Vê o registro: quem vê tudo, o autor, ou o supervisor da área do registro.
 export const veRegSeg = (u, r) => !!u && !!r && (veTudoSeg(u) || (registraSeg(u) && r.por === u.uid) || supConjs(u).includes(r.conj));
-// ---- DDS (diálogo diário de segurança) ----
-// Registra quem registra na Segurança e a liderança da Operação (líder, supervisor, coordenador e gestor) nos conjuntos
-// (Pátio, Bateria) do escopo dela. Vê: quem vê a Segurança, o autor, o supervisor da área e, na Operação, quem não é
-// líder (supervisor, coordenador, gestor) nos conjuntos dele. As regras do banco conferem do mesmo jeito.
-const OP_DDS = ['lider', 'supervisor', 'coordenador', 'gestor'];
-export const ddsConjsOp = u => (u && OP_DDS.includes(perfilDe(u, 'operacao')) ? escoposDe(u).filter(k => SET_KEYS.includes(k)) : []);
-export const registraDds = u => !!u && u.papel !== 'bloqueado' && (registraSeg(u) || ddsConjsOp(u).length > 0);
-export const veDds = (u, r) => !!u && !!r && (veRegSeg(u, r) || r.por === u.uid || (perfilDe(u, 'operacao') !== 'lider' && ddsConjsOp(u).includes(r.conj)));
-// Estado de espírito de cada participante (código gravado → nome e emoji).
-export const HUMOR_DDS = [['B', 'Bem', '😀'], ['N', 'Normal', '🙂'], ['C', 'Cansado', '😴'], ['P', 'Preocupado', '😟'], ['T', 'Triste', '😢']];
 // Trata a anomalia (acompanhamento): trata, gestor, administrador e o supervisor da área.
 export const trataAnom = (u, a) => !!u && !!a && (trataTudoSeg(u) || supConjs(u).includes(a.conj));
 // O autor edita o próprio registro por 24 horas (a anomalia, só enquanto estiver aberta).
