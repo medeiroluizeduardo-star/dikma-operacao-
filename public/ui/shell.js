@@ -119,7 +119,7 @@ function renderTela() {
   if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
   if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));
   if (arq === 'CF') return tela(comModulo('CF', m => m.vConfigModulo(v)));
-  if (v === 'resumo' && !['ativ', 'he'].includes(resTipo())) return tela(modulo('RE').vResumoOutro());
+  if (v === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo())) return tela(modulo('RE').vResumoOutro());
   // Atividades (Pátio ou Bateria): Operação, Gestão e as configurações de rotas, plano e gerador.
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
   if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', comModulo('CF', m => m.vImportar())); return; }
@@ -308,12 +308,12 @@ function renderTop() {
   if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
-  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
+  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
-  const comFiltro = !!v.filtros; // filtros declarados na aba (VIEWS, navegacao.js)
+  const comFiltro = !!v.filtros && !(v.id === 'resumo' && resTipo() === 'escala'); // a Escala das áreas tem o filtro de área dela // filtros declarados na aba (VIEWS, navegacao.js)
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
   else if (comFiltro) ctr = periodControls(filtrosDe(v.id));
   // Seletor Pátio | Bateria (quem tem os dois conjuntos), também no celular: troca o conjunto e fica na mesma aba.
