@@ -564,16 +564,15 @@ test('acesso Administrativo somente leitura: consulta e não altera', async () =
   await assertFails(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-03': 'FT' } }, { merge: true }));
   await assertFails(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
 });
-test('treinamentos, NRs e ASO: o RH Administrativo grava; o leitor do RH só lê; quem não tem RH não vê', async () => {
+test('treinamentos, NRs e ASO: saíram do RH; o RH não lê nem grava; o administrador grava; quem não tem a Segurança não vê', async () => {
   await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'treinos', 't1'), { nome: 'PESSOA TESTE', tipo: 'ASO', validade: '2026-12-01' }); });
   const a = db('admAn');
-  await assertSucceeds(getDocs(collection(a, 'treinos')));
-  await assertSucceeds(setDoc(doc(a, 'treinos', 't2'), { nome: 'OUTRA', tipo: 'NR-35', validade: '2027-01-01' }));
-  await assertFails(setDoc(doc(a, 'treinos', 't3'), { nome: 'SEM TIPO' }));
-  await assertSucceeds(deleteDoc(doc(a, 'treinos', 't2')));
-  await assertSucceeds(getDocs(collection(db('admLeitor'), 'treinos')));
-  await assertFails(setDoc(doc(db('admLeitor'), 'treinos', 't4'), { nome: 'X', tipo: 'ASO' }));
-  await assertFails(deleteDoc(doc(db('admLeitor'), 'treinos', 't1')));
+  await assertFails(getDocs(collection(a, 'treinos')), 'RH Administrativo não lê mais');
+  await assertFails(setDoc(doc(a, 'treinos', 't2'), { nome: 'OUTRA', tipo: 'NR-35', validade: '2027-01-01' }), 'RH Administrativo não grava mais');
+  await assertFails(getDocs(collection(db('admLeitor'), 'treinos')));
+  await assertSucceeds(setDoc(doc(db('admin'), 'treinos', 't2'), { nome: 'OUTRA', tipo: 'NR-35', validade: '2027-01-01' }));
+  await assertFails(setDoc(doc(db('admin'), 'treinos', 't3'), { nome: 'SEM TIPO' }));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'treinos', 't2')));
   await assertFails(getDocs(collection(db('liderRec'), 'treinos')));
 });
 test('treinamentos: o técnico de segurança (registra) lê, grava e importa; o leitor da Segurança só lê', async () => {

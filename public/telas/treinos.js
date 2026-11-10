@@ -14,9 +14,9 @@ import { render, isMobile, schedule } from '../ui/shell.js';
 const SIT = {
   vencido: ['Vencido', 'bad'], vence: ['Vence em breve', 'warn'], ok: ['Em dia', 'ok'], sem: ['Sem validade', 'neu'], renovado: ['Renovado', 'neu']
 };
-const VIEWS_TR = ['atrein', 'sgtrein'];
+const VIEWS_TR = ['sgtrein'];
 
-// Uma tela só para o RH e a Segurança (os ouvintes de clique são ligados uma vez).
+// Uma tela só (os ouvintes de clique são ligados uma vez).
 let TELA = null;
 export const telaTreinos = () => (TELA ||= criarTreinos());
 

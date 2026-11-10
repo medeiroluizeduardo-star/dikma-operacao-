@@ -237,20 +237,20 @@ export function planejar(d) {
       msgs.push({ uid, titulo, corpo, tag: 'seguranca', url: `/?m=seguranca&v=sganom` });
     }
   }
-  // 10) RH: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (segunda-feira, a partir das 7h, uma vez),
-  //     para quem tem o RH (qualquer perfil), os técnicos de segurança (registra, trata, gestor) e o administrador.
+  // 10) Segurança: treinamentos, NRs e ASO vencidos e vencendo nos próximos 30 dias (segunda-feira, a partir das 7h, uma vez),
+  //     para os técnicos de segurança (registra, trata, gestor) e o administrador.
   //     Só números, sem nomes de colaboradores.
   if (hora >= 7 && new Date(hoje + 'T12:00:00').getDay() === 1 && (d.treinos || []).length) {
     const r = resumoTreinos(d.treinos, hoje);
     for (const x of alvo) {
       const chave = `trein|${x.uid}|${hoje}`;
-      const rh = usuarioEm(x.u, 'rh'), sg = usuarioEm(x.u, 'seguranca');
-      const temRh = !!(rh && rh.papel && rh.papel !== 'sem'), temSg = !!(sg && ['registra', 'trata', 'gestor', 'admin'].includes(sg.papel));
-      if (!x.prefs.treinos || d.enviados[chave] || (!temRh && !temSg)) continue;
+      const sg = usuarioEm(x.u, 'seguranca');
+      const temSg = !!(sg && ['registra', 'trata', 'gestor', 'admin'].includes(sg.papel));
+      if (!x.prefs.treinos || d.enviados[chave] || !temSg) continue;
       marcar.add(chave);
       if (!r.vencido && !r.vence) continue;
       const partes = [r.vencido && `${r.vencido} vencido${r.vencido > 1 ? 's' : ''}`, r.vence && `${r.vence} vence${r.vence > 1 ? 'm' : ''} em ${ANTECEDENCIA} dias`].filter(Boolean);
-      msgs.push({ uid: x.uid, titulo: `Treinamentos e ASO: ${partes.join(', ')}`, corpo: `Abra ${temRh ? 'RH' : 'Segurança'} › Treinamentos e ASO para programar as renovações.`, tag: 'treinos', url: temRh ? '/?m=rh&v=atrein' : '/?m=seguranca&v=sgtrein' });
+      msgs.push({ uid: x.uid, titulo: `Treinamentos e ASO: ${partes.join(', ')}`, corpo: 'Abra Segurança › Treinamentos e ASO para programar as renovações.', tag: 'treinos', url: '/?m=seguranca&v=sgtrein' });
     }
   }
   return { msgs, marcar: [...marcar] };

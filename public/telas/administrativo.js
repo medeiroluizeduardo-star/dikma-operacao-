@@ -9,7 +9,6 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
 import { caixaBusca } from '../ui/busca.js';
-import { telaTreinos } from './treinos.js';
 import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from '../contas/situacao.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
@@ -552,7 +551,6 @@ export function criarAdministrativo(X) {
   });
 
   function renderView(view) {
-    if (view === 'atrein') return telaTreinos().view(); // RH › Treinamentos e ASO (telas/treinos.js, também na Segurança)
     if (view === 'afreq') return vFreq();
     if (view === 'aferias') return vFerias();
     if (view === 'aimport') return vImport();

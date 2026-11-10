@@ -51,10 +51,10 @@ export function resumoTreinos(lista, hoje) {
   return r;
 }
 
-// Quem vê e quem altera: o RH (o perfil Administrativo altera) e a Segurança (registra, trata e gestor alteram; o
-// somente leitura só vê). As regras do banco conferem do mesmo jeito.
-export const veTreinos = u => !!u && u.papel !== 'bloqueado' && (!!perfilDe(u, 'rh') || !!perfilDe(u, 'seguranca'));
-export const editaTreinos = u => !!u && u.papel !== 'bloqueado' && (['admin', 'administrativo'].includes(perfilDe(u, 'rh')) || ['admin', 'registra', 'trata', 'gestor'].includes(perfilDe(u, 'seguranca')));
+// Quem vê e quem altera: só a Segurança (registra, trata e gestor alteram; o somente leitura só vê) e o administrador.
+// Desde 2026-11-10 os treinamentos não ficam mais no RH. As regras do banco conferem do mesmo jeito.
+export const veTreinos = u => !!u && u.papel !== 'bloqueado' && !!perfilDe(u, 'seguranca');
+export const editaTreinos = u => !!u && u.papel !== 'bloqueado' && ['admin', 'registra', 'trata', 'gestor'].includes(perfilDe(u, 'seguranca'));
 
 // ---- Importar planilha ----
 // Colunas (o nome pode variar, sem acento e sem maiúscula): Matrícula, Nome, Setor (ou Área), Tipo (ou Treinamento, NR),

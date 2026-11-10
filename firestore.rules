@@ -424,11 +424,11 @@ service cloud.firestore {
       allow read: if acAdm();
       allow write: if admEdita();
     }
-    // Treinamentos, NRs e ASO (RH e Segurança › Treinamentos e ASO): um documento por treinamento feito. Quem tem RH ou
-    // Segurança lê; o perfil Administrativo do RH, os técnicos de segurança (registra, trata, gestor) e o administrador
-    // gravam, um a um ou pela importação da planilha.
-    function treinoLe() { return acAdm() || (ativo() && pEm('seguranca') != ''); }
-    function treinoEdita() { return admEdita() || (ativo() && pEm('seguranca') in ['registra', 'trata', 'gestor']); }
+    // Treinamentos, NRs e ASO (Segurança › Treinamentos e ASO; saiu do RH em 2026-11-10): um documento por treinamento
+    // feito. Quem tem a Segurança lê; os técnicos de segurança (registra, trata, gestor) e o administrador gravam, um a um
+    // ou pela importação da planilha.
+    function treinoLe() { return ativo() && (admin() || pEm('seguranca') != ''); }
+    function treinoEdita() { return ativo() && (admin() || pEm('seguranca') in ['registra', 'trata', 'gestor']); }
     match /treinos/{id} {
       allow read: if treinoLe();
       allow write: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string;
