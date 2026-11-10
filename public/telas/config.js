@@ -7,7 +7,7 @@ import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, ace
 import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../contas/escala.js';
 import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../contas/permissoes.js';
 import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg, rebuild } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { senhaAleatoria } from '../contas/senha.js';
 import { cartaoAjustesHE } from './horas-justificativas.js';
@@ -424,13 +424,34 @@ export function vPerfis() {
 
 /* ---------------- CONFIG ---------------- */
 export function vConfig() {
-  return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
+  return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="body pt0"><button class="btn pri" data-act="novaRota">+ Nova rota</button></div><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
   ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><input class="in pin" data-rnome="${i}" value="${esc(r.rota)}" maxlength="60" aria-label="Nome da rota ${esc(r.rota)}" title="Mudar o nome troca também no plano padrão e nos colaboradores da rota"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
   </tbody></table></div></div>
 
   <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>
   ${cartaoAjustesHE()}`;
 }
+
+// Nova rota: escolhe a área do conjunto, nome, efetivo e carga padrão. Entra logo depois das rotas da mesma área.
+acoes.novaRota = () => {
+  if (!admDe('ativ')) return;
+  const areas = SETS[SK].areas;
+  formSheet('Nova rota', esc(SETS[SK].nome), `<label class="sel"><span>Área</span><select class="in" id="nrArea">${areas.map(a => `<option value="${a}">${esc(AREA_S[a])}</option>`).join('')}</select></label>
+  <label class="sel"><span>Nome da rota</span><input class="in" id="nrNome" maxlength="60" required autocomplete="off" style="text-transform:uppercase" placeholder="Ex.: ROTA DO SOL"></label>
+  <div class="row-gap"><label class="sel"><span>Efetivo padrão</span><input class="in num" id="nrEf" type="number" min="0" value="1"></label><label class="sel"><span>Carga padrão</span><input class="in num" id="nrCarga" type="number" min="0" value="0"></label></div>`, 'Criar rota', async () => {
+    const area = $('nrArea').value; const nome = String($('nrNome').value || '').replace(/\s+/g, ' ').trim().toUpperCase();
+    if (!areas.includes(area)) throw new Error('Escolha a área.');
+    if (!nome) throw new Error('Digite o nome da rota.');
+    if (rotas().some(r => r.area === area && r.rota === nome)) throw new Error('Já existe uma rota com esse nome nesta área.');
+    const nova = { area, rota: nome, ef: Math.max(0, +$('nrEf').value || 0), carga: Math.max(0, +$('nrCarga').value || 0) };
+    const rs = [...rotas()]; let pos = rs.length;
+    for (let j = rs.length - 1; j >= 0; j--) if (rs[j].area === area) { pos = j + 1; break; }
+    if (pos === rs.length) { const ia = areas.indexOf(area); const k = rs.findIndex(r => areas.indexOf(r.area) > ia); if (k >= 0) pos = k; }
+    rs.splice(pos, 0, nova);
+    DB.cache.config.rotas = rs; await DB.saveRotas(rs); rebuild();
+    DB.log(`Rota criada: ${nome} (${AREA_S[area]})`); toast(`Rota ${nome} criada`); render();
+  });
+};
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */
 export function vImportar() {
