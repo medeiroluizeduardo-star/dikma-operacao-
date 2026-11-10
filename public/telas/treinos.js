@@ -1,9 +1,10 @@
 // Dikma Gestão — Treinamentos e ASO (Segurança): validade de cada treinamento (NRs, ASO etc.), quem está vencido e quem
-// vence nos próximos 30 dias, a visão por colaborador (igual à planilha de controle da empresa), cadastro um a um ou por planilha. A conta da situação e a leitura da planilha
+// vence nos próximos 30 dias, a visão por colaborador (igual à planilha de controle da empresa), divisão por Pátio e Bateria e pelas
+// áreas, cadastro um a um ou por planilha. A conta da situação e a leitura da planilha
 // ficam em contas/treinos.js (as mesmas do Meu dia e da rotina de avisos).
-import { today, SET_KEYS } from '../contas/cal.js';
+import { today, SET_KEYS, SETS, areasDoSet, setDaArea } from '../contas/cal.js';
 import { normNome, criarBusca, abasDoXLSX } from '../contas/planilhas-adm.js';
-import { TIPOS_TREINO, mesesSugeridos, addMeses, vigentes, situacaoTreino, resumoTreinos, diasAte, ANTECEDENCIA, editaTreinos, lerPlanilhaTreinos, MODELO_TREINOS, chaveTreino, chavePessoa, tipoOficial } from '../contas/treinos.js';
+import { TIPOS_TREINO, mesesSugeridos, addMeses, vigentes, situacaoTreino, resumoTreinos, diasAte, ANTECEDENCIA, editaTreinos, lerPlanilhaTreinos, MODELO_TREINOS, chaveTreino, chavePessoa, tipoOficial, ehNA, conjDe, areaDe } from '../contas/treinos.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { DB, framed, esc, title } from '../nucleo/base.js';
 import { ME, UI } from '../nucleo/estado.js';
@@ -22,10 +23,20 @@ export const telaTreinos = () => (TELA ||= criarTreinos());
 
 function criarTreinos() {
   const $ = id => document.getElementById(id);
-  const U = { aba: 'atencao', q: '', tipo: '', turno: '' };
+  const U = { aba: 'atencao', q: '', tipo: '', turno: '', conj: '', area: '' };
   let PES = new Map(); // pessoas da visão por colaborador (para o + de uma célula vazia)
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
   const lista = () => DB.cache.treinos || [];
+  const tArea = a => (/^[A-Z]{2,4}$/.test(a) ? a : title(a)); // CDQ fica em maiúsculas
+  const nomeConj = k => (SETS[k] ? SETS[k].curto : '');
+  // Filtro de Pátio/Bateria e área (vale para tudo: números, listas, por colaborador e exportação).
+  const noFiltro = t => (!U.conj || conjDe(t) === U.conj) && (!U.area || areaDe(t) === U.area);
+  // Área de cada pessoa pelo cadastro das Atividades (Operação), para quem vem da planilha sem área.
+  function areasDoSistema() {
+    const m = new Map();
+    for (const k of SET_KEYS) { const d = DB.dados ? DB.dados(k) : null; for (const [a, l] of Object.entries((d && d.colabs) || {})) for (const c of l || []) { const n = normNome(c.nome || ''); if (n && !m.has(n)) m.set(n, { conj: k, area: a, mat: String(c.mat || '') }); } }
+    return m;
+  }
   const pode = () => editaTreinos(ME);
   const aqui = () => VIEWS_TR.includes(UI.view);
   // Nomes para sugerir no cadastro: fichas do RH, colaboradores das Atividades e quem já tem treinamento.
@@ -48,19 +59,25 @@ function criarTreinos() {
     return SIT[s][0];
   }
 
+  const TODAS = SET_KEYS.flatMap(k => [...areasDoSet(k), ...SETS[k].gerais]);
+  const ordArea = a => { const i = TODAS.indexOf(a); return i < 0 ? 99 : i; };
+  const opArea = atual => SET_KEYS.map(k => `<optgroup label="${esc(nomeConj(k))}">${[...areasDoSet(k), ...SETS[k].gerais].map(a => `<option value="${esc(a)}" ${a === atual ? 'selected' : ''}>${esc(tArea(a))}</option>`).join('')}</optgroup>`).join('')
+    + (atual && !TODAS.includes(atual) && atual !== 'SEM ÁREA' ? `<option selected>${esc(atual)}</option>` : '');
+
   // Por colaborador: uma linha por pessoa e uma coluna por treinamento, como a planilha de controle da empresa.
   function pessoas(L, vig) {
     const m = new Map();
     for (const t of L) {
-      if (!vig.has(t.id)) continue;
+      if (!ehNA(t) && !vig.has(t.id)) continue;
       const k = chavePessoa(t); let p = m.get(k);
-      if (!p) m.set(k, p = { k, nome: t.nome || '', mat: t.mat || '', turno: '', funcao: '', admissao: '', setor: '', por: {} });
-      for (const c of ['turno', 'funcao', 'admissao', 'setor']) if (t[c]) p[c] = t[c];
-      p.por[tipoOficial(t.tipo)] = t;
+      if (!p) m.set(k, p = { k, nome: t.nome || '', mat: t.mat || '', turno: '', funcao: '', admissao: '', setor: '', area: '', conj: '', supervisor: '', por: {}, na: new Set() });
+      for (const c of ['turno', 'funcao', 'admissao', 'setor', 'area', 'conj', 'supervisor']) if (t[c]) p[c] = t[c];
+      if (ehNA(t)) t.naTipos.forEach(x => p.na.add(tipoOficial(x))); else p.por[tipoOficial(t.tipo)] = t;
     }
+    for (const p of m.values()) { p.conj = conjDe(p); p.area = areaDe(p); }
     return m;
   }
-  const colunas = L => { const u = new Set(L.map(t => tipoOficial(t.tipo))); return [...TIPOS_TREINO.map(([t]) => t).filter(t => u.has(t)), ...[...u].filter(t => !TIPOS_TREINO.some(([x]) => x === t)).sort()]; };
+  const colunas = L => { const u = new Set(L.flatMap(t => (ehNA(t) ? t.naTipos.map(tipoOficial) : [tipoOficial(t.tipo)]))); return [...TIPOS_TREINO.map(([t]) => t).filter(t => u.has(t)), ...[...u].filter(t => !TIPOS_TREINO.some(([x]) => x === t)).sort()]; };
   function matriz(L, vig, hoje, q) {
     PES = pessoas(L, vig);
     const ps = [...PES.values()].filter(p => (!q || normNome(p.nome).includes(q) || String(p.mat).includes(q)) && (!U.turno || p.turno === U.turno)).sort((a, b) => a.nome.localeCompare(b.nome));
@@ -69,23 +86,27 @@ function criarTreinos() {
     const d2 = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}` : '');
     const cel = (p, tipo) => {
       const t = p.por[tipo];
+      if (!t && p.na.has(tipo)) return pode() ? `<button class="trc pill neu" data-tr="add" data-v="${esc(p.k)}" data-t="${esc(tipo)}" title="Não se aplica · toque para cadastrar">N/A</button>` : '<span class="pill neu trc">N/A</span>';
       if (!t) return pode() ? `<button class="trc trv" data-tr="add" data-v="${esc(p.k)}" data-t="${esc(tipo)}" aria-label="Cadastrar ${esc(tipo)}">+</button>` : '<span class="muted">—</span>';
       const s = situacaoTreino(t, hoje, vig), txt = s === 'na' ? 'N/A' : t.validade ? d2(t.validade) : t.realizado ? 'feito ' + d2(t.realizado) : (t.obs || '?').slice(0, 14);
       return `<button class="trc pill ${SIT[s][1]}" data-tr="abrir" data-v="${esc(t.id)}" title="${esc(textoSit(t, s, hoje))}">${esc(txt)}</button>`;
     };
     return `<p class="muted small body pt0 m0">${ps.length} colaborador${ps.length > 1 ? 'es' : ''} · a data é o vencimento · cores: vencido, a vencer em ${ANTECEDENCIA} dias, em dia.${pode() ? ' Toque numa célula para alterar ou no + para cadastrar.' : ''}</p>
       <div class="tw"><table class="trmat"><thead><tr><th class="trp">Colaborador</th>${cols.map(t => `<th class="tt">${esc(t)}</th>`).join('')}</tr></thead>
-      <tbody>${ps.map(p => `<tr><td class="trp"><b>${esc(title(p.nome))}</b><small class="muted">${[p.mat, p.turno, p.funcao && title(p.funcao)].filter(Boolean).map(esc).join(' · ')}</small></td>${cols.map(t => `<td>${cel(p, t)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      <tbody>${ps.map(p => `<tr><td class="trp"><b>${esc(title(p.nome))}</b><small class="muted">${[p.mat, tArea(p.area), p.turno, p.funcao && title(p.funcao)].filter(Boolean).map(esc).join(' · ')}</small></td>${cols.map(t => `<td>${cel(p, t)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   }
 
   function view() {
     if (DB.treinosCarregar) DB.treinosCarregar();
     if (!DB.cache.tLoaded) return '<div class="card skel"><i></i><i></i><i></i></div>';
-    const hoje = today(), L = lista(), vig = vigentes(L), r = resumoTreinos(L, hoje);
-    const tipos = [...new Set([...TIPOS_TREINO.map(([t]) => t), ...L.map(t => tipoOficial(t.tipo)).filter(Boolean)])];
+    const hoje = today(), T = lista(), vig = vigentes(T);
+    const areas = [...new Set(T.filter(t => !U.conj || conjDe(t) === U.conj).map(areaDe))].sort((a, b) => ordArea(a) - ordArea(b) || a.localeCompare(b));
+    if (U.area && !areas.includes(U.area)) U.area = '';
+    const L = T.filter(noFiltro), r = resumoTreinos(L, hoje), npes = new Set(L.map(chavePessoa)).size;
+    const tipos = [...new Set([...TIPOS_TREINO.map(([t]) => t), ...L.filter(t => !ehNA(t)).map(t => tipoOficial(t.tipo)).filter(Boolean)])];
     const turnos = [...new Set(L.map(t => t.turno).filter(Boolean))].sort();
     const q = normNome(U.q || '');
-    let l = L.map(t => ({ t, s: situacaoTreino(t, hoje, vig) }))
+    let l = L.filter(t => !ehNA(t)).map(t => ({ t, s: situacaoTreino(t, hoje, vig) }))
       .filter(({ t }) => (!U.tipo || tipoOficial(t.tipo) === U.tipo) && (!U.turno || t.turno === U.turno) && (!q || normNome(t.nome || '').includes(q) || String(t.mat || '').includes(q)));
     if (U.aba === 'atencao') l = l.filter(({ s }) => s === 'vencido' || s === 'vence');
     else if (U.aba === 'pessoas') l = [];
@@ -94,7 +115,10 @@ function criarTreinos() {
     l.sort((a, b) => ord[a.s] - ord[b.s] || String(a.t.validade || '9').localeCompare(String(b.t.validade || '9')) || String(a.t.nome).localeCompare(String(b.t.nome)));
     const lim = isMobile() ? Math.min(UI.more || 20, 300) : 300;
     const vazio = U.aba === 'atencao' ? 'Ninguém vencido nem vencendo nos próximos 30 dias.' : L.length ? 'Nenhum treinamento com esses filtros.' : 'Nenhum treinamento cadastrado ainda.';
-    return `<div class="mini"><div><b class="num" style="color:var(--st-nreal)">${r.vencido}</b><span>Vencidos</span></div><div><b class="num" style="color:var(--st-atr)">${r.vence}</b><span>A vencer em ${ANTECEDENCIA} dias</span></div><div><b class="num">${r.ok}</b><span>Em dia</span></div></div>
+    const base = r.ok + r.vence + r.vencido, pct = base ? Math.round(r.ok / base * 100) : null;
+    return `<div class="rchips trconj" role="group" aria-label="Conjunto">${[['', 'Todos'], ...SET_KEYS.map(k => [k, nomeConj(k)])].map(([k, t]) => `<button class="rchip" data-tr="conj" data-v="${k}" aria-pressed="${U.conj === k}">${esc(t)}</button>`).join('')}
+        <label class="sel"><span>Área</span><select class="in" id="trArea"><option value="">Todas</option>${areas.map(a => `<option value="${esc(a)}" ${a === U.area ? 'selected' : ''}>${esc(tArea(a))}</option>`).join('')}</select></label></div>
+      <div class="mini"><div><b class="num" style="color:var(--st-nreal)">${r.vencido}</b><span>Vencidos</span></div><div><b class="num" style="color:var(--st-atr)">${r.vence}</b><span>A vencer em ${ANTECEDENCIA} dias</span></div><div><b class="num">${r.ok}</b><span>Em dia</span></div><div><b class="num">${pct == null ? '—' : pct + '%'}</b><span>Em dia de ${npes} colaborador${npes === 1 ? '' : 'es'}</span></div></div>
       <div class="card"><div class="body lbar">
         <div class="rchips" role="group" aria-label="Mostrar">${[['atencao', 'Vencidos e a vencer'], ['pessoas', 'Por colaborador'], ['vigentes', 'Todos os atuais'], ['todos', 'Histórico completo']].map(([k, t]) => `<button class="rchip" data-tr="aba" data-v="${k}" aria-pressed="${U.aba === k}">${t}</button>`).join('')}</div>
         <label class="sel"><span>Tipo</span><select class="in" id="trTipo"><option value="">Todos</option>${tipos.map(t => `<option ${t === U.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
@@ -104,7 +128,7 @@ function criarTreinos() {
         ${pode() ? `<button class="btn sm" data-tr="importar">${I.dl} Importar planilha</button><input type="file" id="trArq" accept=".xlsx,.xls,.csv" hidden><button class="btn ghost sm" data-tr="modelo">Baixar modelo</button>` : ''}
         ${!framed && L.length ? `<button class="btn sm" data-tr="exportar">${I.dl} Exportar</button>` : ''}
       </div>
-      ${U.aba === 'pessoas' ? matriz(L, vig, hoje, q) : l.length ? `<div class="plist ferlist">${l.slice(0, lim).map(({ t, s }) => `<button class="pitem ferit" data-tr="abrir" data-v="${esc(t.id)}"><div class="minw"><div class="t">${esc(title(t.nome || ''))} <span class="muted small">${t.mat ? '· ' + esc(t.mat) : ''}</span></div><div class="l"><b>${esc(tipoOficial(t.tipo))}</b>${[t.setor, t.turno, t.funcao && title(t.funcao)].filter(Boolean).map(x => ' · ' + esc(x)).join('')}${t.realizado ? ' · feito em ' + dBR(t.realizado) : ''}</div>${t.obs ? `<div class="l">${esc(t.obs)}</div>` : ''}</div><div class="fer-r"><span class="pill ${SIT[s][1]}">${esc(textoSit(t, s, hoje))}</span>${s === 'na' ? '' : `<small class="muted">validade ${dBR(t.validade)}</small>`}</div></button>`).join('')}</div>${l.length > lim ? (lim < 300 ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${lim + 40}">Mostrar mais ${Math.min(40, l.length - lim)} (faltam ${l.length - lim})</button></div>` : `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o tipo.</p>`) : ''}` : `<div class="empty">${vazio}</div>`}</div>`;
+      ${U.aba === 'pessoas' ? matriz(L, vig, hoje, q) : l.length ? `<div class="plist ferlist">${l.slice(0, lim).map(({ t, s }) => `<button class="pitem ferit" data-tr="abrir" data-v="${esc(t.id)}"><div class="minw"><div class="t">${esc(title(t.nome || ''))} <span class="muted small">${t.mat ? '· ' + esc(t.mat) : ''}</span></div><div class="l"><b>${esc(tipoOficial(t.tipo))}</b>${[tArea(areaDe(t)), t.turno, t.funcao && title(t.funcao)].filter(Boolean).map(x => ' · ' + esc(x)).join('')}${t.realizado ? ' · feito em ' + dBR(t.realizado) : ''}</div>${t.obs ? `<div class="l">${esc(t.obs)}</div>` : ''}</div><div class="fer-r"><span class="pill ${SIT[s][1]}">${esc(textoSit(t, s, hoje))}</span>${s === 'na' ? '' : `<small class="muted">validade ${dBR(t.validade)}</small>`}</div></button>`).join('')}</div>${l.length > lim ? (lim < 300 ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${lim + 40}">Mostrar mais ${Math.min(40, l.length - lim)} (faltam ${l.length - lim})</button></div>` : `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o tipo.</p>`) : ''}` : `<div class="empty">${vazio}</div>`}</div>`;
   }
 
   // id: alterar um registro; base: novo registro de uma pessoa já conhecida (célula vazia da visão por colaborador).
@@ -117,7 +141,7 @@ function criarTreinos() {
     const turnos = [...new Set(['Adm', 'Turno', ...lista().map(x => x.turno).filter(Boolean)])];
     formSheet(t ? `${tipoOficial(t.tipo)} · ${title(t.nome || '')}` : fixo ? `${base.tipo ? tipoOficial(base.tipo) : 'Novo treinamento'} · ${title(base.nome)}` : 'Novo treinamento', t ? 'Altere as datas ou registre a renovação' : 'Escolha a pessoa, o tipo e as datas', `
       ${fixo ? '' : `<label class="sel"><span>Nome</span><input class="in" id="trNome" list="trLista" autocomplete="off" required></label><datalist id="trLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist>`}
-      <div class="g2eq"><label class="sel"><span>Treinamento</span><input class="in" id="trTp" list="trTipos" value="${esc(o0.tipo ? tipoOficial(o0.tipo) : '')}" required placeholder="Ex.: NR 35 TRABALHO EM ALTURA"></label><label class="sel"><span>Setor</span><input class="in" id="trSetor" value="${v('setor')}"></label></div>
+      <div class="g2eq"><label class="sel"><span>Treinamento</span><input class="in" id="trTp" list="trTipos" value="${esc(o0.tipo ? tipoOficial(o0.tipo) : '')}" required placeholder="Ex.: NR 35 TRABALHO EM ALTURA"></label><label class="sel"><span>Área</span><select class="in" id="trArea2"><option value="">—</option>${opArea(o0.area || (o0.nome || o0.mat ? areaDe(o0) : ''))}</select></label></div>
       <datalist id="trTipos">${TIPOS_TREINO.map(([x]) => `<option value="${esc(x)}">`).join('')}</datalist>
       <div class="g2eq"><label class="sel"><span>Data de realização</span><input class="in" type="date" id="trFeito" value="${v('realizado')}"></label><label class="sel"><span>Vencimento</span><input class="in" type="date" id="trVal" value="${v('validade')}"></label></div>
       <label class="trna"><input type="checkbox" id="trNa" ${o0.na && t ? 'checked' : ''}> Não se aplica a esta pessoa</label>
@@ -132,7 +156,8 @@ function criarTreinos() {
       const na = $('trNa').checked;
       const realizado = na ? null : $('trFeito').value || null, validade = na ? null : $('trVal').value || null;
       if (realizado && validade && validade < realizado) throw new Error('O vencimento não pode ser antes da data de realização.');
-      const dados = { nome, mat, tipo, setor: $('trSetor').value.trim().toUpperCase(), realizado, validade, obs: $('trObs').value.trim(), na,
+      const area = $('trArea2').value;
+      const dados = { nome, mat, tipo, area, conj: setDaArea(area) || '', realizado, validade, obs: $('trObs').value.trim(), na,
         turno: $('trTurno2').value.trim(), funcao: $('trFunc').value.trim().toUpperCase(), admissao: $('trAdm').value || null };
       await DB.treinoSalvar(t ? t.id : null, dados);
       DB.log(`Treinamentos: ${tipo} de ${title(nome)}${validade ? ` válido até ${dBR(validade)}` : ''}`); toast('Treinamento salvo'); render();
@@ -141,7 +166,7 @@ function criarTreinos() {
     ['trFeito', 'trTp'].forEach(k => $(k).addEventListener('input', sugerir));
     $('trVal').addEventListener('input', () => { $('trVal').dataset.mexeu = '1'; });
     const ren = $('trRenovar');
-    if (ren) ren.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; novo({ nome: t.nome, mat: t.mat, tipo: tipoOficial(t.tipo), setor: t.setor, turno: t.turno, funcao: t.funcao, admissao: t.admissao }); });
+    if (ren) ren.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; novo({ nome: t.nome, mat: t.mat, tipo: tipoOficial(t.tipo), setor: t.setor, area: t.area, conj: t.conj, supervisor: t.supervisor, turno: t.turno, funcao: t.funcao, admissao: t.admissao }); });
     const del = $('trDel');
     if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.treinoExcluir(t.id); DB.log(`Treinamentos: excluiu ${t.tipo} de ${title(t.nome || '')}`); document.getElementById('layer').innerHTML = ''; toast('Treinamento excluído'); render(); });
   }
@@ -153,21 +178,22 @@ function criarTreinos() {
       <label class="sel"><span>Observação</span><input class="in" id="trObs"></label>`, 'Salvar', async () => {
       const realizado = $('trFeito').value || null, validade = $('trVal').value || null;
       if (realizado && validade && validade < realizado) throw new Error('A validade não pode ser antes da data em que foi feito.');
-      await DB.treinoSalvar(null, { nome: base.nome, mat: base.mat || '', tipo: base.tipo, setor: base.setor || '', turno: base.turno || '', funcao: base.funcao || '', admissao: base.admissao || null, realizado, validade, obs: $('trObs').value.trim() });
+      await DB.treinoSalvar(null, { nome: base.nome, mat: base.mat || '', tipo: base.tipo, setor: base.setor || '', area: base.area || '', conj: base.conj || '', supervisor: base.supervisor || '', turno: base.turno || '', funcao: base.funcao || '', admissao: base.admissao || null, realizado, validade, obs: $('trObs').value.trim() });
       DB.log(`Treinamentos: renovou ${base.tipo} de ${title(base.nome || '')}${validade ? ` até ${dBR(validade)}` : ''}`); toast('Renovação salva'); render();
     });
   }
   // Exporta no formato do controle da empresa (uma linha por colaborador) e, numa 2ª aba, a lista com o histórico.
   function exportar() {
-    const hoje = today(), L = lista(), vig = vigentes(L), cols = colunas(L);
+    const hoje = today(), T = lista(), vig = vigentes(T), L = T.filter(noFiltro), cols = colunas(L);
     const ps = [...pessoas(L, vig).values()].sort((a, b) => a.nome.localeCompare(b.nome));
     const st = t => { const s = situacaoTreino(t, hoje, vig); return s === 'vencido' ? 'Vencido' : s === 'vence' ? 'A vencer' : s === 'ok' ? 'Em dia' : s === 'na' ? 'Não se aplica' : t.realizado ? 'Cadastre a validade' : t.obs || ''; };
-    const controle = [['CONTROLE DE VALIDADE DOS TREINAMENTOS DE SEGURANÇA'], [`Total de colaboradores: ${ps.length}`],
-      ['Nº', 'Nome do colaborador', 'Matrícula', 'Data de admissão', 'Turno', 'Função', ...cols.flatMap(t => [t, '', ''])],
-      ['', '', '', '', '', '', ...cols.flatMap(() => ['Data de realização', 'Vencimento', 'Status'])],
-      ...ps.map((p, i) => [i + 1, p.nome, p.mat, dataBR(p.admissao), p.turno, p.funcao, ...cols.flatMap(c => { const t = p.por[c]; return t ? [t.na ? 'NÃO SE APLICA' : t.realizado ? dataBR(t.realizado) : t.obs || '', dataBR(t.validade), st(t)] : ['', '', '']; })])];
-    const linhas = [['Matrícula', 'Nome', 'Setor', 'Turno', 'Função', 'Treinamento', 'Data de realização', 'Vencimento', 'Situação', 'Observação'],
-      ...L.map(t => [t.mat || '', t.nome || '', t.setor || '', t.turno || '', t.funcao || '', tipoOficial(t.tipo), dataBR(t.realizado), dataBR(t.validade), textoSit(t, situacaoTreino(t, hoje, vig), hoje), t.obs || ''])];
+    const filtro = [U.conj && nomeConj(U.conj), U.area && tArea(U.area)].filter(Boolean).join(' · ');
+    const controle = [['CONTROLE DE VALIDADE DOS TREINAMENTOS DE SEGURANÇA' + (filtro ? ' - ' + filtro.toUpperCase() : '')], [`Total de colaboradores: ${ps.length}`],
+      ['Nº', 'Nome do colaborador', 'Matrícula', 'Conjunto', 'Área', 'Data de admissão', 'Turno', 'Função', ...cols.flatMap(t => [t, '', ''])],
+      ['', '', '', '', '', '', '', '', ...cols.flatMap(() => ['Data de realização', 'Vencimento', 'Status'])],
+      ...ps.map((p, i) => [i + 1, p.nome, p.mat, nomeConj(p.conj), p.area, dataBR(p.admissao), p.turno, p.funcao, ...cols.flatMap(c => { const t = p.por[c]; return t ? [t.na ? 'NÃO SE APLICA' : t.realizado ? dataBR(t.realizado) : t.obs || '', t.permanente ? 'PERMANENTE' : dataBR(t.validade), st(t)] : p.na.has(c) ? ['NÃO SE APLICA', '', 'Não se aplica'] : ['', '', '']; })])];
+    const linhas = [['Matrícula', 'Nome', 'Conjunto', 'Área', 'Turno', 'Função', 'Treinamento', 'Data de realização', 'Vencimento', 'Situação', 'Observação'],
+      ...L.filter(t => !ehNA(t)).map(t => [t.mat || '', t.nome || '', nomeConj(conjDe(t)), areaDe(t), t.turno || '', t.funcao || '', tipoOficial(t.tipo), dataBR(t.realizado), t.permanente ? 'PERMANENTE' : dataBR(t.validade), textoSit(t, situacaoTreino(t, hoje, vig), hoje), t.obs || ''])];
     baixarExcel('treinamentos', [{ nome: 'Controle de Treinamentos', linhas: controle }, { nome: 'Lista e histórico', linhas }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
@@ -176,11 +202,20 @@ function criarTreinos() {
     try {
       const XLSX = await import('../vendor/xlsx.js');
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
-      const r = lerPlanilhaTreinos(abasDoXLSX(XLSX, wb));
-      const ja = new Set(lista().map(chaveTreino)); const busca = criarBusca(opcoesPessoa().filter(o => o.mat));
-      const novos = [], vistos = new Set(); let repetidos = 0;
+      const r = lerPlanilhaTreinos(abasDoXLSX(XLSX, wb), file.name);
+      const ja = new Set(lista().map(chaveTreino)); const busca = criarBusca(opcoesPessoa().filter(o => o.mat)), sis = areasDoSistema();
+      const naDe = new Map(lista().filter(ehNA).map(t => [chavePessoa(t), t]));
+      const novos = [], vistos = new Set(); let repetidos = 0, achouArea = 0;
       for (const t of r.itens) {
         if (!t.mat) { const b = busca(t.nome); if (b) { t.mat = String(b.item.mat || ''); t.nome = b.item.nome; } }
+        // Sem área na planilha: a área do cadastro das Atividades (Presença do dia), se a pessoa estiver lá.
+        if (!t.area) { const s = sis.get(normNome(t.nome)); if (s) { t.area = s.area; t.conj = s.conj; achouArea++; } }
+        if (ehNA(t)) {
+          // "Não se aplica": junta com o registro que a pessoa já tem (um só por pessoa).
+          const o = naDe.get(chavePessoa(t));
+          if (o) { const u = [...new Set([...o.naTipos, ...t.naTipos])]; if (u.length === o.naTipos.length) { repetidos++; continue; } t.id = o.id; t.naTipos = u; }
+          novos.push(t); continue;
+        }
         const k = chaveTreino(t); if (ja.has(k) || vistos.has(k)) { repetidos++; continue; } vistos.add(k); novos.push(t);
       }
       const pl = (k, a, b) => (k > 1 ? b : a);
@@ -190,16 +225,22 @@ function criarTreinos() {
           [{ t: 'Baixar o modelo', v: 'm' }], o => { if (o.v === 'm') baixarModelo(); }, { fechar: 'Fechar' });
         return;
       }
-      const ex = novos.slice(0, 5).map(t => `${esc(title(t.nome))} · ${esc(t.tipo)} · ${t.na ? 'não se aplica' : t.validade ? 'vence ' + dBR(t.validade) : esc(t.obs || 'sem validade')}`).join('<br>');
+      const reais = novos.filter(t => !ehNA(t)), n = reais.length, nNA = novos.filter(ehNA).reduce((s, t) => s + t.naTipos.length, 0);
+      const semConj = novos.filter(t => !conjDe(t)).length;
+      const ex = reais.slice(0, 5).map(t => `${esc(title(t.nome))} · ${esc(t.tipo)} · ${t.permanente ? 'permanente' : t.validade ? 'vence ' + dBR(t.validade) : esc(t.obs || 'sem validade')}`).join('<br>');
       const av = (r.avisos || []).length ? `<br><br><b>Para conferir:</b><br>${r.avisos.slice(0, 6).map(esc).join('<br>')}` : '';
-      const fmt = r.formato === 'matriz' ? `<br>Controle por colaborador: ${r.pessoas} ${pl(r.pessoas, 'colaborador', 'colaboradores')} (o CPF não é gravado).` : '';
-      const n = novos.length;
-      sheet('Importar planilha', `${esc(file.name)}${r.aba ? ` · aba ${esc(r.aba)}` : ''}${fmt}<br><b>${n} ${pl(n, 'treinamento novo', 'treinamentos novos')}</b>${repetidos ? ` · ${repetidos} ${pl(repetidos, 'já cadastrado', 'já cadastrados')} (ficam como estão)` : ''}${r.erros.length ? ` · ${r.erros.length} ${pl(r.erros.length, 'linha com erro', 'linhas com erro')} (não entram)` : ''}<br><br>${ex}${n > 5 ? '<br>…' : ''}${av}${erros}`,
-        [{ t: `Gravar ${n} ${pl(n, 'treinamento', 'treinamentos')}`, v: 'ok', cls: 'pri' }], async o => {
-          if (o.v !== 'ok') return;
-          try { await DB.treinosImportar(novos); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }
-          catch (e) { toast('Não foi possível gravar: ' + ((e && e.message) || e)); }
-        });
+      const porArea = {}; for (const t of novos) if (conjDe(t)) { const a = areaDe(t); porArea[a] = (porArea[a] || 0) + 1; }
+      const divisao = r.formato === 'matriz' ? `<br>${r.pessoas} ${pl(r.pessoas, 'colaborador', 'colaboradores')} (CPF e telefone não são gravados)${r.conj ? ` · ${esc(nomeConj(r.conj))}` : ''}.`
+        + (Object.keys(porArea).length ? `<br>Áreas: ${Object.keys(porArea).sort((a, b) => ordArea(a) - ordArea(b)).map(a => esc(tArea(a))).join(', ')}${achouArea ? ` (${achouArea} pela Presença do dia)` : ''}.` : '') : '';
+      const gravar = conj => async () => {
+        const itens = novos.map(t => (conjDe(t) ? t : { ...t, conj }));
+        try { await DB.treinosImportar(itens); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }
+        catch (e) { toast('Não foi possível gravar: ' + ((e && e.message) || e)); }
+      };
+      const qual = n ? `Gravar ${n} ${pl(n, 'treinamento', 'treinamentos')}` : 'Gravar os "não se aplica"';
+      const botoes = semConj ? SET_KEYS.map((k, i) => ({ t: `${qual} · ${nomeConj(k)}`, v: k, cls: i ? '' : 'pri' })) : [{ t: qual, v: 'ok', cls: 'pri' }];
+      sheet('Importar planilha', `${esc(file.name)}${r.aba ? ` · aba ${esc(r.aba)}` : ''}${divisao}<br><b>${n} ${pl(n, 'treinamento novo', 'treinamentos novos')}</b>${nNA ? ` · ${nNA} "não se aplica"` : ''}${repetidos ? ` · ${repetidos} ${pl(repetidos, 'já cadastrado', 'já cadastrados')} (ficam como estão)` : ''}${r.erros.length ? ` · ${r.erros.length} ${pl(r.erros.length, 'linha com erro', 'linhas com erro')} (não entram)` : ''}${semConj ? `<br><br>Não achei se a planilha é do Pátio ou da Bateria: escolha abaixo.` : ''}<br><br>${ex}${n > 5 ? '<br>…' : ''}${av}${erros}`,
+        botoes, o => { if (o.v === 'ok') gravar('')(); else if (SETS[o.v]) gravar(o.v)(); });
     } catch (e) { toast('Não foi possível ler a planilha: ' + ((e && e.message) || e)); }
   }
   const baixarModelo = () => baixarExcel('modelo-treinamentos', [{ nome: 'Treinamentos', linhas: MODELO_TREINOS }]).catch(e => toast('Não foi possível baixar: ' + e.message));
@@ -208,9 +249,10 @@ function criarTreinos() {
     const t = e.target.closest('[data-tr]'); if (!t || t.closest('#layer') || !aqui()) return;
     const a = t.dataset.tr, v = t.dataset.v;
     if (a === 'aba') { U.aba = v; UI.more = 0; render(); }
+    else if (a === 'conj') { U.conj = v; U.area = ''; UI.more = 0; render(); }
     else if (a === 'novo') form(null);
     else if (a === 'abrir') form(v);
-    else if (a === 'add') { const p = PES.get(v); if (p) form(null, { nome: p.nome, mat: p.mat, setor: p.setor, turno: p.turno, funcao: p.funcao, admissao: p.admissao, tipo: t.dataset.t }); }
+    else if (a === 'add') { const p = PES.get(v); if (p) form(null, { nome: p.nome, mat: p.mat, setor: p.setor, area: p.area, conj: p.conj, supervisor: p.supervisor, turno: p.turno, funcao: p.funcao, admissao: p.admissao, tipo: t.dataset.t }); }
     else if (a === 'exportar') exportar();
     else if (a === 'modelo') baixarModelo();
     else if (a === 'importar') { const f = $('trArq'); if (f) { f.value = ''; f.click(); } }
@@ -220,6 +262,7 @@ function criarTreinos() {
     if (!aqui()) return;
     if (e.target.id === 'trTipo') { U.tipo = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'trTurno') { U.turno = e.target.value; UI.more = 0; render(); }
+    if (e.target.id === 'trArea') { U.area = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'trArq' && e.target.files[0]) importar(e.target.files[0]);
   });
 

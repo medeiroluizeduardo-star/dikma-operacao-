@@ -426,7 +426,7 @@ service cloud.firestore {
     }
     // Treinamentos, NRs e ASO (Segurança › Treinamentos e ASO; saiu do RH em 2026-11-10): um documento por treinamento
     // feito. Quem tem a Segurança lê; os técnicos de segurança (registra, trata, gestor) e o administrador gravam, um a um
-    // ou pela importação da planilha.
+    // ou pela importação da planilha. Os "não se aplica" de cada pessoa ficam num documento só (naTipos).
     function treinoLe() { return ativo() && (admin() || pEm('seguranca') != ''); }
     function treinoEdita() { return ativo() && (admin() || pEm('seguranca') in ['registra', 'trata', 'gestor']); }
     match /treinos/{id} {

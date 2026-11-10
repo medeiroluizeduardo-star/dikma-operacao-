@@ -572,6 +572,7 @@ test('treinamentos, NRs e ASO: saíram do RH; o RH não lê nem grava; o adminis
   await assertFails(getDocs(collection(db('admLeitor'), 'treinos')));
   await assertSucceeds(setDoc(doc(db('admin'), 'treinos', 't2'), { nome: 'OUTRA', tipo: 'NR-35', validade: '2027-01-01' }));
   await assertFails(setDoc(doc(db('admin'), 'treinos', 't3'), { nome: 'SEM TIPO' }));
+  await assertSucceeds(setDoc(doc(db('admin'), 'treinos', 't4'), { nome: 'OUTRA', tipo: 'NÃO SE APLICA', naTipos: ['CAL', 'ARL'], conj: 'patio', area: 'RECEBIMENTO' }), 'os "não se aplica" da pessoa num registro só');
   await assertSucceeds(deleteDoc(doc(db('admin'), 'treinos', 't2')));
   await assertFails(getDocs(collection(db('liderRec'), 'treinos')));
 });

@@ -1,7 +1,7 @@
 // Testes da conta de treinamentos, NRs e ASO (public/contas/treinos.js). Não precisa do emulador.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addMeses, vigentes, situacaoTreino, resumoTreinos, chavePessoa, mesesSugeridos, diasAte, tipoOficial, lerPlanilhaTreinos, chaveTreino } from '../public/contas/treinos.js';
+import { addMeses, vigentes, situacaoTreino, resumoTreinos, chavePessoa, mesesSugeridos, diasAte, tipoOficial, lerPlanilhaTreinos, chaveTreino, TIPO_NA, ehNA, painelTreinos, areaDe, conjDe } from '../public/contas/treinos.js';
 
 test('addMeses respeita o fim do mês', () => {
   assert.equal(addMeses('2026-01-31', 1), '2026-02-28');
@@ -86,8 +86,8 @@ test('importar o controle da empresa: uma linha por colaborador, 3 colunas por t
   assert.equal(r.itens.find(t => t.nome === 'PESSOA TESTE TRES').mat, '', 'entra sem matrícula');
   const de = (mat, tipo) => r.itens.find(t => t.mat === mat && t.tipo === tipo);
   const a = de('70000001', 'NR 35 TRABALHO EM ALTURA');
-  assert.deepEqual(a, { mat: '70000001', nome: 'PESSOA TESTE UM', setor: 'BATERIA', turno: 'Adm', funcao: 'AJUDANTE', admissao: '2025-01-06', tipo: 'NR 35 TRABALHO EM ALTURA', realizado: '2024-12-13', validade: '2026-12-13', obs: '' });
-  assert.equal(de('70000001', 'NR 33 ESPAÇO CONFINADO').na, true, 'NÃO SE APLICA');
+  assert.deepEqual(a, { mat: '70000001', nome: 'PESSOA TESTE UM', conj: 'bateria', area: '', supervisor: '', turno: 'Adm', funcao: 'AJUDANTE', admissao: '2025-01-06', tipo: 'NR 35 TRABALHO EM ALTURA', realizado: '2024-12-13', validade: '2026-12-13', obs: '' });
+  assert.deepEqual(de('70000001', TIPO_NA).naTipos, ['NR 33 ESPAÇO CONFINADO'], 'NÃO SE APLICA: um registro só por pessoa');
   assert.equal(de('70000001', 'GASES SIDERÚRGICOS').validade, '2029-05-08', 'sem vencimento: validade da aba Configurações');
   assert.equal(de('70000001', 'CAL').obs, 'INAPTO', 'texto fica como observação');
   assert.equal(de('70000002', 'NR 33 ESPAÇO CONFINADO').validade, '2027-01-16', 'vencimento com erro: calcula pelos meses');
@@ -98,9 +98,44 @@ test('importar o controle da empresa: uma linha por colaborador, 3 colunas por t
   r.itens.pop();
   // situação: não se aplica fica fora da contagem; o registro com data vale mais que o sem data
   const hoje = '2026-11-10', l = r.itens.map((t, i) => ({ ...t, id: 'x' + i })), v = vigentes(l);
-  assert.equal(situacaoTreino(l.find(t => t.na), hoje, v), 'na');
+  assert.equal(situacaoTreino(l.find(ehNA), hoje, v), 'na'); assert.ok(!v.has(l.find(ehNA).id));
   assert.deepEqual(resumoTreinos(l, hoje), { vencido: 0, vence: 0, ok: 3, sem: 2 });
   const sub = vigentes([{ id: 'n', mat: '9', tipo: 'CAL', na: true }, { id: 'd', mat: '9', tipo: 'CAL', realizado: '2026-01-01', validade: null }]);
   assert.deepEqual([...sub], ['d']);
-  assert.notEqual(chaveTreino(l.find(t => t.na)), chaveTreino({ ...l.find(t => t.na), na: false }));
+  assert.notEqual(chaveTreino(l.find(ehNA)), chaveTreino({ ...l.find(ehNA), naTipos: ['CAL'] }));
+});
+
+test('importar a matriz do Pátio: validade em anos ou permanente, NA nas colunas, área em outra aba', () => {
+  const d = (a, m, dia) => new Date(a, m - 1, dia);
+  const principal = { nome: 'Controle de Vencimento', linhas: [
+    ['CONTROLE ', null, null, null, null, 'MATRIZ DE TREINAMENTO'],
+    [],
+    ['NOMES', 'FUNÇÃO', 'ADMISSÃO', 'CPF', 'MATRICULA', 'TELEFONE', 'SUPERVISOR', 'PINE\n04:00', null, null, null, 'CAL - VÍDEO\n01:30\n', null, null, null, 'TRABALHO EM ALTURA', null, null, null],
+    [null, null, null, null, null, null, null, 'DATA DO TREINAMENTO', 'VALIDADE', 'RECICLAGEM', 'STATUS\nVENCIMENTO', 'DATA DO TREINAMENTO', 'VALIDADE', 'RECICLAGEM', 'STATUS', 'DATA DO TREINAMENTO', 'VALIDADE', 'RECICLAGEM', 'STATUS'],
+    ['PESSOA TESTE UM', 'OPERADOR', d(2020, 1, 2), '000.000.000-00', 80000001, '(00) 0000-0000', 'LIDER TESTE', d(2025, 6, 1), '2 ANOS', d(2027, 6, 1), 'EM DIA', null, 'NA', 'NA', null, d(2024, 1, 10), 'PERMANENTE', null, 'OK'],
+    ['PESSOA TESTE DOIS', 'AJUDANTE', null, null, 80000002, null, null, d(2025, 1, 5), '1 ANO', null, null, 'MARCAR', null, null, null, 'NA', null, null, null],
+    ['PESSOA TESTE TRES', 'AJUDANTE', null, null, 80000003, null, null]
+  ] };
+  const areas = { nome: 'Planilha1', linhas: [['ÁREAS'], ['COLABORADOR', 'ÁREA'], ['PESSOA TESTE UM', 'FINAL PATIO '], ['PESSOA TESTE DOIS', 'Preparação']] };
+  const r = lerPlanilhaTreinos([principal, areas], 'MATRIZ DE TREINAMENTO - PATIO.xls');
+  assert.equal(r.formato, 'matriz'); assert.equal(r.conj, 'patio'); assert.equal(r.erros.length, 0);
+  const de = (mat, tipo) => r.itens.find(t => t.mat === mat && t.tipo === tipo);
+  const a = de('80000001', 'PINE');
+  assert.equal(a.validade, '2027-06-01', 'data da reciclagem'); assert.equal(a.area, 'FINAL DO PÁTIO'); assert.equal(a.conj, 'patio'); assert.equal(a.supervisor, 'LIDER TESTE');
+  assert.equal(de('80000002', 'PINE').validade, '2026-01-05', '"1 ANO" sem data: soma 12 meses');
+  const alt = de('80000001', 'NR 35 TRABALHO EM ALTURA');
+  assert.equal(alt.permanente, true); assert.equal(alt.validade, null); assert.equal(situacaoTreino(alt, '2026-11-10'), 'ok', 'permanente fica em dia');
+  assert.deepEqual(de('80000001', TIPO_NA).naTipos, ['CAL'], 'NA na coluna da validade');
+  assert.deepEqual(de('80000002', TIPO_NA).naTipos, ['NR 35 TRABALHO EM ALTURA']);
+  assert.equal(de('80000002', 'CAL').obs, 'MARCAR', 'pendência fica como observação');
+  assert.equal(de('80000002', 'CAL').area, 'PREPARAÇÃO');
+  assert.ok(!/000\.000|\(00\)/.test(JSON.stringify(r.itens)), 'CPF e telefone não são lidos');
+  // Painel: por área e por treinamento; sem área vai para a geral do conjunto
+  const l = r.itens.map((t, i) => ({ ...t, id: 'p' + i })).concat([{ id: 'z', nome: 'PESSOA TESTE QUATRO', setor: 'BATERIA', tipo: 'PINE', realizado: '2024-01-01', validade: '2025-01-01' }]);
+  const p = painelTreinos(l, '2026-11-10');
+  assert.equal(areaDe(l.at(-1)), 'COQUERIA BATERIA'); assert.equal(conjDe(l.at(-1)), 'bateria');
+  assert.deepEqual(p.areas.map(x => x.area), ['FINAL DO PÁTIO', 'PREPARAÇÃO', 'COQUERIA BATERIA']);
+  assert.equal(p.total.vencido, 2); assert.equal(p.pessoasComPendencia, 2);
+  assert.equal(p.areas[0].conformidade, 100); assert.equal(p.areas[2].conformidade, 0);
+  assert.equal(p.tipos[0].tipo, 'PINE');
 });
