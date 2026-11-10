@@ -1736,5 +1736,5 @@ label.btn.dis{opacity:.45;pointer-events:none}
 @media (max-width:860px){.trpn .trl{grid-template-columns:minmax(0,1fr) 50px auto}.trpn .trl3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}}
 /* Resumos › Escala das áreas: uma área por folha na impressão */
 .escfiltro{margin:0 0 12px;align-items:center}.escfiltro select{max-width:100%}
-.escfolhas{display:grid;gap:16px}.escfolhas .escrota{break-inside:avoid}.escrota table{table-layout:fixed;width:100%}.escrota th.en{width:34px}.escrota th.em{width:90px}.escrota th.ef{width:28%}.escrota th.ee{width:22%}.escfolhas .escrota h4 .muted{text-transform:none;letter-spacing:0;font-weight:400}
+.escfolhas{display:grid;gap:16px}.escfolhas .escrota{break-inside:avoid}.escrota table{table-layout:fixed;width:100%}.escrota th.escn{width:34px}.escrota th.escm{width:90px}.escrota th.escf{width:28%}.escrota th.esce{width:22%}.escfolhas .escrota h4 .muted{text-transform:none;letter-spacing:0;font-weight:400}
 @media print{.escfolhas{display:block}.paper.escfolha{break-after:page}.paper.escfolha:last-child{break-after:auto}}
