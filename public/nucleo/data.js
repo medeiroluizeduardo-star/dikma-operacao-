@@ -712,10 +712,11 @@ export function treinoSalvar(id, dados) {
 }
 export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); const b = writeBatch(db); b.delete(doc(db, 'treinos', id)); track(b.commit()); }
 // Importar treinamentos de uma planilha: lotes de até 400; espera o servidor confirmar cada lote.
+// Item com id: atualiza o registro que já existe (o "não se aplica" da pessoa, que é um registro só).
 export async function treinosImportar(itens) {
   for (let i = 0; i < itens.length; i += 400) {
     const b = writeBatch(db);
-    for (const t of itens.slice(i, i + 400)) b.set(doc(collection(db, 'treinos')), { ...t, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+    for (const { id, ...t } of itens.slice(i, i + 400)) b.set(id ? doc(db, 'treinos', id) : doc(collection(db, 'treinos')), { ...t, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true });
     await track(b.commit());
   }
 }

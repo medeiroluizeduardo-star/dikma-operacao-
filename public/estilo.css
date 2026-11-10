@@ -1721,3 +1721,13 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .trmat .trv{background:none;color:var(--ink-3);width:100%;padding:2px 6px;border-radius:6px}.trmat .trv:hover{background:var(--surface-2);color:var(--ink)}
 .trna{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}.trna input{width:18px;height:18px;accent-color:var(--accent)}
 @media (max-width:860px){.trmat .trp{min-width:130px;max-width:150px}}
+.trconj{align-items:flex-end;margin-bottom:10px}.trconj .sel{margin-left:auto;min-width:180px}
+@media (max-width:860px){.trconj .sel{margin-left:0;flex:1 1 100%}}
+/* Painel da Segurança: treinamentos por área e os que mais precisam de atenção */
+.trpn{display:grid;grid-template-columns:1fr 1fr;gap:16px}.trpn h4{margin:0 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.trpn .trl{display:grid;grid-template-columns:minmax(0,1fr) 90px auto;gap:4px 10px;align-items:center;font-size:13px}
+.trpn .trl>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trbar{height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden}.trbar i{display:block;height:100%;background:var(--st-real,var(--accent))}
+@media (max-width:860px){.trpn{grid-template-columns:1fr}}
+.trpn .trl3{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) auto}
+@media (max-width:860px){.trpn .trl{grid-template-columns:minmax(0,1fr) 50px auto}.trpn .trl3{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}}

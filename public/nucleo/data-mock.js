@@ -476,21 +476,26 @@ function treinosExemplo() {
   // Os treinamentos da planilha de controle da empresa: alguns feitos, alguns 'não se aplica', um pendente.
   const tipos = ['NR 35 TRABALHO EM ALTURA', 'NR 33 ESPAÇO CONFINADO', 'BENZENO (PPEOB)', 'PINE', 'GASES SIDERÚRGICOS', 'ASO'], meses = [24, 12, 24, 24, 36, 12];
   cache.treinos = ps.flatMap((c, i) => {
-    const p = { mat: c.mat || '', nome: c.nome, setor: c.area || '', turno: i % 3 ? 'Adm' : 'Turno', funcao: i % 4 ? 'AJUDANTE' : 'OPERADOR DE PROCESSOS', admissao: add(hoje, -400 - i * 90) };
-    return tipos.flatMap((tipo, j) => {
+    const conj = i % 2 ? 'bateria' : 'patio', ars = conj === 'bateria' ? ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'] : ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'];
+    const p = { mat: c.mat || '', nome: c.nome, conj, area: ars[(i >> 1) % 4], turno: i % 3 ? 'Adm' : 'Turno', funcao: i % 4 ? 'AJUDANTE' : 'OPERADOR DE PROCESSOS', admissao: add(hoje, -400 - i * 90) };
+    const naTipos = tipos.filter((_, j) => (i + j) % 7 === 5);
+    return (naTipos.length ? [{ id: 'trna' + i, ...p, tipo: 'NÃO SE APLICA', naTipos, realizado: null, validade: null, obs: '' }] : []).concat(tipos.flatMap((tipo, j) => {
       const id = 'tr' + i + '_' + j, k = (i + j) % 7;
-      if (k === 6) return [];
-      if (k === 5) return [{ id, ...p, tipo, realizado: null, validade: null, obs: '', na: true }];
+      if (k === 6 || k === 5) return [];
       if (i === 3 && j === 2) return [{ id, ...p, tipo, realizado: null, validade: null, obs: 'INAPTO' }];
       const venc = add(hoje, desl[(i + j) % 14]);
       return [{ id, ...p, tipo, realizado: add(venc, -meses[j] * 30), validade: venc, obs: '' }];
-    });
+    }));
   });
   cache.tLoaded = true;
 }
 export async function treinoSalvar(id, dados) { treinosExemplo(); const nid = id || 'tr' + Date.now().toString(36); const i = cache.treinos.findIndex(t => t.id === nid); if (i >= 0) cache.treinos[i] = { ...cache.treinos[i], ...dados }; else cache.treinos.push({ id: nid, ...dados }); changed(); return nid; }
 export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); changed(); }
-export async function treinosImportar(itens) { treinosExemplo(); itens.forEach((t, i) => cache.treinos.push({ id: 'ti' + Date.now().toString(36) + i, ...t })); changed(); }
+export async function treinosImportar(itens) {
+  treinosExemplo();
+  itens.forEach((t, i) => { const { id, ...d } = t; const j = id ? cache.treinos.findIndex(x => x.id === id) : -1; if (j >= 0) cache.treinos[j] = { ...cache.treinos[j], ...d }; else cache.treinos.push({ id: 'ti' + Date.now().toString(36) + i, ...d }); });
+  changed();
+}
 export function treinosCarregar() { treinosExemplo(); }
 export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); admCh(); }
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
