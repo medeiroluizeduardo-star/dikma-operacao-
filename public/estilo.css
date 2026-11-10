@@ -1711,3 +1711,13 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .dobra>summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 @media (max-width:860px){.dobra>summary h2{font-size:17px}}
 .pendrota{margin-bottom:10px}
+/* Treinamentos › Por colaborador (telas/treinos.js): uma linha por pessoa, uma coluna por treinamento */
+.trmat{border-collapse:collapse;font-size:12.5px;min-width:100%}
+.trmat th,.trmat td{border-bottom:1px solid var(--line-2);padding:6px 8px;text-align:center;vertical-align:middle;white-space:nowrap}
+.trmat th.tt{white-space:normal;min-width:86px;max-width:120px;font-size:11px;font-weight:600;color:var(--ink-2);line-height:1.25}
+.trmat .trp{position:sticky;left:0;z-index:1;background:var(--surface);text-align:left;min-width:190px;max-width:240px;white-space:normal}
+.trmat td.trp b{display:block;font-weight:600}.trmat td.trp small{display:block;font-size:11px}
+.trmat .trc{cursor:pointer;border:0;font:inherit;font-size:11.5px}
+.trmat .trv{background:none;color:var(--ink-3);width:100%;padding:2px 6px;border-radius:6px}.trmat .trv:hover{background:var(--surface-2);color:var(--ink)}
+.trna{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}.trna input{width:18px;height:18px;accent-color:var(--accent)}
+@media (max-width:860px){.trmat .trp{min-width:130px;max-width:150px}}
