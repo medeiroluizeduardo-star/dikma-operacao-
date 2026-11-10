@@ -363,6 +363,13 @@ export function apontarComFotos(docId, changes, fotos) {
   Object.assign(w, toLocal(docId, w)); changed();
   return ids;
 }
+export async function apagarFotoAtividade(f) {
+  await pausa(); const i = EV.findIndex(x => x.id === f.id); if (i < 0) throw new Error('Foto não encontrada');
+  const e = EV[i]; EV.splice(i, 1);
+  const k = conjDe(e); const w = S[k] && S[k].semanas[e.semana];
+  if (w && w.ft) { for (const [key, n] of Object.entries(incrementosFt(e.refs || [], 1))) w.ft[key] = Math.max(0, (w.ft[key] || 0) - n); Object.assign(w, toLocal(e.semana, w)); }
+  changed();
+}
 // Para os testes da tela (Playwright) conferirem o que foi gravado: tamanhos da foto e da miniatura.
 export const _fotosGravadas = () => EV.filter(e => !e.demo).map(e => ({ id: e.id, refs: e.refs, bytes: e.bytes, w: e.w, h: e.h, sha: e.sha, thumbCar: (e.thumb || '').length, dadosCar: (e.dados || '').length, dia: e.dia, rota: e.rota, sit: e.sit }));
 export async function ajustarRefsFoto(id, refs) { const e = EV.find(x => x.id === id); if (e) { e.refs = [...refs]; changed(); } }

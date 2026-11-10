@@ -216,8 +216,9 @@ service cloud.firestore {
     //   sem-sha) ao confirmar o .zip salvo; lixeiraEm (hora) só na foto já exportada (restaurar = lixeiraEm null);
     //   removidaEm (hora) só na foto que está na lixeira, no MESMO lote que apaga a foto completa (evidenciasArquivo).
     //   Depois de removida, a foto não volta: removidaEm, lixeiraEm e exportadoEm ficam como estão.
-    // - Apagar o documento leve: só o administrador. Apagar a foto completa (evidenciasArquivo): só o administrador e só
-    //   junto da marca removidaEm numa foto exportada (ou junto com o documento leve).
+    // - Apagar o documento leve: o administrador; o líder da área (Apontar › fotos da atividade) só a foto que ainda não
+    //   foi exportada. Apagar a foto completa (evidenciasArquivo): o administrador junto da marca removidaEm numa foto
+    //   exportada ou junto com o documento leve; o líder da área só junto com o documento leve.
     function fotoCampos() { return ['refs', 'semana', 'area', 'conj', 'pid', 'k', 'dia', 'mes', 'rota', 'sit', 'local', 'ativ', 'nome', 'tipo', 'tamanho',
       'bytes', 'w', 'h', 'sha', 'thumb', 'por', 'porNome', 'at', 'exportadoEm', 'exportLote', 'exportConf', 'lixeiraEm', 'removidaEm']; }
     function fotoOk(d, col) {
@@ -261,22 +262,26 @@ service cloud.firestore {
     // A foto completa só sai junto da marca removidaEm (foto exportada) ou junto com o documento leve.
     // Cada foto custa uma leitura (getAfter do leve): o lote de "apagar de vez" tem até 15 fotos, porque o Firestore
     // aceita no máximo 20 documentos lidos pelas regras num lote (fotos-arquivo.js › LOTE).
-    function arqApagavel(col, id) {
-      return admin() && (!existsAfter(/databases/$(database)/documents/$(col)/$(id))
+    function arqApagavel(col, id, e) {
+      return (admin() && (!existsAfter(/databases/$(database)/documents/$(col)/$(id))
         || (getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('removidaEm', null) != null
-          && getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('exportadoEm', null) != null));
+          && getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('exportadoEm', null) != null)))
+        || (liderDa(resource.data.area, e) && !existsAfter(/databases/$(database)/documents/$(col)/$(id)));
     }
+    // Líder da área (Operação · líder, na área e no escopo): apaga a foto ainda não exportada (Apontar).
+    function liderDa(area, e) { return apontaDa(area, e) && pEm('operacao') == 'lider'; }
+    function fotoLiderApaga(e) { return liderDa(resource.data.area, e) && resource.data.get('exportadoEm', null) == null; }
     match /evidencias/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area)) && fotoOk(request.resource.data, 'semanas');
       allow update: if (fotoAutor('patio') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
-      allow delete: if admin();
+      allow delete: if admin() || fotoLiderApaga('patio');
     }
     match /evidenciasArquivo/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area)) && arqOk(request.resource.data, 'evidencias', id);
       allow update: if false;
-      allow delete: if arqApagavel('evidencias', id);
+      allow delete: if arqApagavel('evidencias', id, 'patio');
     }
     // Configuração das fotos: todos os ativos leem; só o administrador grava (com os limites conferidos).
     match /config/fotos {
@@ -325,13 +330,13 @@ service cloud.firestore {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && fotoOk(request.resource.data, 'b_semanas');
       allow update: if (fotoAutor('bateria') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
-      allow delete: if admin();
+      allow delete: if admin() || fotoLiderApaga('bateria');
     }
     match /b_evidenciasArquivo/{id} {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && arqOk(request.resource.data, 'b_evidencias', id);
       allow update: if false;
-      allow delete: if arqApagavel('b_evidencias', id);
+      allow delete: if arqApagavel('b_evidencias', id, 'bateria');
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------

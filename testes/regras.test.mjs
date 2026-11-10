@@ -321,9 +321,23 @@ test('Fotos: o autor só ajusta refs (24 h); exportação, lixeira e remoção s
   // depois de 24 h o autor não ajusta mais
   await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'evidencias', 'h2'), { ...fotoMeta(), at: Timestamp.fromMillis(Date.now() - 3 * 864e5) }); });
   await assertFails(updateDoc(doc(db('liderRec'), 'evidencias', 'h2'), { refs: [`${SEM}|REC-001|2`] }));
-  for (const u of ['liderRec', 'gestorP', 'admModulo']) { await assertFails(deleteDoc(doc(db(u), 'evidencias', 'h1')), u); await assertFails(deleteDoc(doc(db(u), 'evidenciasArquivo', 'h1')), u); }
+  // h1 já foi exportada (laço acima): o líder não apaga mais; os outros perfis nunca apagam
+  for (const u of ['liderRec', 'sup', 'gestorP', 'admModulo']) { await assertFails(deleteDoc(doc(db(u), 'evidencias', 'h1')), u); await assertFails(deleteDoc(doc(db(u), 'evidenciasArquivo', 'h1')), u); }
   await assertSucceeds(deleteDoc(doc(db('admin'), 'evidenciasArquivo', 'h1')));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'evidencias', 'h1')));
+});
+test('Fotos: o líder da área apaga a foto ainda não exportada (leve + completa + ft num lote só); outros perfis não', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'ap1'));
+  const apagar = (uid, id, { arq = true, leve = true } = {}) => { const d = db(uid); const b = writeBatch(d); if (leve) b.delete(doc(d, 'evidencias', id)); if (arq) b.delete(doc(d, 'evidenciasArquivo', id)); b.update(doc(d, 'semanas', SEM), { 'ft.REC-001|2': increment(-1), 'ft.REC-002|2': increment(-1), atualizadoPor: uid }); return b.commit(); };
+  for (const u of ['liderPrep', 'sup', 'coord', 'gestorP', 'admModulo', 'freqLeitor']) await assertFails(apagar(u, 'ap1'), u);
+  // a foto completa sozinha (sem o leve) o líder não apaga
+  await assertFails(apagar('liderRec', 'ap1', { leve: false }));
+  await assertSucceeds(apagar('liderRec', 'ap1'));
+  // o administrador apaga qualquer uma, também a já exportada
+  await assertSucceeds(gravarFoto('liderRec', 'ap2'));
+  await env.withSecurityRulesDisabled(async ctx => { await updateDoc(doc(ctx.firestore(), 'evidencias', 'ap2'), { exportadoEm: Timestamp.now(), exportLote: 'L' }); });
+  await assertFails(apagar('liderRec', 'ap2'));
+  await assertSucceeds(apagar('admin', 'ap2'));
 });
 test('Fotos na Bateria (b_): o supervisor grava na área dele; o líder do Pátio não', async () => {
   const meta = fotoMeta({ refs: [`${SEM_B1}|B1-001|2`], semana: SEM_B1, area: 'BATERIA 1', conj: 'bateria', pid: 'B1-001', por: 'sup' });

@@ -499,6 +499,18 @@ export async function listarEvidenciasSemanas(ids, conj = cur) {
 export async function abrirEvidencia(id, conj = cur) { const s = await getDoc(doc(db, C('evidenciasArquivo', conj), id)); return s.exists() ? s.data().dados : null; }
 // O autor ajusta a quais atividades a foto vale (até 24 h depois; as regras conferem).
 export const ajustarRefsFoto = (id, refs, conj = cur) => track(updateDoc(doc(db, C('evidencias', conj), id), { refs, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
+// Apagar uma foto (Apontar › fotos da atividade; líder da área ou administrador, as regras conferem): apaga o documento
+// leve e a foto completa e diminui a contagem ft da semana, num lote só. Espera o servidor (sem sinal, dá erro).
+// A foto já arquivada fora do banco (removidaEm) não tem mais a foto completa: só o leve sai.
+export async function apagarFotoAtividade(f, conj = setDaArea(f.area || '') || cur) {
+  const b = writeBatch(db);
+  b.delete(doc(db, C('evidencias', conj), f.id));
+  if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', conj), f.id));
+  const args = [];
+  if (f.semana && (f.refs || []).length) for (const [key, n] of Object.entries(incrementosFt(f.refs, 1))) args.push(new FieldPath('ft', key), increment(-n));
+  if (args.length) b.update(doc(db, C('semanas', conj), f.semana), ...args, 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  await gravarLote(b);
+}
 // ---------- Relatórios e arquivo de fotos (Parte 2; só o administrador; contas em fotos-arquivo.js) ----------
 // Fotos (leves) de um período: lidas por mês e filtradas pelo dia. Todas as situações (a tela separa).
 export async function listarEvidenciasPeriodo(conj, de, ate) {

@@ -1658,6 +1658,9 @@ label.btn.dis{opacity:.45;pointer-events:none}
 :root[data-theme="dark"] .fstat.arquivada{color:#B9B8F0}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .fstat.arquivada{color:#B9B8F0}}
 .fgrade .sgmini.fmini{position:relative}
+.fgrade .fcel{display:flex;flex-direction:column;align-items:center;gap:4px}
+.fgrade .fapb{min-height:26px;padding:2px 8px}
+.fapagar{border:1px solid var(--st-nreal);border-radius:10px;padding:10px 12px;margin:8px 0;display:flex;flex-direction:column;gap:8px}
 .fgrade .sgmini .fstat{position:absolute;left:3px;bottom:3px;max-width:calc(100% - 6px);overflow:hidden;text-overflow:ellipsis;font-size:9.5px;padding:0 5px}
 .fgrade .sgmini.arq img{filter:grayscale(.6);opacity:.8}
 /* Administração › Relatórios e arquivo de fotos */

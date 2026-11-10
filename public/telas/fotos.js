@@ -3,7 +3,7 @@
 // As contas ficam em fotos.js; a gravação (um lote só com o apontamento), em data.js › apontarComFotos.
 import { DAYS, SETS, add, ddmm, setDaArea } from '../contas/cal.js';
 import { DB, TODAY, esc, title, n0, $ } from '../nucleo/base.js';
-import { ME, PL, UI, SK, canEdit, isAdmin, setsDe } from '../nucleo/estado.js';
+import { ME, PL, UI, SK, canEdit, isAdmin, perfil, setsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { sheet, toast } from '../ui/janelas.js';
@@ -116,11 +116,15 @@ const achar = ref => { const p = String(ref).split('|'); const k = +p.pop(), i =
 acoes.verFotos = (t, d) => { const x = achar(d.k); if (x) verFotosCel(x.doc, x.i, x.k); };
 // Pode juntar fotos a um apontamento já feito (até o máximo): quem aponta na área.
 const podeJuntar = (doc, i, k) => canEdit(doc.area) && 'RNE'.includes(doc.d[i][k]) && fotosDaCel(doc, doc.ids[i], k) < cfgF().max;
+// Apagar foto (com confirmação): o administrador e o líder da área; o líder só a foto que ainda não foi exportada
+// (a exportada faz parte do arquivo da empresa). As regras do banco conferem o mesmo.
+const podeApagarFoto = (doc, x) => isAdmin() || (perfil('operacao') === 'lider' && canEdit(doc.area) && statusFoto(x) === 'banco');
 export async function verFotosCel(doc, i, k) {
   const p = PL.get(doc.ids[i]) || {}; const L = $('layer'); const n = fotosDaCel(doc, doc.ids[i], k);
   const conj = setDaArea(doc.area) || SK; const juntar = podeJuntar(doc, i, k);
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet fotosheet" role="dialog" aria-modal="true" aria-label="Fotos da atividade"><h3>Fotos da atividade</h3><div class="sub"><b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}${n ? ` · ${n} foto${n > 1 ? 's' : ''}` : ''}</div>
     <div class="sgfotos fgrade" id="fVer"><p class="muted small m0">Carregando as fotos…</p></div><p class="muted small m0" id="fVerInfo"></p>
+    <div class="fapagar" id="fApagar" hidden></div>
     <div class="row-gap">${juntar ? `<button class="btn" type="button" id="fJuntar">${I.cam} Adicionar foto</button>` : ''}<button class="btn" type="button" data-close>Fechar</button></div></div></div>`;
   const kd = e => { if (e.key === 'Escape' && !document.querySelector('.sgfoto')) fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
@@ -138,14 +142,34 @@ export async function verFotosCel(doc, i, k) {
       else verFotoGrande(() => DB.abrirEvidencia(x.id, conj), x.thumb, 'Foto da atividade', `${leg}${st === 'exportada' ? ` · ${STATUS.exportada.t}${x.exportLote ? ` (lote ${x.exportLote})` : ''}` : ''}`);
       return;
     }
-    if (e.target.closest('#fJuntar')) { fechar(); juntarFotos(doc, i, k); }
+    if (e.target.closest('#fJuntar')) { fechar(); juntarFotos(doc, i, k); return; }
+    const ap = e.target.closest('[data-apagar]');
+    if (ap) {
+      const x = lista.find(y => y.id === ap.dataset.apagar); if (!x) return;
+      const varias = (x.refs || []).length > 1;
+      $('fApagar').hidden = false;
+      $('fApagar').innerHTML = `<p class="m0"><b>Apagar esta foto?</b> Ela sai do sistema e não dá para desfazer.${varias ? ` A foto vale para ${x.refs.length} atividades e sai de todas.` : ''}</p><div class="row-gap"><button class="btn perigo" type="button" data-sim="${esc(x.id)}">${I.lixo} Apagar a foto</button><button class="btn" type="button" data-nao>Cancelar</button></div>`;
+      $('fApagar').scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.target.closest('[data-nao]')) { $('fApagar').hidden = true; return; }
+    const sim = e.target.closest('[data-sim]');
+    if (sim) {
+      const x = lista.find(y => y.id === sim.dataset.sim); if (!x) return;
+      sim.disabled = true; sim.textContent = 'Apagando…';
+      DB.apagarFotoAtividade(x, conj).then(() => {
+        DB.log(`${p.ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → foto apagada${(x.refs || []).length > 1 ? ` (valia para ${x.refs.length} atividades)` : ''}`);
+        toast('Foto apagada'); fechar(); render();
+      }).catch(() => { sim.disabled = false; sim.innerHTML = `${I.lixo} Apagar a foto`; toast('Não deu para apagar a foto agora. Confira o sinal e tente de novo.'); });
+    }
   };
   try {
     lista = await DB.listarFotosCel(doc.id, doc.ids[i], k, conj);
     const v = $('fVer'); if (!v) return;
     // selo da situação da foto (Relatórios e arquivo de fotos): "No banco" só aparece para o administrador
     const selo = x => { const st = statusFoto(x); return st === 'banco' && !isAdmin() ? '' : `<span class="fstat ${st}">${esc(STATUS[st].c)}</span>`; };
-    v.innerHTML = lista.length ? lista.map((x, j) => `<button type="button" class="sgmini fmini${statusFoto(x) === 'arquivada' ? ' arq' : ''}" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1} (${esc(STATUS[statusFoto(x)].t)})" title="${esc(STATUS[statusFoto(x)].d)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}${selo(x)}</button>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal) ou estão na lixeira da administração.' : 'Nenhuma foto nesta atividade.'}</p>`;
+    const btApagar = (x, j) => podeApagarFoto(doc, x) ? `<button type="button" class="btn sm danger fapb" data-apagar="${esc(x.id)}" aria-label="Apagar a foto ${j + 1}">${I.lixo} Apagar</button>` : '';
+    v.innerHTML = lista.length ? lista.map((x, j) => `<div class="fcel"><button type="button" class="sgmini fmini${statusFoto(x) === 'arquivada' ? ' arq' : ''}" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1} (${esc(STATUS[statusFoto(x)].t)})" title="${esc(STATUS[statusFoto(x)].d)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}${selo(x)}</button>${btApagar(x, j)}</div>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal) ou estão na lixeira da administração.' : 'Nenhuma foto nesta atividade.'}</p>`;
     const comp = lista.filter(x => (x.refs || []).length > 1).length;
     const arq = lista.filter(x => statusFoto(x) === 'arquivada').length;
     $('fVerInfo').textContent = lista.length ? `Toque numa foto para ver grande.${comp ? ` ${comp === 1 ? 'Uma foto vale' : `${comp} fotos valem`} para várias atividades da rota.` : ''}${arq ? ` ${arq === 1 ? 'Uma foto foi arquivada' : `${arq} fotos foram arquivadas`} fora do banco (fica a miniatura).` : ''}` : '';

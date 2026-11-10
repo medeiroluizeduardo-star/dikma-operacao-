@@ -34,6 +34,11 @@ Arquivos:
   contam para o mínimo.
 - **Lista do Apontar e Programação**: cada atividade com foto mostra 📷n; tocar abre as miniaturas e, tocando numa, a
   foto grande (lida de `evidenciasArquivo`). Quem aponta pode **adicionar foto** a um apontamento já feito, até o máximo.
+- **Apagar foto** (líder da área e administrador; os outros perfis não veem o botão): nas fotos da atividade, cada
+  miniatura tem **Apagar**, que pede confirmação. Apaga o documento leve e a foto completa e diminui a contagem `ft` da
+  semana no **mesmo lote** (`DB.apagarFotoAtividade`; espera o servidor, sem sinal dá erro). A foto que vale para várias
+  atividades ("Marcar restantes") sai de todas (a tela avisa). O líder só apaga a foto **No banco** (ainda não
+  exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos
@@ -100,7 +105,7 @@ antes) também é somado. Uma foto com 20 `refs` soma 1 em cada uma das 20 célu
 | `removidaEm` | **só o administrador** | `null` na criação. Parte 2: arquivo completo apagado; as telas mostram só a miniatura com o selo "Arquivada fora do banco" |
 | `atualizadoEm`, `atualizadoPor` | quem altera depois | |
 
-Apagar o documento: **só o administrador**.
+Apagar o documento: o **administrador** ou o **líder da área** (este só a foto ainda não exportada). Veja "Apagar foto no Apontar" abaixo.
 
 ### `evidenciasArquivo/{id}` (Bateria: `b_evidenciasArquivo`) — foto completa, mesmo id do leve
 
@@ -121,7 +126,7 @@ por esse campo, e a contagem soma `ev`. A Parte 2 deve tratar `refs` ausente com
 - **Ler**: quem lê as semanas do conjunto (Operação ou Gestão com o escopo).
 - **Alterar**: autor só `refs` (24 h e ainda apontando na área); administrador `refs`, `exportadoEm`, `exportLote`,
   `lixeiraEm`, `removidaEm`.
-- **Apagar**: só o administrador.
+- **Apagar**: o administrador; o líder da área só a foto ainda não exportada (Apontar).
 - `semanas`/`b_semanas`: quem aponta pode alterar `ft` (além de `s`, `m`, `ev`).
 - `config/fotos`: todos os ativos leem; só o administrador grava, com os limites.
 
