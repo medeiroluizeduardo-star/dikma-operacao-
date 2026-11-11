@@ -5,8 +5,8 @@ rules_version = '2';
 //   escopos = parte de ['patio', 'bateria', 'equipamentos']; as Fichas de acompanhamento = 'gestao' em modulos.
 //   Cada regra confere o perfil DO MÓDULO certo:
 //   - Pátio/Bateria (semanas, aprov, plano, colaboradores, situacao, acoes): ler = Operação ou Gestão + escopo;
-//     apontar e lançar a presença = Operação (líder a gestor) na área; aprovar = Operação · Supervisor
-//     (o administrador é a reserva); ações das causas = Operação ou Gestão (supervisor para cima) na área.
+//     apontar e lançar a presença = Operação (líder a gestor) na área; aprovar = Operação · Supervisor na área,
+//     Operação · Técnico de Processo em todas as áreas do escopo, e o administrador; ações das causas = Operação ou Gestão (supervisor para cima) na área.
 //   - Plano, rotas, gerador = Administração: administrador, ou 'Dos módulos' com Gestão · Gestor no escopo.
 //   - Equipamentos (eq*) = escopo Equipamentos: Operação grava; Gestão lê (e lança a Avaliação mensal).
 //   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas.
@@ -69,6 +69,9 @@ service cloud.firestore {
     function geEdita() { return hasProfile() && geEditaU(perfil()); }
     // Aponta e lança a presença na área (Operação · líder a gestor, com o escopo).
     function apontaDa(area, e) { return ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider'] && areaEm(pEm('operacao'), area); }
+    // Técnico de Processo (Operação): aprova e devolve em todas as áreas do escopo; não aponta. Ao devolver, a célula
+    // volta a pendente na semana (só s e m mudam).
+    function tecnicoEm(e) { return ativo() && esc(e) && pEm('operacao') == 'tecnico'; }
     function gestorDa(area) { return apontaDa(area, 'patio'); }
     function gestorDaB(area) { return apontaDa(area, 'bateria'); }
     // Atividade fora da programação (campo fp da semana): só coordenador e supervisor da área (e o administrador).
@@ -167,12 +170,13 @@ service cloud.firestore {
       allow create: if admMod('operacao');
       allow delete: if admin();
       allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+        || (tecnicoEm('patio') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
         || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
 
-    // Aprovação dos apontamentos: o supervisor da área aprova ou devolve o que foi apontado; o administrador é a reserva.
-    // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
-    function aprova(area, e) { return (apontaDa(area, e) && pEm('operacao') == 'supervisor') || admin(); }
+    // Aprovação dos apontamentos: o supervisor da área, o técnico de processo (todas as áreas do escopo) e o
+    // administrador aprovam ou devolvem o que foi apontado.
+    function aprova(area, e) { return (apontaDa(area, e) && pEm('operacao') == 'supervisor') || tecnicoEm(e) || admin(); }
     function aprovaDa(area) { return aprova(area, 'patio'); }
     // Plano de ação das causas: supervisor na área dele; coordenador, gestor e administrador também. Pela Operação
     // ou pela Gestão (a tela Causas e ações fica na Gestão).
@@ -316,9 +320,9 @@ service cloud.firestore {
       allow create: if admMod('bateria');
       allow delete: if admin();
       allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+        || (tecnicoEm('bateria') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
         || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
     }
-    // Administrador: aprovador reserva (a tela só oferece nas áreas sem supervisor).
     function aprovaDaB(area) { return aprova(area, 'bateria'); }
     function acompanhaDaB(area) { return acompanha(area, 'bateria'); }
     match /b_aprov/{id} {

@@ -109,14 +109,16 @@ test('aprovação: líder recebe o que foi devolvido (uma vez); supervisor receb
   const S = { plano: [{ id: 'R1', rota: 'RECEBIMENTO' }, { id: 'R2', rota: 'RECEBIMENTO' }], rotas: [], colabs: [], sit: {},
     semanas: { [`RECEBIMENTO|${ini}`]: { area: 'RECEBIMENTO', ini, ids: ['R1', 'R2'], s: { R1: 'RNP____', R2: 'RPP____' } } },
     aprov: { [`RECEBIMENTO|${ini}`]: { 'R2|0': { s: 'A', c: 'R' }, 'R2|1': { s: 'D', c: 'P', mot: 'Não foi feita', em: 'e1' } } } };
-  const us = { ...usuarios, ...conv({ supRec: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Sup' } }) };
-  const av = { ...avisos, supRec: tok };
+  const us = { ...usuarios, ...conv({ supRec: { papel: 'supervisor', area: 'RECEBIMENTO', modulos: ['operacao'], nome: 'Sup' } }), tec: { papel: 'leitor', modulos: ['operacao'], acesso: { operacao: 'tecnico' }, escopos: ['patio'], nome: 'Tec' } };
+  const av = { ...avisos, supRec: tok, tec: tok };
   const r = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${H}T08:10:00`), hoje: H });
   const ana = de(r, 'liderRec', 'aprovacao');
   assert.equal(ana.length, 1); assert.equal(ana[0].titulo, 'O supervisor devolveu 1 atividade'); assert.match(ana[0].corpo, /Não foi feita/);
   assert.equal(de(r, 'liderPrep', 'aprovacao').length, 0, 'outra área não recebe');
   const sup = de(r, 'supRec', 'aprovacao');
   assert.equal(sup.length, 1); assert.equal(sup[0].titulo, '1 apontamento esperando aprovação há mais de 1 dia'); // R1 de segunda; o de terça ainda está no prazo
+  const tec = de(r, 'tec', 'aprovacao');
+  assert.equal(tec.length, 1, 'o Técnico de Processo também recebe (todas as áreas do Pátio)'); assert.equal(tec[0].titulo, '1 apontamento esperando aprovação há mais de 1 dia');
   const env = Object.fromEntries(r.marcar.map(k => [k, H]));
   const r2 = planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: env, agora: new Date(`${H}T09:10:00`), hoje: H });
   assert.equal(r2.msgs.filter(m => m.tag === 'aprovacao').length, 0, 'não repete');

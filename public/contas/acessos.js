@@ -15,7 +15,7 @@ import { normNome } from './planilhas-adm.js';
 // (= Gestão com as Fichas de acompanhamento). A tela Usuários ainda grava os campos antigos tirados do acesso
 // (legadoDoAcesso); a rotina dos avisos e as telas não usam mais o papel único para dar permissão.
 export const MODULOS_ACESSO = [
-  { k: 'operacao', nome: 'Operação', sub: 'Apontar, Aprovação, Pendências, Equipamentos e Efetivo', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'leitor'] },
+  { k: 'operacao', nome: 'Operação', sub: 'Apontar, Aprovação, Pendências, Equipamentos e Efetivo', perfis: ['lider', 'supervisor', 'tecnico', 'coordenador', 'gestor', 'leitor'] },
   { k: 'gestao', nome: 'Gestão', sub: 'Programação, Fichas, Dimensionamento, Indicadores e Resumos', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'administrativo', 'leitor'] },
   { k: 'seguranca', nome: 'Segurança', sub: 'Registros de interação e de anomalia, fila de anomalias e painel', perfis: ['registra', 'trata', 'gestor', 'leitor'] },
   { k: 'rh', nome: 'RH', sub: 'Frequência, Férias e Importar planilhas', perfis: ['administrativo', 'leitor'] },
@@ -23,7 +23,7 @@ export const MODULOS_ACESSO = [
 ];
 export const MODULO_ACESSO = Object.fromEntries(MODULOS_ACESSO.map(m => [m.k, m]));
 export const ESCOPOS = [['patio', 'Pátio'], ['bateria', 'Bateria'], ['equipamentos', 'Equipamentos']];
-export const PERFIL_NOME = { lider: 'Líder', supervisor: 'Supervisor', coordenador: 'Coordenador', gestor: 'Gestor', administrativo: 'Administrativo', leitor: 'Somente leitura', registra: 'Registra', trata: 'Trata', admin: 'Completa', modulo: 'Dos módulos' };
+export const PERFIL_NOME = { lider: 'Líder', supervisor: 'Supervisor', tecnico: 'Técnico de Processo', coordenador: 'Coordenador', gestor: 'Gestor', administrativo: 'Administrativo', leitor: 'Somente leitura', registra: 'Registra', trata: 'Trata', admin: 'Completa', modulo: 'Dos módulos' };
 export const perfilNome = (mod, p) => (mod === 'administracao' ? { admin: 'Completa (administrador)', modulo: 'Só dos módulos (gestor)' }[p] : PERFIL_NOME[p]) || p;
 // Ordem usada para escolher o papel antigo (único) a partir dos perfis de cada módulo.
 export const ORDEM_PAPEL = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];

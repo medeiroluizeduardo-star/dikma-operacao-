@@ -17,7 +17,7 @@ const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
-const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'administrativo', 'leitor'].includes(u.papel) && mods(u).includes(m));
+const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'tecnico', 'administrativo', 'leitor'].includes(u.papel) && mods(u).includes(m));
 function areasDe(u, k) {
   if (!mods(u).includes(SETS[k].mod)) return [];
   if (todas(u, SETS[k].mod)) return SETS[k].areas;
