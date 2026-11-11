@@ -424,9 +424,12 @@ export function vPerfis() {
 
 /* ---------------- CONFIG ---------------- */
 export function vConfig() {
-  return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="body pt0"><button class="btn pri" data-act="novaRota">+ Nova rota</button></div><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th></tr></thead><tbody>
-  ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><input class="in pin" data-rnome="${i}" value="${esc(r.rota)}" maxlength="60" aria-label="Nome da rota ${esc(r.rota)}" title="Mudar o nome troca também no plano padrão e nos colaboradores da rota"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td></tr>`).join('')}
+  return `<div class="card"><header><h2>Rotas</h2><p>Efetivo padrão (quadro previsto) e carga padrão (pico diário de atividades)</p></header><div class="body pt0"><button class="btn pri" data-act="novaRota">+ Nova rota</button></div><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th class="r">Colaboradores</th><th></th></tr></thead><tbody>
+  ${rotas().map((r, i) => `<tr><td class="muted">${AREA_S[r.area]}</td><td><input class="in pin" data-rnome="${i}" value="${esc(r.rota)}" maxlength="60" aria-label="Nome da rota ${esc(r.rota)}" title="Mudar o nome troca também no plano padrão e nos colaboradores da rota"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|ef" value="${r.ef}" aria-label="Efetivo padrão ${esc(r.rota)}"></td><td class="r"><input class="in num numin" type="number" min="0" data-rcfg="${i}|carga" value="${r.carga}" aria-label="Carga padrão ${esc(r.rota)}"></td><td class="r num">${COLABS.filter(c => c.area === r.area && c.rota === r.rota).length}</td><td class="r">${UI.confirm === 'rdel:' + i ? `<span class="confirm"><button class="btn danger" data-act="rotaExcluir" data-i="${i}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="rotaAskDel" data-i="${i}" aria-label="Excluir a rota ${esc(r.rota)}" title="Excluir rota">✕</button>`}</td></tr>`).join('')}
   </tbody></table></div></div>
+  ${rotasExcluidas().length ? `<div class="card"><header><h2>Rotas excluídas</h2><p>Ficam guardadas aqui. Restaurar devolve a rota com o mesmo efetivo e carga padrão</p></header><div class="tw"><table><thead><tr><th>Área</th><th>Rota</th><th class="r">Efetivo padrão</th><th class="r">Carga padrão</th><th></th></tr></thead><tbody>
+  ${rotasExcluidas().map((r, i) => `<tr><td class="muted">${esc(AREA_S[r.area] || r.area)}</td><td><b>${esc(r.rota)}</b></td><td class="r num">${r.ef}</td><td class="r num">${r.carga}</td><td class="r"><button class="btn" data-act="rotaRestaurar" data-i="${i}">Restaurar</button></td></tr>`).join('')}
+  </tbody></table></div></div>` : ''}
 
   <div class="card"><header><h2>Tipos de atividade</h2></header><div class="body"><div class="rchips">${tipos().map(t => `<span class="rchip">${esc(t)}</span>`).join('')}</div></div></div>
   ${cartaoAjustesHE()}`;
@@ -444,13 +447,37 @@ acoes.novaRota = () => {
     if (!nome) throw new Error('Digite o nome da rota.');
     if (rotas().some(r => r.area === area && r.rota === nome)) throw new Error('Já existe uma rota com esse nome nesta área.');
     const nova = { area, rota: nome, ef: Math.max(0, +$('nrEf').value || 0), carga: Math.max(0, +$('nrCarga').value || 0) };
-    const rs = [...rotas()]; let pos = rs.length;
-    for (let j = rs.length - 1; j >= 0; j--) if (rs[j].area === area) { pos = j + 1; break; }
-    if (pos === rs.length) { const ia = areas.indexOf(area); const k = rs.findIndex(r => areas.indexOf(r.area) > ia); if (k >= 0) pos = k; }
-    rs.splice(pos, 0, nova);
+    const rs = [...rotas()]; rs.splice(posNaArea(rs, area), 0, nova);
     DB.cache.config.rotas = rs; await DB.saveRotas(rs); rebuild();
     DB.log(`Rota criada: ${nome} (${AREA_S[area]})`); toast(`Rota ${nome} criada`); render();
   });
+};
+
+// Excluir rota: só quando está vazia (sem colaboradores e sem atividades no plano padrão), para não deixar nada sem rota.
+// A rota excluída fica guardada em config.rotasExcluidas e pode ser restaurada.
+const rotasExcluidas = () => (DB.cache.config && DB.cache.config.rotasExcluidas) || [];
+const posNaArea = (rs, area) => { const areas = SETS[SK].areas; for (let j = rs.length - 1; j >= 0; j--) if (rs[j].area === area) return j + 1; const ia = areas.indexOf(area); const k = rs.findIndex(r => areas.indexOf(r.area) > ia); return k >= 0 ? k : rs.length; };
+acoes.rotaAskDel = (t, d) => {
+  const r = rotas()[+d.i]; if (!r) return;
+  const nC = COLABS.filter(c => c.area === r.area && c.rota === r.rota).length;
+  const nP = (DB.cache.plano[r.area] || []).filter(x => x.rota === r.rota && x.ativo !== false).length;
+  if (nC || nP) { toast(`Não dá para excluir ${r.rota}: ainda tem ${[nC ? `${nC} colaborador${nC === 1 ? '' : 'es'}` : '', nP ? `${nP} atividade${nP === 1 ? '' : 's'} no plano padrão` : ''].filter(Boolean).join(' e ')}. Passe para outra rota antes.`); return; }
+  UI.confirm = 'rdel:' + d.i; render();
+};
+acoes.rotaExcluir = async (t, d) => {
+  if (!admDe('ativ')) return;
+  const i = +d.i; const r = rotas()[i]; UI.confirm = null; if (!r) return render();
+  const rs = rotas().filter((x, j) => j !== i); const ex = [...rotasExcluidas(), r];
+  DB.cache.config.rotas = rs; DB.cache.config.rotasExcluidas = ex; await DB.saveConfig({ rotas: rs, rotasExcluidas: ex }); rebuild();
+  DB.log(`Rota excluída: ${r.rota} (${AREA_S[r.area]})`); toast(`Rota ${r.rota} excluída · dá para restaurar mais abaixo`); render();
+};
+acoes.rotaRestaurar = async (t, d) => {
+  if (!admDe('ativ')) return;
+  const i = +d.i; const r = rotasExcluidas()[i]; if (!r) return;
+  if (rotas().some(x => x.area === r.area && x.rota === r.rota)) { toast('Já existe uma rota com esse nome nesta área. Mude o nome dela antes de restaurar.'); return; }
+  const rs = [...rotas()]; rs.splice(posNaArea(rs, r.area), 0, r); const ex = rotasExcluidas().filter((x, j) => j !== i);
+  DB.cache.config.rotas = rs; DB.cache.config.rotasExcluidas = ex; await DB.saveConfig({ rotas: rs, rotasExcluidas: ex }); rebuild();
+  DB.log(`Rota restaurada: ${r.rota} (${AREA_S[r.area]})`); toast(`Rota ${r.rota} restaurada`); render();
 };
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */
