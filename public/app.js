@@ -4,7 +4,7 @@
 //   nucleo/estado.js    estado da tela (UI), quem entrou (ME), conjunto aberto (SK) e o que a pessoa pode ver e fazer
 //   nucleo/erros.js     anota os erros que acontecem no aparelho e grava no banco (Administração › Erros nos aparelhos)
 //   nucleo/acoes.js     registro das ações dos botões (data-act)
-//   nucleo/modulos.js   Meu dia, pessoas e as telas de Operação, fichas do Efetivo e Frequência (carregadas quando precisa)
+//   nucleo/modulos.js   Avisos no celular, pessoas e as telas de Operação, fichas do Efetivo e Frequência (carregadas quando precisa)
 //   calc/               contas das telas: atividades (programado, atrasadas, aprovação) e presença (escala, situação do dia)
 //   contas/             contas sem tela e sem banco, as mesmas no site, nos testes e nas rotinas do GitHub (cal, situacao...)
 //   nucleo/navegacao.js abas (VIEWS), módulos (MODS), barra de baixo do celular e troca de módulo
@@ -12,7 +12,7 @@
 //   ui/                 ícones, janelas (sheet, formSheet, toast), a moldura da tela (render, menu, topo, filtros, busca),
 //                       busca nas listas, baixar Excel, animações e o lançamento de presença
 //   telas/              cada tela: atividades, apontar, efetivo, horas extras e justificativas, relatórios, configurações,
-//                       Operação (equip), fichas do Efetivo (gestao, importar), Frequência (administrativo), Meu dia
+//                       Operação (equip), fichas do Efetivo (gestao, importar), Frequência (administrativo), Avisos no celular (avisos)
 //                       Resumos e configurações da Administração só são baixados quando abertos (nucleo/modulos.js).
 // A ordem dos imports abaixo é a ordem em que cada parte fica pronta.
 import './nucleo/base.js';

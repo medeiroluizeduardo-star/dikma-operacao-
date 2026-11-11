@@ -8,7 +8,7 @@ import { MODULOS_ACESSO, perfilDe, perfilNome } from './acessos.js';
 
 // Perfis de cada módulo que dá para configurar (o administrador sempre vê tudo).
 export const PERFIS_MOD = Object.fromEntries(MODULOS_ACESSO.map(m => [m.k, m.perfis.filter(p => p !== 'admin').map(p => [p, perfilNome(m.k, p)])]));
-// Grupos da tela Perfis e permissões: um por módulo. 'all' = Meu dia (vale em todos os módulos).
+// Grupos da tela Perfis e permissões: um por módulo. 'all' = Avisos no celular (vale em todos os módulos).
 export const GRUPOS_ABAS = [
   { t: 'Operação', mod: 'operacao' },
   { t: 'Gestão', mod: 'gestao' },
@@ -31,21 +31,23 @@ export function valorCfg(cfg, mod, papel, id) {
 const SO_ADMIN = ['usuarios', 'perfis', 'gimport', 'cflimpa', 'cfhist', 'cffotos', 'cfarqfotos'];
 // Aba que o perfil do módulo pode ter ligada (as da Administração, só o perfil 'Dos módulos').
 export const configuravel = (mod, papel, v) => !SO_ADMIN.includes(v.id) && (mod !== 'administracao' || papel === 'modulo');
-// Módulo de uma aba para a configuração: Meu dia (all) fica com o módulo pedido.
+// Módulo de uma aba para a configuração: Avisos no celular (all) fica com o módulo pedido.
 const modDaAba = (v, mod) => (v.mod === 'all' ? mod : v.mod);
 
 // O que o perfil (do módulo) vê, sem olhar exceções da pessoa.
 export function doPerfil(mod, papel, v, cfg) {
   if (papel === 'admin') return true;
+  if (v.livre) return !!papel;
   if (!papel || !configuravel(mod, papel, v)) return false;
   const c = valorCfg(cfg, mod, papel, v.id);
   return typeof c === 'boolean' ? c : true;
 }
-// O que esta pessoa vê na aba v (Meu dia: no módulo mod): exceção dela, senão o perfil dela naquele módulo.
+// O que esta pessoa vê na aba v (Avisos no celular: no módulo mod): exceção dela, senão o perfil dela naquele módulo.
 export function podeVer(u, v, cfg, mod) {
   if (!u) return false;
   const m = modDaAba(v, mod); const papel = perfilDe(u, m);
   if (papel === 'admin') return true;
+  if (v.livre) return !!papel;
   if (!papel || !configuravel(m, papel, v)) return false;
   const ex = u.abas && u.abas[v.id];
   return typeof ex === 'boolean' ? ex : doPerfil(m, papel, v, cfg);
