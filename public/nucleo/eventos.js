@@ -17,7 +17,7 @@ import { apArea, cellMenu, pedirJustificativa, apply } from '../telas/apontar.js
 import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from '../telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
 import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
-import { MD, modulo } from './modulos.js';
+import { AV, modulo } from './modulos.js';
 // Telas de configuração (config.js): chegam quando a tela é aberta; os botões abaixo só existem nessas telas.
 const CF = () => modulo('CF');
 
@@ -62,7 +62,7 @@ document.addEventListener('click', async e => {
       const vs = abasDoMenu().filter(v => !naBarra.includes(v.id));
       // "Mais" em seções: as abas desta área primeiro, depois as outras áreas e, por fim, conta e tela.
       const outros = modsMenu().filter(m => !mesmoItem(m, UI.modulo)).map((m, i) => ({ t: MODS[m].nome, d: subMod(m), id: '__mod_' + m, ic: `<span class="opt-ic">${MOD_IC[m] || I.swap}</span>`, sec: i ? '' : 'Outros módulos' }));
-      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), { t: 'Avisos no celular', id: 'avisos', d: 'Ligar, desligar e escolher os avisos', ic: `<span class="opt-ic">${I.celular}</span>` }, { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       if (extra.length) extra[0].sec = 'Conta e tela';
       return sheet('Mais', '', [...vs.map((v, i) => ({ t: nomeCurto(v), id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>`, ...(SELOS[v.id] ? { d: SELOS[v.id].n + ' ' + SELOS[v.id].txt, fim: `<span class="badge">${numSelo(SELOS[v.id].n)}</span>` } : {}), sec: i ? '' : 'Neste módulo · ' + MODS[UI.modulo].curto })), ...outros, ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
     }
@@ -81,29 +81,7 @@ document.addEventListener('click', async e => {
   if (d.escfer) { const dt = $('escFerD').value, ds = $('escFerT').value.trim(); if (!dt) { toast('Informe a data do feriado'); return; } const R = CF().rascEsc(); R.feriados = R.feriados.filter(f => f.data !== dt).concat([{ data: dt, desc: ds || 'Feriado', semOp: true }]); render(); return; }
   if (d.escferdel) { const R = CF().rascEsc(); R.feriados = R.feriados.filter(f => f.data !== d.escferdel); render(); return; }
   if (d.escfereq) { const R = CF().rascEsc(); const eqF = ((DB.cache.e && DB.cache.e.config && DB.cache.e.config.feriados) || []).filter(f => f.semOp && !R.feriados.some(x => x.data === f.data)); R.feriados = R.feriados.concat(eqF.map(f => ({ data: f.data, desc: f.desc, semOp: true }))); render(); toast(`${eqF.length} feriado(s) copiados · salve para valer`); return; }
-  if (d.mdAv) { MD.onClick(t); return; }
-  if (d.md) {
-    const [mod0, view, area, conj] = d.md.split('|');
-    // Meu dia: o botão diz o módulo de antes (operacao/bateria = Pátio/Bateria, equipamentos, frequencia...); a tela
-    // vai para o módulo onde ela está agora, no conjunto certo.
-    const vNova = { gcomigo: 'gcolab', gnovaoc: 'gcolab', gocorr: 'gcolab', epar: 'elanc', escala: 'esdia' }[view] || view;
-    const set = conj && SETS[conj] ? conj : mod0 === 'bateria' ? 'bateria' : mod0 === 'operacao' ? 'patio' : null;
-    const mod = moduloDaView(vNova) || moduloNovo(mod0, true);
-    if (!modsDe(ME).includes(mod)) return;
-    if (set && setsDe(ME).includes(set)) UI.esSet = set; // Meu dia: abre no conjunto (Pátio ou Bateria) do aviso
-    if (view === 'escala') { UI.modulo = 'operacao'; UI.area = area || UI.area; aplicarSet(); irEscala(''); return; }
-    const novaOc = view === 'gnovaoc';
-    UI.modulo = mod; UI.modOpen = false; aplicarSet(); UI.view = vNova; UI.confirm = null;
-    if (area && set) { UI.area = area; UI.aRota = null; UI.eRota = null; }
-    if (view === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
-    if (view === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
-    if (view === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
-    // Segurança: o terceiro campo é o filtro da fila de anomalias (abertas, vencidas, comigo).
-    if (vNova.startsWith('sg') && area && UI.sg) UI.sg.sit = area;
-    ensureModulo(); aplicarSet(); salvarUI(); trocarTela(UI.view);
-    if (novaOc) { const b = document.querySelector('[data-g="novaOc"]'); if (b) b.click(); }
-    return;
-  }
+  if (d.mdAv) { AV.onClick(t); return; } // Avisos no celular (telas/avisos.js)
   if (d.modmenu) { menuModulos(!UI.modOpen); if (!UI.modOpen) t.focus(); return; }
   if (d.mod) { UI.modOpen = false; trocarModulo(d.mod); return;
   }
@@ -177,8 +155,8 @@ document.addEventListener('submit', async e => {
   const btn = f.querySelector('[type=submit]'); if (btn) btn.disabled = true;
   try {
     if (f.id === 'fLogin') {
-      // Entra no Meu dia, no módulo em que estava (ensureModulo leva para um que a pessoa tem).
-      UI.view = 'meudia'; salvarUI();
+      // Entra na primeira aba do módulo em que estava (ensureModulo leva para um que a pessoa tem e abre o início dele).
+      UI.view = ''; salvarUI();
       try { localStorage.setItem('dikma-ultimo-login', DB.normLogin($('lgUser').value)); } catch (e) { /* ignora */ }
       await DB.signIn($('lgUser').value, $('lgPass').value); return;
     }
@@ -218,7 +196,7 @@ document.addEventListener('change', e => {
     if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
     if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? { ...c, turma: t.value } : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
-  if (t.dataset.mdPref) { MD.onChange(t); return; }
+  if (t.dataset.mdPref) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
   if (t.dataset.permperfil !== undefined) { UI.permPerfil = t.value; render(); return; }
   if (t.dataset.perm) { const [m, p, id] = t.dataset.perm.split('|'); const R = CF().rascunhoPerm(); (R[m + '|' + p] ||= {})[id] = t.checked; render(); return; }

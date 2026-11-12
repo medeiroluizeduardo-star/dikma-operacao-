@@ -9,9 +9,10 @@ import { supConjs } from '../contas/segcalc.js';
 import { veTreinos } from '../contas/treinos.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
-// mod: all (Meu dia, em todos menos a Administração) · operacao · gestao · seguranca · rh · administracao
+// mod: all (Avisos no celular, em todos os módulos; abre pelo Mais e pelo menu lateral) · operacao · gestao · seguranca · rh · administracao
 // req(): condição pelo usuário logado · reqU(u): condição pelo usuário · ord: ordem na Administração.
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
+// livre: todo mundo que tem o módulo vê (não entra em Perfis e permissões).
 // junto: abas que ocupam um lugar só no menu (o da primeira que a pessoa vê), com um seletor no topo para trocar entre elas.
 // sup: aba da Segurança que o supervisor da área vê mesmo sem perfil na Segurança (ele trata as anomalias da área).
 // filtros: o que aparece no topo para escolher: m = mês, s = semana, a = área (ex.: 'msa'; sem filtros = nada).
@@ -27,7 +28,7 @@ const opEq = () => temEquipEm(ME, 'operacao');
 const geEq = () => temEquipEm(ME, 'gestao');
 const temRH = () => !!perfil('rh');
 export const VIEWS = [
-  { id: 'meudia', nome: 'Meu dia', ic: 'sol', grp: 'Hoje', mod: 'all', sup: true },
+  { id: 'avisos', nome: 'Avisos no celular', ic: 'celular', grp: 'Conta', mod: 'all', fora: true, livre: true, sup: true },
   // ---- Operação: o dia a dia no campo ----
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao'), mesDados: true, conj: true },
@@ -133,12 +134,12 @@ export const MODS = {
 export const modsMenu = () => modsDe(ME);
 export const mesmoItem = (a, b) => a === b;
 export const subMod = m => MODS[m].sub;
-// Abas do módulo aberto que esta pessoa vê (Meu dia vale em todos, menos na Administração).
+// Abas do módulo aberto que esta pessoa vê (Avisos no celular vale em todos).
 export const viewsDoModulo = () => {
   const m = UI.modulo;
   // Supervisor da área sem perfil na Segurança: vê as abas marcadas com sup (as anomalias e interações da área dele).
   const supSeg = m === 'seguranca' && !perfil('seguranca') && supConjs(ME).length > 0;
-  const l = VIEWS.filter(v => (v.mod === m || (v.mod === 'all' && m !== 'administracao')) && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : podeVer(ME, v, permCfg(), m)));
+  const l = VIEWS.filter(v => (v.mod === m || v.mod === 'all') && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : podeVer(ME, v, permCfg(), m)));
   return m === 'administracao' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l;
 };
 // Abas que aparecem no menu: sem as que abrem por botão de outra aba e, das juntas, só a primeira que a pessoa vê.
@@ -161,7 +162,7 @@ function normalizarView() {
   if (v0 === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
   if (v0 === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
 }
-// Em que módulo fica a aba (null = Meu dia, que existe em todos).
+// Em que módulo fica a aba (null = Avisos no celular, que existe em todos).
 export function moduloDaView(id) {
   const tv = VIEWS.find(v => v.id === id); return !tv || tv.mod === 'all' ? null : tv.mod;
 }
@@ -176,19 +177,19 @@ export function ensureModulo() {
   if (!ms.includes(UI.modulo)) UI.modulo = ms[0];
   // Aba desligada para o perfil some do menu e não abre nem por link: cai na primeira aba liberada do módulo.
   const vs = viewsDoModulo();
-  if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs.find(v => v.id !== 'meudia' && !v.fora) || vs[0] || { id: MODS[UI.modulo].inicio }).id;
+  if (!vs.some(v => v.id === UI.view)) UI.view = vs.some(v => v.id === MODS[UI.modulo].inicio) ? MODS[UI.modulo].inicio : (vs.find(v => !v.fora) || vs[0] || { id: MODS[UI.modulo].inicio }).id;
 }
 // Declaração da aba pelo id (vazio se não existir).
 export const aba = id => VIEWS.find(v => v.id === id) || {};
 // Filtros da aba: { mes, semana, area } (true = aparece no topo).
 export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: f.includes('m'), semana: f.includes('s'), area: f.includes('a') }; };
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais, na ordem de uso. Nome e ícone são os do menu lateral.
-// Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores; Causas fica no "Mais".
+// Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores.
 const BARRA = {
-  operacao: () => (aprovador() && !isAdmin() ? ['meudia', 'apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['meudia', 'apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
-  gestao: () => ['meudia', 'prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
-  seguranca: () => ['meudia', 'sganom', 'sginter', 'sgtrein', 'sgpainel'],
-  rh: () => ['meudia', 'afreq', 'aferias', 'fpainel'],
+  operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
+  gestao: () => ['prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
+  seguranca: () => ['sganom', 'sginter', 'sgtrein', 'sgpainel'],
+  rh: () => ['afreq', 'aferias', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {
