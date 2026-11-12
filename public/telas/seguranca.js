@@ -524,30 +524,6 @@ export function criarSeguranca() {
     try { await baixarExcel(o.arquivo, abas); toast('Planilha baixada'); } catch (e) { toast('Não foi possível gerar a planilha agora'); }
   }
 
-  // ---------- Meu dia ----------
-  function meuDia() {
-    if (!S().on || !ME) return null;
-    const h0 = hoje(); const an = S().anom.filter(abertaSeg);
-    const trata = trataTudoSeg(ME) || supConjs(ME).length > 0;
-    const daArea = an.filter(a => trataAnom(ME, a));
-    const comigo = an.filter(a => comigoSeg(ME, a));
-    const venc = [...new Set([...daArea, ...comigo])].filter(a => vencidaSeg(a, h0));
-    const sem = daArea.filter(a => !(a.trat && a.trat.resp));
-    const minhas = an.filter(a => a.por === ME.uid);
-    const ondeTxt = trataTudoSeg(ME) ? 'todas as áreas' : 'sua área';
-    const tiles = [];
-    if (venc.length) tiles.push({ n: venc.length, t: `${venc.length === 1 ? 'anomalia' : 'anomalias'} com prazo vencido · Segurança`, s: venc.slice(0, 2).map(a => a.local).join(', '), tom: 'bad', go: ['seguranca', 'sganom', 'vencidas'], acao: 'Ver vencidas' });
-    if (comigo.length) tiles.push({ n: comigo.length, t: `${comigo.length === 1 ? 'anomalia com você' : 'anomalias com você'} para tratar`, s: comigo.slice(0, 2).map(a => a.local).join(', '), tom: 'warn', go: ['seguranca', 'sganom', 'comigo'], acao: 'Tratar' });
-    if (trata && sem.length) tiles.push({ n: sem.length, t: `${sem.length === 1 ? 'anomalia aberta' : 'anomalias abertas'} sem responsável · ${ondeTxt}`, s: 'assuma ou defina quem trata', tom: 'warn', go: ['seguranca', 'sganom', 'abertas'], acao: 'Assumir' });
-    if (!trata && minhas.length) tiles.push({ n: minhas.length, t: `${minhas.length === 1 ? 'anomalia sua em aberto' : 'anomalias suas em aberto'} · Segurança`, s: 'acompanhe o tratamento', tom: 'neu', go: ['seguranca', 'sganom', 'abertas'] });
-    const lista = (trata ? [...new Set([...venc, ...comigo, ...daArea])] : minhas).slice(0, 5);
-    const bt = podeRegistrar() ? `<button class="btn sm" data-act="sgNova" data-tipo="inter">${I.plus} Interação</button> <button class="btn sm" data-act="sgNova" data-tipo="anom">${I.plus} Anomalia</button>` : `<button class="btn sm" data-md="seguranca|sganom|abertas">Abrir anomalias</button>`;
-    const bloco = `<div class="card md-card"><header><h2>Segurança</h2><p>${trata ? `Anomalias em aberto · ${ondeTxt}` : 'Suas anomalias em aberto'}</p><span class="r">${bt}</span></header><div class="body stackcol" style="gap:10px">
-      ${lista.length ? `<div class="plist">${lista.map(a => `<div class="pitem${vencidaSeg(a, h0) ? ' aberta' : ''}"><div class="minw"><div class="t">${esc(a.local)} · ${esc(tArea(a.area))}</div><div class="l">${dm(a.data)} · ${esc(String(a.desc || '').slice(0, 80))}</div></div>${pillSit(a)}</div>`).join('')}</div>` : `<p class="muted small m0">${trata ? 'Nenhuma anomalia em aberto na sua área.' : 'Nenhuma anomalia sua em aberto.'}</p>`}
-      ${lista.length && an.length > lista.length ? `<p class="muted small m0">+ ${an.length - lista.length} em aberto</p>` : ''}</div></div>`;
-    return { tiles, bloco, trata };
-  }
-
   // ---------- ações (botões com data-act) ----------
   acoes.sgNova = (t, d) => abrirForm(d.tipo);
   acoes.sgVer = (t, d) => abrirDetalhe(d.col, d.id);
@@ -587,5 +563,5 @@ export function criarSeguranca() {
     if (v === 'sgconfig') return vConfig();
     return vAnom();
   }
-  return { render: renderTela, meuDia };
+  return { render: renderTela };
 }

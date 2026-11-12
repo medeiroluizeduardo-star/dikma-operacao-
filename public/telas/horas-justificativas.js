@@ -7,19 +7,10 @@ import { DB, TODAY, framed, esc, title, $ } from '../nucleo/base.js';
 import { ME, SK, UI, isAdmin, podeItem, admDe, todasAreas, areaScope, canEditSit, temFichas, perfil } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
-import { escala, regimeDe, sitDia, periodoDe, SIT_NOME, colabsDa, HE_ORIG, areasSitDe, colabsDoSet, sitDoSet } from '../calc/presenca.js';
+import { escala, regimeDe, sitDia, periodoDe, SIT_NOME, colabsDa, HE_ORIG } from '../calc/presenca.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
 
-// Faltas, atrasos e atestados dos últimos 7 dias ainda sem justificativa (só de quem a pessoa pode lançar), por conjunto:
-// o Meu dia mostra o mesmo número em qualquer módulo que a pessoa tenha aberto antes.
-export function jusPendentes(k = SK) {
-  const areas = areasSitDe(k); if (!areas.length) return 0;
-  const ds = []; for (let i = 0; i < 7; i++) ds.push(add(TODAY, -i));
-  let n = 0;
-  for (const c of colabsDoSet(k)) { if (!areas.includes(c.area)) continue; for (const d of ds) { const v = sitDoSet(k, c.id + '|' + d); if (!v || !JUS_CODS.includes(v)) continue; const j = DB.sitInfo(c.id + '|' + d, k).jus; if (!(j && j.cod === v)) n++; } }
-  return n;
-}
 // Justificativas do mês: lista de faltas, atrasos, atestados… com o que falta justificar primeiro.
 function regsJus(area, m) {
   const out = [];

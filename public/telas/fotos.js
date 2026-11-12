@@ -1,7 +1,7 @@
 // Fotos das atividades (telas): passo de fotos antes de concluir o apontamento, fotos de uma atividade (miniaturas e
 // foto grande), selo 📷 nas listas e a configuração (Administração › Fotos das atividades, só o administrador).
 // As contas ficam em fotos.js; a gravação (um lote só com o apontamento), em data.js › apontarComFotos.
-import { DAYS, SETS, add, ddmm, setDaArea } from '../contas/cal.js';
+import { DAYS, SETS, ddmm, setDaArea } from '../contas/cal.js';
 import { DB, TODAY, esc, title, n0, $ } from '../nucleo/base.js';
 import { ME, PL, UI, SK, canEdit, isAdmin, perfil, setsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -193,12 +193,6 @@ export const fotosSemana = (doc, i) => DAYS.reduce((n, _, k) => n + fotosDaCel(d
 /* ---------------- indicadores ---------------- */
 // Atividades com foto no período (Painel de Atividades): realizadas/extras desde a regra.
 export const indicadorFotos = (docs, areas) => resumoFotos(docs, { areas, hoje: TODAY, cfg: cfgF() });
-// Meu dia (supervisor para cima): realizadas sem foto desde que a regra foi ligada, nas áreas da pessoa.
-export function semFotoPend(k, areas) {
-  const cfg = cfgF(); if (!cfg.obrig) return 0; const st = DB.dados(k); if (!st || !st.semanas) return 0;
-  const noPlano = (ids => pid => ids.has(pid))(new Set(SETS[k].areas.flatMap(a => ((st.plano || {})[a] || []).map(p => p.id))));
-  return resumoFotos(st.semanas, { areas, de: add(TODAY, -60), hoje: TODAY, cfg, noPlano }).semFoto;
-}
 
 /* ---------------- Administração › Fotos das atividades ---------------- */
 const rascF = () => { if (!UI.fotoR) { const c = cfgF(); UI.fotoR = { ...c, situacoes: [...c.situacoes] }; } return UI.fotoR; };

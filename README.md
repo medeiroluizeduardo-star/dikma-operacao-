@@ -144,15 +144,10 @@ Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3
 - **Programação:** a aba foi tirada (Pátio e Bateria). O dia a dia fica no **Apontar**, o atrasado em **Pendências** e a semana impressa e exportada na **Folha do líder**.
 - **Efetivo diário:** com muitas rotas na tela, elas começam fechadas com "presentes hoje"; toque para ver as pessoas. A legenda das siglas fica em **Legenda das siglas**.
 - **Pendências:** o número no menu conta só os atrasos dos últimos 7 dias da sua área.
-- **Aprovação** (só o supervisor aprova, nas áreas dele; coordenador, gestor e administrador acompanham sem aprovar): cada apontamento do líder (realizada, não realizada ou extra) fica com o selo **aguardando aprovação** e já conta nos números. Na aba **Aprovação**, por rota e dia, o supervisor **aprova** (um por um, a rota inteira ou tudo) ou **devolve** com o motivo: a atividade volta para "a fazer" e o líder vê, no Apontar e no Meu dia, o motivo para corrigir. O que o supervisor aponta já entra aprovado; o que gestor, coordenador ou administrador apontam também passa pela aprovação do supervisor da área. O número no menu mostra quantos esperam; o Painel avisa também. Vale a partir dos apontamentos de 15/10/2026.
+- **Aprovação** (só o supervisor aprova, nas áreas dele; coordenador, gestor e administrador acompanham sem aprovar): cada apontamento do líder (realizada, não realizada ou extra) fica com o selo **aguardando aprovação** e já conta nos números. Na aba **Aprovação**, por rota e dia, o supervisor **aprova** (um por um, a rota inteira ou tudo) ou **devolve** com o motivo: a atividade volta para "a fazer" e o líder vê, no Apontar, o motivo para corrigir. O que o supervisor aponta já entra aprovado; o que gestor, coordenador ou administrador apontam também passa pela aprovação do supervisor da área. O número no menu mostra quantos esperam; o Painel avisa também. Vale a partir dos apontamentos de 15/10/2026.
 
-## Meu dia
-- **Agora:** até 3 itens, do mais urgente para o menos, cada um com o botão que resolve (Apontar, Recolher, Abrir…). O resto fica em **Mais**.
-- **Hoje:** o progresso do dia por módulo e os números de apoio (quem falta, etc.).
-- É a primeira tela depois de entrar (e o primeiro item do menu em todos os módulos; no celular, a aba **Hoje**).
-- Mostra só o que é da pessoa hoje, nos módulos dela e nas áreas dela: atividades para apontar e atrasadas (Pátio e Bateria, por rota), quem falta hoje, déficit de efetivo amanhã, paradas sem liberação, operadores fora, assinaturas pendentes e experiências vencendo.
-- Cada número leva direto para a tela certa (Apontar, Pendências, Escala, Paradas, Ocorrências).
-- Líder vê a área dele; supervisor, as duas; coordenador, gestor, somente leitura e administrador veem todas as áreas dos módulos deles.
+## Tela inicial
+- Ao entrar, o sistema abre a primeira aba do módulo em que a pessoa estava: Operação › **Apontar**, Gestão › **Programação**, Segurança › **Anomalias**, RH › **Folha de frequência** e Administração › **Visão geral**. (O antigo **Meu dia** foi retirado em 11/2026; links e avisos antigos para ele abrem essa primeira aba.)
 
 ## Avisos no celular
 Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows/avisos.yml`) roda de hora em hora, das 6h às 22h, e manda avisos para quem ligou no aparelho. Cada pessoa recebe só o que é dela, e os avisos não mostram nomes de colaboradores na tela bloqueada:
@@ -162,15 +157,15 @@ Uma rotina do GitHub (workflow **Avisos no celular**, arquivo `.github/workflows
 - **Rota com déficit de efetivo amanhã** (às 17h, uma vez por dia) — só das áreas da pessoa.
 - **Resumo da semana que passou** (segunda-feira, às 7h) — para administrador, gestor e coordenador: % de atividades realizadas, não realizadas, faltas e atestados de cada conjunto, assinaturas pendentes e paradas sem liberação. Sem nomes de colaboradores.
 - Tocar no aviso abre a tela certa (Lançamentos e paradas, Colaboradores, Apontar ou Efetivo diário).
-- O administrador vê no **Meu dia** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
+- O administrador vê em **Avisos no celular** quando a rotina rodou pela última vez, quantas pessoas e aparelhos estão com aviso ligado e quantos avisos foram entregues.
 
 **Ligar (uma vez só, administrador)**
 1. Firebase › ⚙ Configurações do projeto › **Cloud Messaging** › Configuração da Web › **Certificados push da Web** › **Gerar par de chaves**. Copie a chave (começa com B…).
-2. No sistema, abra **Meu dia** › **Avisos no celular**, cole a chave e clique em **Salvar chave**. É uma chave pública; pode ficar no sistema.
+2. No sistema, abra **Avisos no celular** (no computador, botão no fim do menu lateral; no celular, em **Mais**), cole a chave e clique em **Salvar chave**. É uma chave pública; pode ficar no sistema.
 3. No GitHub, crie o arquivo `.github/workflows/avisos.yml` (Add file › Create new file) com o conteúdo do zip. Ele usa o `FIREBASE_SERVICE_ACCOUNT` que já existe.
 
 **Cada pessoa, no próprio celular**
-- Abrir o sistema, ir em **Meu dia** › **Ligar avisos** e permitir as notificações. Dá para marcar quais avisos quer receber.
+- Abrir o sistema, ir em **Mais** › **Avisos no celular** › **Ligar avisos** e permitir as notificações. Dá para marcar quais avisos quer receber.
 - Android (Chrome): funciona direto. iPhone: primeiro **Compartilhar › Adicionar à Tela de Início** e abrir o sistema por esse ícone (iOS 16.4 ou mais novo).
 - **Testar neste aparelho** mostra um aviso na hora, para conferir que as notificações estão permitidas.
 
@@ -184,10 +179,10 @@ Ao abrir o sistema aparece só a tela de usuário e senha. Depois de entrar, o s
 
 | Módulo | Abas | Perfis |
 |---|---|---|
-| **Operação** | Meu dia · Apontar · Aprovação · Pendências · Equipamentos (Lançamentos, Equipe e frota, Inspeções) · Efetivo (Presença do dia, Horas extras, Justificativas). Seletor Pátio \| Bateria no topo | líder, supervisor, coordenador, gestor, somente leitura |
-| **Gestão** | Meu dia · Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
-| **Segurança** | Meu dia · Interações · Anomalias (fila com acompanhamento) · Painel · Exportar para o Excel | registra (vê só o que registrou), trata e gestor (veem e tratam tudo), somente leitura; o supervisor da área (Operação · Supervisor) vê e trata as anomalias da área dele |
-| **RH** | Meu dia · Frequência · Férias · Importar planilhas (só Administrativo) · Indicadores e resumo da frequência | administrativo, somente leitura |
+| **Operação** | Apontar · Aprovação · Pendências · Equipamentos (Lançamentos, Equipe e frota, Inspeções) · Efetivo (Presença do dia, Horas extras, Justificativas). Seletor Pátio \| Bateria no topo | líder, supervisor, coordenador, gestor, somente leitura |
+| **Gestão** | Programação (com Folha do líder e Etiquetas QR) · Causas e ações · Dimensionamento · Balanço · Fichas (Colaboradores, Impressão) · Avaliação mensal e Análises de equipamentos · Indicadores (Atividades, Equipamentos, Fichas) · Resumos | líder, supervisor, coordenador, gestor, administrativo, somente leitura (+ "com as Fichas de acompanhamento") |
+| **Segurança** | Interações · Anomalias (fila com acompanhamento) · Painel · Exportar para o Excel | registra (vê só o que registrou), trata e gestor (veem e tratam tudo), somente leitura; o supervisor da área (Operação · Supervisor) vê e trata as anomalias da área dele |
+| **RH** | Frequência · Férias · Importar planilhas (só Administrativo) · Indicadores e resumo da frequência | administrativo, somente leitura |
 | **Administração** | Visão geral, Conferência, Uso do plano, Escalas e turnos, Rotas, Plano padrão, Gerador, Equipamentos, Tipos de ocorrência, Segurança (listas dos formulários), Importar dados, Usuários e Perfis | Completa (administrador: tudo) ou Dos módulos (as configurações dos módulos em que a pessoa é Gestor) |
 
 - **Escopos** (Pátio, Bateria, Equipamentos) dizem quais conjuntos a pessoa vê na Operação e na Gestão. Áreas: líder 1, supervisor até 2, coordenador e gestor todas.
@@ -204,19 +199,19 @@ Módulo comum (sem recarregar a página). O administrador vê tudo; o perfil "Do
 
 ### Escalas e turnos (fonte única)
 
-Fica em `config/escalas` e vale para Escala e Efetivo, Atividades, Operação, Meu dia e avisos no celular.
+Fica em `config/escalas` e vale para Escala e Efetivo, Atividades, Operação e avisos no celular.
 - **Administrativo:** dias da semana de trabalho (padrão seg a sex) e lista de feriados = folga.
 - **Turnos em ciclo (4x4, 3x3, e outros):** dias de trabalho e de folga, e para cada turma (letra) um dia em que ela começou um bloco de trabalho. Dá para incluir turmas.
 - **Próximos 14 dias:** quadro de quem trabalha e quem folga, por turma.
 - **Turma de cada pessoa de turno:** escolha a letra; sem letra, o sistema usa a da ficha do Efetivo ou do cadastro da Operação (botão para gravar todas de uma vez).
 
-Sem lançamento no dia, o **Efetivo diário marca a folga sozinho** pela escala (F tracejado). Marcar presente num dia de folga fica gravado; "voltar ao da escala" apaga o lançamento. Escalados, presentes, dimensionamento, balanço, déficit do Meu dia e avisos já descontam a folga da escala. Em rotas de turno, o necessário considera só a parte do quadro que trabalha por dia (4x4 = metade).
+Sem lançamento no dia, o **Efetivo diário marca a folga sozinho** pela escala (F tracejado). Marcar presente num dia de folga fica gravado; "voltar ao da escala" apaga o lançamento. Escalados, presentes, dimensionamento, balanço e avisos já descontam a folga da escala. Em rotas de turno, o necessário considera só a parte do quadro que trabalha por dia (4x4 = metade).
 
 ## Módulo Efetivo (escala, presença e fichas)
 
 Um módulo só com duas partes. **Escala e presença** (Efetivo diário, Dimensionamento, Balanço e ausências), para Pátio e Bateria (botão **Pátio | Bateria** no topo): aparece para quem tem Atividades Pátio ou Bateria, nas mesmas áreas. **Fichas de acompanhamento** (Painel, Colaboradores, Ocorrências, Controle, Impressão): aparece para quem tem o Efetivo marcado no usuário. Quem tem só uma das partes vê só ela.
 
-**Quem recolhe a assinatura:** ao registrar uma ocorrência, escolha quem vai recolher a assinatura (sugere o líder imediato da ficha; lista você, os líderes das fichas e os usuários de liderança, ou digite o nome). "Colher agora" só aparece quando é você. Na lista, cada pendência mostra o responsável (com **trocar**), o filtro **Comigo para recolher** mostra as suas, e o Meu dia avisa quantas estão com você.
+**Quem recolhe a assinatura:** ao registrar uma ocorrência, escolha quem vai recolher a assinatura (sugere o líder imediato da ficha; lista você, os líderes das fichas e os usuários de liderança, ou digite o nome). "Colher agora" só aparece quando é você. Na lista, cada pendência mostra o responsável (com **trocar**), o filtro **Comigo para recolher** mostra as suas.
 
 - **Efetivo diário:** todas as rotas da área de uma vez (agrupadas, com "presentes hoje" de cada rota) ou uma rota só; busca por nome, função ou rota; ✓ verde = presente; toque no dia para trocar a situação (com "Repetir até domingo" e **Desfazer**).
 - **Dimensionamento:** disponíveis × necessários por rota e dia.
@@ -329,7 +324,7 @@ Os endereços padrão do Senior X e os nomes de campo do G5 em `mapa-padrao.json
 - **Marcar restantes** pede as fotos uma vez só: elas valem para todas as atividades marcadas naquele momento (guardadas uma vez).
 - A foto é reduzida no celular (cerca de 150 KB) e sobe junto com o apontamento; sem sinal, sobe quando a conexão voltar.
 - A atividade com foto mostra **📷n** no Apontar e na Programação: tocar abre as fotos; tocar numa foto abre grande. Quem aponta pode **adicionar foto** depois, até o máximo.
-- O administrador configura em **Administração › Fotos das atividades** (obrigatória ou não, mínimo, máximo, situações e a data de início) e vê a previsão de uso do banco. O Painel de Atividades mostra **Atividades com foto** e o Meu dia do supervisor avisa as realizadas sem foto.
+- O administrador configura em **Administração › Fotos das atividades** (obrigatória ou não, mínimo, máximo, situações e a data de início) e vê a previsão de uso do banco. O Painel de Atividades mostra **Atividades com foto**.
 - **Relatórios e arquivo de fotos** (Administração, só o administrador): escolha Pátio ou Bateria, a semana (ou as datas) e, se quiser, a rota.
   - **Relatório em PowerPoint (.pptx):** capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota, os registros fotográficos (até 4 por slide, com legenda) e as listas de não realizadas e de realizadas sem foto. Até 120 fotos por relatório (para mais, escolha uma rota ou um período menor).
   - **Exportar fotos (.zip):** pastas por período, colaborador e atividade, com `indice.csv` e a conferência do SHA-256 de cada foto. Depois de salvar o arquivo, clique em **O arquivo foi salvo**: só então as fotos ficam **Exportadas**.
@@ -381,13 +376,13 @@ public/
   calc/               contas das telas de Atividades e presença (usam o estado da página)
   contas/             contas SEM tela e sem banco, as mesmas no site, nos testes e nas rotinas do GitHub:
                       cal.js (calendário: a semana pertence ao mês da quinta-feira), situacao.js e escala.js
-                      (presença e turno), hoje.js (Meu dia e avisos), acessos.js e permissoes.js (quem vê o quê),
+                      (presença e turno), hoje.js (contas do dia e avisos), acessos.js e permissoes.js (quem vê o quê),
                       aprovacao.js, pessoas.js (cadastro único), planilhas-adm.js e lideres.js (planilhas do RH),
                       segcalc.js (Segurança), eqcalc.js (indicadores da Operação), feriados.js, planoaplica.js,
                       limpeza.js, fotos.js e fotos-arquivo.js
   telas/              cada tela: Atividades, Efetivo, Segurança, Relatórios, Administração e fotos,
                       Operação (equip.js), fichas do Efetivo (gestao.js, importar.js),
-                      Frequência e férias (administrativo.js), e Meu dia (meudia.js)
+                      Frequência e férias (administrativo.js), e Avisos no celular (avisos.js)
   demo/               dados da demonstração, com nomes e matrículas fictícios
   vendor/             bibliotecas (Firebase 13.2.0, gerado por ferramentas/firebase/gerar.mjs, SheetJS 0.20.3, PptxGenJS, QR code)
   img/                logo da Dikma
