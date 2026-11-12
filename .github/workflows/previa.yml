@@ -34,7 +34,7 @@ jobs:
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           P=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
-          npx --yes firebase-tools@15 hosting:channel:deploy "pr${{ github.event.pull_request.number }}" --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa.json"
+          npx --yes firebase-tools@15 hosting:channel:deploy "pr${{ github.event.pull_request.number }}" --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa.json" || { cat "$RUNNER_TEMP/previa.json"; exit 1; }
           URL=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/previa.json" | head -1)
           [ -n "$URL" ] || { cat "$RUNNER_TEMP/previa.json"; exit 1; }
           echo "URL=$URL" >> "$GITHUB_ENV"
