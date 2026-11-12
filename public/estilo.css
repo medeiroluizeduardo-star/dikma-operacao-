@@ -1568,7 +1568,7 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .fotosheet .sgfotos{min-height:84px}
 .fotosheet .fadd{font-weight:700}
 .fotosheet label.btn[aria-disabled="true"]{opacity:.45;pointer-events:none}
-/* Queda zero (lançamento do dia no Apontar) */
+/* Queda zero (aba própria na Operação) */
 .qzbox{border:1px solid var(--line,#ccc);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:8px}
 .qzbox>summary{cursor:pointer;padding:4px 0}
 .qzbox[open]>summary{margin-bottom:6px}
@@ -1585,6 +1585,11 @@ label.btn.dis{opacity:.45;pointer-events:none}
 button.qzitem{cursor:pointer}
 button.qzitem:hover{border-color:var(--st-real)}
 .qzitem>span{min-width:0;overflow-wrap:anywhere}
+#view .kpis.qzkpis{grid-template-columns:repeat(2,minmax(0,1fr));margin:10px 0}
+.qzkpis .kpi .v{font-size:28px}
+#view .qzkpis>.kpi{grid-column:auto}
+.dbtn.qzdia span{font-size:10.5px;color:var(--ink-3);line-height:1.2}
+.qztab{margin-top:12px}
 @media (max-width:560px){.qzlin{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.qzlin>label:first-child{grid-column:1/3}.qzrm{grid-column:3;grid-row:1}.qzres{grid-column:1/-1}}
 .fgrade .sgmini.fmini{width:84px;height:84px}
 .chip.ft{position:relative}
