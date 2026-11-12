@@ -47,6 +47,9 @@ after(async () => { await navegador?.close(); await new Promise(r => servidor ? 
 async function esperar(page) {
   await page.waitForLoadState('networkidle');
   await page.waitForFunction(() => !document.querySelector('#view [aria-busy="true"]'), null, { timeout: 8000 }).catch(() => {});
+  // A aba carregada sob demanda pode levar mais que um instante para desenhar numa máquina lenta (CI): espera ter
+  // conteúdo (até 5 s). Se continuar vazia, o teste acusa "tela em branco" do mesmo jeito.
+  await page.waitForFunction(() => (document.getElementById('view')?.innerText || '').trim().length > 0, null, { timeout: 5000 }).catch(() => {});
   await page.waitForTimeout(120);
 }
 const clicar = (page, sel) => page.evaluate(s => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
