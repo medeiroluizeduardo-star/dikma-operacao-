@@ -43,6 +43,11 @@ Arquivos:
   (`public/telas/queda-zero.js`). Os registros antigos feitos junto da foto aparecem lá, no dia deles.
   Cada lançamento pode ter local (transportador) e motivo das listas de `public/contas/queda-zero.js`; nomes novos
   cadastrados na hora ficam em `config/quedazero` (`locais`, `motivos`) e aparecem para todos.
+  O lançamento pode ter **fotos** (opcionais, até o **máximo** de `config/fotos`). Ficam nas mesmas coleções
+  (`evidencias` + `evidenciasArquivo`, mesmo lote do lançamento), com a "atividade" `QZ-<id>` no lugar do PID
+  (`refs = 'semana|QZ-<id>|k'`, `pidFotoQZ`), **sem** somar em `ft`; o lançamento guarda quantas tem em `qz[key].f`.
+  Entram no arquivo de fotos e no relatório como as outras (título = texto da queda). Apagar foto ou lançamento com
+  foto: líder da área (foto não exportada) ou administrador (`DB.apagarFotosQZ`).
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos

@@ -374,10 +374,17 @@ export function apontarComFotos(docId, changes, fotos) {
   return ids;
 }
 export async function salvarItemQZ(tipo, nome) { cache.qzListas = cache.qzListas || {}; const l = cache.qzListas[tipo] = cache.qzListas[tipo] || []; if (!l.includes(nome)) l.push(nome); changed(); }
-export function salvarQuedaZero(docId, area, key, v) {
+export function salvarQuedaZero(docId, area, key, v, fotos = []) {
   const w = S[setDaArea(area || '') || cur].semanas[docId]; if (!w) return;
   w.qz = w.qz || {}; if (v) w.qz[key] = v; else delete w.qz[key];
+  for (const f of fotos) EV.push({ ...f.meta, id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), por: me.uid, porNome: me.nome, at: new Date(), dados: f.dados });
   Object.assign(w, toLocal(docId, w)); changed();
+}
+export async function apagarFotosQZ(docId, area, key, fotos, apagarLanc = false) {
+  await pausa(); const w = S[setDaArea(area || '') || cur].semanas[docId];
+  for (const f of fotos) { const i = EV.findIndex(x => x.id === f.id); if (i >= 0) EV.splice(i, 1); }
+  if (w && w.qz && w.qz[key]) { if (apagarLanc) delete w.qz[key]; else w.qz[key].f = Math.max(0, (w.qz[key].f || 0) - fotos.length); Object.assign(w, toLocal(docId, w)); }
+  changed();
 }
 export async function apagarFotoAtividade(f) {
   await pausa(); const i = EV.findIndex(x => x.id === f.id); if (i < 0) throw new Error('Foto não encontrada');

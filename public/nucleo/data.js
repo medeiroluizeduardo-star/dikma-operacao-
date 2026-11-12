@@ -464,20 +464,34 @@ export function apontarComFotos(docId, changes, fotos) {
   args.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
   const b = writeBatch(db);
   b.update(doc(db, C('semanas', k), docId), ...args);
-  const ids = [];
-  for (const f of fotos) {
-    const r = doc(collection(db, C('evidencias', k)));
-    b.set(r, { ...f.meta, por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() });
-    b.set(doc(db, C('evidenciasArquivo', k), r.id), { area: f.meta.area, semana: f.meta.semana, dia: f.meta.dia, sha: f.meta.sha || '', por: me.uid, dados: f.dados });
-    ids.push(r.id);
-  }
+  const ids = fotos.map(f => fotoNoLote(b, k, f));
   track(b.commit());
   return ids;
 }
-// Queda zero (opcional) de uma atividade num dia: qz['PID|k'] = { i: [{ e, p, q }], t } na semana; v = null apaga.
-export function salvarQuedaZero(docId, area, key, v) {
+// Põe uma foto (documento leve + foto completa, mesmo id) no lote b; devolve o id.
+function fotoNoLote(b, k, f) {
+  const r = doc(collection(db, C('evidencias', k)));
+  b.set(r, { ...f.meta, por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() });
+  b.set(doc(db, C('evidenciasArquivo', k), r.id), { area: f.meta.area, semana: f.meta.semana, dia: f.meta.dia, sha: f.meta.sha || '', por: me.uid, dados: f.dados });
+  return r.id;
+}
+// Queda zero (opcional): grava o lançamento qz[key] da semana (v = null apaga) e as fotos novas (opcionais,
+// [{ meta, dados }], contas/queda-zero.js › pidFotoQZ) no MESMO lote, como no apontamento: sem sinal sobe tudo junto.
+export function salvarQuedaZero(docId, area, key, v, fotos = []) {
   const k = setDaArea(area || '') || cur;
-  return track(updateDoc(doc(db, C('semanas', k), docId), new FieldPath('qz', key), v || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid));
+  const b = writeBatch(db);
+  b.update(doc(db, C('semanas', k), docId), new FieldPath('qz', key), v || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  for (const f of fotos) fotoNoLote(b, k, f);
+  return track(b.commit());
+}
+// Apaga fotos de um lançamento da Queda zero (líder da área ou administrador; as regras conferem) e, com
+// apagarLanc, o próprio lançamento; senão só diminui a contagem f. Espera o servidor (sem sinal, dá erro).
+export async function apagarFotosQZ(docId, area, key, fotos, apagarLanc = false) {
+  const k = setDaArea(area || '') || cur;
+  const b = writeBatch(db);
+  for (const f of fotos) { b.delete(doc(db, C('evidencias', k), f.id)); if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', k), f.id)); }
+  b.update(doc(db, C('semanas', k), docId), apagarLanc ? new FieldPath('qz', key) : new FieldPath('qz', key, 'f'), apagarLanc ? deleteField() : increment(-fotos.length), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
+  await gravarLote(b);
 }
 // Cadastra um local ou motivo novo da Queda zero (tipo = 'locais' ou 'motivos'), para todos verem.
 export const salvarItemQZ = (tipo, nome) => track(setDoc(doc(db, 'config', 'quedazero'), { [tipo]: arrayUnion(nome), atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));

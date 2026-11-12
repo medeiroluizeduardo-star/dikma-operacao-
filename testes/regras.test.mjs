@@ -289,6 +289,20 @@ test('Fotos: o líder grava o apontamento com a foto na área dele (um lote só)
   b.set(doc(d, 'evidencias', 'f1b'), fotoMeta({ refs: [`${SEM}|REC-001|2`] })); b.set(doc(d, 'evidenciasArquivo', 'f1b'), fotoArq());
   await assertSucceeds(b.commit());
 });
+test('Queda zero com fotos: o líder grava o lançamento e as fotos num lote só (sem ft) e apaga foto e lançamento', async () => {
+  const key = 'Z|2|0000abcde00'; const pid = 'QZ-0000abcde00';
+  const v = { i: [{ e: 'pa', p: 'coque', q: 3 }], t: 0.024, f: 1 };
+  const d = db('liderRec'); const b = writeBatch(d);
+  b.update(doc(d, 'semanas', SEM), { [`qz.${key}`]: v, atualizadoPor: 'liderRec' });
+  b.set(doc(d, 'evidencias', 'qzf1'), fotoMeta({ refs: [`${SEM}|${pid}|2`], pid, sit: '', ativ: 'Queda zero: 0,024 t' }));
+  b.set(doc(d, 'evidenciasArquivo', 'qzf1'), fotoArq());
+  await assertSucceeds(b.commit());
+  await assertSucceeds(getDocs(query(collection(db('sup'), 'evidencias'), where('refs', 'array-contains', `${SEM}|${pid}|2`))));
+  // o supervisor não apaga foto; o líder apaga a foto e o lançamento juntos
+  const apagar = uid => { const x = db(uid); const c = writeBatch(x); c.delete(doc(x, 'evidencias', 'qzf1')); c.delete(doc(x, 'evidenciasArquivo', 'qzf1')); c.update(doc(x, 'semanas', SEM), { [`qz.${key}`]: deleteField(), atualizadoPor: uid }); return c.commit(); };
+  await assertFails(apagar('sup'));
+  await assertSucceeds(apagar('liderRec'));
+});
 test('Fotos: ninguém grava foto em outra área, em nome de outro, nem com a área diferente da semana', async () => {
   await assertFails(gravarFoto('liderPrep', 'f2', { meta: fotoMeta({ por: 'liderPrep' }), arq: fotoArq({ por: 'liderPrep' }) }));
   await assertFails(gravarFoto('liderRec', 'f3', { meta: fotoMeta({ por: 'outro' }), arq: fotoArq({ por: 'outro' }) }));
