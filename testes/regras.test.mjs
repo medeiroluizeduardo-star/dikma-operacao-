@@ -58,6 +58,8 @@ const USUARIOS = {
   segLeitor: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'leitor' }, escopos: [] },
   supPatio: { papel: 'supervisor', area: 'PREPARAÇÃO', area2: null, modulos: ['operacao', 'gestao'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio'] },
   supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
+  tecPatio: { papel: 'leitor', modulos: ['operacao'], acesso: { operacao: 'tecnico' }, escopos: ['patio'] },
+  tecBat: { papel: 'leitor', modulos: ['bateria'], acesso: { operacao: 'tecnico' }, escopos: ['bateria'] },
   supSemArea: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['operacao'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
   admModSeg: { papel: 'gestor', modulos: ['seguranca'], acesso: { seguranca: 'gestor', administracao: 'modulo' }, escopos: [] },
   bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] },
@@ -682,7 +684,8 @@ test('aprovação: o supervisor aprova ou devolve nas áreas dele e o administra
   await assertFails(setDoc(doc(db('sup'), 'aprov', SEM), ap('PREPARAÇÃO'), { merge: true }), 'não troca a área de um registro');
   await assertFails(setDoc(doc(db('coord'), 'aprov', SEM_PREP), ap('PREPARAÇÃO')), 'coordenador não aprova');
   await assertFails(setDoc(doc(db('gestorP'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'gestor não aprova');
-  await assertSucceeds(setDoc(doc(db('admin'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'administrador aprova como reserva');
+  await assertSucceeds(setDoc(doc(db('admin'), 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'administrador aprova em qualquer área');
+  await assertSucceeds(setDoc(doc(db('admin'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'administrador aprova também em área que tem supervisor');
   await assertFails(setDoc(doc(db('liderRec'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o líder não aprova o próprio apontamento');
   await assertFails(setDoc(doc(db('freqLeitor'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
   await assertFails(setDoc(doc(db('admv'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'o Administrativo não aprova apontamento');
@@ -691,6 +694,23 @@ test('aprovação: o supervisor aprova ou devolve nas áreas dele e o administra
   await assertSucceeds(setDoc(doc(db('sup'), 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: { 'B1-001|1': { s: 'A', c: 'R' } } }));
   await assertFails(setDoc(doc(db('liderRec'), 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: {} }, { merge: true }));
   await assertFails(deleteDoc(doc(db('sup'), 'aprov', SEM)));
+});
+
+test('aprovação: o Técnico de Processo aprova e devolve em todas as áreas do escopo dele, sem apontar', async () => {
+  const ap = (area, v = { 'REC-001|2': { s: 'A', c: 'R' } }) => ({ area, mes: '2026-10', v });
+  const t = db('tecPatio');
+  await assertSucceeds(getDoc(doc(t, 'semanas', SEM)), 'lê as Atividades do Pátio');
+  await assertSucceeds(setDoc(doc(t, 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }));
+  await assertSucceeds(setDoc(doc(t, 'aprov', SEM_PREP), ap('PREPARAÇÃO'), { merge: true }), 'qualquer área do Pátio');
+  await assertSucceeds(setDoc(doc(t, 'aprov', SEM), ap('RECEBIMENTO', { 'REC-002|2': { s: 'D', c: 'P', mot: 'Não foi feita' } }), { merge: true }), 'devolve');
+  await assertSucceeds(updateDoc(doc(t, 'semanas', SEM), { 's.REC-002': 'PPP____', 'm.REC-002|2': deleteField(), atualizadoPor: 'tecPatio' }), 'ao devolver, a célula volta a pendente');
+  await assertFails(updateDoc(doc(t, 'semanas', SEM), { ev: { 'REC-002|2': 1 } }), 'não mexe em outros campos da semana');
+  await assertFails(updateDoc(doc(t, 'semanas', SEM), { fp: {} }), 'não inclui fora da programação');
+  await assertFails(setDoc(doc(t, 'aprov', SEM), ap('PREPARAÇÃO'), { merge: true }), 'não troca a área de um registro');
+  await assertFails(setDoc(doc(t, 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: {} }, { merge: true }), 'sem o escopo Bateria não aprova a Bateria');
+  await assertFails(deleteDoc(doc(t, 'aprov', SEM)), 'não apaga aprovação');
+  await assertSucceeds(setDoc(doc(db('tecBat'), 'b_aprov', SEM_B1), { area: 'BATERIA 1', mes: '2026-10', v: { 'B1-001|2': { s: 'A', c: 'R' } } }, { merge: true }));
+  await assertFails(setDoc(doc(db('tecBat'), 'aprov', SEM), ap('RECEBIMENTO'), { merge: true }), 'sem o escopo Pátio não aprova o Pátio');
 });
 
 // ---------------- perfil Administrativo ----------------

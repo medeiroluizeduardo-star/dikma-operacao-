@@ -1,13 +1,15 @@
 // Dikma Gestão — aprovação dos apontamentos das Atividades.
-// O líder aponta (realizada, não realizada, extra); o supervisor, coordenador, gestor ou administrador aprova ou devolve
-// com o motivo. O que ainda espera aprovação já conta nos números, com o selo "aguardando".
+// O líder aponta (realizada, não realizada, extra); o supervisor, o técnico de processo ou o administrador aprova ou
+// devolve com o motivo. O que ainda espera aprovação já conta nos números, com o selo "aguardando".
 // Guardado em aprov/{área|semana} (b_aprov na Bateria): { area, mes, v: { 'atividade|dia': { s: 'A'|'D', c, por, nome, em, mot, ant } } }
 export const APROV_DESDE = '2026-10-15'; // apontamentos de antes desta data não entram na aprovação
-// O supervisor aprova ou devolve (nas áreas dele). O administrador é o aprovador reserva: aprova nas áreas sem supervisor.
+// Aprovam ou devolvem (perfil da Operação): o supervisor, nas áreas dele, e o técnico de processo, em todas as áreas
+// do conjunto (Pátio ou Bateria) que estão no escopo dele. O administrador aprova em todas as áreas.
 // Gestor e coordenador acompanham sem aprovar.
-export const APROVADORES = ['supervisor'];
+export const APROVADORES = ['supervisor', 'tecnico'];
 export const aprovaPapel = papel => APROVADORES.includes(papel);
-export const ACOMPANHA = ['admin', 'gestor', 'coordenador', 'supervisor'];
+export const aprovaTodas = papel => papel === 'tecnico'; // aprova em todas as áreas do conjunto (sem área fixa)
+export const ACOMPANHA = ['admin', 'gestor', 'coordenador', 'supervisor', 'tecnico'];
 export const acompanhaPapel = papel => ACOMPANHA.includes(papel);
 // c = código da célula, dt = data, a = registro de aprovação (ou nada), hoje = AAAA-MM-DD
 // devolve 'pend' (aguardando) · 'ok' (aprovada) · 'dev' (devolvida ao líder) · null (nada a aprovar)

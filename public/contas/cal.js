@@ -24,7 +24,7 @@ export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junh
 export const MOTIVOS = ['Efetivo insuficiente', 'Equipamento indisponível', 'Área não liberada pela operação', 'Chuva / condição climática', 'Prioridade operacional', 'Falta de material / EPI', 'Outro'];
 // Códigos de situação: a tabela única fica em situacao.js; estes nomes continuam valendo para quem já usa.
 export { SITS, AUSENTE, AUSENCIA } from './situacao.js';
-export const PAPEIS = [['admin', 'Administrador'], ['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['lider', 'Líder'], ['administrativo', 'Administrativo'], ['leitor', 'Somente leitura'], ['bloqueado', 'Bloqueado']];
+export const PAPEIS = [['admin', 'Administrador'], ['gestor', 'Gestor'], ['coordenador', 'Coordenador'], ['supervisor', 'Supervisor'], ['tecnico', 'Técnico de Processo'], ['lider', 'Líder'], ['administrativo', 'Administrativo'], ['leitor', 'Somente leitura'], ['bloqueado', 'Bloqueado']];
 export const ATIVOS = new Set(['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']);
 
 export const pad = n => String(n).padStart(2, '0');
