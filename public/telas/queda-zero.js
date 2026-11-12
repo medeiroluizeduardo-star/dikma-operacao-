@@ -1,13 +1,15 @@
-// Queda zero (telas): bloco opcional no passo de fotos, janela para lançar ou corrigir depois e o selo na lista
-// do Apontar. As contas (tabela de fatores e resultado) ficam em contas/queda-zero.js; a gravação, em data.js ›
+// Queda zero (telas): cartão do dia no Apontar (separado das atividades e das fotos), janela para lançar ou
+// corrigir e o formulário com a tabela. As contas ficam em contas/queda-zero.js; a gravação, em data.js ›
 // salvarQuedaZero (mapa qz da semana).
-import { DAYS, ddmm } from '../contas/cal.js';
+import { AREA_S, DAYS, ddmm } from '../contas/cal.js';
 import { DB, esc, $ } from '../nucleo/base.js';
-import { PL, canEdit } from '../nucleo/estado.js';
+import { PL, UI, canEdit } from '../nucleo/estado.js';
+import { acoes } from '../nucleo/acoes.js';
+import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { diasDe } from '../calc/atividades.js';
-import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDaCel } from '../contas/queda-zero.js';
+import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 function linhaQZ(l = {}) {
@@ -20,10 +22,10 @@ function linhaQZ(l = {}) {
     <button type="button" class="btn sm ghost qzrm" data-qzrm aria-label="Tirar esta linha">✕</button>
   </div>`;
 }
-// Bloco do formulário. aberto = já vem aberto (janela própria); no passo de fotos começa fechado (é opcional).
+// Bloco do formulário (a tabela). aberto = já vem aberto.
 export function blocoQZ(inicial, aberto = false) {
   const linhas = inicial && Array.isArray(inicial.i) && inicial.i.length ? inicial.i : [{}];
-  return `<details class="qzbox" id="qzBox"${aberto || inicial ? ' open' : ''}><summary><b>Queda zero</b> <span class="muted small">(opcional) · material recolhido</span></summary>
+  return `<details class="qzbox" id="qzBox"${aberto || inicial ? ' open' : ''}><summary><b>Equipamentos</b> <span class="muted small">· material recolhido</span></summary>
     <p class="muted small m0">Informe quantos equipamentos foram enchidos; o resultado é calculado pela tabela da operação.</p>
     <div id="qzLinhas">${linhas.map(linhaQZ).join('')}</div>
     <div class="row-gap"><button type="button" class="btn sm" id="qzMais">+ Outro equipamento</button><span class="qztot" id="qzTot" aria-live="polite"></span></div>
@@ -53,30 +55,52 @@ export function ligarQZ() {
   pintar();
   return () => calcQZ(linhas());
 }
-// Grava (ou apaga) o registro da célula, só se mudou. r = resultado de ler().
-export function gravarQZ(doc, i, k, r) {
-  if (!r || !canEdit(doc.area)) return;
-  const pid = doc.ids[i]; const key = pid + '|' + k; const novo = valorQZ(r); const antes = qzDaCel(doc, pid, k);
+// Grava (ou apaga) um lançamento, só se mudou. novo = valor completo ou null.
+function gravarQZ(doc, key, k, novo, rotulo) {
+  if (!canEdit(doc.area)) return;
+  const antes = (doc.qz || {})[key] || null;
   if (JSON.stringify(novo) === JSON.stringify(antes)) return;
   doc.qz = doc.qz || {}; if (novo) doc.qz[key] = novo; else delete doc.qz[key];
   Promise.resolve(DB.salvarQuedaZero(doc.id, doc.area, key, novo)).catch(() => toast('Não foi possível gravar a queda zero'));
-  const p = PL.get(pid) || {};
-  DB.log(`${p.ativ || pid} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → queda zero ${novo ? `${fmtT(novo.t)} (${textoQZ(novo)})` : 'apagada'}`);
+  DB.log(`Queda zero · ${rotulo} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${novo ? `${fmtT(novo.t)} (${textoQZ(novo)})` : 'apagada'}`);
 }
-// Janela para lançar ou corrigir a queda zero de uma atividade já apontada.
-export function editarQZ(doc, i, k) {
-  const p = PL.get(doc.ids[i]) || {}; const atual = qzDaCel(doc, doc.ids[i], k);
+const docAtual = () => DB.cache.semanas[UI.apArea + '|' + UI.ini];
+// Janela para lançar (key vazia) ou corrigir um lançamento do dia k.
+export function editarQZ(doc, k, key) {
+  const atual = key ? (doc.qz || {})[key] || null : null;
+  const pid = key && !key.startsWith('Z|') ? key.split('|').slice(0, -1).join('|') : '';
+  const ativ = pid ? (PL.get(pid) || {}).ativ || pid : '';
+  const rota = atual ? atual.r || (PL.get(pid) || {}).rota || '' : UI.aRota || '';
+  const rotulo = `${AREA_S[doc.area] || doc.area}${rota ? ' · ' + rota : ''}`;
   let ler = null;
-  formSheet('Queda zero', `<b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, blocoQZ(atual, true) + (atual ? '<p class="muted small m0">Para apagar o registro, tire todas as quantidades e salve.</p>' : ''), 'Salvar', async () => {
-    const r = ler(); if (r.erro) throw new Error(r.erro);
-    gravarQZ(doc, i, k, r); toast(r.itens.length ? `Queda zero: ${fmtT(r.t)}` : 'Queda zero apagada'); render();
-  });
+  formSheet(atual ? 'Corrigir queda zero' : 'Lançar queda zero', `${esc(rotulo)} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}${ativ ? `<br>Lançada junto da atividade: ${esc(ativ)}` : ''}`,
+    blocoQZ(atual, true) + `<label class="sel"><span>Local ou observação (opcional)</span><input class="in" id="qzObs" maxlength="120" autocomplete="off" placeholder="Ex.: correia 3, perto da torre" value="${esc((atual && atual.o) || '')}"></label>`
+    + (atual ? `<button type="button" class="btn sm danger" id="qzApagar">${I.lixo} Apagar este lançamento</button>` : ''), 'Salvar', async () => {
+      const r = ler(); if (r.erro) throw new Error(r.erro);
+      if (!r.itens.length) { if (!atual) throw new Error('Preencha pelo menos um equipamento com a quantidade.'); gravarQZ(doc, key, k, null, rotulo); toast('Lançamento apagado'); render(); return; }
+      const o = ($('qzObs').value || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      const novo = { ...valorQZ(r), ...(rota ? { r: rota } : {}), ...(o ? { o } : {}) };
+      gravarQZ(doc, key || chaveNovaQZ(k), k, novo, rotulo); toast(`Queda zero: ${fmtT(r.t)}`); render();
+    });
   ler = ligarQZ();
+  const ap = $('qzApagar');
+  if (ap) ap.addEventListener('click', () => {
+    if (ap.dataset.conf) { gravarQZ(doc, key, k, null, rotulo); $('layer').innerHTML = ''; toast('Lançamento apagado'); render(); return; }
+    ap.dataset.conf = '1'; ap.innerHTML = `${I.lixo} Confirmar: apagar`;
+  });
 }
-// Selo na lista do Apontar: "queda zero 1,2 t".
-export function seloQZ(doc, i, k) {
-  const v = qzDaCel(doc, doc.ids[i], k); if (!v) return '';
-  return ` · <span class="pill qz" title="${esc(textoQZ(v))}">queda zero ${esc(fmtT(v.t).replace(/ \(.*\)$/, ''))}</span>`;
+acoes.qzNovo = () => { const doc = docAtual(); if (doc && canEdit(doc.area)) editarQZ(doc, UI.dia); };
+acoes.qzEditar = (t, d) => { const doc = docAtual(); if (doc && canEdit(doc.area) && (doc.qz || {})[d.k]) editarQZ(doc, UI.dia, d.k); };
+// Cartão do dia no Apontar (todas as rotas da área): lançamentos, total e o botão de lançar.
+export function cartaoQZ(doc, k, edit) {
+  const l = qzDoDia(doc, k);
+  if (!l.length && !edit) return '';
+  const linha = ({ key, v, pid }) => {
+    const onde = [v.r || (pid ? (PL.get(pid) || {}).rota : ''), v.o, pid ? (PL.get(pid) || {}).ativ || pid : ''].filter(Boolean).map(esc).join(' · ');
+    const corpo = `<b class="num">${esc(fmtT(v.t))}</b> <span>${esc(textoQZ(v))}</span>${onde ? `<span class="muted small">${onde}</span>` : ''}`;
+    return edit ? `<button type="button" class="qzitem" data-act="qzEditar" data-k="${esc(key)}" aria-label="Corrigir o lançamento de ${esc(fmtT(v.t))}">${corpo}</button>` : `<div class="qzitem">${corpo}</div>`;
+  };
+  return `<section class="card qzcard" aria-label="Queda zero do dia"><div class="body"><div class="row-between"><b>Queda zero · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}</b>${l.length ? `<span class="num">Total ${esc(fmtT(totalDiaQZ(doc, k)))}</span>` : ''}</div>
+    ${l.length ? `<div class="qzlista">${l.map(linha).join('')}</div>` : '<p class="muted small m0">Nenhum lançamento neste dia. É opcional: registre o material caído recolhido (coque ou carvão).</p>'}
+    ${edit ? `<div class="row-gap"><button type="button" class="btn sm" data-act="qzNovo">${I.plus} Lançar queda zero</button></div>` : ''}</div></section>`;
 }
-// Linha de resumo (fotos da atividade).
-export function resumoQZ(doc, i, k) { const v = qzDaCel(doc, doc.ids[i], k); return v ? `Queda zero: <b>${esc(fmtT(v.t))}</b> · ${esc(textoQZ(v))}` : ''; }

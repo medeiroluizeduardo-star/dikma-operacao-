@@ -36,3 +36,15 @@ test('Queda zero: textos e registro da célula', () => {
   assert.equal(Q.qzDaCel(doc, 'REC-001', 3), null);
   assert.equal(Q.qzDaCel({}, 'REC-001', 2), null);
 });
+test('Queda zero: lançamentos do dia (novos e antigos, da atividade) e total', () => {
+  const k1 = Q.chaveNovaQZ(2, 1000, 0.5), k2 = Q.chaveNovaQZ(2, 2000, 0.1);
+  assert.match(k1, /^Z\|2\|[0-9a-z]+$/);
+  const doc = { qz: { [k2]: { i: [], t: 2 }, [k1]: { i: [], t: 1.5 }, 'REC-001|2': { i: [], t: 0.25 }, 'REC-001|3': { i: [], t: 9 }, [Q.chaveNovaQZ(3, 5)]: { i: [], t: 7 } } };
+  const l = Q.qzDoDia(doc, 2);
+  assert.deepEqual(l.map(x => x.key), ['REC-001|2', k1, k2], 'antigos primeiro, depois na ordem em que foram lançados');
+  assert.equal(l[0].pid, 'REC-001');
+  assert.equal(l[1].pid, undefined);
+  assert.equal(Q.totalDiaQZ(doc, 2), 3.75);
+  assert.equal(Q.totalDiaQZ(doc, 3), 16);
+  assert.deepEqual(Q.qzDoDia({}, 2), []);
+});

@@ -2,8 +2,10 @@
 // Registro opcional junto das fotos da atividade: quanto material caído (coque ou carvão) foi recolhido.
 // Cada equipamento tem um fator por produto (quanto cabe em 1 equipamento, em toneladas); a pessoa informa quantos
 // equipamentos encheu e o resultado é fator × quantidade. Tabela da planilha da operação (12/11/2026).
-// Gravado na semana, no mapa qz: qz['PID|k'] = { i: [{ e, p, q }], t } (e = equipamento, p = produto, q = quantidade,
-// t = total em toneladas). Sem registro = sem chave (não é obrigatório).
+// Lançamento próprio do Apontar (por área e dia, separado das atividades e das fotos). Gravado na semana, no mapa qz:
+// qz['Z|k|id'] = { i: [{ e, p, q }], t, r, o } (e = equipamento, p = produto, q = quantidade, t = total em toneladas,
+// r = rota em que foi lançado, o = local/observação). Os registros antigos, feitos junto das fotos de uma atividade
+// (12/11/2026), ficam com a chave 'PID|k' e continuam aparecendo no dia.
 
 export const QZ_PRODUTOS = [['coque', 'Coque'], ['carvao', 'Carvão']];
 export const QZ_EQUIP = [
@@ -59,3 +61,17 @@ export function textoQZ(v) {
 }
 // Registro de uma célula da semana (ou null).
 export const qzDaCel = (doc, pid, k) => (doc && doc.qz && doc.qz[pid + '|' + k]) || null;
+// Chave de um lançamento novo do dia k.
+export const chaveNovaQZ = (k, agora = Date.now(), sorte = Math.random()) => `Z|${k}|${agora.toString(36).padStart(9, '0')}${Math.floor(sorte * 1296).toString(36).padStart(2, '0')}`;
+// Lançamentos do dia k de uma semana, do mais antigo para o mais novo: [{ key, v, pid (só nos antigos, da atividade) }].
+export function qzDoDia(doc, k) {
+  const out = [];
+  for (const [key, v] of Object.entries((doc && doc.qz) || {})) {
+    if (!v) continue; const p = key.split('|');
+    if (p[0] === 'Z') { if (+p[1] === k) out.push({ key, v, ord: p[2] || '' }); }
+    else if (+p[p.length - 1] === k) out.push({ key, v, pid: p.slice(0, -1).join('|'), ord: '' });
+  }
+  return out.sort((a, b) => (a.ord < b.ord ? -1 : a.ord > b.ord ? 1 : 0)).map(({ ord, ...x }) => x);
+}
+// Total do dia (toneladas).
+export const totalDiaQZ = (doc, k) => Math.round(qzDoDia(doc, k).reduce((n, x) => n + (Number(x.v.t) || 0), 0) * 1e6) / 1e6;
