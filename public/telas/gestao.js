@@ -406,7 +406,7 @@ export function criarGestao(X) {
 
   /* ---------- líderes: trocar e renomear de uma vez (Gestão › Fichas › Líderes) ---------- */
   // Um líder por grafia (sem acento e maiúsculas). A Presença do dia (Agrupar por: Líder) junta grafias parecidas;
-  // aqui elas aparecem separadas para dar para corrigir. Muda só as fichas: a folha de frequência fica no RH.
+  // aqui elas aparecem separadas para dar para corrigir. Muda as fichas; a Frequência (da folha de 16/10 a 15/11/2026 em diante) monta os grupos por elas.
   const lideres = () => lideresDasFichas(G().colabs, TODAY);
   const opcoesLider = () => lideres().map(l => ({ v: l.nome, t: title(l.nome), d: `${l.ativos} pessoa${l.ativos === 1 ? '' : 's'}` }));
   const pessoasTxt = n => `${n} pessoa${n === 1 ? '' : 's'}`;
@@ -421,7 +421,7 @@ export function criarGestao(X) {
       ${L.length ? `<div class="plist" id="ldLista">${L.map((l, i) => { const j = junto(l); return `<div class="pitem"><div class="minw"><div class="t">${esc(title(l.nome))}</div><div class="l">${pessoasTxt(l.ativos)}${l.desligados ? ` · +${l.desligados} desligado${l.desligados === 1 ? '' : 's'}` : ''}${j.length ? ` · <span class="warn-t">na Presença fica junto com ${esc(j.join(', '))}</span>` : ''}</div>
         <details style="margin-top:2px"><summary class="small muted" style="cursor:pointer">Ver quem</summary><div class="small" style="padding:4px 0 2px">${l.pessoas.map(c => esc(title(c.nome)) + (c.dem && c.dem <= TODAY ? ' <span class="muted">(desligado)</span>' : '')).join(', ')}</div></details></div>
         <div class="row-gap"><button type="button" class="btn sm" data-ld="trocar" data-i="${i}">Trocar por…</button><button type="button" class="btn sm ghost" data-ld="renomear" data-i="${i}">Renomear</button></div></div>`; }).join('')}</div>` : '<div class="empty">Nenhuma ficha tem líder imediato. Preencha em Editar, na ficha de cada pessoa.</div>'}
-      <p class="small muted m0">Trocar move <b>todas</b> as pessoas do líder para outro. Renomear corrige a grafia (se o nome novo já existir, os dois viram um só). Os grupos da folha de frequência são mudados em RH › Frequência.</p>
+      <p class="small muted m0">Trocar move <b>todas</b> as pessoas do líder para outro. Renomear corrige a grafia (se o nome novo já existir, os dois viram um só). A Frequência acompanha sozinha (os grupos dela vêm do líder da ficha).</p>
       <button type="button" class="btn center" data-ld="fechar">Fechar</button></div></div>`;
     $('scrim').onclick = e => {
       e.stopPropagation();
