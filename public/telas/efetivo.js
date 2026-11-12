@@ -13,7 +13,7 @@ import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEdi
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
-import { escala, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet } from '../calc/presenca.js';
+import { escala, comTurma, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet } from '../calc/presenca.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile, trocarTela } from '../ui/shell.js';
 import { ocorrOpc, salvarJus, textoHE, horarioHE } from './horas-justificativas.js';
@@ -99,8 +99,8 @@ export function lancarEfetivo(key) {
   fecharSitPop();
   const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
   const sx = sitDia(c, dt); const info = DB.sitInfo(key); const cobre = cobrindo(id, dt);
-  const prev = escala().previsto(regimeDe(c), turmaDe(c), dt);
-  const linha = prev ? (prev.trab ? `Pela escala: trabalha${turmaDe(c) ? ` (turma ${esc(turmaDe(c))})` : ''}` : `Pela escala: folga (${esc(prev.motivo)})`) : 'Sem turma: a escala não marca folga sozinha';
+  const prev = escala().previsto(regimeDe(c, dt), turmaDe(c, dt), dt);
+  const linha = prev ? (prev.trab ? `Pela escala: trabalha${turmaDe(c, dt) ? ` (turma ${esc(turmaDe(c, dt))})` : ''}` : `Pela escala: folga (${esc(prev.motivo)})`) : 'Sem turma: a escala não marca folga sozinha';
   const extras = [];
   if (!sx.auto && AUS_COBRIVEL.has(sx.v)) {
     if (info.cob) extras.push({ t: 'Trocar substituto', d: `Hoje cobre: ${nomeDe(info.cob)}`, v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` }, { t: 'Tirar o substituto', v: 'semcob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
@@ -204,7 +204,7 @@ export function turmaSheet(id) {
   const letras = Object.keys(r.turmas || {}); const atual = turmaDe(c);
   const prox = l => { const ds = []; for (let i = 0; i < 8; i++) { const d = add(TODAY, i); const p = escala().previsto(rg, l, d); ds.push(p ? (p.trab ? '●' : '○') : '?'); } return ds.join(' '); };
   sheet(`Turma de ${title(c.nome)}`, `${esc(r.nome)} · ● trabalha ○ folga, a partir de hoje`, [...letras.map(l => ({ t: `Turma ${l}`, d: prox(l), v: l, cur: l === atual })), { t: 'Sem turma', d: 'A folga não é marcada sozinha', v: '' }], o => {
-    const itens = (DB.cache.colabs[c.area] || []).map(x => (x.id === c.id ? { ...x, turma: o.v } : x));
+    const itens = (DB.cache.colabs[c.area] || []).map(x => (x.id === c.id ? comTurma(x, o.v) : x));
     DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
   });
 }
@@ -300,7 +300,7 @@ export function vEsDia() {
   const porGestao = UI.eAgr === 'gestao';
   const nivelG = c => { const f = semAcento(c.funcao || '').toUpperCase(); return /COORDEN/.test(f) ? 1 : /SUPERVIS/.test(f) ? 2 : /LIDER/.test(f) ? 3 : /SEGURANCA|\bTST\b/.test(f) && /TEC/.test(f) ? 4 : 0; };
   const dRef = tk.includes(true) ? TODAY : UI.ini;
-  const grpPer = c => { const s = sitDia(c, dRef); if (s.v === 'DS') return '5|Desligados'; if (s.auto || s.v === 'F' || s.v === 'FE') return '4|Folga ou férias'; const pr = periodoDe(c, dRef); if (pr) return pr === 'N' ? '2|Turno noturno' : '1|Turno diurno'; return escala().regimes[regimeDe(c)] && escala().regimes[regimeDe(c)].tipo === 'ciclo' ? '3|Turno sem turma' : '0|Administrativo'; };
+  const grpPer = c => { const s = sitDia(c, dRef); if (s.v === 'DS') return '5|Desligados'; if (s.auto || s.v === 'F' || s.v === 'FE') return '4|Folga ou férias'; const pr = periodoDe(c, dRef); if (pr) return pr === 'N' ? '2|Turno noturno' : '1|Turno diurno'; return escala().regimes[regimeDe(c, dRef)] && escala().regimes[regimeDe(c, dRef)].tipo === 'ciclo' ? '3|Turno sem turma' : '0|Administrativo'; };
   // Gestão mostra só a gestão; Rota mostra só o pessoal das rotas (a gestão fica na opção Gestão). Busca, período e líder mostram todos.
   const porRota = !q.trim() && !porGrupo && !porGestao;
   let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' || porGrupo || porGestao ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);

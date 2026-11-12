@@ -3,7 +3,7 @@
 // a Frequência vê e corrige aqui. Quem não está nas Atividades (gestão, apoio) fica só na folha (freqcomp).
 // Férias marcadas aqui aparecem sozinhas como FE no Efetivo diário e na folha.
 import { SETS, AREA_S, today, add, ddmm, MESES_L } from '../contas/cal.js';
-import { normRegime, letra } from '../contas/escala.js';
+import { normRegime, letra, comoEra } from '../contas/escala.js';
 import { editaAdm, indiceFerias } from '../contas/acessos.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
@@ -37,8 +37,9 @@ export function criarAdministrativo(X) {
   let FI = null, FIv = null;
   const ferIdx = () => { const l = A().ferias; if (FIv !== l) { FI = indiceFerias(l); FIv = l; } return FI; };
   const colabPorId = conj => { const m = new Map(); (A().colabs[conj] || []).forEach(c => m.set(c.id, c)); return m; };
-  function regimeTurma(conj, g, p, cmap) {
-    const c = p.ativ ? cmap.get(p.ativ) : null;
+  // dt: regime e turma daquele dia (a troca de escala só vale a partir da data dela)
+  function regimeTurma(conj, g, p, cmap, dt) {
+    const c0 = p.ativ ? cmap.get(p.ativ) : null; const c = c0 && dt ? comoEra(c0, dt) : c0;
     const regime = c ? c.regime : g.turno ? (/3\s*X\s*3/i.test(g.nome) ? '3X3' : '4X4') : 'ADMINISTRATIVO';
     return { regime, turma: (c && letra(c.turma)) || letra(p.turma) || '' };
   }
@@ -59,7 +60,7 @@ export function criarAdministrativo(X) {
     return HEOP.get(normNome(nome) + '|' + dt) || null;
   };
   function codigo(conj, comp, doc, g, p, dt, cmap) {
-    const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap);
+    const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap, dt);
     const s = situacaoDoDia(p, dt, {
       lancado: () => lancadoDe(conj, doc, p, dt), desligadoEm, ferias: (x, d) => ferIdx()({ mat: x.mat, nome: x.nome }, d),
       escala: E, regime: () => normRegime(rt.regime, E.regimes), turma: () => rt.turma, turmaFicha: X.turmaFicha, hoje: TODAY

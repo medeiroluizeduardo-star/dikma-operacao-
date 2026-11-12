@@ -368,13 +368,14 @@ export function criarGestao(X) {
       <div class="row2" id="ncPatioBox"><label class="sel"><span id="ncRotaLbl">Rota</span><select class="in" id="ncRota"></select></label><label class="sel"><span>Regime</span><select class="in" id="ncReg">${regimeOpts((L.patio && L.patio.regime) || 'ADMINISTRATIVO')}</select></label></div>
       ${PES.temOp() ? `<label class="switch" id="ncOpLbl"><input type="checkbox" id="ncOp" ${L.op ? 'checked' : ''}><span>Opera equipamentos (equipe da área Equipamentos)</span></label>
       <div class="row2" id="ncOpBox"><label class="sel"><span>Escala (Equipamentos)</span><select class="in" id="ncEsc">${opt(['ADM', '4x4'], (L.op && L.op.escala) || 'ADM')}</select></label><label class="sel"><span>Turma 4x4</span><select class="in" id="ncTurOp"><option value="">—</option>${opt(Object.keys(eqc.turmas || {}), (L.op && L.op.turma) || '')}</select></label></div>` : ''}
+      ${mat ? `<div class="aviso" id="ncDesdeBox" hidden><label class="sel"><span>A troca de escala vale a partir de</span><input class="in" type="date" id="ncDesde" value="${TODAY}"></label><small>Os dias antes dessa data continuam com a escala antiga (folgas, presença e frequência não mudam).</small></div>` : ''}
       <label class="sel"><span>Função</span><input class="in" id="ncFun" list="dlFun" autocomplete="off" value="${esc(c.funcao || (L.patio && L.patio.funcao) || (L.op && L.op.funcao) || '')}" placeholder="Escolha da lista ou digite"><datalist id="dlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>
       <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('ncLid', nomeLider(c.lider), opcoesLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
       <label class="sel"><span>Demissão</span><input class="in" type="date" id="ncDem" value="${c.dem || ''}"></label>
       <label class="switch"><input type="checkbox" id="ncAnt" ${c.intAnt ? 'checked' : ''}><span>Integração feita antes do sistema ("Anterior")</span></label>`, 'Salvar', async () => {
       const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim() };
       if (!n.mat || !n.nome) throw new Error('Informe matrícula e nome.');
-      const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '' };
+      const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '', desde: ($('ncDesde') && $('ncDesde').value) || TODAY };
       if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Presença do dia)
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
       if ((o.op || o.area === AREA_OP) && o.escala === '4x4' && !o.turma) throw new Error('Escolha a turma da escala 4x4.');
@@ -396,8 +397,11 @@ export function criarGestao(X) {
       $('ncPatioBox').hidden = !pat && !ger; rt.closest('label').hidden = !pat; // área geral: só o regime (entra na Presença do dia)
       if (pat) { const rs = PES.rotasDe(a); const cur = L.patio && L.patio.area === a ? L.patio.rota : rt.value; rt.innerHTML = rs.map(r => `<option ${r === cur ? 'selected' : ''}>${esc(r)}</option>`).join(''); }
       if (op) { if (a === AREA_OP) { op.checked = true; op.disabled = true; } else op.disabled = false; $('ncOpBox').hidden = !op.checked; }
+      // trocou regime, escala ou turma: pergunta de quando vale (os dias anteriores ficam com a escala antiga)
+      const db = $('ncDesdeBox'); if (db) db.hidden = ![['ncReg', ini.reg], ['ncEsc', ini.esc], ['ncTurOp', ini.tur], ['ncTur', ini.tf]].some(([id, v]) => $(id) && $(id).value !== v);
     };
-    ar.onchange = atualizar; if (op) op.onchange = atualizar; atualizar();
+    const ini = { reg: $('ncReg').value, esc: $('ncEsc') ? $('ncEsc').value : '', tur: $('ncTurOp') ? $('ncTurOp').value : '', tf: $('ncTur').value };
+    ar.onchange = atualizar; if (op) op.onchange = atualizar; for (const id of ['ncReg', 'ncEsc', 'ncTurOp']) if ($(id)) $(id).onchange = atualizar; $('ncTur').oninput = atualizar; atualizar();
   }
 
   /* ---------- líderes: trocar e renomear de uma vez (Gestão › Fichas › Líderes) ---------- */

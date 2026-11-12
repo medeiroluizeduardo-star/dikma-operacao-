@@ -1,6 +1,7 @@
 // Cálculos do módulo Operação (controle de equipamentos).
 // Reproduz as fórmulas da planilha CONTROLE DE EQUIPAMENTOS - COQUERIA (abas LANÇAMENTOS, PARADAS e CALC).
-// Sem dependências: roda no navegador e no Node (usado para conferir os números com a planilha).
+// Sem dependências de tela: roda no navegador e no Node (usado para conferir os números com a planilha).
+import { comoEra } from './escala.js'; // troca de escala do operador: vale só a partir da data dela
 
 const toMin = h => { if (!h) return null; const [a, b] = String(h).split(':').map(Number); return a * 60 + (b || 0); };
 const pdate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
@@ -25,12 +26,12 @@ export function criarCalc(cfg, cad, ext, prev) {
   const frotaMap = new Map((cad.frota || []).map(f => [f.id, f]));
   const causaResp = new Map((cfg.causas || []).map(c => [c.causa, c.resp]));
   const feriadosSemOp = new Set((cfg.feriados || []).filter(f => f.semOp).map(f => f.data));
-  const escalaDe = op => ((opMap.get(op) || {}).escala === '4x4' ? '4x4' : 'ADM');
+  const escalaDe = (op, data) => { const o = opMap.get(op); return ((o && data ? comoEra(o, data) : o) || {}).escala === '4x4' ? '4x4' : 'ADM'; };
   const fimPadrao = (esc, data) => (esc === '4x4' ? T.x4Fim : dow(data) === 5 ? T.admFimSex : T.admFim);
 
   // Janela (horas previstas) de um lançamento — coluna JANELA H
   function janela(l) {
-    const esc = escalaDe(l.op);
+    const esc = escalaDe(l.op, l.data);
     const ini = toMin(l.ini || (esc === '4x4' ? T.x4Ini : T.admIni));
     const fim = toMin(l.fim || fimPadrao(esc, l.data));
     const dur = ((fim - ini) % 1440 + 1440) % 1440;
@@ -41,7 +42,7 @@ export function criarCalc(cfg, cad, ext, prev) {
   // Duração de uma parada — coluna DURAÇÃO H (vazio = até o fim do turno)
   function duracao(p) {
     if (!p.ini) return 0;
-    const esc = escalaDe(p.op);
+    const esc = escalaDe(p.op, p.data);
     const ini = toMin(p.ini), fim = toMin(p.fim || fimPadrao(esc, p.data));
     const dur = ((fim - ini) % 1440 + 1440) % 1440;
     if (esc === '4x4') return r2(dur / 60);
@@ -61,6 +62,10 @@ export function criarCalc(cfg, cad, ext, prev) {
   const diasUteis = (a, b) => contar(a, b, diaUtil);
   function diasPrevistosOp(o, a, b) {
     if (a > b) return 0;
+    if (o.escHist && o.escHist.length) { // trocou de escala: conta cada dia com a escala que valia nele
+      let n = 0; for (let d = a; d <= b; d = addD(d, 1)) { const x = comoEra(o, d); if ((x.escala || 'ADM') === '4x4') { const t = trabalha4x4(x.turma, d); n += t === null ? 0.5 : t ? 1 : 0; } else if (diaUtil(d)) n++; }
+      return Math.round(n);
+    }
     if ((o.escala || 'ADM') === '4x4') { if (trabalha4x4(o.turma, a) === null) return Math.round((diffD(a, b) + 1) / 2); return contar(a, b, d => trabalha4x4(o.turma, d)); }
     return diasUteis(a, b);
   }
@@ -74,6 +79,7 @@ export function criarCalc(cfg, cad, ext, prev) {
   }
   function escalado(o, data) { // previsto para trabalhar na data (sem contar ausência)
     if (!o) return false;
+    o = comoEra(o, data);
     if ((o.escala || 'ADM') === '4x4') { const t = trabalha4x4(o.turma, data); return t === null ? true : t; }
     return diaUtil(data);
   }
@@ -93,9 +99,9 @@ export function criarCalc(cfg, cad, ext, prev) {
     const linhas = L.map(l => {
       const jan = janela(l); const ps = parKey.get(l.data + '|' + l.eq + '|' + l.op) || [];
       const hpar = Math.min(jan, ps.reduce((s, p) => s + duracao(p), 0));
-      return { ...l, escala: escalaDe(l.op), jan, hpar: r2(hpar), hoper: r2(Math.max(0, jan - hpar)), npar: ps.length };
+      return { ...l, escala: escalaDe(l.op, l.data), jan, hpar: r2(hpar), hoper: r2(Math.max(0, jan - hpar)), npar: ps.length };
     });
-    const pars = P.map(p => ({ ...p, dur: duracao(p), resp: resp(p), situacao: situacao(p), tipo: (frotaMap.get(p.eq) || {}).tipo || '', escala: escalaDe(p.op) }));
+    const pars = P.map(p => ({ ...p, dur: duracao(p), resp: resp(p), situacao: situacao(p), tipo: (frotaMap.get(p.eq) || {}).tipo || '', escala: escalaDe(p.op, p.data) }));
     const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
     const cnt = (arr, f) => arr.filter(f).length;
     const k = {};
@@ -217,7 +223,7 @@ export function criarCalc(cfg, cad, ext, prev) {
     }
     const lk = new Set(lanc.map(l => l.data + '|' + l.eq + '|' + l.op));
     for (const p of par) {
-      const esc = escalaDe(p.op);
+      const esc = escalaDe(p.op, p.data);
       if (!p.eq || !p.op || !p.ini) out.push({ aba: 'Paradas', ref: p, tipo: 'INCOMPLETO' });
       else if (!p.causa) out.push({ aba: 'Paradas', ref: p, tipo: 'SEM CAUSA' });
       else if (!lk.has(p.data + '|' + p.eq + '|' + p.op)) out.push({ aba: 'Paradas', ref: p, tipo: 'SEM LANÇAMENTO CORRESPONDENTE' });

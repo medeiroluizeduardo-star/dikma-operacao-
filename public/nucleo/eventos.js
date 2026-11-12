@@ -9,7 +9,7 @@ import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe
 import { acoes } from './acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { setSt, tirarFora } from '../calc/atividades.js';
-import { sitDia, curto, removerCobertura } from '../calc/presenca.js';
+import { sitDia, curto, removerCobertura, comTurma } from '../calc/presenca.js';
 import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
 import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
 import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela, SELOS, numSelo } from '../ui/shell.js';
@@ -196,7 +196,7 @@ document.addEventListener('change', e => {
     if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = CF().rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
     if (dd.escn) { const [k, f] = dd.escn.split('|'); CF().rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
     if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
-    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? { ...c, turma: t.value } : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
+    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? comTurma(c, t.value) : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
   if (t.dataset.mdPref) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
