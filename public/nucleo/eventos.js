@@ -200,6 +200,7 @@ document.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.mdPref) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
+  if (t.dataset.rfarea) { UI.rfArea = t.value; render(); return; }
   if (t.dataset.permperfil !== undefined) { UI.permPerfil = t.value; render(); return; }
   if (t.dataset.perm) { const [m, p, id] = t.dataset.perm.split('|'); const R = CF().rascunhoPerm(); (R[m + '|' + p] ||= {})[id] = t.checked; render(); return; }
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }

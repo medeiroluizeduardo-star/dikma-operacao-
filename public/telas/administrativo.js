@@ -9,7 +9,7 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
 import { caixaBusca } from '../ui/busca.js';
-import { situacaoDoDia, contagemDia, CONTA, presente as presenteSit } from '../contas/situacao.js';
+import { situacaoDoDia, contagemDia, CONTA, AUSENCIA, presente as presenteSit } from '../contas/situacao.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
@@ -458,12 +458,19 @@ export function criarAdministrativo(X) {
       for (const g of grs.get(comp)) for (const p of g.pessoas || []) {
         if (p.mat) naFolha.add('m' + p.mat); naFolha.add('n' + normNome(p.nome));
         const key = p.ativ ? 'a' + p.ativ : p.mat ? 'm' + p.mat : 'n' + normNome(p.nome);
-        let x = pessoas.get(key); if (!x) { x = { nome: p.nome, grupo: g.nome, c: {} }; pessoas.set(key, x); }
+        let x = pessoas.get(key); if (!x) { const at = p.ativ ? cmap.get(p.ativ) : null; x = { nome: p.nome, mat: p.mat, grupo: g.nome, area: (at && at.area) || '', c: {} }; pessoas.set(key, x); }
         x.c[dt] = codigo(conj, comp, doc, g, p, dt, cmap);
         const ju = jusDe(conj, doc, p, dt); if (ju) (x.j ||= {})[dt] = ju;
       }
     }
     return { carregando, pessoas: [...pessoas.values()], naFolha };
+  }
+  // Só as pessoas de uma área (pela área delas na Presença do dia). Quem está só na folha, sem ligação, fica de fora.
+  function daArea(lev, area) {
+    if (!area || area === 'TODAS') return lev;
+    const pessoas = lev.pessoas.filter(x => x.area === area); const naFolha = new Set();
+    for (const x of pessoas) { if (x.mat) naFolha.add('m' + x.mat); naFolha.add('n' + normNome(x.nome)); }
+    return { ...lev, pessoas, naFolha };
   }
   // Férias só de quem está na folha do conjunto escolhido (Pátio ou Bateria).
   const feriasDoConj = (lista, lev) => (lista || []).filter(f => (f.mat && lev.naFolha.has('m' + f.mat)) || lev.naFolha.has('n' + normNome(f.nome)));
@@ -521,8 +528,8 @@ export function criarAdministrativo(X) {
     return h;
   }
   // Resumo da semana (folha de impressão): presença, ocorrências e férias da semana.
-  function resumoSemana(ini, conj) {
-    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = levantar(conj, datas);
+  function resumoSemana(ini, conj, area) {
+    const datas = Array.from({ length: 7 }, (_, i) => add(ini, i)); const lev = daArea(levantar(conj, datas), area);
     if (lev.carregando && !lev.pessoas.length) return null;
     const k = indicadores(lev, datas); const fe = feriasDoConj(A().ferias, lev);
     const DL7 = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -538,8 +545,8 @@ export function criarAdministrativo(X) {
   }
 
   // Resumo do mês (a folha de 16 a 15 inteira): presença por semana e por grupo, quem mais faltou e as férias.
-  function resumoMes(comp, conj) {
-    const datas = diasDaCompetencia(comp); const lev = levantar(conj, datas);
+  function resumoMes(comp, conj, area) {
+    const datas = diasDaCompetencia(comp); const lev = daArea(levantar(conj, datas), area);
     if (lev.carregando && !lev.pessoas.length) return null;
     const k = indicadores(lev, datas); const fe = feriasDoConj(A().ferias, lev); const fim = datas[datas.length - 1];
     const semanas = []; datas.forEach(dt => { const dw = new Date(dt + 'T12:00:00').getDay(); if (!semanas.length || dw === 1) semanas.push([]); semanas[semanas.length - 1].push(dt); });
@@ -557,21 +564,39 @@ export function criarAdministrativo(X) {
     };
   }
   // Resumo de um dia: presença por grupo, quem faltou ou está fora e quem fez hora extra.
-  function resumoDia(dt, conj) {
-    const lev = levantar(conj, [dt]); if (lev.carregando && !lev.pessoas.length) return null;
+  // Com uma área escolhida, vêm também os nomes: presentes, ausências e hora extra do dia.
+  function resumoDia(dt, conj, area) {
+    const lev0 = levantar(conj, [dt]); if (lev0.carregando && !lev0.pessoas.length) return null;
+    const lev = daArea(lev0, area); const umaArea = area && area !== 'TODAS';
     const k = indicadores(lev, [dt]); const fe = feriasDoConj(A().ferias, lev);
     const cod = x => x.c[dt] && x.c[dt].v;
     const oc = lev.pessoas.filter(x => ['FT', 'ATR', 'SA', 'AT', 'AF', 'AB', 'SP', 'TR'].includes(cod(x))).sort((a, b) => cod(a).localeCompare(cod(b)) || a.nome.localeCompare(b.nome));
     const he = lev.pessoas.filter(x => cod(x) === 'HE').sort((a, b) => a.nome.localeCompare(b.nome));
     const sai = fe.filter(f => f.inicio === dt), volta = fe.filter(f => f.retorno === dt);
     const fut = dt > TODAY;
+    const ferTxt = `<h4>Férias</h4>${sai.length || volta.length ? `<table><tbody>${sai.map(f => `<tr><td>${esc(title(f.nome))}</td><td>sai hoje</td></tr>`).join('')}${volta.map(f => `<tr><td>${esc(title(f.nome))}</td><td>volta hoje</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${k.t.FE} pessoa(s) em férias · ninguém sai ou volta neste dia.</p>`}`;
     return {
       kpis: [[fut || !k.Q ? '—' : pc(k.pres), 'Presença do dia'], [fut ? '—' : `${k.P}/${k.Q}`, 'Presentes / escalados'], [k.t.FT, 'Faltas'], [k.t.ATR + k.t.SA, 'Atrasos e saídas'], [k.t.AT, 'Atestados'], [k.t.HE, 'Hora extra']],
       corpo: `${fut ? '<p class="muted">Dia ainda não chegou: aparecem só férias e lançamentos já feitos.</p>' : ''}<h4>Presença por grupo</h4><table><thead><tr><th>Grupo</th><th class="r">Pessoas</th><th class="r">Presentes / escalados</th><th class="r">Presença</th><th class="r">Faltas</th><th class="r">Atestados</th></tr></thead><tbody>${k.grupos.sort((a, b) => (a.q ? a.p / a.q : 1) - (b.q ? b.p / b.q : 1)).map(g => `<tr><td>${esc(title(g.nome))}</td><td class="r">${g.n}</td><td class="r">${g.q ? `${g.p}/${g.q}` : '—'}</td><td class="r"><b>${g.q ? pc(g.p / g.q) : '—'}</b></td><td class="r">${g.FT || ''}</td><td class="r">${g.AT || ''}</td></tr>`).join('')}</tbody></table>
-        <div class="rcols"><div><h4>Ocorrências do dia</h4>${oc.length ? `<table><tbody>${oc.map(x => `<tr><td>${esc(title(x.nome))}<div class="muted small">${esc(title(x.grupo || ''))}</div></td><td>${esc(NOMES_CODIGO[cod(x)] || cod(x))}${(x.j || {})[dt] && x.j[dt].cod === cod(x) ? `<div class="muted small">${esc(textoJus(x.j[dt]))}</div>` : JUS_CODS.includes(cod(x)) ? '<div class="muted small">sem justificativa</div>' : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma falta, atraso, atestado ou afastamento.</p>'}</div>
+        ${umaArea ? nomesDoDia(lev, dt, ferTxt) : `<div class="rcols"><div><h4>Ocorrências do dia</h4>${oc.length ? `<table><tbody>${oc.map(x => `<tr><td>${esc(title(x.nome))}<div class="muted small">${esc(title(x.grupo || ''))}</div></td><td>${esc(NOMES_CODIGO[cod(x)] || cod(x))}${(x.j || {})[dt] && x.j[dt].cod === cod(x) ? `<div class="muted small">${esc(textoJus(x.j[dt]))}</div>` : JUS_CODS.includes(cod(x)) ? '<div class="muted small">sem justificativa</div>' : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma falta, atraso, atestado ou afastamento.</p>'}</div>
         <div><h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(x => `<tr><td>${esc(title(x.nome))}</td><td class="muted small">${esc(title(x.grupo || ''))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
-        <h4>Férias</h4>${sai.length || volta.length ? `<table><tbody>${sai.map(f => `<tr><td>${esc(title(f.nome))}</td><td>sai hoje</td></tr>`).join('')}${volta.map(f => `<tr><td>${esc(title(f.nome))}</td><td>volta hoje</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${k.t.FE} pessoa(s) em férias · ninguém sai ou volta neste dia.</p>`}</div></div>`
+        ${ferTxt}</div></div>`}`
     };
+  }
+
+  // Listas com nome (resumo do dia de uma área): presentes, ausências (falta, atestado, afastado...) e hora extra.
+  function nomesDoDia(lev, dt, ferTxt) {
+    const cod = x => x.c[dt] && x.c[dt].v; const ord = (a, b) => a.nome.localeCompare(b.nome);
+    const pres = lev.pessoas.filter(x => presente(cod(x))).sort(ord);
+    const aus = lev.pessoas.filter(x => AUSENCIA.has(cod(x))).sort((a, b) => cod(a).localeCompare(cod(b)) || ord(a, b));
+    const he = lev.pessoas.filter(x => cod(x) === 'HE').sort(ord);
+    const fora = lev.pessoas.filter(x => ['F', 'FE'].includes(cod(x)) || (x.c[dt] && x.c[dt].auto && x.c[dt].por === 'escala')).length;
+    const nota = x => { const c = cod(x); return c === 'HE' ? 'hora extra' : c === 'ATR' ? 'atrasado' : c === 'SA' ? 'saída antecipada' : ''; };
+    const jus = x => (x.j || {})[dt] && x.j[dt].cod === cod(x) ? esc(textoJus(x.j[dt])) : JUS_CODS.includes(cod(x)) ? 'sem justificativa' : '';
+    const tab = (cab, l) => `<table class="rnomes"><thead><tr><th class="r escn">Nº</th><th>Colaborador</th><th>${cab}</th></tr></thead><tbody>${l}</tbody></table>`;
+    return `<h4>Presentes (${pres.length})</h4>${pres.length ? tab('Grupo', pres.map((x, i) => `<tr><td class="r">${i + 1}</td><td>${esc(title(x.nome))}${nota(x) ? ` <span class="muted small">· ${nota(x)}</span>` : ''}</td><td class="muted small">${esc(title(x.grupo || ''))}</td></tr>`).join('')) : '<p class="muted">Ninguém presente neste dia.</p>'}
+      <div class="rcols"><div><h4>Ausências (${aus.length})</h4>${aus.length ? tab('Motivo', aus.map((x, i) => `<tr><td class="r">${i + 1}</td><td>${esc(title(x.nome))}</td><td>${esc(NOMES_CODIGO[cod(x)] || cod(x))}${jus(x) ? `<div class="muted small">${jus(x)}</div>` : ''}</td></tr>`).join('')) : '<p class="muted">Nenhuma falta, atestado ou afastamento.</p>'}${fora ? `<p class="muted small">Fora da conta: ${fora} de folga ou férias.</p>` : ''}</div>
+      <div><h4>Hora extra (${he.length})</h4>${he.length ? tab('Grupo', he.map((x, i) => `<tr><td class="r">${i + 1}</td><td>${esc(title(x.nome))}${x.c[dt].motivo ? `<div class="muted small">${esc(x.c[dt].motivo)}</div>` : ''}</td><td class="muted small">${esc(title(x.grupo || ''))}</td></tr>`).join('')) : '<p class="muted">Ninguém em hora extra.</p>'}${ferTxt}</div></div>`;
   }
 
   /* ---------- eventos ---------- */
