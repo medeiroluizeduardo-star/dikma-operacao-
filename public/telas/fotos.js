@@ -12,6 +12,8 @@ import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../contas/fotos.js';
 import { gravarApont, diasDe } from '../calc/atividades.js';
 import { statusFoto, STATUS } from '../contas/fotos-arquivo.js';
+import { blocoQZ, ligarQZ, gravarQZ, editarQZ, resumoQZ } from './queda-zero.js';
+import { qzDaCel } from '../contas/queda-zero.js';
 
 // Configuração em vigor (config/fotos ou o padrão).
 export const cfgF = () => cfgFotos(DB.cache.fotosCfg);
@@ -38,7 +40,8 @@ export function montarFotos(doc, k, is, imgs, sit) {
 }
 
 /* ---------------- passo de fotos ---------------- */
-// o = { titulo, sub, cfg ({ obrig, min, max }), tem (fotos que já tem), rotuloOk, aoConfirmar(imgs), aoCancelar() }
+// o = { titulo, sub, cfg ({ obrig, min, max }), tem (fotos que já tem), rotuloOk, aoConfirmar(imgs, qz), aoCancelar(),
+//   qz (opcional: { inicial }) = mostra o bloco Queda zero; aoConfirmar recebe o que foi preenchido (queda-zero.js) }
 // A atividade só é marcada no Confirmar; Cancelar (ou fechar) não marca nada.
 export function passoFotos(o) {
   const L = $('layer'); const imgs = []; let ocupado = 0;
@@ -50,6 +53,7 @@ export function passoFotos(o) {
     <div class="row-gap"><label class="btn fadd" for="fIn" id="fAdd">${I.cam} Tirar foto / escolher</label><label class="btn ghost sm" for="fInG" id="fAddG">Da galeria</label><span class="muted small" id="fProc" aria-live="polite"></span></div>
     <input type="file" id="fIn" accept="image/*" capture="environment" multiple hidden><input type="file" id="fInG" accept="image/*" multiple hidden>
     <p class="muted small m0">${o.lote ? `As mesmas fotos valem para as ${o.lote} atividades (ficam guardadas uma vez só). ` : ''}A foto é reduzida no aparelho e sobe com o apontamento; sem sinal, sobe quando a conexão voltar.</p>
+    ${o.qz ? blocoQZ(o.qz.inicial) : ''}
     <p class="err" id="fErr" role="alert" hidden></p>
     <div class="row-gap"><button class="btn pri" type="button" id="fOk" disabled>${esc(o.rotuloOk || 'Confirmar')}</button><button class="btn" type="button" data-close>Cancelar</button></div>
   </div></div>`;
@@ -76,7 +80,8 @@ export function passoFotos(o) {
     if (e.target.closest('#fOk')) {
       const c = contador(cfg, imgs.length, tem);
       if (!c.ok) { erro(imgs.length > c.max ? `No máximo ${c.max} foto${c.max > 1 ? 's' : ''}.` : `Falta${c.min - imgs.length > 1 ? 'm' : ''} ${c.min - imgs.length} foto${c.min - imgs.length > 1 ? 's' : ''}.`); return; }
-      fechar(); o.aoConfirmar(imgs.slice());
+      const qz = lerQZ ? lerQZ() : null; if (qz && qz.erro) { erro(qz.erro); $('qzBox').open = true; return; }
+      fechar(); o.aoConfirmar(imgs.slice(), qz);
     }
   };
   const escolher = async ev => {
@@ -92,13 +97,15 @@ export function passoFotos(o) {
     }
   };
   $('fIn').addEventListener('change', escolher); $('fInG').addEventListener('change', escolher);
+  const lerQZ = o.qz ? ligarQZ() : null;
   pintar();
   const a = $('fAdd'); if (a) a.focus();
 }
 // Passo de fotos de uma atividade (sit = situação que vai receber).
 export function passoFotosCel(doc, i, k, sit, ok, cancelar) {
   const p = PL.get(doc.ids[i]) || {}; const cfg = cfgF(); const tem = fotosDaCel(doc, doc.ids[i], k);
-  passoFotos({ titulo: 'Fotos da atividade', sub: `<b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${{ R: 'Realizada', N: 'Não realizada', E: 'Extra' }[sit] || ''}`, cfg, tem, rotuloOk: { R: 'Marcar como realizada', N: 'Marcar como não realizada', E: 'Registrar' }[sit] || 'Confirmar', aoConfirmar: ok, aoCancelar: cancelar });
+  passoFotos({ titulo: 'Fotos da atividade', sub: `<b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${{ R: 'Realizada', N: 'Não realizada', E: 'Extra' }[sit] || ''}`, cfg, tem, rotuloOk: { R: 'Marcar como realizada', N: 'Marcar como não realizada', E: 'Registrar' }[sit] || 'Confirmar', aoConfirmar: ok, aoCancelar: cancelar,
+    qz: sit === 'N' ? null : { inicial: qzDaCel(doc, doc.ids[i], k) } });
 }
 
 /* ---------------- selo 📷 e fotos de uma atividade ---------------- */
@@ -123,9 +130,10 @@ export async function verFotosCel(doc, i, k) {
   const p = PL.get(doc.ids[i]) || {}; const L = $('layer'); const n = fotosDaCel(doc, doc.ids[i], k);
   const conj = setDaArea(doc.area) || SK; const juntar = podeJuntar(doc, i, k);
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet fotosheet" role="dialog" aria-modal="true" aria-label="Fotos da atividade"><h3>Fotos da atividade</h3><div class="sub"><b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}${n ? ` · ${n} foto${n > 1 ? 's' : ''}` : ''}</div>
+    ${resumoQZ(doc, i, k) ? `<p class="qzres m0">${resumoQZ(doc, i, k)}</p>` : ''}
     <div class="sgfotos fgrade" id="fVer"><p class="muted small m0">Carregando as fotos…</p></div><p class="muted small m0" id="fVerInfo"></p>
     <div class="fapagar" id="fApagar" hidden></div>
-    <div class="row-gap">${juntar ? `<button class="btn" type="button" id="fJuntar">${I.cam} Adicionar foto</button>` : ''}<button class="btn" type="button" data-close>Fechar</button></div></div></div>`;
+    <div class="row-gap">${juntar ? `<button class="btn" type="button" id="fJuntar">${I.cam} Adicionar foto</button>` : ''}${canEdit(doc.area) && 'RE'.includes(doc.d[i][k]) ? `<button class="btn" type="button" id="fQZ">Queda zero</button>` : ''}<button class="btn" type="button" data-close>Fechar</button></div></div></div>`;
   const kd = e => { if (e.key === 'Escape' && !document.querySelector('.sgfoto')) fechar(); };
   const fechar = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
   document.addEventListener('keydown', kd);
@@ -143,6 +151,7 @@ export async function verFotosCel(doc, i, k) {
       return;
     }
     if (e.target.closest('#fJuntar')) { fechar(); juntarFotos(doc, i, k); return; }
+    if (e.target.closest('#fQZ')) { fechar(); editarQZ(doc, i, k); return; }
     const ap = e.target.closest('[data-apagar]');
     if (ap) {
       const x = lista.find(y => y.id === ap.dataset.apagar); if (!x) return;
@@ -178,8 +187,8 @@ export async function verFotosCel(doc, i, k) {
 // Juntar fotos a um apontamento já feito (ex.: realizada antes da regra, ou foto que faltou).
 function juntarFotos(doc, i, k) {
   const cfg = cfgF(); const tem = fotosDaCel(doc, doc.ids[i], k); const sit = doc.d[i][k];
-  passoFotos({ titulo: 'Adicionar foto', sub: `<b>${esc((PL.get(doc.ids[i]) || {}).ativ || '')}</b><br>${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, cfg: { obrig: true, min: Math.max(tem + 1, cfg.min), max: cfg.max }, tem, rotuloOk: 'Salvar as fotos',
-    aoConfirmar: imgs => { if (!canEdit(doc.area)) return toast('Seu perfil não pode apontar nesta área'); gravarApont(doc, [], montarFotos(doc, k, [i], imgs, sit)); DB.log(`${(PL.get(doc.ids[i]) || {}).ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${imgs.length} foto${imgs.length > 1 ? 's' : ''} anexada${imgs.length > 1 ? 's' : ''}`); toast(imgs.length > 1 ? `${imgs.length} fotos salvas` : 'Foto salva'); render(); } });
+  passoFotos({ titulo: 'Adicionar foto', sub: `<b>${esc((PL.get(doc.ids[i]) || {}).ativ || '')}</b><br>${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, cfg: { obrig: true, min: Math.max(tem + 1, cfg.min), max: cfg.max }, tem, rotuloOk: 'Salvar as fotos', qz: 'RE'.includes(sit) ? { inicial: qzDaCel(doc, doc.ids[i], k) } : null,
+    aoConfirmar: (imgs, qz) => { if (!canEdit(doc.area)) return toast('Seu perfil não pode apontar nesta área'); gravarApont(doc, [], montarFotos(doc, k, [i], imgs, sit)); gravarQZ(doc, i, k, qz); DB.log(`${(PL.get(doc.ids[i]) || {}).ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${imgs.length} foto${imgs.length > 1 ? 's' : ''} anexada${imgs.length > 1 ? 's' : ''}`); toast(imgs.length > 1 ? `${imgs.length} fotos salvas` : 'Foto salva'); render(); } });
 }
 // Fotos da atividade na semana (Programação): abre o primeiro dia com foto; os outros dias ficam no seletor.
 acoes.verFotosSem = (t, d) => {

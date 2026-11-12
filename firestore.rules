@@ -165,13 +165,14 @@ service cloud.firestore {
     // O mesmo vale para o feriado sem operação (célula volta a '_' e a marca vai em fe; public/feriados.js): grava o
     // administrador (Escalas e turnos) ou a rotina do GitHub (chave de serviço, que não passa por estas regras).
     // ft = quantas fotos cada célula tem (sobe no mesmo lote que grava a foto; veja Fotos das atividades abaixo).
+    // qz = queda zero (opcional, material recolhido) de cada célula: grava quem aponta na área (contas/queda-zero.js).
     match /semanas/{id} {
       allow read: if op();
       allow create: if admMod('operacao');
       allow delete: if admin();
-      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
         || (tecnicoEm('patio') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
+        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor']));
     }
 
     // Aprovação dos apontamentos: o supervisor da área, o técnico de processo (todas as áreas do escopo) e o
@@ -319,9 +320,9 @@ service cloud.firestore {
       allow read: if ba();
       allow create: if admMod('bateria');
       allow delete: if admin();
-      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'atualizadoEm', 'atualizadoPor']))
+      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
         || (tecnicoEm('bateria') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'atualizadoEm', 'atualizadoPor']));
+        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor']));
     }
     function aprovaDaB(area) { return aprova(area, 'bateria'); }
     function acompanhaDaB(area) { return acompanha(area, 'bateria'); }
