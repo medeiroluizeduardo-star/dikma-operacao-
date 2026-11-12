@@ -9,6 +9,8 @@ import { curto } from '../calc/presenca.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, desenharLogo } from '../ui/shell.js';
 import { precisaFotos, passoFotos, passoFotosCel, montarFotos, seloFotos, verFotosCel, cfgF } from './fotos.js';
+import { gravarQZ, editarQZ, seloQZ } from './queda-zero.js';
+import { qzDaCel, fmtT } from '../contas/queda-zero.js';
 import { exigeFoto, fotosDaCel } from '../contas/fotos.js';
 
 /* ---------------- APONTAR ---------------- */
@@ -62,7 +64,7 @@ export function vApontar() {
     const c = st(doc, i, k); const raw = doc.d[i][k]; const m = doc.m[p.id + '|' + k];
     const ea = estAprov(doc, i, k); const av = ea ? aprovDe(doc, p.id, k) || {} : null;
     const selo = ea === 'pend' ? ' · <span class="pill neu">aguardando aprovação</span>' : ea === 'ok' ? ' · <span class="pill ok">aprovada</span>' : ea === 'dev' ? ' · <span class="pill bad">devolvida</span>' : '';
-    h += `<div class="act ${c}${ea === 'dev' ? ' devolvida' : ''}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${doc.fp && doc.fp[p.id + '|' + k] ? ` · <span class="pill ext" title="Incluída por ${esc(title(curto(doc.fp[p.id + '|' + k].nome || '')))}">fora da programação</span>${raw === 'P' && podeForaProg(area) ? ` <button class="btn ghost link" data-tirafp="${i}|${k}">tirar</button>` : ''}` : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}${selo}${seloFotos(doc, i, k)}</div>${raw === 'N' ? `<div class="m">${m ? `Justificativa: ${esc(m)}` : '<span class="semt">Sem justificativa</span>'}${edit ? ` <button class="btn ghost link" data-just="${i}|${k}">${m ? 'editar' : 'justificar'}</button>` : ''}</div>` : ''}${ea === 'dev' ? `<div class="m devm">Devolvida${av.nome ? ` por ${esc(title(curto(av.nome)))}` : ''}: ${esc(av.mot || '')}. Confira e aponte de novo.</div>` : ''}</div>
+    h += `<div class="act ${c}${ea === 'dev' ? ' devolvida' : ''}"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span>${raw === 'E' ? ' · <span class="pill ext">extra</span>' : ''}${doc.fp && doc.fp[p.id + '|' + k] ? ` · <span class="pill ext" title="Incluída por ${esc(title(curto(doc.fp[p.id + '|' + k].nome || '')))}">fora da programação</span>${raw === 'P' && podeForaProg(area) ? ` <button class="btn ghost link" data-tirafp="${i}|${k}">tirar</button>` : ''}` : ''}${c === 'A' ? ' · <span class="pill warn">atrasada</span>' : ''}${selo}${seloFotos(doc, i, k)}${seloQZ(doc, i, k)}</div>${raw === 'N' ? `<div class="m">${m ? `Justificativa: ${esc(m)}` : '<span class="semt">Sem justificativa</span>'}${edit ? ` <button class="btn ghost link" data-just="${i}|${k}">${m ? 'editar' : 'justificar'}</button>` : ''}</div>` : ''}${ea === 'dev' ? `<div class="m devm">Devolvida${av.nome ? ` por ${esc(title(curto(av.nome)))}` : ''}: ${esc(av.mot || '')}. Confira e aponte de novo.</div>` : ''}</div>
     ${edit ? `<div class="bt">${raw === 'E' ? `<button class="no-btn" data-ap="${i}|${k}|rmE" aria-label="Remover extra" title="Remover extra">✕</button>` : `<button class="ok-btn" data-ap="${i}|${k}|R" aria-pressed="${raw === 'R'}" aria-label="Realizada">✓</button><button class="no-btn" data-ap="${i}|${k}|N" aria-pressed="${raw === 'N'}" aria-label="Não realizada">✕</button>`}</div>` : `<span class="pill ${{ R: 'ok', E: 'ok', N: 'bad', A: 'warn' }[c] || 'neu'}">${{ R: 'Realizada', E: 'Extra', N: 'Não realizada', A: 'Atrasada', P: 'A fazer' }[c] || ST_NOME[c] || ''}</span>`}</div>`;
   }
   for (const { i, p } of fers) h += `<div class="act F"><div class="minw"><div class="t">${esc(p.ativ)}</div><div class="l">${esc(p.local)} · <span class="mono">${p.id}</span> · <span class="pill neu">Feriado · ${esc(feriadoDe(doc, i, k))}</span></div></div><button class="btn ghost link" data-act="ferInfo" data-k="${i}|${k}">por quê?</button></div>`;
@@ -99,7 +101,8 @@ export function cellMenu(doc, i, k) {
       ...(fp && raw === 'P' && pf ? [{ t: 'Tirar da programação', d: 'Foi incluída fora da programação', v: 'rmFP', ic: chipIc('X') }] : [])];
   const nf = fotosDaCel(doc, p.id, k);
   if (nf || ('RNE'.includes(raw) && exigeFoto({ ...cfgF(), obrig: true }, raw, !!fp))) o.push({ t: nf ? `Ver as fotos (${nf})` : 'Adicionar foto', d: nf ? 'Miniaturas; toque para ver grande' : 'Esta atividade está sem foto', v: 'FOTOS', ic: `<span class="chip P fotoic">${I.cam}</span>`, larga: true });
-  sheet(p.ativ, fp ? sub + '<br>Incluída fora da programação' : sub, o, x => (x.v === 'rmFP' ? tirarFora(doc, i, k) : x.v === 'FOTOS' ? verFotosCel(doc, i, k) : apply(doc, i, k, x.v)));
+  if ('RE'.includes(raw)) { const qz = qzDaCel(doc, p.id, k); o.push({ t: qz ? `Queda zero: ${fmtT(qz.t)}` : 'Queda zero', d: qz ? 'Corrigir o material recolhido' : 'Opcional: material recolhido (coque ou carvão)', v: 'QZ', larga: true }); }
+  sheet(p.ativ, fp ? sub + '<br>Incluída fora da programação' : sub, o, x => (x.v === 'rmFP' ? tirarFora(doc, i, k) : x.v === 'FOTOS' ? verFotosCel(doc, i, k) : x.v === 'QZ' ? editarQZ(doc, i, k) : apply(doc, i, k, x.v)));
 }
 // Justificativa de por que a atividade não foi feita: um motivo da lista ou escrito pela pessoa (obrigatória).
 export function pedirJustificativa(doc, i, k, ok) {
@@ -119,7 +122,7 @@ export function apply(doc, i, k, v, motivo, fotos) {
   if (v === 'N' && !motivo) return pedirJustificativa(doc, i, k, m => apply(doc, i, k, 'N', m));
   // cancelar: o botão marcado na hora (eventos.js) volta a mostrar a situação gravada
   const voltar = () => { document.querySelectorAll(`[data-ap^="${i}|${k}|"]`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.ap.endsWith('|' + doc.d[i][k])))); render(); };
-  if (!fotos && canEdit(doc.area) && precisaFotos(doc, i, k, v)) return passoFotosCel(doc, i, k, v, imgs => apply(doc, i, k, v, motivo, montarFotos(doc, k, [i], imgs, v)), voltar);
+  if (!fotos && canEdit(doc.area) && precisaFotos(doc, i, k, v)) return passoFotosCel(doc, i, k, v, (imgs, qz) => { apply(doc, i, k, v, motivo, montarFotos(doc, k, [i], imgs, v)); gravarQZ(doc, i, k, qz); }, voltar);
   setSt(doc, i, k, v, motivo, fotos);
   toast(({ R: 'Marcada como realizada', N: 'Marcada como não realizada', P: 'Apontamento desfeito', E: 'Extra registrada', _: 'Extra removida' }[v] || 'Atualizado') + (fotos && fotos.length ? ` · ${fotos.length === 1 ? '1 foto' : fotos.length + ' fotos'}` : ''));
   desenharLogo();

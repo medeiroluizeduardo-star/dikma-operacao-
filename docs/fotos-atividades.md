@@ -39,6 +39,13 @@ Arquivos:
   semana no **mesmo lote** (`DB.apagarFotoAtividade`; espera o servidor, sem sinal dá erro). A foto que vale para várias
   atividades ("Marcar restantes") sai de todas (a tela avisa). O líder só apaga a foto **No banco** (ainda não
   exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
+- **Queda zero** (opcional): no passo de fotos de uma atividade (Realizada ou Extra) há o bloco "Queda zero", fechado
+  por padrão. A pessoa escolhe o equipamento, o produto (coque ou carvão) e quantos equipamentos encheu; o resultado é
+  fator × quantidade, em toneladas (tabela em `public/contas/queda-zero.js`, testada em `testes/queda-zero.test.mjs`).
+  Também dá para lançar ou corrigir depois pelo botão **Queda zero** nas fotos da atividade ou no menu da célula.
+  Fica na semana, no mapa `qz['PID|k'] = { i: [{ e, p, q }], t }` (grava quem aponta na área; `firestore.rules`).
+  No "Marcar restantes" (lote) não aparece: a queda zero é de cada atividade. Na lista do Apontar aparece o selo
+  "queda zero N t".
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos

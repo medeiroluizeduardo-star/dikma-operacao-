@@ -30,11 +30,19 @@ jobs:
       - name: Publicar a prévia
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
           P=$(jq -r .project_id "$RUNNER_TEMP/sa.json")
-          npx --yes firebase-tools@15 hosting:channel:deploy "pr${{ github.event.pull_request.number }}" --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa.json"
+          # O Firebase tem limite de prévias: antes de criar, apaga as das propostas que já fecharam.
+          abertas=" $(gh api "repos/${{ github.repository }}/pulls?state=open&per_page=100" --jq '.[].number' | tr '\n' ' ') "
+          npx --yes firebase-tools@15 hosting:channel:list --project "$P" --json > "$RUNNER_TEMP/canais.json" || true
+          for c in $(jq -r '.result.channels[]?.name // empty' "$RUNNER_TEMP/canais.json" | sed 's#.*/##' | grep -E '^pr[0-9]+$' || true); do
+            n="${c#pr}"
+            case "$abertas" in *" $n "*) ;; *) echo "Apagando a prévia antiga $c"; npx --yes firebase-tools@15 hosting:channel:delete "$c" --project "$P" --force || true ;; esac
+          done
+          npx --yes firebase-tools@15 hosting:channel:deploy "pr${{ github.event.pull_request.number }}" --expires 7d --project "$P" --json > "$RUNNER_TEMP/previa.json" || { cat "$RUNNER_TEMP/previa.json"; exit 1; }
           URL=$(jq -r '.result[]?.url // empty' "$RUNNER_TEMP/previa.json" | head -1)
           [ -n "$URL" ] || { cat "$RUNNER_TEMP/previa.json"; exit 1; }
           echo "URL=$URL" >> "$GITHUB_ENV"
