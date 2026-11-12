@@ -1,14 +1,15 @@
-// Painel › Resumos: Atividades, Horas extras, Operação e Frequência, do dia ou da semana, prontos para imprimir.
-import { SETS, AREA_S, areasDoSet, DAYS, AUSENCIA, pd, add, ddmm, weekLabel, monthLabel } from '../contas/cal.js';
+// Painel › Resumos: Atividades, Horas extras, Operação e Frequência, do dia, da semana ou do mês, prontos para imprimir.
+// O de Atividades fica só com as atividades; presença, ausências e hora extra ficam no de Frequência (mesmas contas da
+// aba Frequência e da Presença do dia) e no de Horas extras.
+import { SETS, AREA_S, areasDoSet, DAYS, pd, add, ddmm, weekLabel, monthLabel } from '../contas/cal.js';
 import { indicadoresSeg } from '../contas/segcalc.js';
-import { JUS_CODS, textoJus } from '../ui/presenca.js';
-import { PARCIAL } from '../contas/situacao.js';
 import * as M from '../ui/movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, n0 } from '../nucleo/base.js';
+import { competenciaDe, diasDaCompetencia } from '../contas/planilhas-adm.js';
 import { ME, PL, COLABS, SK, AREAS, UI, areaScope, myAreas, modsReais, setsDe, temEquipEm } from '../nucleo/estado.js';
 import { I } from '../ui/icones.js';
 import { docsFor, stats, listaAprov, rotasDa } from '../calc/atividades.js';
-import { sitDia, desligadoNoDia, SIT_NOME, colabsDa, HE_ORIG, cobDoDia, cobertoPor, nomeDe, regimeNome, turmaDe } from '../calc/presenca.js';
+import { desligadoNoDia, cobDoDia, nomeDe, regimeNome, turmaDe } from '../calc/presenca.js';
 import { contarCausas } from './atividades.js';
 import { MOTIVOS_HE, fmtH, textoHE, heCfg, registrosHE } from './horas-justificativas.js';
 import { modulo } from '../nucleo/modulos.js';
@@ -26,8 +27,13 @@ const abasResumo = () => { const l = tiposRes(); return l.length > 1 ? `<div cla
 // Resumo do dia ou da semana (vale para os três tipos).
 if (UI.rPer == null) { try { UI.rPer = localStorage.getItem('dikma-rper') || 'sem'; } catch (e) { UI.rPer = 'sem'; } }
 const rDia = () => UI.rPer === 'dia';
-const rMes = () => UI.rPer === 'mes' && resTipo() === 'ativ'; // o mês inteiro: só no resumo das Atividades
-const perResumo = () => resTipo() === 'escala' ? '' : `<div class="seg resabas noprint" role="tablist" aria-label="Período do resumo"><button type="button" role="tab" data-rper="dia" aria-selected="${rDia()}">Do dia</button><button type="button" role="tab" data-rper="sem" aria-selected="${!rDia() && !rMes()}">Da semana</button>${resTipo() === 'ativ' ? `<button type="button" role="tab" data-rper="mes" aria-selected="${rMes()}">Do mês</button>` : ''}</div>`;
+// O mês inteiro: Atividades e Horas extras (mês do calendário, no topo) e Frequência (a folha de 16 a 15).
+const COM_MES = ['ativ', 'he', 'freq'];
+const rMes = () => UI.rPer === 'mes' && COM_MES.includes(resTipo());
+const perResumo = () => resTipo() === 'escala' ? '' : `<div class="seg resabas noprint" role="tablist" aria-label="Período do resumo"><button type="button" role="tab" data-rper="dia" aria-selected="${rDia()}">Do dia</button><button type="button" role="tab" data-rper="sem" aria-selected="${!rDia() && !rMes()}">Da semana</button>${COM_MES.includes(resTipo()) ? `<button type="button" role="tab" data-rper="mes" aria-selected="${rMes()}">Do mês</button>` : ''}</div>`;
+const periodoComp = c => { const d = diasDaCompetencia(c); const i = d[0], f = d[d.length - 1]; return `${ddmm(i)} a ${ddmm(f)}/${f.slice(0, 4)}`; };
+// Mesmas pessoas da aba Frequência: a folha e quem está na Presença do dia fora dela.
+const metaFreq = conj => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Presença do dia</span>`;
 const dataLonga = d => { const x = pd(d); return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][x.getDay()]}, ${ddmm(d)}/${d.slice(0, 4)}`; };
 export function vResumoOutro() {
   const tipo = resTipo();
@@ -38,8 +44,17 @@ export function vResumoOutro() {
     const r = !md ? null : tipo === 'oper' ? md.resumoDia(d) : md.resumoDia(d, conj);
     const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
     if (!r) return nav + M.ESQUELETO;
-    const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
+    const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj);
     return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
+  <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
+  }
+  if (rMes()) { // Frequência do mês: a folha de 16 a 15
+    const max = competenciaDe(TODAY); const comp = UI.rComp && UI.rComp <= max ? UI.rComp : max; UI.rComp = comp;
+    const md = modulo('AD'); const r = md && md.resumoMes ? md.resumoMes(comp, conj) : null;
+    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rcomp="-1" aria-label="Mês anterior">‹</button><b>${monthLabel(comp)} · ${periodoComp(comp)}</b><button class="btn ghost sm" data-rcomp="1" aria-label="Próximo mês" ${comp >= max ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+    if (!r) return nav + M.ESQUELETO;
+    return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO MÊS · FREQUÊNCIA</h3><div class="meta">${metaFreq(conj)}<span><b>Folha:</b> ${monthLabel(comp)} (${periodoComp(comp)})</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
   }
@@ -48,7 +63,7 @@ export function vResumoOutro() {
   const r = !md ? null : tipo === 'oper' ? md.resumoSemana(ini) : md.resumoSemana(ini, conj);
   const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
   if (!r) return nav + M.ESQUELETO;
-  const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : `<span><b>Frequência · ${SETS[conj].nome}</b> · só as áreas ${conj === 'bateria' ? 'da Bateria' : 'do Pátio de Carvão'}</span>`;
+  const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj);
   return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
@@ -68,12 +83,6 @@ function vResumoDia() {
   }
   const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(x => x.id));
   const pa = listaAprov(as).filter(x => ids.has(x.doc.id) && x.k === k).length;
-  const cs = colabsDa(area).filter(c => !desligadoNoDia(c, d));
-  const aus = cs.map(c => ({ c, x: sitDia(c, d) })).filter(o => !o.x.auto && (AUSENCIA.has(o.x.v) || PARCIAL.has(o.x.v))).sort((a, b) => a.x.v.localeCompare(b.x.v) || a.c.nome.localeCompare(b.c.nome));
-  const folga = cs.filter(c => { const x = sitDia(c, d); return x.auto || x.v === 'F' || x.v === 'FE'; }).length;
-  const pres = cs.length - aus.filter(o => !PARCIAL.has(o.x.v)).length - folga;
-  const he = cs.filter(c => DB.sit(c.id + '|' + d) === 'HE').map(c => ({ c, inf: DB.sitInfo(c.id + '|' + d) }));
-  const cob = cobDoDia(d).filter(x => COLABS.some(c => c.id === x.aus && (area === 'TODAS' || c.area === area)));
   const linhas = [...rot.values()].filter(g => g.prog || g.E).sort((a, b) => (b.N + b.P) - (a.N + a.P) || a.rota.localeCompare(b.rota));
   const ef = pct(tot.R, tot.prog);
   const chipsDia = `<div class="dayscroll noprint" role="group" aria-label="Dia">${dias.map((x, j) => `<button class="dbtn ${x === TODAY ? 'hoje' : ''}" data-rdia="${x}" aria-pressed="${x === d}"><small>${DAYS[j]}</small><b>${x.slice(8)}</b></button>`).join('')}</div>`;
@@ -83,16 +92,16 @@ function vResumoDia() {
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência do dia</span></div><div><b>${n0(tot.prog)}</b><span>Programadas</span></div><div><b>${n0(tot.R)}</b><span>Realizadas</span></div><div><b>${n0(tot.N)}</b><span>Não realizadas</span></div><div><b>${n0(passou ? tot.A : tot.P)}</b><span>${passou ? 'Sem apontamento' : 'A fazer'}</span></div><div><b>${n0(tot.E)}</b><span>Extras</span></div></div>
   <h4>Por rota</h4>${linhas.length ? `<table><thead><tr><th>Rota</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">${passou ? 'Sem apont.' : 'A fazer'}</th><th class="r">Extras</th><th class="r">Eficiência</th></tr></thead><tbody>${linhas.map(g => `<tr><td>${esc(g.rota)}${area === 'TODAS' ? `<div class="muted small">${AREA_S[g.area]}</div>` : ''}</td><td class="r">${g.prog}</td><td class="r">${g.R}</td><td class="r">${g.N || ''}</td><td class="r">${g.P || ''}</td><td class="r">${g.E || ''}</td><td class="r"><b>${pct(g.R, g.prog)}%</b></td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nada programado neste dia.</p>'}
   <h4>Não realizadas e o motivo</h4>${nao.length ? `<table><tbody>${nao.slice(0, 30).map(x => `<tr><td>${esc(x.p.ativ)}<div class="muted small">${esc(x.p.local)} · ${esc(x.p.rota)}</div></td><td>${esc(x.m)}</td></tr>`).join('')}</tbody></table>${nao.length > 30 ? `<p class="muted small">e mais ${nao.length - 30}.</p>` : ''}` : '<p class="muted">Nenhuma não realizada.</p>'}
-  <div class="rcols"><div><h4>Efetivo do dia</h4><table><tbody><tr><td>Presentes</td><td class="r"><b>${pres}</b></td></tr><tr><td>Folga ou férias</td><td class="r">${folga}</td></tr><tr><td>Ausentes</td><td class="r">${aus.filter(o => o.x.v !== 'ATR').length}</td></tr><tr><td>Atrasos</td><td class="r">${aus.filter(o => o.x.v === 'ATR').length}</td></tr><tr><td>Saídas antecipadas</td><td class="r">${aus.filter(o => o.x.v === 'SA').length}</td></tr><tr><td>Coberturas</td><td class="r">${cob.length}</td></tr><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table></div>
-  <div><h4>Ausências, atrasos e saídas</h4>${aus.length ? `<table><tbody>${aus.slice(0, 20).map(o => { const j = DB.sitInfo(o.c.id + '|' + d).jus; return `<tr><td>${esc(title(o.c.nome))}<div class="muted small">${esc(o.c.rota)}</div></td><td>${SIT_NOME[o.x.v] || o.x.v}<div class="muted small">${j && j.cod === o.x.v ? esc(textoJus(j)) : 'sem justificativa'}</div></td><td class="small">${cobertoPor(o.c.id, d) ? 'coberto' : ''}</td></tr>`; }).join('')}</tbody></table>${aus.length > 20 ? `<p class="muted small">e mais ${aus.length - 20}.</p>` : ''}` : '<p class="muted">Ninguém ausente.</p>'}</div></div>
-  <h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(({ c, inf }) => `<tr><td>${esc(title(c.nome))}<div class="muted small">${esc(c.rota)}</div></td><td>${inf.he === 'DIKMA' ? 'A pedido da Dikma' : inf.he === 'ARCELOR' ? 'A pedido da ArcelorMittal' : 'Origem não informada'}</td><td class="small">${esc(textoHE(inf.hed) || 'sem horário')}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}
+  <h4>Aprovação</h4><table><tbody><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr></tbody></table>
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
 }
-// Resumo das horas extras (dia ou semana): horas com horário informado e estimadas, por pessoa, por motivo e a pedido de quem.
+// Resumo das horas extras (dia, semana ou mês): horas com horário informado e estimadas, por pessoa, por motivo e a pedido de quem.
 function vResumoHE() {
   const area = areaScope(); const semana = DAYS.map((_, k) => add(UI.ini, k));
   if (!UI.rDia || !semana.includes(UI.rDia)) UI.rDia = semana.includes(TODAY) ? TODAY : semana[0];
-  const dias = rDia() ? [UI.rDia] : semana; const cfg = heCfg();
+  const mes = !rDia() && rMes(); const fimM = add(add(UI.mes + '-01', 32).slice(0, 7) + '-01', -1);
+  const diasMes = mes ? Array.from({ length: +fimM.slice(8) }, (_, k) => add(UI.mes + '-01', k)) : [];
+  const dias = rDia() ? [UI.rDia] : mes ? diasMes : semana; const cfg = heCfg();
   // os mesmos registros do Banco de horas extras (registrosHE), só que do dia ou da semana
   const regs = registrosHE(area, null, dias).map(x => { const cob = cobDoDia(x.d).find(y => y.sub === x.c.id); return { ...x, cobre: cob ? nomeDe(cob.aus) : '' }; });
   regs.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.c.nome.localeCompare(b.c.nome)));
@@ -102,12 +111,15 @@ function vResumoHE() {
   const pess = new Map(); regs.forEach(x => { const p = pess.get(x.c.id) || { c: x.c, dias: 0, h: 0, D: 0, A: 0 }; p.dias++; p.h += x.conta; if (x.orig === 'DIKMA') p.D += x.conta; if (x.orig === 'ARCELOR') p.A += x.conta; pess.set(x.c.id, p); });
   const mot = {}; regs.forEach(x => { const k = x.det && x.det.mot ? (MOTIVOS_HE.includes(x.det.mot) ? x.det.mot : 'Outro') : 'Sem horário informado'; mot[k] = (mot[k] || 0) + x.conta; });
   const chipsDia = rDia() ? `<div class="dayscroll noprint" role="group" aria-label="Dia">${semana.map((x, j) => `<button class="dbtn ${x === TODAY ? 'hoje' : ''}" data-rdia="${x}" aria-pressed="${x === UI.rDia}"><small>${DAYS[j]}</small><b>${x.slice(8)}</b></button>`).join('')}</div>` : '';
-  const periodo = rDia() ? dataLonga(UI.rDia) : weekLabel(UI.ini);
+  const periodo = rDia() ? dataLonga(UI.rDia) : mes ? monthLabel(UI.mes) : weekLabel(UI.ini);
+  // Do mês: horas por semana (segunda a domingo) no lugar da tabela por dia
+  const semM = []; diasMes.forEach(d => { if (!semM.length || pd(d).getDay() === 1) semM.push([]); semM[semM.length - 1].push(d); });
+  const porSemana = mes ? `<h4>Por semana</h4><table><thead><tr><th>Semana</th><th class="r">Horas</th><th class="r">Pessoas</th><th class="r">Lançamentos</th></tr></thead><tbody>${semM.map(l => { const r = regs.filter(x => l.includes(x.d)); return `<tr><td>${ddmm(l[0])} a ${ddmm(l[l.length - 1])}</td><td class="r">${r.length ? fmtH(soma(r)) : ''}</td><td class="r">${new Set(r.map(x => x.c.id)).size || ''}</td><td class="r">${r.length || ''}</td></tr>`; }).join('')}<tr><td><b>Total</b></td><td class="r"><b>${fmtH(tot)}</b></td><td class="r">${pess.size}</td><td class="r">${regs.length}</td></tr></tbody></table>` : '';
   return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
-  ${chipsDia}<p class="muted m0 noprint">${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]} · troque a semana e a área no topo. Sem horário informado, conta a estimativa de ${cfg.ciclo} h (turno) ou ${cfg.adm} h (administrativo).</p>
-  <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO ${rDia() ? 'DO DIA' : 'DA SEMANA'} · HORAS EXTRAS</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>${rDia() ? 'Dia' : 'Semana'}:</b> ${periodo}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+  ${chipsDia}<p class="muted m0 noprint">${area === 'TODAS' ? 'Todas as áreas' : AREA_S[area]} · troque ${mes ? 'o mês' : 'a semana'} e a área no topo. Sem horário informado, conta a estimativa de ${cfg.ciclo} h (turno) ou ${cfg.adm} h (administrativo).</p>
+  <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO ${rDia() ? 'DO DIA' : mes ? 'DO MÊS' : 'DA SEMANA'} · HORAS EXTRAS</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span><span><b>${rDia() ? 'Dia' : mes ? 'Mês' : 'Semana'}:</b> ${periodo}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis"><div><b>${fmtH(tot)}</b><span>Horas extras</span></div><div><b>${pess.size}</b><span>Pessoas</span></div><div><b>${regs.length}</b><span>Lançamentos</span></div><div><b>${fmtH(soma(inf))}</b><span>Com horário informado</span></div><div><b>${fmtH(porO('DIKMA'))}</b><span>A pedido da Dikma</span></div><div><b>${fmtH(porO('ARCELOR'))}</b><span>A pedido da ArcelorMittal</span></div></div>
-  ${!rDia() ? `<h4>Por dia</h4><table><thead><tr><th></th>${semana.map((d, k) => `<th class="r">${DAYS[k]} ${ddmm(d)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody><tr><td>Horas</td>${semana.map(d => { const v = soma(regs.filter(x => x.d === d)); return `<td class="r">${v ? fmtH(v) : ''}</td>`; }).join('')}<td class="r"><b>${fmtH(tot)}</b></td></tr><tr><td>Pessoas</td>${semana.map(d => { const v = regs.filter(x => x.d === d).length; return `<td class="r">${v || ''}</td>`; }).join('')}<td class="r"></td></tr></tbody></table>` : ''}
+  ${porSemana}${!rDia() && !mes ? `<h4>Por dia</h4><table><thead><tr><th></th>${semana.map((d, k) => `<th class="r">${DAYS[k]} ${ddmm(d)}</th>`).join('')}<th class="r">Total</th></tr></thead><tbody><tr><td>Horas</td>${semana.map(d => { const v = soma(regs.filter(x => x.d === d)); return `<td class="r">${v ? fmtH(v) : ''}</td>`; }).join('')}<td class="r"><b>${fmtH(tot)}</b></td></tr><tr><td>Pessoas</td>${semana.map(d => { const v = regs.filter(x => x.d === d).length; return `<td class="r">${v || ''}</td>`; }).join('')}<td class="r"></td></tr></tbody></table>` : ''}
   <div class="rcols"><div><h4>Por pessoa</h4>${pess.size ? `<table><thead><tr><th>Colaborador</th><th class="r">Dias</th><th class="r">Horas</th><th class="r">Dikma</th><th class="r">Arcelor</th></tr></thead><tbody>${[...pess.values()].sort((a, b) => b.h - a.h).map(p => `<tr><td>${esc(title(p.c.nome))}<div class="muted small">${esc(p.c.rota)}</div></td><td class="r">${p.dias}</td><td class="r"><b>${fmtH(p.h)}</b></td><td class="r">${p.D ? fmtH(p.D) : ''}</td><td class="r">${p.A ? fmtH(p.A) : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma hora extra no período.</p>'}</div>
   <div><h4>Por motivo</h4>${Object.keys(mot).length ? `<table><tbody>${Object.entries(mot).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${fmtH(v)}</td><td class="r">${pct(v, tot)}%</td></tr>`).join('')}</tbody></table>` : '<p class="muted">—</p>'}
   <h4>Atenção</h4><table><tbody><tr><td>Sem horário informado</td><td class="r">${sem.length}</td></tr><tr><td>Sem “a pedido de”</td><td class="r">${regs.filter(x => !x.orig).length}</td></tr><tr><td>Cobrindo ausência</td><td class="r">${regs.filter(x => x.cobre).length}</td></tr></tbody></table></div></div>
@@ -153,18 +165,12 @@ export function vResumo() {
   const as = area === 'TODAS' ? AREAS : [area]; const ids = new Set(docs.map(d => d.id));
   const pa = listaAprov(as).filter(x => ids.has(x.doc.id)).length, dv = listaAprov(as, 'dev').filter(x => ids.has(x.doc.id)).length;
   const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status === 'aberta' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
-  const cs = colabsDa(area); const dias = mes ? Array.from({ length: +fimMes.slice(8) }, (_, k) => add(UI.mes + '-01', k)) : DAYS.map((_, k) => add(UI.ini, k)); const he = { DIKMA: 0, ARCELOR: 0, '': 0 };
-  cs.forEach(c => dias.forEach(d => { if (DB.sit(c.id + '|' + d) === 'HE') he[DB.sitInfo(c.id + '|' + d).he || '']++; }));
-  const aus = {}; cs.forEach(c => dias.forEach(d => { const x = sitDia(c, d); if (!x.auto && (AUSENCIA.has(x.v) || PARCIAL.has(x.v))) aus[x.v] = (aus[x.v] || 0) + 1; }));
-  const semJ = cs.reduce((n, c) => n + dias.filter(d => d <= TODAY && (() => { const x = sitDia(c, d); if (x.auto || !JUS_CODS.includes(x.v)) return false; const j = DB.sitInfo(c.id + '|' + d).jus; return !(j && j.cod === x.v); })()).length, 0);
   return `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div></div><div class="row-between noprint"><p class="muted m0">${mes ? monthLabel(UI.mes) : weekLabel(UI.ini)} · ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]} · troque ${mes ? 'o mês' : 'a semana'} e a área no topo.</p>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>
   <div class="tw"><div class="paper resumo"><div class="hd"><div><h3>${mes ? 'RESUMO DO MÊS' : 'RESUMO DA SEMANA'}</h3><div class="meta"><span><b>${SETS[SK].nome}</b></span><span><b>Área:</b> ${area === 'TODAS' ? 'Todas' : AREA_S[area]}</span>${mes ? `<span><b>Mês:</b> ${monthLabel(UI.mes)}</span>` : `<span><b>Semana:</b> ${weekLabel(UI.ini)}</span>`}<span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis"><div><b>${ef}%</b><span>Eficiência até ${ddmm(mes ? (TODAY < fimMes ? TODAY : fimMes) : TODAY < add(UI.ini, 6) ? TODAY : add(UI.ini, 6))}</span></div><div><b>${n0(s.prog)}</b><span>Programadas</span></div><div><b>${n0(s.R)}</b><span>Realizadas</span></div><div><b>${n0(s.N)}</b><span>Não realizadas</span></div><div><b>${n0(s.A)}</b><span>Atrasadas</span></div><div><b>${n0(s.E)}</b><span>Extras</span></div></div>
   <h4>Por área</h4><table><thead><tr><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realizadas</th><th class="r">Atrasadas</th><th class="r">Eficiência</th></tr></thead><tbody>${porArea.map(({ a, x }) => `<tr><td>${AREA_S[a]}</td><td class="r">${x.prog}</td><td class="r">${x.R}</td><td class="r">${x.N}</td><td class="r">${x.A}</td><td class="r"><b>${pct(x.Rhoje, x.progHoje)}%</b></td></tr>`).join('')}</tbody></table>
   <div class="rcols"><div><h4>Principais causas das não realizadas</h4>${causas.length ? `<table><tbody>${causas.map(([c, n]) => `<tr><td>${esc(c)}</td><td class="r">${n}</td><td class="r">${pct(n, total)}%</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma não realizada.</p>'}</div>
   <div><h4>Aprovação e plano de ação</h4><table><tbody><tr><td>Aguardando aprovação</td><td class="r">${pa}</td></tr><tr><td>Devolvidas ao líder</td><td class="r">${dv}</td></tr><tr><td>Ações abertas</td><td class="r">${acoes.length}</td></tr><tr><td>Ações com prazo vencido</td><td class="r">${acoes.filter(a => a.prazo && a.prazo < TODAY).length}</td></tr></tbody></table></div></div>
-  <div class="rcols"><div><h4>Ausências e atrasos (pessoas × dias)</h4>${Object.keys(aus).length ? `<table><tbody>${Object.entries(aus).map(([k, n]) => `<tr><td>${SIT_NOME[k]}</td><td class="r">${n}</td></tr>`).join('')}${semJ ? `<tr><td><b>Ainda sem justificativa</b></td><td class="r"><b>${semJ}</b></td></tr>` : ''}</tbody></table>` : '<p class="muted">Nenhuma ausência.</p>'}</div>
-  <div><h4>Horas extras (dias)</h4><table><tbody><tr><td>A pedido da Dikma</td><td class="r">${he.DIKMA}</td></tr><tr><td>A pedido da ArcelorMittal</td><td class="r">${he.ARCELOR}</td></tr>${he[''] ? `<tr><td>Sem origem informada</td><td class="r">${he['']}</td></tr>` : ''}</tbody></table></div></div>
   ${acoes.length ? `<h4>Ações em andamento</h4><table><thead><tr><th>Causa</th><th>Ação</th><th>Responsável</th><th>Prazo</th></tr></thead><tbody>${acoes.slice(0, 10).map(a => `<tr><td>${esc(a.causa)}</td><td>${esc(a.acao)}</td><td>${esc(a.resp || '')}</td><td>${a.prazo ? ddmm(a.prazo) : ''}</td></tr>`).join('')}</tbody></table>` : ''}
   ${mes ? segDoMes() : ''}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;

@@ -18,6 +18,7 @@ import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin } from '..
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
 import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
 import { MD, modulo } from './modulos.js';
+import { competenciaDe } from '../contas/planilhas-adm.js';
 // Telas de configuração (config.js): chegam quando a tela é aberta; os botões abaixo só existem nessas telas.
 const CF = () => modulo('CF');
 
@@ -135,6 +136,7 @@ document.addEventListener('click', async e => {
   if (d.rdia) { UI.rDia = d.rdia; render(); return; }
   if (d.rdiao) { const n = add(UI.rDiaO || TODAY, +d.rdiao); UI.rDiaO = n > TODAY ? TODAY : n; render(); return; }
   if (d.rsem) { UI.rIni = add(UI.rIni || UI.ini || CUR_WEEK, 7 * +d.rsem); if (UI.rIni > CUR_WEEK) UI.rIni = CUR_WEEK; render(); return; }
+  if (d.rcomp) { const [y, m] = (UI.rComp || competenciaDe(TODAY)).split('-').map(Number); const t = y * 12 + m - 1 + +d.rcomp; const c = `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; const max = competenciaDe(TODAY); UI.rComp = c > max ? max : c; render(); return; }
   if (d.rconj) { UI.rConj = d.rconj; render(); return; }
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
