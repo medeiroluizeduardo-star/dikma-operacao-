@@ -48,6 +48,16 @@ test('Queda zero: lançamentos do dia (novos e antigos, da atividade) e total', 
   assert.equal(Q.totalDiaQZ(doc, 3), 16);
   assert.deepEqual(Q.qzDoDia({}, 2), []);
 });
+test('Queda zero: fotos do lançamento (atividade QZ-… e contagem f)', () => {
+  assert.equal(Q.pidFotoQZ('Z|2|0000abcde00'), 'QZ-0000abcde00');
+  assert.equal(Q.pidFotoQZ('REC-001|2'), 'QZ-REC-001');
+  assert.ok(!Q.pidFotoQZ('Z|2|abc').includes('|'), 'sem | (a ref da foto é semana|pid|k)');
+  assert.ok(Q.ehFotoQZ('QZ-abc') && !Q.ehFotoQZ('REC-001'));
+  assert.equal(Q.fotosQZ({ f: 2 }), 2);
+  assert.equal(Q.fotosQZ({}), 0);
+  assert.equal(Q.fotosQZ(null), 0);
+  assert.equal(Q.fotosQZ({ f: -1 }), 0);
+});
 test('Queda zero: listas de locais e motivos, sem repetir, e nomes novos', () => {
   const chaves = l => new Set(l.map(Q.chaveNomeQZ)).size;
   assert.equal(chaves(Q.QZ_LOCAIS), Q.QZ_LOCAIS.length, 'locais sem repetição');

@@ -3,8 +3,8 @@
 // Cada equipamento tem um fator por produto (quanto cabe em 1 equipamento, em toneladas); a pessoa informa quantos
 // equipamentos encheu e o resultado é fator × quantidade. Tabela da planilha da operação (12/11/2026).
 // Lançamento próprio do Apontar (por área e dia, separado das atividades e das fotos). Gravado na semana, no mapa qz:
-// qz['Z|k|id'] = { i: [{ e, p, q }], t, r, o } (e = equipamento, p = produto, q = quantidade, t = total em toneladas,
-// r = rota em que foi lançado, o = local/observação). Os registros antigos, feitos junto das fotos de uma atividade
+// qz['Z|k|id'] = { i: [{ e, p, q }], t, r, l, m, o, f } (e = equipamento, p = produto, q = quantidade, t = total em
+// toneladas, r = rota, l = local, m = motivo, o = observação, f = quantas fotos). Os registros antigos, feitos junto das fotos de uma atividade
 // (12/11/2026), ficam com a chave 'PID|k' e continuam aparecendo no dia.
 
 export const QZ_PRODUTOS = [['coque', 'Coque'], ['carvao', 'Carvão']];
@@ -79,6 +79,12 @@ export function textoQZ(v) {
 export const qzDaCel = (doc, pid, k) => (doc && doc.qz && doc.qz[pid + '|' + k]) || null;
 // Chave de um lançamento novo do dia k.
 export const chaveNovaQZ = (k, agora = Date.now(), sorte = Math.random()) => `Z|${k}|${agora.toString(36).padStart(9, '0')}${Math.floor(sorte * 1296).toString(36).padStart(2, '0')}`;
+// Fotos de um lançamento (opcionais, até o máximo da configuração das fotos das atividades). Ficam guardadas como as
+// fotos das atividades (evidencias + evidenciasArquivo, mesmo arquivo e limpeza), com a "atividade" QZ-<id> no lugar
+// do PID (refs = 'semana|QZ-<id>|k'), sem mexer na contagem ft das atividades. O lançamento guarda quantas tem em f.
+export const pidFotoQZ = key => { const p = String(key || '').split('|'); return 'QZ-' + (p[0] === 'Z' ? p.slice(2).join('-') : p.slice(0, -1).join('-')); };
+export const fotosQZ = v => Math.max(0, Math.floor(Number(v && v.f) || 0));
+export const ehFotoQZ = pid => String(pid || '').startsWith('QZ-');
 // Lançamentos do dia k de uma semana, do mais antigo para o mais novo: [{ key, v, pid (só nos antigos, da atividade) }].
 export function qzDoDia(doc, k) {
   const out = [];

@@ -199,7 +199,9 @@ export function itensDaFoto(f, { plano, semanas }) {
     const x = partesRef(r); if (!x) continue;
     const p = (plano && plano.get(x.pid)) || {}; const doc = semanas && semanas[x.semana];
     const i = doc ? doc.ids.indexOf(x.pid) : -1; const sit = i >= 0 ? linhaDoc(doc, i)[x.k] : f.sit;
-    out.push({ pid: x.pid, rota: p.rota || f.rota || '', local: p.local || '', ativ: p.ativ || '', tipo: p.tipo || '', sit: sit && sit !== '_' ? sit : f.sit || '', semana: x.semana, k: x.k });
+    // sem a atividade no plano (ex.: foto da Queda zero, "atividade" QZ-…): usa o texto gravado na foto
+    const daFoto = !plano || !plano.get(x.pid) ? refsDe(f).length === 1 : false;
+    out.push({ pid: x.pid, rota: p.rota || f.rota || '', local: p.local || (daFoto ? f.local || '' : ''), ativ: p.ativ || (daFoto ? f.ativ || '' : ''), tipo: p.tipo || '', sit: sit && sit !== '_' ? sit : f.sit || '', semana: x.semana, k: x.k });
   }
   return out;
 }
