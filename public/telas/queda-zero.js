@@ -1,7 +1,7 @@
 // Queda zero (telas): aba própria em Operação › Queda zero (separada do Apontar e das fotos), janela para lançar ou
 // corrigir e o formulário com a tabela. As contas ficam em contas/queda-zero.js; a gravação, em data.js ›
 // salvarQuedaZero (mapa qz da semana).
-import { AREA_S, DAYS, ddmm, add, pd, setDaArea } from '../contas/cal.js';
+import { AREA_S, DAYS, ddmm, add, pd, setDaArea, monthLabel } from '../contas/cal.js';
 import { DB, TODAY, esc, $ } from '../nucleo/base.js';
 import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, perfil } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -13,7 +13,7 @@ import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgF } from './fotos.js';
-import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ, pidFotoQZ, fotosQZ } from '../contas/queda-zero.js';
+import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ, pidFotoQZ, fotosQZ, lancamentosMesQZ, resumoQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 function linhaQZ(l = {}) {
@@ -262,3 +262,40 @@ export function vQuedaZero() {
     + QZ_EQUIP.map(x => `<tr><td>${esc(x.nome)}</td><td class="r num">${num(x.coque)}</td><td class="r num">${num(x.carvao)}</td></tr>`).join('') + '</tbody></table></div><p class="muted small m0">Resultado = valor da tabela × quantidade de equipamentos.</p></details>';
 }
 const fmtCurto = t => fmtT(Math.round(t * 1000) / 1000).replace(/ \(.*\)$/, '');
+
+/* ---------------- Operação › Indicadores › Queda zero (painel do mês) ---------------- */
+// Mês e área do topo (todas as áreas ou uma). Números grandes, dia a dia do mês e as somas por local, motivo,
+// área e equipamento. Os lançamentos ficam na aba Queda zero.
+const diasDoMes = ym => { const out = []; for (let d = ym + '-01'; d.slice(0, 7) === ym; d = add(d, 1)) out.push(d); return out; };
+const pctT = (t, tot) => (tot ? Math.round(t / tot * 100) : 0);
+const pctTx = (t, tot) => { const p = pctT(t, tot); return p || !t ? p + '%' : 'menos de 1%'; };
+function barrasQZ(l, tot, cor, max = 10) {
+  if (!l.length) return '<div class="empty">Nada lançado no período.</div>';
+  const mx = Math.max(...l.map(x => x[1]), 1e-9); const mais = l.length - max;
+  return `<div class="bars">${l.slice(0, max).map(([n, t, q]) => `<div class="barrow qzbar"><span class="n">${esc(n)}<small>${q} lançamento${q > 1 ? 's' : ''} · ${pctTx(t, tot)}</small></span><div class="stack clear"><i style="width:${t / mx * 100}%;background:${cor}"></i></div><span class="p num">${esc(fmtCurto(t))}</span></div>`).join('')}</div>${mais > 0 ? `<p class="muted small m0">E mais ${mais} com valores menores.</p>` : ''}`;
+}
+export function vQzPainel() {
+  const area = areaScope();
+  const r = resumoQZ(lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, area));
+  const onde = area === 'TODAS' ? 'todas as áreas' : AREA_S[area];
+  let h = `<div class="row-between"><span class="muted">${monthLabel(UI.mes)} · ${esc(onde)}</span><button class="btn sm" data-go="quedazero">${I.queda || ''} Lançamentos da queda zero</button></div>`;
+  if (!r.n) return h + `<div class="card"><div class="empty">Nenhuma queda zero lançada em ${monthLabel(UI.mes)} (${esc(onde)}).</div></div>`;
+  const kp = (lbl, v, s, cor) => `<div class="kpi"><span class="lbl">${cor ? `<i class="dot" style="background:${cor}"></i>` : ''}${lbl}</span><span class="v num">${v}</span><span class="s">${s}</span></div>`;
+  h += `<div class="kpis qzpainel">
+    <div class="kpi hero"><span class="lbl">Recolhido no mês</span><span class="v num">${esc(fmtCurto(r.total))}</span><span class="s num">${(() => { const [d, t] = Object.entries(r.porDia).sort((a, b) => b[1] - a[1])[0]; return `Maior dia: ${ddmm(d)} · ${esc(fmtCurto(t))}`; })()}</span></div>
+    ${kp('Lançamentos', r.n, 'no mês')}
+    ${kp('Dias com queda', r.dias, `de ${diasDoMes(UI.mes).length} dias do mês`)}
+    ${kp('Média por dia', esc(fmtCurto(r.media)), 'nos dias com queda')}
+    ${kp('Coque', esc(fmtCurto(r.coque)), `${pctT(r.coque, r.total)}% do total`, 'var(--st-prog)')}
+    ${kp('Carvão', esc(fmtCurto(r.carvao)), `${pctT(r.carvao, r.total)}% do total`, 'var(--st-nreal)')}
+  </div>`;
+  const datas = diasDoMes(UI.mes); const mx = Math.max(...datas.map(d => r.porDia[d] || 0), 1e-9);
+  h += `<div class="card"><header><h2>Dia a dia</h2><p>Toneladas recolhidas por dia · ${monthLabel(UI.mes)}</p></header><div class="body">
+    <div class="cols cmes" role="img" aria-label="Queda zero por dia">${datas.map(d => { const t = r.porDia[d] || 0; return `<div class="col" title="${ddmm(d)}: ${t ? fmtT(t) : 'nada lançado'}">${t ? `<i style="height:${Math.max(3, t / mx * 100)}%;background:var(--st-nreal)"></i>` : ''}</div>`; }).join('')}</div>
+    <div class="colx cmes">${datas.map((dt, i) => `<div class="${dt === TODAY ? 'today' : ''}">${i % 5 === 0 || dt === TODAY ? `<b>${dt.slice(8)}</b>` : ''}</div>`).join('')}</div></div></div>`;
+  h += `<div class="grid2"><div class="card"><header><h2>Por local</h2><p>Onde mais caiu material</p></header><div class="body">${barrasQZ(r.porLocal, r.total, 'var(--st-nreal)')}</div></div>
+    <div class="card"><header><h2>Por motivo</h2><p>Por que caiu</p></header><div class="body">${barrasQZ(r.porMotivo, r.total, 'var(--st-atr)')}</div></div></div>`;
+  h += `<div class="grid2">${area === 'TODAS' ? `<div class="card"><header><h2>Por área</h2><p>Toneladas no mês</p></header><div class="body">${barrasQZ(r.porArea.map(([a, t, q]) => [AREA_S[a] || a, t, q]), r.total, 'var(--st-prog)')}</div></div>` : ''}
+    <div class="card"><header><h2>Por equipamento</h2><p>Com que foi recolhido</p></header><div class="body">${barrasQZ(r.porEquip, r.total, 'var(--st-real)')}</div></div></div>`;
+  return h;
+}

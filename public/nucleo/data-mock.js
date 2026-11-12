@@ -8,6 +8,7 @@ import { aplicarCampos } from '../contas/limpeza.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
 import { shaDe } from '../ui/fotos.js';
+import { QZ_EQUIP, QZ_LOCAIS, QZ_MOTIVOS, calcQZ } from '../contas/queda-zero.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -66,6 +67,14 @@ async function freshSet(k) {
           else if (d < 5 && r < .012 && !(w.fe && w.fe[pid + '|' + d])) arr[d] = 'E';
         }
         w.s[pid] = arr.join('');
+      }
+      // demonstração: alguns lançamentos de queda zero nos dias que já passaram (para o painel dos Indicadores)
+      for (let d = 0; d < 7; d++) {
+        if (add(ini, d) >= hoje) continue;
+        const r = rnd(hash('qz' + a + ini + d)); if (r > .3) continue;
+        const pick = (l, x) => l[Math.floor(rnd(hash(x + a + ini + d)) * l.length) % l.length];
+        const c = calcQZ([{ e: pick(QZ_EQUIP, 'e').id, p: r < .15 ? 'coque' : 'carvao', q: 1 + Math.floor(r * 20) }]);
+        w.qz = w.qz || {}; w.qz[`Z|${d}|demo${d}`] = { i: c.itens, t: c.t, l: pick(QZ_LOCAIS.slice(0, 12), 'l'), m: pick(QZ_MOTIVOS.slice(0, 8), 'm') };
       }
       st.semanas[a + '|' + ini] = toLocal(a + '|' + ini, w);
     }

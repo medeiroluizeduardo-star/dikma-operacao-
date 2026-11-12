@@ -70,3 +70,27 @@ test('Queda zero: listas de locais e motivos, sem repetir, e nomes novos', () =>
   assert.match(Q.novoNomeQZ('x', []).erro, /pelo menos/);
   assert.match(Q.novoNomeQZ('x'.repeat(41), []).erro, /muito grande/);
 });
+
+test('painel do mês: lançamentos só dos dias do mês e somas por local, motivo, área e equipamento', async () => {
+  const { lancamentosMesQZ, resumoQZ } = await import('../public/contas/queda-zero.js');
+  // semana de 27/10 a 02/11 marcada como de novembro: só 01 e 02 contam em novembro
+  const w1 = { area: 'RECEBIMENTO', ini: '2026-10-27', mes: '2026-11', qz: {
+    'Z|0|a': { i: [{ e: 'pa', p: 'coque', q: 10 }], t: 0.08, l: 'C5601', m: 'Chuva' }, // 27/10: fora
+    'Z|5|b': { i: [{ e: 'cacamba', p: 'carvao', q: 1 }], t: 12, l: 'C5601', m: 'Transbordo' }, // 01/11
+    'Z|6|c': { i: [{ e: 'bobcat', p: 'coque', q: 2 }, { e: 'balde', p: 'carvao', q: 10 }], t: 0.43 } // 02/11, sem local/motivo
+  } };
+  const w2 = { area: 'PREPARAÇÃO', ini: '2026-11-03', mes: '2026-11', qz: { 'Z|0|d': { i: [{ e: 'retro', p: 'coque', q: 4 }], t: 2, l: 'BC211', m: 'Chuva' }, 'Z|1|e': null } };
+  const outro = { area: 'RECEBIMENTO', ini: '2026-12-01', mes: '2026-12', qz: { 'Z|0|f': { i: [], t: 99 } } };
+  const l = lancamentosMesQZ([w1, w2, outro, null], '2026-11');
+  assert.equal(l.length, 3);
+  assert.deepEqual(l.map(x => x.dt), ['2026-11-01', '2026-11-02', '2026-11-03']);
+  assert.equal(lancamentosMesQZ([w1, w2], '2026-11', 'PREPARAÇÃO').length, 1);
+  const r = resumoQZ(l);
+  assert.equal(r.total, 14.43); assert.equal(r.n, 3); assert.equal(r.dias, 3); assert.equal(r.media, 4.81);
+  assert.equal(r.coque, 2.4); assert.equal(r.carvao, 12.03);
+  assert.deepEqual(r.porLocal, [['C5601', 12, 1], ['BC211', 2, 1], ['Não informado', 0.43, 1]]);
+  assert.deepEqual(r.porMotivo[0], ['Transbordo', 12, 1]);
+  assert.deepEqual(r.porArea, [['RECEBIMENTO', 12.43, 2], ['PREPARAÇÃO', 2, 1]]);
+  assert.equal(r.porEquip[0][0], 'Caçamba de caminhão');
+  assert.deepEqual(resumoQZ([]), { ...resumoQZ([]), total: 0, n: 0, dias: 0, media: 0 });
+});
