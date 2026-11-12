@@ -67,3 +67,29 @@ export function criarEscala(cfg = {}, eqTurmas = {}, feriadosEq = []) {
   const turmasPeriodo = (regime, data) => { const o = { D: [], N: [] }; for (const l of turmasDoDia(regime, data)) { const p = previsto(regime, l, data); o[p.periodo === 'N' ? 'N' : 'D'].push(l); } return o; };
   return { regimes: R, previsto, turmasDoDia, turmasPeriodo, feriados: fer };
 }
+
+// ---- Troca de escala (ADM ↔ turno, troca de turma) ----
+// A troca vale só a partir da data dela: os dias anteriores continuam com a escala antiga.
+// Cada pessoa guarda em escHist o que valia antes: [{ ate: 'AAAA-MM-DD', regime, turma }] (Atividades) ou
+// [{ ate, escala, turma }] (Operação), do mais antigo para o mais novo. Depois do último "ate" vale o que está na ficha.
+const diaAntes = d => { const x = new Date(d + 'T12:00:00'); x.setDate(x.getDate() - 1); return x.toISOString().slice(0, 10); };
+const HIST_MAX = 30;
+// Pessoa como estava no dia (com o regime/escala e a turma daquele dia).
+export function comoEra(p, data) {
+  const h = p && p.escHist; if (!h || !h.length || !data) return p;
+  const e = h.find(x => x && data <= x.ate); if (!e) return p;
+  const { ate, ...campos } = e; return { ...p, ...campos };
+}
+// Histórico novo depois da troca. campos: ['regime', 'turma'] ou ['escala', 'turma'] · desde: dia em que a troca começa a valer.
+// Sem mudança nos campos, devolve o histórico como estava. Trocar de novo no mesmo dia não cria um dia a mais com a escala do meio.
+export function anotarTroca(antes, depois, campos, desde) {
+  const h = ((antes && antes.escHist) || []).filter(x => x && x.ate);
+  if (!antes || !desde || !campos.some(k => String(antes[k] || '') !== String(depois[k] || ''))) return h;
+  const ontem = diaAntes(desde); const era = comoEra(antes, ontem);
+  const novo = h.filter(x => x.ate < ontem);
+  novo.push({ ate: ontem, ...Object.fromEntries(campos.map(k => [k, era[k] || ''])) });
+  // depois da data: fica valendo o que foi gravado agora (some com o que havia de troca futura)
+  const igual = (a, b) => campos.every(k => String(a[k] || '') === String(b[k] || ''));
+  const junto = []; for (const x of novo) { const u = junto[junto.length - 1]; if (u && igual(u, x)) u.ate = x.ate; else junto.push({ ...x }); }
+  return junto.slice(-HIST_MAX);
+}

@@ -1,6 +1,7 @@
 // Dikma Gestão — módulo OPERAÇÃO: controle de equipamentos e operadores (planilha CONTROLE DE EQUIPAMENTOS - COQUERIA).
 // Telas: Painel, Lançamentos e paradas (uma aba só), Equipe (operadores, frota e escala), Inspeções, Avaliação, Análises e Configurações.
 import { add, pad, today, MESES_L, addMonth, DAYS, SETS, AREA_S } from '../contas/cal.js';
+import { anotarTroca } from '../contas/escala.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { criarBusca, competenciaDe } from '../contas/planilhas-adm.js';
@@ -74,7 +75,7 @@ export function criarEquip(X) {
     const ext = extFreq();
     // "escalado" vem da escala central (Configurações › Escalas e turnos): 4x4 pela letra e administrativo pelos dias e feriados
     const ES = X.escala ? X.escala() : null;
-    const prev = ES ? (o, d) => ES.previsto(o.escala === '4x4' ? '4x4' : 'ADM', o.turma, d) : null;
+    const prev = ES ? (o, d) => ES.previsto(o.escala === '4x4' ? '4x4' : 'ADM', o.turma, d) : null; // o já vem com a escala do dia (eqcalc › comoEra)
     if (!CALC || CALCv !== DB.cache.eVersao || CALCesc !== DB.cache.escalas || CALC._ext !== ext || CALC._es !== ES) { CALC = criarCalc(cfgOp(), E().cad, ext, prev); CALC._ext = ext; CALC._es = ES; CALCv = DB.cache.eVersao; CALCesc = DB.cache.escalas; }
     return CALC;
   };
@@ -236,14 +237,14 @@ export function criarEquip(X) {
     const ajuda = '<p class="muted small m0 ajuda">Cada linha é um operador num equipamento no dia. <b>Janela</b> = horário do lançamento (vazio = turno da escala). <b>Operadas</b> = janela − paradas desse operador nesse equipamento. Ações: ${I.pend} registra uma parada · ${I.swap} troca o equipamento danificado por um reserva (o operador segue sem perder horas) · ✎ edita.</p>';
     if (matchMedia('(max-width:860px)').matches) {
       return h + busca + `<div class="mlist" id="eLList">${linhas.map(l => `<div class="mcard" data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'}><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span>${trocaTxt(l)}</div>${ed ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
-        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(l.setor ? AREA_S[l.setor] || l.setor : title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
+        <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op, l.data) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(l.setor ? AREA_S[l.setor] || l.setor : title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
         ${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(x => `<option ${x === l.status ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}
         <div class="row-between small"><span class="num">${l.ini || 'turno'} – ${l.fim || 'turno'} · janela ${h2(l.jan)} h</span><b class="num">${h2(l.hoper)} h operadas</b></div>
         ${parTxt(l)}${l.obs ? `<div class="muted small">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}
         ${ed && !l.trocaPara ? `<div class="row-gap">${l.aberta ? `<button class="btn pri grow" data-e="liberar" data-id="${l.aberta.id}">Liberar ${esc(l.eq)}</button>` : `<button class="btn grow" data-e="parDe" data-id="${l.id}">${I.pend} Parada</button>`}<button class="btn grow" data-e="trocar" data-id="${l.id}">${I.swap} Trocar equipamento</button></div>` : ''}</div>`).join('')}<p class="empty" data-vazio ${linhas.some(l => casa(kLanc(l), q)) ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div>${ajuda}`;
     }
     h += `<div class="card">${busca.replace('class="lbar"', 'class="lbar body"')}<div class="tw" id="eLList"><table class="lanc"><thead><tr><th>Equipamento</th><th>Operador</th><th>Área</th><th>Status</th><th class="c">Horário</th><th class="r">Janela</th><th class="r">Paradas</th><th class="r">Operadas</th><th class="r">Ações</th></tr></thead><tbody>
-      ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}${l.setor ? ` · ${esc(AREA_S[l.setor] || l.setor)}` : ''}</td>
+      ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op, l.data) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}${l.setor ? ` · ${esc(AREA_S[l.setor] || l.setor)}` : ''}</td>
         <td>${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}</td>
         <td class="c num small">${l.ini || '—'} – ${l.fim || '—'}${l.he ? `<div class="pill ext" title="Hora extra${l.heOrigem ? ' a pedido da ' + (l.heOrigem === 'ARCELOR' ? 'ArcelorMittal' : 'Dikma') : ''}">HE ${hhmm(l.he)}${l.heOrigem ? ' · ' + (l.heOrigem === 'ARCELOR' ? 'Arcelor' : 'Dikma') : ''}</div>` : ''}</td><td class="r num">${h2(l.jan)}</td><td class="r num">${l.hpar ? h2(l.hpar) : ''}${l.aberta ? '<div><span class="pill bad">aberta</span></div>' : ''}</td><td class="r num"><b>${h2(l.hoper)}</b></td>
         <td class="nowrap r acts">${ed ? `${l.trocaPara ? '' : l.aberta ? `<button class="btn sm pri" data-e="liberar" data-id="${l.aberta.id}">Liberar</button>` : `<button class="btn sm ic" data-e="parDe" data-id="${l.id}" title="Registrar parada" aria-label="Registrar parada de ${esc(l.eq)}">${I.pend}</button>`}${l.trocaPara ? '' : `<button class="btn sm ic" data-e="trocar" data-id="${l.id}" title="Trocar equipamento (danificado → reserva)" aria-label="Trocar ${esc(l.eq)} por um reserva">${I.swap}</button>`}<button class="btn sm ic ghost" data-e="editLanc" data-id="${l.id}" title="Editar" aria-label="Editar">✎</button>` : ''}</td></tr>`).join('')}
@@ -529,6 +530,7 @@ export function criarEquip(X) {
       const n = { ...o, funcao: $('foFun').value, fixo: $('foFixo').value === '1', escala: $('foEsc').value, turma: $('foTur').value, situacao: $('foSit').value, de: $('foDe').value || null, ate: $('foAte').value || null };
       if (n.situacao === 'TRABALHANDO') { n.de = null; n.ate = null; } else if (!n.de) n.de = TODAY;
       if (n.ate && n.de && n.ate < n.de) throw new Error('"Até" está antes de "De".');
+      if (nome) { const h = anotarTroca(o, n, ['escala', 'turma'], TODAY); if (h.length) n.escHist = h; else delete n.escHist; } // troca de escala vale a partir de hoje
       let lista = E().cad.operadores.slice();
       if (!nome) { n.nome = $('foNome').value.trim().toUpperCase(); if (!n.nome) throw new Error('Informe o nome.'); if (lista.some(x => x.nome === n.nome)) throw new Error('Já existe esse operador.'); lista.push(n); }
       else lista = lista.map(x => (x.nome === nome ? n : x));

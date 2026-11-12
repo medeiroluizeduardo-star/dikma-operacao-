@@ -1,7 +1,7 @@
 // Dikma Gestão — conta única de presença: a tabela de códigos de situação e "qual é a situação desta pessoa neste dia".
 // Funções puras (sem banco e sem tela): usadas pelo Efetivo diário, pela Frequência, pela Operação, pelo Meu dia
 // e pela rotina de avisos no celular (GitHub Actions), para todos mostrarem o mesmo número.
-import { normRegime, letra } from './escala.js';
+import { normRegime, letra, comoEra } from './escala.js';
 
 // Tabela única dos códigos. Um código novo entra só aqui; as listas abaixo saem dela.
 //   ausente: a pessoa não está disponível no dia (inclui folga, férias e desligado)
@@ -68,7 +68,7 @@ export function criarTurmaFicha(fichas = [], operadores = []) {
 export const feriadosOperacao = eqCfg => ((eqCfg && eqCfg.feriados) || []).filter(f => f && f.data).map(f => ({ data: f.data, desc: f.desc || 'feriado', semOp: !!f.semOp }));
 
 // ---- Situação do dia ----
-// pessoa = { id, nome, mat, regime, turma } · data = AAAA-MM-DD
+// pessoa = { id, nome, mat, regime, turma, escHist } · data = AAAA-MM-DD (escHist: escala.js › comoEra)
 // fontes = {
 //   lancado(pessoa, data) → código lançado no dia (Efetivo diário, Frequência, check-in) ou vazio,
 //   desligadoEm(pessoa) → data de demissão/desligamento (vale a partir dela) ou vazio,
@@ -83,6 +83,7 @@ export const feriadosOperacao = eqCfg => ((eqCfg && eqCfg.feriados) || []).filte
 // A ordem é a mesma em todo o sistema: o lançado vale mais; depois desligamento, férias, folga da escala e presente.
 export function previstoDe(pessoa, data, fontes = {}) {
   const E = fontes.escala; if (!E) return null;
+  pessoa = comoEra(pessoa, data); // troca de escala vale só a partir da data dela
   const regime = fontes.regime ? fontes.regime(pessoa) : normRegime(pessoa.regime, E.regimes);
   const t = fontes.turma ? fontes.turma(pessoa) : letra(pessoa.turma);
   const turma = t || (fontes.turmaFicha ? fontes.turmaFicha(pessoa.nome) : '');

@@ -116,9 +116,9 @@ export function registrosHE(area, m, diasPedidos) {
   const cfg = heCfg(); const out = [];
   const dias = diasPedidos ? [...diasPedidos] : []; if (!diasPedidos) for (let d = m + '-01'; d.slice(0, 7) === m; d = add(d, 1)) dias.push(d);
   for (const c of colabsDa(area)) {
-    const r = escala().regimes[regimeDe(c)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm;
     for (const d of dias) {
       const key = c.id + '|' + d; if (DB.sit(key) !== 'HE') continue;
+      const r = escala().regimes[regimeDe(c, d)]; const est = r && r.tipo === 'ciclo' ? cfg.ciclo : cfg.adm; // regime do dia (troca de escala)
       const inf = DB.sitInfo(key); const h = horasHE(inf.hed);
       out.push({ c, d, key, orig: inf.he || '', det: inf.hed, horas: h, est, conta: h == null ? est : h, per: periodoDe(c, d) });
     }

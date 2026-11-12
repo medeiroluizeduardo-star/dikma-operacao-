@@ -3,7 +3,8 @@
 // definidas lá são gravadas também no Atividades Pátio (colaboradores/{ÁREA}), no Atividades Bateria
 // (b_colaboradores/{ÁREA}) e na Operação (eq/cadastro.operadores). A ligação é pela matrícula e,
 // na falta dela, pelo nome.
-import { SETS, SET_KEYS, AREAS_ATIV, AREAS_GERAIS, ehAreaGeral, areasDoSet, setDaArea, AREA_S } from './cal.js';
+import { SETS, SET_KEYS, AREAS_ATIV, AREAS_GERAIS, ehAreaGeral, areasDoSet, setDaArea, AREA_S, today } from './cal.js';
+import { anotarTroca, letra } from './escala.js';
 import { perfilDe, temFichasU, escoposDe } from './acessos.js';
 
 export const AREA_GERAL = 'COQUERIA';
@@ -97,14 +98,20 @@ export function criarPessoas(DB) {
 
   // Aplica a mudança nos dados locais e marca o que precisa ser gravado (sem gravar).
   // antes: colaborador como estava (para achar os vínculos); c: como ficou.
-  // o: { area, rota, regime, op: bool, escala, turma }
+  // o: { area, rota, regime, op: bool, escala, turma, desde }
+  // Troca de regime/escala/turma vale a partir de o.desde (padrão: hoje): o que valia antes fica em escHist (escala.js).
   function aplicar(antes, c, o, sujo) {
-    const v = vinculo(antes || c);
+    const v = vinculo(antes || c); const desde = o.desde || today();
     const kNovo = setDaArea(o.area);
     if (v.ativ || kNovo) {
       const mesmoSet = v.ativ && v.ativ.set === kNovo;
       const base = mesmoSet ? v.ativ.x : { id: kNovo ? proximoId(kNovo) : null, regime: (v.ativ && v.ativ.x.regime) || 'ADMINISTRATIVO', funcao: v.ativ && v.ativ.x.funcao };
       const novo = kNovo && temSetDados(kNovo) ? { ...base, mat: c.mat, nome: c.nome, funcao: c.funcao || base.funcao || '', area: o.area, rota: o.rota || (mesmoSet && v.ativ.x.area === o.area ? v.ativ.x.rota : rotasDe(o.area)[0]) || o.area, regime: o.regime || base.regime || 'ADMINISTRATIVO' } : null;
+      if (novo && v.ativ) { // turma que vale: a das Atividades ou, sem ela, a da ficha
+        const efT = (x, f) => letra(x && x.turma) || letra(f && f.turma);
+        const h = anotarTroca({ ...v.ativ.x, turma: efT(v.ativ.x, antes || c) }, { ...novo, turma: efT(novo, c) }, ['regime', 'turma'], desde);
+        if (h.length) novo.escHist = h; else delete novo.escHist;
+      }
       if (v.ativ) {
         const k = v.ativ.set, a = v.ativ.x.area;
         st(k).colabs[a] = (st(k).colabs[a] || []).filter(x => x.id !== v.ativ.x.id); sujo.add(k + '|' + a);
@@ -119,6 +126,7 @@ export function criarPessoas(DB) {
       const lista = ops().slice();
       if (quer) {
         const novo = { ...(v.op || { nome: c.nome, fixo: true, situacao: 'TRABALHANDO', de: null, ate: null }), mat: c.mat, funcao: c.funcao || (v.op && v.op.funcao) || '', escala: o.escala || (v.op && v.op.escala) || 'ADM', turma: (o.escala || (v.op && v.op.escala)) === '4x4' ? (o.turma || (v.op && v.op.turma) || '') : '' };
+        if (v.op) { const h = anotarTroca(v.op, novo, ['escala', 'turma'], desde); if (h.length) novo.escHist = h; else delete novo.escHist; }
         const i = lista.findIndex(x => x === v.op); if (i >= 0) lista[i] = novo; else lista.push(novo);
         DB.cache.e.cad = { ...DB.cache.e.cad, operadores: lista.sort((x, y) => x.nome.localeCompare(y.nome)) }; sujo.add('op');
       } else if (v.op) { DB.cache.e.cad = { ...DB.cache.e.cad, operadores: lista.filter(x => x !== v.op) }; sujo.add('op'); }

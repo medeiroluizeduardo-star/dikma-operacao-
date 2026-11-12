@@ -1,10 +1,10 @@
 // Contas da presença (sem tela): escala, situação de cada pessoa no dia, coberturas (substitutos) e hora extra.
 // A regra do dia fica em situacao.js (a mesma de todos os módulos); aqui ficam as ligações com os dados e a memória.
-import { SETS, SITS, AUSENTE, add } from '../contas/cal.js';
+import { SETS, SITS, AUSENTE, add, today } from '../contas/cal.js';
 import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBRIVEL } from '../contas/situacao.js';
 import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../contas/hoje.js';
 import { indiceFerias, indiceDesligados } from '../contas/acessos.js';
-import { criarEscala, normRegime, letra, fatorRota } from '../contas/escala.js';
+import { criarEscala, normRegime, letra, fatorRota, comoEra, anotarTroca } from '../contas/escala.js';
 import { DB, title } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
 
@@ -31,9 +31,15 @@ export function desligadoDe(p) {
   if (!DEMi || DEMk[0] !== g || DEMk[1] !== rh || DEMk[2] !== res) { DEMi = indiceDesligados([...res, ...rh, ...g]); DEMk = [g, rh, res]; }
   return DEMi(p);
 }
-export const turmaDe = c => letra(c.turma) || turmaFicha(c.nome);
-export const regimeDe = c => normRegime(c.regime, escala().regimes);
-export const regimeNome = c => { const r = escala().regimes[regimeDe(c)]; return r ? r.nome : title(c.regime || ''); };
+// Com a data, valem o regime e a turma daquele dia (a troca de escala só vale a partir da data dela).
+export const turmaDe = (c, dt) => { const x = dt ? comoEra(c, dt) : c; return letra(x.turma) || turmaFicha(x.nome); };
+export const regimeDe = (c, dt) => normRegime((dt ? comoEra(c, dt) : c).regime, escala().regimes);
+// Pessoa (Atividades) com a turma nova a partir de hoje: os dias anteriores guardam a turma antiga (escHist).
+export function comTurma(c, turma, desde = today()) {
+  const h = anotarTroca({ ...c, turma: turmaDe(c) }, { ...c, turma: letra(turma) || turmaFicha(c.nome) }, ['regime', 'turma'], desde);
+  const n = { ...c, turma }; if (h.length) n.escHist = h; else delete n.escHist; return n;
+}
+export const regimeNome = (c, dt) => { const r = escala().regimes[regimeDe(c, dt)]; return r ? r.nome : title((dt ? comoEra(c, dt) : c).regime || ''); };
 // { v: código, auto: veio da escala, motivo, semTurma }
 // Férias marcadas em Frequência e férias entram sozinhas como FE (o lançamento do dia ainda vale mais).
 let FERI = null, FERIv = null;
@@ -43,15 +49,15 @@ const feriasDe = (c, dt) => { const l = (DB.cache.adm && DB.cache.adm.fLoaded &&
 let PVM = new Map(), PVv = -1, PVe = null;
 function previstoDe(c, dt) {
   const e = escala(); if (PVv !== DATAV || PVe !== e) { PVM = new Map(); PVv = DATAV; PVe = e; }
-  const ch = (c.regime || '') + '|' + turmaDe(c) + '|' + dt;
+  const rg = regimeDe(c, dt), t = turmaDe(c, dt); const ch = rg + '|' + t + '|' + dt;
   if (PVM.has(ch)) return PVM.get(ch);
-  const p = e.previsto(regimeDe(c), turmaDe(c), dt); PVM.set(ch, p); return p;
+  const p = e.previsto(rg, t, dt); PVM.set(ch, p); return p;
 }
 // sitDia é chamado milhares de vezes por desenho (Painel, balanço, escala): guarda o resultado até os dados mudarem.
 let SDM = new Map(), SDv = -1;
 export function sitDia(c, dt) {
   if (SDv !== DATAV) { SDM = new Map(); SDv = DATAV; }
-  const ch = c.id + '|' + dt + '|' + (c.regime || '') + '|' + (c.turma || '') + '|' + (c.nome || '');
+  const ch = c.id + '|' + dt + '|' + (c.regime || '') + '|' + (c.turma || '') + '|' + (c.nome || '') + '|' + ((c.escHist || []).length);
   let r = SDM.get(ch); if (r) return r;
   r = Object.freeze(sitDiaCalc(c, dt)); SDM.set(ch, r); return r;
 }
@@ -132,14 +138,14 @@ export function limparPresenca(conj, id, dt, cod) {
   const v = String(inf.cob); const i = v.indexOf(':'); const sk = i > 0 && SETS[v.slice(0, i)] ? v.slice(0, i) : conj; const sid = i > 0 && SETS[v.slice(0, i)] ? v.slice(i + 1) : v;
   const sc = Object.values((DB.dados(sk) || {}).colabs || {}).flat().find(x => x.id === sid); if (!sc) return;
   const skey = sid + '|' + dt; const scod = (((DB.dados(sk) || {}).sitByMonth || {})[dt.slice(0, 7)] || {})[skey];
-  const prev = escala().previsto(normRegime(sc.regime, escala().regimes), turmaDe(sc), dt);
+  const prev = escala().previsto(regimeDe(sc, dt), turmaDe(sc, dt), dt);
   if (scod === 'HE' && prev && !prev.trab) { DB.setSit(skey, null, sk); DB.setSitExtra('he', skey, null, sk); DB.setSitExtra('hed', skey, null, sk); }
 }
 // Situação de quem está em outro conjunto: o lançado lá, as férias e a folga pela escala.
 function sitOutro(k, c, dt) {
   const st = DB.dados(k) || {}; const m = ((st.sitByMonth || {})[dt.slice(0, 7)] || {})[c.id + '|' + dt]; if (m) return { v: m, auto: false };
   if (feriasDe(c, dt)) return { v: 'FE', auto: false, ferias: true };
-  const p = escala().previsto(normRegime(c.regime, escala().regimes), turmaDe(c), dt); if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
+  const p = escala().previsto(regimeDe(c, dt), turmaDe(c, dt), dt); if (p && !p.trab) return { v: 'F', auto: true, motivo: p.motivo };
   return { v: 'P', auto: false };
 }
 export const sitDoSub = (r, dt) => (r.outro ? sitOutro(r.k, r.c, dt) : sitDia(r.c, dt));
@@ -153,7 +159,7 @@ export function removerCobertura(ausId, dt) {
   DB.setSitExtra('cob', ausId + '|' + dt, null);
   const r = refSub(sid); if (!r.c) return; const key = r.id + '|' + dt;
   const cod = r.outro ? (((DB.dados(r.k) || {}).sitByMonth || {})[dt.slice(0, 7)] || {})[key] : DB.sit(key);
-  const prev = escala().previsto(normRegime(r.c.regime, escala().regimes), turmaDe(r.c), dt);
+  const prev = escala().previsto(regimeDe(r.c, dt), turmaDe(r.c, dt), dt);
   if (cod === 'HE' && prev && !prev.trab) { DB.setSit(key, null, r.k); DB.setSitExtra('he', key, null, r.k); DB.setSitExtra('hed', key, null, r.k); }
 }
 // Áreas de um conjunto (Pátio ou Bateria) em que a pessoa lança a presença — sem depender do módulo aberto.
