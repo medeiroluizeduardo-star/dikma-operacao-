@@ -206,6 +206,8 @@ export function criarEquip(X) {
     const seg = `<div class="seg lpseg" role="tablist" aria-label="Mostrar"><button type="button" role="tab" data-e="aba" data-v="lanc" aria-selected="${aba === 'lanc'}">${I.apontar} Lançamentos do dia</button><button type="button" role="tab" data-e="aba" data-v="par" aria-selected="${aba === 'par'}">${I.pend} Paradas${abertas ? ` <span class="badge num">${abertas}</span>` : ''}</button></div>`;
     return seg + (aba === 'par' ? vPar() : vLanc());
   }
+  // Quantos nomes da lista "escalados sem lançamento" aparecem antes do "Ver todos" (o celular mostra menos).
+  const LIM_SEM = () => (matchMedia('(max-width:860px)').matches ? 6 : 14);
   function vLanc() {
     const C = calc(); const d = U.dia;
     const all = E().lanc; const al = C.alertas(all.filter(l => l.data === d), E().par.filter(p => p.data === d), TODAY);
@@ -228,7 +230,7 @@ export function criarEquip(X) {
     // Conferência do dia: escalados sem lançamento (toque para lançar) e operadores fora
     if (semLanc.length || fora.length) {
       h += `<div class="card conf"><div class="body"><div class="conf-l"><b>${semLanc.length ? `${semLanc.length} operador${semLanc.length > 1 ? 'es' : ''} escalado${semLanc.length > 1 ? 's' : ''} sem lançamento` : 'Todos os escalados foram lançados'}</b>${semLanc.length && ed ? '<small>Toque no nome para lançar</small>' : ''}</div>
-        ${semLanc.length ? `<div class="rchips">${semLanc.map(o => ed ? `<button class="rchip add" data-e="lancOp" data-op="${esc(o.nome)}">${I.plus}${esc(short(o.nome))}<span class="c">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></button>` : `<span class="rchip">${esc(short(o.nome))}</span>`).join('')}</div>` : ''}
+        ${semLanc.length ? `<div class="rchips semlanc">${(U.semTodos ? semLanc : semLanc.slice(0, LIM_SEM())).map(o => ed ? `<button class="rchip add" data-e="lancOp" data-op="${esc(o.nome)}">${I.plus}<span class="n">${esc(short(o.nome))}</span><span class="c">${o.escala === '4x4' ? '4x4·' + esc(o.turma || '?') : 'ADM'}</span></button>` : `<span class="rchip">${esc(short(o.nome))}</span>`).join('')}${semLanc.length > LIM_SEM() ? `<button type="button" class="btn ghost sm vertodos" data-e="semTodos">${U.semTodos ? 'Mostrar menos' : `Ver todos (${semLanc.length})`}</button>` : ''}</div>` : ''}
         ${fora.length ? `<div class="conf-f"><span class="muted small">${d === TODAY ? 'Fora hoje' : 'Fora neste dia'}:</span> ${fora.map(o => `<span class="rchip mut">${esc(short(o.nome))}<span class="c">${esc(title(C.ausenteEm(o, d)))}</span></span>`).join('')}</div>` : ''}</div></div>`;
     }
     if (!linhas.length) return h + `<div class="card"><div class="empty">Nenhum lançamento em ${dBR(d)}.${ed ? ' Use "Copiar do dia anterior" para repetir as alocações do último dia lançado, ou toque num operador acima.' : ''}</div></div>`;
@@ -411,7 +413,8 @@ export function criarEquip(X) {
     const F = { aberta: p => !p.fim, todas: () => true, EQUIPAMENTO: p => p.resp === 'EQUIPAMENTO', OPERADOR: p => p.resp === 'OPERADOR', OPERACIONAL: p => p.resp === 'OPERACIONAL' };
     const base = ps.filter(F[U.pf] || F.todas);
     if (U.pdia && U.pdia.slice(0, 7) !== U.mes) U.pdia = '';
-    const l = base.filter(p => !U.pdia || p.data === U.pdia).sort((a, b) => (a.data + (a.ini || '') > b.data + (b.ini || '') ? -1 : 1));
+    const soAbertas = U.pf === 'aberta';
+    const l = base.filter(p => soAbertas || !U.pdia || p.data === U.pdia).sort((a, b) => (a.data + (a.ini || '') > b.data + (b.ini || '') ? -1 : 1));
     const n = k => ps.filter(F[k]).length;
     const abertas = E().par.filter(p => !p.fim);
     const maisLonga = abertas.reduce((m, p) => Math.max(m, desdeH(p)), 0);
@@ -427,14 +430,14 @@ export function criarEquip(X) {
       <div class="mini"><div><b class="num" style="color:${abertas.length ? 'var(--st-nreal)' : 'inherit'}">${abertas.length}</b><span>Parados agora</span></div><div><b class="num">${abertas.length ? tempoTxt(maisLonga) : '—'}</b><span>Mais tempo parado</span></div><div><b class="num">${doMes.length}</b><span>Paradas no mês</span></div><div><b class="num">${h1(doMes.reduce((t, p) => t + (p.dur || 0), 0))}</b><span>Horas paradas no mês</span></div><div><b class="num">${doMes.filter(p => p.subst).length}</b><span>Trocas por reserva</span></div></div>
       <div class="rchips">${[['aberta', 'Sem liberação'], ['todas', 'Todas do mês'], ['EQUIPAMENTO', 'Equipamento'], ['OPERADOR', 'Operador'], ['OPERACIONAL', 'Operacional']].map(([k, t]) => `<button class="rchip" data-epf="${k}" aria-pressed="${U.pf === k}">${t}<span class="c num">${k === 'aberta' ? abertas.length : n(k)}</span></button>`).join('')}</div>
       ${RESP_TXT[U.pf] ? `<p class="muted small m0 ajuda"><b>${title(U.pf)}:</b> ${RESP_TXT[U.pf]}.</p>` : U.pf === 'aberta' ? '<p class="muted small m0 ajuda"><b>Sem liberação</b> = o equipamento continua parado. Quando voltar a operar, toque em <b>Liberar</b> e informe a hora.</p>' : ''}
-      ${faixa}`;
-    if (!l.length) return h + `<div class="card"><div class="empty">${U.pdia ? `Nenhuma parada em ${dBR(U.pdia)} com esse filtro.` : U.pf === 'aberta' ? 'Nenhum equipamento parado agora.' : 'Nenhuma parada com esse filtro.'}</div></div>`;
+      ${soAbertas ? '' : faixa}`;
+    if (!l.length) return h + `<div class="card"><div class="empty">${U.pdia && !soAbertas ? `Nenhuma parada em ${dBR(U.pdia)} com esse filtro.` : U.pf === 'aberta' ? 'Nenhum equipamento parado agora.' : 'Nenhuma parada com esse filtro.'}</div></div>`;
     const grupos = []; for (const p of l) { const g = grupos[grupos.length - 1]; if (g && g.d === p.data) g.l.push(p); else grupos.push({ d: p.data, l: [p] }); }
     const vis = l.filter(p => casa(kPar(p), q)).length;
     const item = p => { const k = kPar(p); const desde = !p.fim ? desdeH(p) : 0; const tipo = (C.frotaMap.get(p.eq) || {}).tipo;
       return `<div class="pitem ${!p.fim ? 'aberta' : ''}" data-k="${esc(k)}" ${casa(k, q) ? '' : 'hidden'}><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span>${tipo ? ` <span class="muted small">${esc(title(tipo))}</span>` : ''} · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
       <div class="l">${p.ini || '—'} às ${p.fim || '…'} · <b>${p.fim ? h2(p.dur) + ' h' : p.ini ? 'parado há ' + tempoTxt(desde) : 'sem hora de início'}</b> · ${esc(short(p.op))}${p.desc ? ' · ' + esc(p.desc) : ''}${p.os ? ' · OS ' + esc(p.os) : ''}</div>
-      ${p.subst ? `<div style="margin-top:4px"><span class="pill ext">${I.swap} ${esc(short(p.op) || 'operador')} seguiu no ${esc(p.subst)}</span></div>` : ''}${al.has(p.id) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
+      ${p.subst ? `<div style="margin-top:4px"><span class="pill ext">${I.swap} ${esc(short(p.op) || 'operador')} seguiu no ${esc(p.subst)}</span></div>` : ''}${al.has(p.id) && !(soAbertas && !p.fim && /SEM LIBERA/.test(al.get(p.id))) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
       <div class="row-gap">${!p.fim ? (podeEditar() ? `${!p.subst ? `<button class="btn" data-e="substPar" data-id="${p.id}" title="Passar o operador para um equipamento reserva">${I.swap} Substituir</button>` : ''}<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill bad">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeEditar() ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`; };
     h += `<div class="card"><div class="lbar body">${caixaBusca('ePQ', q, 'Buscar equipamento, operador, causa ou OS')}<span class="muted small"><b id="ePN">${vis}</b> de ${l.length}</span></div><div class="body pt0" id="ePList"><div class="plist">${grupos.map(g => { const ab = g.l.filter(x => !x.fim).length; return `<div class="pday" data-grupo ${g.l.some(p => casa(kPar(p), q)) ? '' : 'hidden'}><div class="pgrp"><b>${semana(g.d)} ${dBR(g.d).slice(0, 5)}</b><span>${g.l.length} parada${g.l.length > 1 ? 's' : ''} · ${h2(g.l.reduce((t, x) => t + (x.dur || 0), 0))} h${ab ? ` · <em>${ab} sem liberação</em>` : ''}</span></div>${g.l.map(item).join('')}</div>`; }).join('')}<p class="empty" data-vazio ${vis ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div></div></div>`;
     return h;
@@ -653,6 +656,7 @@ export function criarEquip(X) {
       case 'diaAnt': U.dia = add(U.dia, -1); render(); break;
       case 'diaProx': U.dia = add(U.dia, 1); render(); break;
       case 'hoje': U.dia = TODAY; render(); break;
+      case 'semTodos': U.semTodos = !U.semTodos; render(); break;
       case 'irDia': UI.view = 'elanc'; U.aba = 'lanc'; U.dia = d.dia; render(); scrollTo(0, 0); break;
       case 'aba': U.aba = d.v; render(); break;
       case 'novoLanc': lancForm(null); break;

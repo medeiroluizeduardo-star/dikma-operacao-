@@ -19,7 +19,7 @@ export let DATAV = 0;
 export function mudouDados() { DATAV++; }
 // Login: quem entrou (ME) e em que situação está a entrada (AUTH.status).
 export function definirAuth(a) { AUTH = a; ME = a.user || null; }
-export const UI = { view: 'meudia', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
+export const UI = { view: '', mes: null, ini: null, area: 'TODAS', rota: 'TODAS', tipo: 'TODOS', q: '', soPend: false, escopo: 'semana', dia: null, aRota: null, eRota: null, pArea: 'RECEBIMENTO', confirm: null, iRota: 'TODAS', lider: '', more: 0, gMes: null, impIni: CUR_WEEK, busy: false };
 UI.modulo = 'operacao';
 // Módulos de antes da divisão em 5 (guardados no aparelho, em links e avisos) → módulo de agora e o conjunto.
 // A tela (view) manda mais: ensureModulo leva para o módulo onde a aba está agora.
