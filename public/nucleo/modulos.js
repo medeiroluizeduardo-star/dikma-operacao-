@@ -1,28 +1,24 @@
-// Partes criadas na entrada: pessoas (PES) e Meu dia (MD). As telas de Operação (EQ), Frequência e férias (AD) e
+// Partes criadas na entrada: pessoas (PES) e Avisos no celular (AV). As telas de Operação (EQ), Frequência e férias (AD) e
 // fichas do Efetivo (GE) e Segurança (SG) ficam em arquivos grandes que só são baixados quando precisa: ao abrir a tela, ou logo
 // depois do login para quem tem o módulo (em segundo plano). Sem sinal, vêm do service worker (estão no SHELL).
 import { SET_KEYS } from '../contas/cal.js';
 import { criarPessoas, chaveFicha } from '../contas/pessoas.js';
 import * as M from '../ui/movimento.js';
-import { criarMeuDia } from '../telas/meudia.js';
-import { fatorRota } from '../contas/escala.js';
+import { criarAvisos } from '../telas/avisos.js';
 import { DB, framed, esc, title } from './base.js';
 import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './estado.js';
 import { I } from '../ui/icones.js';
-import { escala, turmaFicha, desligadoDe, sitDiaDe, limparPresenca } from '../calc/presenca.js';
+import { temSeg } from '../contas/segcalc.js';
+import { escala, turmaFicha, desligadoDe, limparPresenca } from '../calc/presenca.js';
 import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
-import { checkinPendentes } from '../telas/efetivo.js';
-import { jusPendentes } from '../telas/horas-justificativas.js';
-import { temSeg } from '../contas/segcalc.js';
-import { semFotoPend } from '../telas/fotos.js';
 
-// Criadas por inicio.js (PES, MD) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
-export let PES = null, MD = null, EQ = null, AD = null, GE = null, SG = null;
+// Criadas por inicio.js (PES, AV) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
+export let PES = null, AV = null, EQ = null, AD = null, GE = null, SG = null;
 // Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), e Resumos (RE).
 let CF = null, RE = null;
 
-// Pessoas e Meu dia (antes de abrir o link recebido).
+// Pessoas e Avisos no celular (antes de abrir o link recebido).
 export function criarModulos() {
   PES = criarPessoas(DB);
   // Área de atuação de cada ficha do Efetivo (organiza as fichas por área no banco). Só o administrador calcula,
@@ -32,9 +28,7 @@ export function criarModulos() {
     const ok = SET_KEYS.every(k => { const d = DB.dados(k); return d.configLoaded && (!d.config || d.colabsLoaded); }) && (!DB.cache.e || DB.cache.e.loaded);
     return ok ? chaveFicha(PES.lotacao(c).area) : null;
   });
-  MD = criarMeuDia({ semFoto: (k, areas) => semFotoPend(k, areas), checkinPend: k => checkinPendentes(k), jusPend: k => jusPendentes(k), get ME() { return ME; }, perfil: m => perfil(m), DB, esc, title, I, toast, render: () => render(), modsDe: modsReais,
-    // Segurança no Meu dia: anomalias da pessoa (a tela da Segurança chega sob demanda; enquanto isso, nada aparece).
-    seg: () => (temSeg(ME) ? (SG ? SG.meuDia() : (carregarModulo('SG'), null)) : null), sitEscala: sitDiaDe, fatorRota: cs => fatorRota(cs, escala().regimes) });
+  AV = criarAvisos({ get ME() { return ME; }, perfil: m => perfil(m), DB, esc, toast, render: () => render(), modsDe: modsReais });
 }
 
 // ---- telas carregadas sob demanda ----

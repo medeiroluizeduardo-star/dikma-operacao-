@@ -29,7 +29,7 @@ import * as FE from '../contas/feriados.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
-// vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação, Efetivo e Meu dia.
+// vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação e Efetivo.
 function vCfGeral() {
   const E = escala(); const card = (ic, t, sub, corpo, botoes) => `<div class="card cfc"><header><span class="cfi">${ic}</span><div class="minw"><h2>${t}</h2><p>${sub}</p></div></header><div class="body">${corpo}<div class="row-gap cfb">${botoes}</div></div></div>`;
   const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
@@ -104,7 +104,7 @@ function vCfEscala() {
       <td>${ed ? `<select class="in" data-escpes="${x.k}|${esc(x.c.area)}|${esc(x.c.id)}" aria-label="Turma de ${esc(title(x.c.nome))}"><option value="">${x.tf && !x.t ? `Da ficha (${esc(x.tf)})` : 'Sem turma'}</option>${Object.keys(x.r.turmas || {}).map(l => `<option ${l === x.t ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : esc(t || '—')}</td>
       <td>${p ? (p.trab ? `<span class="pill ok">${p.periodo === 'N' ? 'noite' : 'dia'}</span>` : '<span class="pill neu">folga</span>') : '<span class="pill warn">sem turma</span>'}</td></tr>`; }).join('')}
     </tbody></table><p class="empty" data-vazio ${pessoas.some(x => casa(kP(x), q)) ? 'hidden' : ''}>${pessoas.length ? 'Ninguém encontrado.' : 'Nenhuma pessoa em regime de turno nas Atividades.'}</p></div></div>`;
-  return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Atividades, Pessoas no turno, Equipamentos, RH, Meu dia e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
+  return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Atividades, Pessoas no turno, Equipamentos, RH e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
 }
 const dBRs = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
 // Conferência do cadastro: o que falta ou não bate entre os módulos, com o atalho para corrigir.
@@ -314,7 +314,7 @@ function selosDe(u) {
   const tags = u.papel === 'bloqueado' ? '<span class="pill bad">Bloqueado</span>' : '';
   return `<div class="selos">${tags}${selos.join('') || '<span class="muted small">Sem acesso</span>'}${esc_}</div>`;
 }
-const areaTxt = u => { const ps = ['operacao', 'gestao'].map(m => perfilDe(u, m)).filter(Boolean); const l = ps.some(p => ['lider', 'supervisor'].includes(p)) ? [u.area, ps.includes('supervisor') ? u.area2 : null].filter(Boolean).map(a => AREA_S[a] || a) : []; return l.length ? l.join(' · ') : ps.some(p => ['admin', 'gestor', 'coordenador', 'leitor', 'administrativo'].includes(p)) ? '<span class="muted small">Todas</span>' : '<span class="muted">—</span>'; };
+const areaTxt = u => { const ps = ['operacao', 'gestao'].map(m => perfilDe(u, m)).filter(Boolean); const l = ps.some(p => ['lider', 'supervisor'].includes(p)) ? [u.area, ps.includes('supervisor') ? u.area2 : null].filter(Boolean).map(a => AREA_S[a] || a) : []; return l.length ? l.join(' · ') : ps.some(p => ['admin', 'gestor', 'coordenador', 'tecnico', 'leitor', 'administrativo'].includes(p)) ? '<span class="muted small">Todas</span>' : '<span class="muted">—</span>'; };
 export function vUsuarios() {
   const us = DB.cache.usuarios.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
   const ativos = us.filter(u => u.papel !== 'bloqueado').length;
@@ -329,7 +329,7 @@ export function vUsuarios() {
    <div class="row-gap"><button class="btn pri" type="submit" ${UI.busy ? 'disabled' : ''}>${I.plus} ${UI.busy ? 'Cadastrando…' : 'Cadastrar usuário'}</button></div>
    <p class="err m0" id="nuErr" role="alert" hidden></p>
   </form></div></details>
-  <div class="card"><header><h2>Acessos</h2><p>Um perfil em cada módulo que a pessoa usa</p></header><details class="legdet body pb0 pt0"><summary>Como funcionam os perfis</summary><p class="small m0">Cada pessoa tem um perfil em cada módulo que usa. <b>Operação</b> e <b>Gestão</b>: líder (1 área), supervisor (até 2 áreas), coordenador e gestor (todas as áreas), somente leitura; a Gestão tem também o Administrativo. <b>Segurança</b>: registra (vê só o que registrou), trata e gestor (veem e tratam tudo) ou somente leitura; o supervisor da área (Operação) também vê e trata as anomalias da área dele. <b>RH</b>: Administrativo ou somente leitura. <b>Administração</b>: completa (administrador) ou só a dos módulos da pessoa (como o gestor faz hoje). Os escopos (Pátio, Bateria e Equipamentos) dizem quais conjuntos a pessoa vê. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></details><div class="tw"><table class="tcard utab"><thead><tr><th>Pessoa</th><th>Usuário</th><th>Acesso por módulo</th><th>Área</th><th>Abas</th><th></th></tr></thead><tbody>
+  <div class="card"><header><h2>Acessos</h2><p>Um perfil em cada módulo que a pessoa usa</p></header><details class="legdet body pb0 pt0"><summary>Como funcionam os perfis</summary><p class="small m0">Cada pessoa tem um perfil em cada módulo que usa. <b>Operação</b> e <b>Gestão</b>: líder (1 área), supervisor (até 2 áreas), técnico de processo (aprova e devolve os apontamentos em todas as áreas do Pátio ou da Bateria; não aponta), coordenador e gestor (todas as áreas), somente leitura; a Gestão tem também o Administrativo. <b>Segurança</b>: registra (vê só o que registrou), trata e gestor (veem e tratam tudo) ou somente leitura; o supervisor da área (Operação) também vê e trata as anomalias da área dele. <b>RH</b>: Administrativo ou somente leitura. <b>Administração</b>: completa (administrador) ou só a dos módulos da pessoa (como o gestor faz hoje). Os escopos (Pátio, Bateria e Equipamentos) dizem quais conjuntos a pessoa vê. O que cada perfil vê dentro dos módulos fica em <b>Perfis e permissões</b>.</p></details><div class="tw"><table class="tcard utab"><thead><tr><th>Pessoa</th><th>Usuário</th><th>Acesso por módulo</th><th>Área</th><th>Abas</th><th></th></tr></thead><tbody>
   ${us.slice(0, limU).map(u => `<tr${u.papel === 'bloqueado' ? ' class="ubloq"' : ''}><td class="tc-t"><b>${esc(title(u.nome))}</b>${u.trocarSenha ? '<div class="small" style="color:var(--st-atr)">Ainda não criou a própria senha</div>' : ''}</td><td class="mono tc-s">${u.login ? esc(u.login) : '<span class="muted">conta Google</span>'}</td><td class="tc-full" data-l="Acesso por módulo">${selosDe(u)}</td><td data-l="Área">${areaTxt(u)}</td><td class="tc-full" data-l="Abas">${celulaAbas(u)}</td><td class="uacts tc-acao"><button class="btn sm" data-uacesso="${u.uid}" aria-label="Editar o acesso de ${esc(u.login || u.nome)}">${I.users} Acesso</button>${u.uid !== ME.uid ? `${u.login ? `<button class="btn sm" data-reset="${u.uid}" title="Redefinir senha">${I.key} Senha</button>` : ''}<button class="btn sm ghost danger" data-udel="${u.uid}" aria-label="Apagar o usuário ${esc(u.login || u.nome)}">Apagar</button>` : '<span class="pill neu">você</span>'}</td></tr>`).join('')}
   </tbody></table></div>${us.length > limU ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${limU + 20}">Mostrar mais ${Math.min(20, us.length - limU)} (faltam ${us.length - limU})</button></div>` : ''}</div>`;
 }
@@ -347,8 +347,8 @@ export function editarAcessoSheet(uid) {
     toast('Acesso atualizado');
   });
 }
-// Abas que a pessoa pode ter, conforme os módulos dela (com o módulo de cada uma; Meu dia conta uma vez só).
-const viewsDaPessoa = u => { const ms = modsDe(u); return VIEWS.filter(v => (v.mod === 'all' ? ms.length > 0 : ms.includes(v.mod)) && (() => { const m = v.mod === 'all' ? ms.find(x => x !== 'administracao') || 'operacao' : v.mod; const p = perfilDe(u, m); return p && p !== 'admin' && configuravel(m, p, v); })() && (!v.reqU || v.reqU(u))); };
+// Abas que a pessoa pode ter, conforme os módulos dela (com o módulo de cada uma; Avisos no celular fica de fora: todos veem).
+const viewsDaPessoa = u => { const ms = modsDe(u); return VIEWS.filter(v => !v.livre && (v.mod === 'all' ? ms.length > 0 : ms.includes(v.mod)) && (() => { const m = v.mod === 'all' ? ms.find(x => x !== 'administracao') || 'operacao' : v.mod; const p = perfilDe(u, m); return p && p !== 'admin' && configuravel(m, p, v); })() && (!v.reqU || v.reqU(u))); };
 const modDaAba = (u, v) => (v.mod === 'all' ? modsDe(u).find(x => x !== 'administracao') || 'operacao' : v.mod);
 function celulaAbas(u) {
   if (perfilDe(u, 'administracao') === 'admin') return '<span class="muted small">Todas</span>';
@@ -382,7 +382,7 @@ export function abasPessoaSheet(uid) {
 /* ---------------- PERFIS E PERMISSÕES ---------------- */
 // Uma tabela por módulo (abas × perfis daquele módulo). Rascunho em UI.perm até salvar, com as chaves novas
 // 'módulo|perfil'; o que estava gravado no formato antigo (uma chave por perfil) entra no rascunho já convertido.
-const abasDoModulo = mod => VIEWS.filter(v => (v.mod === mod || (v.mod === 'all' && mod !== 'administracao')) && !['usuarios', 'perfis', 'gimport'].includes(v.id));
+const abasDoModulo = mod => VIEWS.filter(v => !v.livre && (v.mod === mod || (v.mod === 'all' && mod !== 'administracao')) && !['usuarios', 'perfis', 'gimport'].includes(v.id));
 export function rascunhoPerm() {
   if (!UI.perm) {
     const c = permCfg(); UI.perm = {};

@@ -9,7 +9,7 @@ import { copiarDoSite } from './lib-site.mjs';
 
 process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
-// As contas do "Meu dia" ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
+// As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
 copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
