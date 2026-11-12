@@ -107,3 +107,44 @@ export function novoNomeQZ(txt, lista) {
   const igual = lista.find(x => chaveNomeQZ(x) === chaveNomeQZ(nome));
   return { nome: igual || nome, existe: !!igual, erro: '' };
 }
+
+// ---- Indicadores (Operação › Indicadores › Queda zero) ----
+// Lançamentos do mês ym nas semanas dadas (só os dias do mês; area = 'TODAS' ou uma área): [{ v, area, dt }].
+export function lancamentosMesQZ(semanas, ym, area = 'TODAS') {
+  const out = [];
+  for (const w of semanas) {
+    if (!w || w.mes !== ym || (area !== 'TODAS' && w.area !== area)) continue;
+    for (let k = 0; k < 7; k++) {
+      const dt = addDias(w.ini, k); if (dt.slice(0, 7) !== ym) continue;
+      for (const x of qzDoDia(w, k)) out.push({ v: x.v, area: w.area, dt });
+    }
+  }
+  return out;
+}
+const addDias = (ini, k) => { const d = new Date(ini + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); };
+// Soma por chave, do maior para o menor: [[nome, toneladas, lançamentos]].
+const somar = (lancs, chave) => {
+  const m = new Map();
+  for (const x of lancs) for (const [c, t] of chave(x)) { const o = m.get(c) || [c, 0, 0]; o[1] += t; o[2]++; m.set(c, o); }
+  return [...m.values()].map(([c, t, n]) => [c, arred(t), n]).sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0]), 'pt-BR'));
+};
+// Números do painel: total, lançamentos, dias com queda, coque × carvão, por dia (dt → t), por local, motivo,
+// equipamento e área. Lançamento sem local ou motivo entra como 'Não informado'.
+export function resumoQZ(lancs) {
+  const itens = x => (Array.isArray(x.v.i) ? x.v.i : []);
+  const total = arred(lancs.reduce((n, x) => n + (Number(x.v.t) || 0), 0));
+  const prod = { coque: 0, carvao: 0 };
+  for (const x of lancs) for (const it of itens(x)) if (it.p in prod) prod[it.p] += resultadoQZ(it.e, it.p, it.q);
+  const porDia = {};
+  for (const x of lancs) porDia[x.dt] = arred((porDia[x.dt] || 0) + (Number(x.v.t) || 0));
+  const dias = Object.values(porDia).filter(t => t > 0).length;
+  const ni = 'Não informado';
+  return {
+    total, n: lancs.length, dias, media: dias ? arred(total / dias) : 0,
+    coque: arred(prod.coque), carvao: arred(prod.carvao), porDia,
+    porLocal: somar(lancs, x => [[x.v.l || ni, Number(x.v.t) || 0]]),
+    porMotivo: somar(lancs, x => [[x.v.m || ni, Number(x.v.t) || 0]]),
+    porArea: somar(lancs, x => [[x.area, Number(x.v.t) || 0]]),
+    porEquip: somar(lancs, x => itens(x).map(it => [(eqDe(it.e) || { nome: it.e }).nome, resultadoQZ(it.e, it.p, it.q)]))
+  };
+}
