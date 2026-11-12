@@ -1674,3 +1674,27 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .escfiltro{margin:0 0 12px;align-items:center}.escfiltro select{max-width:100%}
 .escfolhas{display:grid;gap:16px}.escfolhas .escrota{break-inside:avoid}.escrota table{table-layout:fixed;width:100%}.escrota th.escn{width:34px}.escrota th.escm{width:90px}.escrota th.escf{width:28%}.escrota th.esce{width:22%}.escfolhas .escrota h4 .muted{text-transform:none;letter-spacing:0;font-weight:400}
 @media print{.escfolhas{display:block}.paper.escfolha{break-after:page}.paper.escfolha:last-child{break-after:auto}}
+/* Presença do dia: selo colorido de presentes em cada rota; nome da rota alinhado à esquerda no celular */
+table.efd tr.grp-row .gp{display:inline-block;min-width:34px;text-align:center;padding:1px 8px;margin-right:2px;border-radius:20px;font-weight:700;font-size:12px;background:var(--surface);color:var(--ink-2,var(--ink))}
+table.efd tr.grp-row .gp.ok{background:color-mix(in srgb,var(--st-real) 14%,transparent);color:var(--st-real)}
+table.efd tr.grp-row .gp.warn{background:color-mix(in srgb,var(--st-atr) 16%,transparent);color:var(--st-atr)}
+table.efd tr.grp-row .gp.bad{background:color-mix(in srgb,var(--st-nreal) 14%,transparent);color:var(--st-nreal)}
+table.efd tfoot b.cheio{color:var(--st-real)}
+table.efd tr.grp-row .efg{text-align:left;cursor:pointer}
+table.efd tr.grp-row:has(.efg):hover th{background:color-mix(in srgb,var(--ink) 5%,var(--surface-2))}
+@media (max-width:860px){
+  table.efd tr.grp-row .gcount{float:none;display:block;margin:3px 0 0 20px}
+  table.efd tr.grp-row .efg{display:flex;flex-wrap:wrap;column-gap:6px;row-gap:0}
+  table.efd tr.grp-row .efg .chev{align-self:center}
+}
+/* Equipamentos › Lançamentos: lista de escalados sem lançamento mais curta (Ver todos) e em duas colunas no celular */
+.conf .rchips.semlanc{align-items:center}
+.conf .vertodos{font-weight:600;color:var(--accent)}
+@media (max-width:860px){
+  .conf .rchips.semlanc{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .conf .rchips.semlanc .rchip{min-width:0;padding:6px 8px}
+  .conf .rchips.semlanc .rchip .n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+  .conf .rchips.semlanc .rchip .c{margin-left:auto;flex:none}
+  .conf .rchips.semlanc .vertodos{grid-column:1/-1;justify-self:start}
+  .conf .conf-f .rchip{padding:4px 9px}
+}
