@@ -19,7 +19,7 @@ import { modulo } from '../nucleo/modulos.js';
 // Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
 // Resumos ficam na Gestão: atividades e horas extras com Pátio/Bateria, Equipamentos com o escopo; a Frequência só
 // para quem também tem o RH (os dados da folha vêm de lá).
-const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'gestao').length > 0], ['he', 'Horas extras', u => setsDe(u, 'gestao').length > 0], ['escala', 'Escala das áreas', u => setsDe(u, 'gestao').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'gestao')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'operacao').length > 0], ['he', 'Horas extras', u => setsDe(u, 'operacao').length > 0], ['escala', 'Escala das áreas', u => setsDe(u, 'operacao').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'operacao')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
 const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (UI.modulo === 'rh' ? t[0] === 'freq' : true));
 export const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
 export const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };

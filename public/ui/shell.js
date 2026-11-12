@@ -332,7 +332,7 @@ function seletorJuntas(v) {
 // RH: Folha de frequência → Importar planilhas; Indicadores da frequência → Resumo da frequência.
 // Administração: Visão geral → Conferência, Uso do plano, Erros, Histórico e Limpeza; Plano padrão → Gerador de meses.
 const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']],
-  painel: [['resumo', 'Imprimir resumo', 'print']], epainel: [['resumo', 'Imprimir resumo', 'print']], gpainel: [['resumo', 'Imprimir resumo', 'print']],
+  painel: [['resumo', 'Imprimir resumo', 'print']], epainel: [['resumo', 'Imprimir resumo', 'print']],
   afreq: [['aimport', 'Importar planilhas', 'planilha']], fpainel: [['fresumo', 'Imprimir resumo', 'print']],
   cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular'], ['cfhist', 'Histórico', 'relogio'], ['cflimpa', 'Limpeza de dados', 'lixo']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
 const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Indicadores', 'painel'], afreq: ['Frequência', 'freq'], fpainel: ['Indicadores', 'percent'] };

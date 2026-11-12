@@ -40,6 +40,10 @@ export const VIEWS = [
   { id: 'esdia', nome: 'Presença do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true },
   { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
   { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
+  // Indicadores da operação: um lugar só no menu; Atividades | Equipamentos no topo da tela; Resumos abre pelo botão.
+  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Indicadores', mod: 'operacao', req: opSets, junto: 'ind', filtros: 'msa', conj: true },
+  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Indicadores', mod: 'operacao', req: opEq, junto: 'ind', tela: 'EQ' },
+  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Indicadores', mod: 'operacao', req: () => opSets() || opEq(), filtros: 'msa', fora: true, pai: 'painel' },
   // ---- Gestão: planejar, acompanhar e analisar ----
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
@@ -51,11 +55,8 @@ export const VIEWS = [
   { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
   { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
-  // Indicadores: um lugar só no menu; Atividades | Equipamentos | Fichas no topo da tela.
-  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geSets, junto: 'ind', filtros: 'msa', conj: true },
-  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: geEq, junto: 'ind', tela: 'EQ' },
-  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), junto: 'ind', tela: 'GE' },
-  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Acompanhamento', mod: 'gestao', req: () => geSets() || geEq(), filtros: 'msa', fora: true, pai: 'painel' },
+  // Indicadores das fichas (os da operação ficam na Operação › Indicadores).
+  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
@@ -125,8 +126,8 @@ const MENU_JUNTO = { ind: 'Indicadores', efetivo: 'Efetivo', fotos: 'Fotos', fic
 export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nome)) || '';
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
-  operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos e Efetivo', key: 'operacao', inicio: 'apontar' },
-  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas e Indicadores', key: 'gestao', inicio: 'prog' },
+  operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos, Efetivo e Indicadores', key: 'operacao', inicio: 'apontar' },
+  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas e indicadores das fichas', key: 'gestao', inicio: 'prog' },
   seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, treinamentos e indicadores', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Frequência e férias', key: 'rh', inicio: 'afreq' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
@@ -188,7 +189,7 @@ export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: 
 // Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores.
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
-  gestao: () => ['prog', 'gcolab', 'painel', 'gpainel', 'epainel', 'causas', 'eaval'],
+  gestao: () => ['prog', 'gcolab', 'gpainel', 'causas', 'eaval'],
   seguranca: () => ['sganom', 'sginter', 'sgtrein', 'sgpainel'],
   rh: () => ['afreq', 'aferias', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
