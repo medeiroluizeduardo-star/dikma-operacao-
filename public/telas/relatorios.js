@@ -33,7 +33,10 @@ const rMes = () => UI.rPer === 'mes' && COM_MES.includes(resTipo());
 const perResumo = () => resTipo() === 'escala' ? '' : `<div class="seg resabas noprint" role="tablist" aria-label="Período do resumo"><button type="button" role="tab" data-rper="dia" aria-selected="${rDia()}">Do dia</button><button type="button" role="tab" data-rper="sem" aria-selected="${!rDia() && !rMes()}">Da semana</button>${COM_MES.includes(resTipo()) ? `<button type="button" role="tab" data-rper="mes" aria-selected="${rMes()}">Do mês</button>` : ''}</div>`;
 const periodoComp = c => { const d = diasDaCompetencia(c); const i = d[0], f = d[d.length - 1]; return `${ddmm(i)} a ${ddmm(f)}/${f.slice(0, 4)}`; };
 // Mesmas pessoas da aba Frequência: a folha e quem está na Presença do dia fora dela.
-const metaFreq = conj => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Presença do dia</span>`;
+const metaFreq = (conj, area) => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Presença do dia</span>${area !== 'TODAS' ? `<span><b>Área:</b> ${esc(AREA_S[area] || title(area))}</span>` : ''}`;
+// Frequência por área (pela área de cada pessoa na Presença do dia); "Todas" = o conjunto inteiro.
+const freqArea = conj => { const l = areasDoSet(conj); return l.includes(UI.rfArea) ? UI.rfArea : 'TODAS'; };
+const filtroArea = (conj, sel) => `<div class="row-gap noprint escfiltro"><label for="rfArea"><b>Área</b></label><select id="rfArea" data-rfarea="1" aria-label="Área da frequência"><option value="TODAS">Todas as áreas</option>${areasDoSet(conj).map(a => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(AREA_S[a] || title(a))}</option>`).join('')}</select><span class="muted small">${sel === 'TODAS' ? 'Escolha uma área para ver os nomes dos presentes, das ausências e da hora extra no resumo do dia.' : rDia() ? 'Com os nomes dos presentes, das ausências e da hora extra.' : 'Só as pessoas desta área; os nomes do dia aparecem em “Do dia”.'}</span></div>`;
 const dataLonga = d => { const x = pd(d); return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][x.getDay()]}, ${ddmm(d)}/${d.slice(0, 4)}`; };
 export function vResumoOutro() {
   const tipo = resTipo();
@@ -41,29 +44,31 @@ export function vResumoOutro() {
   if (rDia()) {
     const d = UI.rDiaO && UI.rDiaO <= TODAY ? UI.rDiaO : TODAY; UI.rDiaO = d;
     const md = modulo(tipo === 'oper' ? 'EQ' : 'AD'); // sem o arquivo ainda: esqueleto até chegar
-    const r = !md ? null : tipo === 'oper' ? md.resumoDia(d) : md.resumoDia(d, conj);
-    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+    const area = tipo === 'oper' ? 'TODAS' : freqArea(conj);
+    const r = !md ? null : tipo === 'oper' ? md.resumoDia(d) : md.resumoDia(d, conj, area);
+    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rdiao="-1" aria-label="Dia anterior">‹</button><b>${dataLonga(d)}</b><button class="btn ghost sm" data-rdiao="1" aria-label="Próximo dia" ${d >= TODAY ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>${tipo === 'oper' ? '' : filtroArea(conj, area)}`;
     if (!r) return nav + M.ESQUELETO;
-    const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj);
+    const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj, area);
     return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO DIA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Dia:</b> ${dataLonga(d)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
   }
   if (rMes()) { // Frequência do mês: a folha de 16 a 15
     const max = competenciaDe(TODAY); const comp = UI.rComp && UI.rComp <= max ? UI.rComp : max; UI.rComp = comp;
-    const md = modulo('AD'); const r = md && md.resumoMes ? md.resumoMes(comp, conj) : null;
-    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rcomp="-1" aria-label="Mês anterior">‹</button><b>${monthLabel(comp)} · ${periodoComp(comp)}</b><button class="btn ghost sm" data-rcomp="1" aria-label="Próximo mês" ${comp >= max ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+    const area = freqArea(conj); const md = modulo('AD'); const r = md && md.resumoMes ? md.resumoMes(comp, conj, area) : null;
+    const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rcomp="-1" aria-label="Mês anterior">‹</button><b>${monthLabel(comp)} · ${periodoComp(comp)}</b><button class="btn ghost sm" data-rcomp="1" aria-label="Próximo mês" ${comp >= max ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>${filtroArea(conj, area)}`;
     if (!r) return nav + M.ESQUELETO;
-    return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO MÊS · FREQUÊNCIA</h3><div class="meta">${metaFreq(conj)}<span><b>Folha:</b> ${monthLabel(comp)} (${periodoComp(comp)})</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
+    return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DO MÊS · FREQUÊNCIA</h3><div class="meta">${metaFreq(conj, area)}<span><b>Folha:</b> ${monthLabel(comp)} (${periodoComp(comp)})</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
   }
   const ini = UI.rIni || UI.ini || CUR_WEEK; UI.rIni = ini; const fim = add(ini, 6);
   const md = modulo(tipo === 'oper' ? 'EQ' : 'AD');
-  const r = !md ? null : tipo === 'oper' ? md.resumoSemana(ini) : md.resumoSemana(ini, conj);
-  const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>`;
+  const area = tipo === 'oper' ? 'TODAS' : freqArea(conj);
+  const r = !md ? null : tipo === 'oper' ? md.resumoSemana(ini) : md.resumoSemana(ini, conj, area);
+  const nav = `<div class="row-between noprint"><div class="row-gap">${abasResumo()}${perResumo()}</div><div class="compnav"><button class="btn ghost sm" data-rsem="-1" aria-label="Semana anterior">‹</button><b>${ddmm(ini)} a ${ddmm(fim)}</b><button class="btn ghost sm" data-rsem="1" aria-label="Próxima semana" ${ini >= CUR_WEEK ? 'disabled' : ''}>›</button></div>${!framed ? `<button class="btn pri" data-act="print">${I.print} Imprimir / salvar PDF</button>` : ''}</div>${tipo === 'oper' ? '' : filtroArea(conj, area)}`;
   if (!r) return nav + M.ESQUELETO;
-  const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj);
+  const meta = tipo === 'oper' ? '<span><b>Equipamentos</b></span>' : metaFreq(conj, area);
   return `${nav}<div class="tw"><div class="paper resumo"><div class="hd"><div><h3>RESUMO DA SEMANA · ${tipo === 'oper' ? 'OPERAÇÃO' : 'FREQUÊNCIA'}</h3><div class="meta">${meta}<span><b>Semana:</b> ${ddmm(ini)} a ${ddmm(fim)}/${fim.slice(0, 4)}</span><span><b>Gerado em:</b> ${ddmm(TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>
   <div class="rkpis">${r.kpis.map(([v, l]) => `<div><b>${v}</b><span>${l}</span></div>`).join('')}</div>${r.corpo}
   <div class="sign"><div>Supervisor</div><div>Gestor</div></div></div></div>`;
