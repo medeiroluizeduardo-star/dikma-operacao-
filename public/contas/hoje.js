@@ -1,4 +1,4 @@
-// Dikma Gestão — cálculos do "Meu dia". Funções puras, usadas pela tela (navegador)
+// Dikma Gestão — cálculos do dia (atrasadas, déficit, paradas). Funções puras, usadas pelo site (navegador)
 // e pela rotina de avisos no celular (GitHub Actions), para os dois mostrarem a mesma coisa.
 import { add, weekOf, SETS } from './cal.js';
 import { AUSENTE, AUSENCIA } from './situacao.js';
@@ -7,10 +7,10 @@ const linha = (doc, i) => (doc.d ? doc.d[i] : ((doc.s && doc.s[doc.ids[i]]) || '
 const diaSemana = data => (new Date(data + 'T12:00:00').getDay() + 6) % 7; // 0 = segunda
 
 // "Atrasadas": atividade programada (P) num dia que já passou, sem apontamento. Janela fixa: os últimos 60 dias,
-// a mesma no menu, em Pendências e no Meu dia (antes cada tela olhava o que estivesse carregado).
+// a mesma no menu e em Pendências (antes cada tela olhava o que estivesse carregado).
 export const JANELA_ATRASADAS = 60;
 export const inicioAtrasadas = hoje => add(hoje, -JANELA_ATRASADAS);
-// No Meu dia, o número principal é o dos últimos 7 dias; o dos 60 dias aparece como detalhe.
+// atrasadasRecentes: as dos últimos 7 dias; o total é o dos 60 dias.
 export const ATRASADAS_RECENTES = 7;
 // semanas {id: doc} · areas (vazio = todas) · devolve [{ doc, i, k, dt }] da mais antiga para a mais nova
 export function listaAtrasadas(semanas, { areas, hoje, desde = inicioAtrasadas(hoje) }) {
@@ -27,7 +27,7 @@ export function listaAtrasadas(semanas, { areas, hoje, desde = inicioAtrasadas(h
 }
 
 // Efetivo de uma rota num dia: disponíveis × necessários, com as coberturas. A mesma conta no Dimensionamento,
-// no Balanço, no Meu dia e no aviso das 17h.
+// no Balanço e no aviso das 17h.
 // r = { area, rota, ef, carga } · o = { cs: pessoas da rota, prog: atividades programadas no dia,
 //   sitDe(c) → { v, auto } (auto = folga pela escala), cob: [{ aus, sub }] coberturas do dia,
 //   subOk(sub) → o substituto existe (neste conjunto ou noutro), fator: parte do quadro que trabalha por dia }

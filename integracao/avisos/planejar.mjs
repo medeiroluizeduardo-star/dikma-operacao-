@@ -1,5 +1,5 @@
 // Decide quem recebe qual aviso agora. Função pura: recebe os dados já lidos e devolve as mensagens.
-// Usa as mesmas contas da tela "Meu dia" (public/contas/hoje.js), copiadas para esta pasta na hora de rodar.
+// Usa as mesmas contas do site (public/contas/hoje.js), copiadas para esta pasta na hora de rodar.
 import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
@@ -60,7 +60,7 @@ export function planejar(d) {
         const n = comigo.length + daArea.length; if (!n) continue;
         const s = n > 1 ? 's' : '';
         const titulo = comigo.length === n ? `${n} assinatura${s} com você há mais de 7 dias` : `${n} assinatura${s} pendente${s} há mais de 7 dias`;
-        const corpo = comigo.length && comigo.length < n ? `${comigo.length} com você para recolher. Toque para ver.` : 'Toque para ver no Meu dia.';
+        const corpo = comigo.length && comigo.length < n ? `${comigo.length} com você para recolher. Toque para ver.` : 'Toque para ver.';
         msgs.push({ uid: x.uid, titulo, corpo, tag: 'assinaturas', url: '/?m=gestao&v=gocorr' });
       }
     }
@@ -143,7 +143,7 @@ export function planejar(d) {
       }
       if (mods(x.ge).includes('gestao') && pend) linhas.push(`Efetivo: ${pend} assinatura${pend > 1 ? 's' : ''} pendente${pend > 1 ? 's' : ''}`);
       if (mods(x.ge).includes('equipamentos') && abertas) linhas.push(`Operação: ${abertas} parada${abertas > 1 ? 's' : ''} sem liberação`);
-      if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=resumo&s=${ini}` : '/?v=meudia' });
+      if (linhas.length) msgs.push({ uid: x.uid, titulo: `Resumo da semana (${dm(ini)} a ${dm(add(ini, 6))})`, corpo: linhas.join('\n'), tag: 'semanal', url: mod ? `/?m=${mod}&v=resumo&s=${ini}` : '/' });
       marcar.add(chave);
     }
   }

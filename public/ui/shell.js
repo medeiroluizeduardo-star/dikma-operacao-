@@ -13,7 +13,7 @@ import { vApontar } from '../telas/apontar.js';
 import { fecharSitPop, vEsDim, vEsBal, vEsDia } from '../telas/efetivo.js';
 import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
 import { problemaSenha } from '../contas/senha.js';
-import { MD, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
+import { AV, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
 // Resumos (relatorios.js) e configurações (config.js) chegam só quando abertos (modulos.js: RE, CF).
 const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
 const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
@@ -111,7 +111,7 @@ function renderTela() {
   if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
   const v = UI.view, arq = aba(v).tela; // arquivo que desenha a aba (campo tela em VIEWS, navegacao.js)
   const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
-  if (v === 'meudia') return tela(MD.view());
+  if (v === 'avisos') return tela(AV.view());
   if (arq === 'SG') return tela(comModulo('SG', m => m.render(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
@@ -128,7 +128,7 @@ function renderTela() {
   const needWeeks = filtrosDe(v).mes || !!aba(v).mesDados;
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
   const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: () => modulo('RE').vResumo(), etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: comCF(m => m.vPlano()), gerador: comCF(m => m.vGerador()), config: comCF(m => m.vConfig()), esdia: vEsDia, esdim: vEsDim, esbal: vEsBal }[v];
-  pintar('view', fn ? fn() : MD.view());
+  pintar('view', fn ? fn() : '');
   afterRender();
 }
 let raf = 0;
@@ -138,7 +138,7 @@ export const schedule = () => { if (raf) return; raf = setTimeout(() => requestA
 function renderNav() {
   const op = UI.modulo === 'operacao', ge = UI.modulo === 'gestao';
   const ativOp = op && setsDe(ME, 'operacao').length > 0 && !!DB.cache.config;
-  // Selo de Pendências: atrasadas dos últimos 60 dias na área da pessoa (a mesma janela de Pendências e do Meu dia).
+  // Selo de Pendências: atrasadas dos últimos 60 dias na área da pessoa (a mesma janela de Pendências).
   const atr = ativOp ? atrasadasAll(myArea() || 'TODAS').length : 0;
   // selos aparecem quando a tela do módulo já chegou: fichas (Gestão) e paradas (Operação)
   const gb = ge ? (temFichas(ME) && GE ? GE.badge() : 0) : op && temEquipEm(ME, 'operacao') && EQ ? EQ.badge() : 0;
@@ -163,8 +163,8 @@ function renderNav() {
   }
   pintar('nav', h);
   pintar('who', DEMO
-    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
-    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
+    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
+    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos no celular</button><div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
   // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
   { const w = $('who'); if (w && !w.querySelector('[data-painel]') && isAdmin()) w.insertAdjacentHTML('afterbegin', `<a class="btn rail-btn" data-painel href="${PAINEL_URL}" target="_blank" rel="noopener">${I.painel} Meu painel</a>`); }
@@ -305,7 +305,7 @@ function renderTop() {
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
     pintarTopo(v.nome, sub, sw + seletorJuntas(v) + atalhosDe(v)); return;
   }
-  if (v.id === 'meudia') { pintarTopo(v.nome, 'O que é seu hoje, em todos os módulos'); return; }
+  if (v.id === 'avisos') { pintarTopo(v.nome, 'Escolha o que receber neste aparelho, mesmo com o sistema fechado'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }

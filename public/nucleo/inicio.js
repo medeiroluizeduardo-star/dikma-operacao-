@@ -29,8 +29,8 @@ function abrirLink(busca) {
 if (abrirLink(location.search)) history.replaceState(null, '', location.pathname + (DEMO ? '?demo' : ''));
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
   if (!e.data || e.data.tipo !== 'abrir' || AUTH.status !== 'ready') return;
-  let busca = ''; try { busca = new URL(e.data.url).search; } catch (err) { /* link inválido: abre o Meu dia */ }
-  if (!abrirLink(busca)) UI.view = 'meudia';
+  let busca = ''; try { busca = new URL(e.data.url).search; } catch (err) { /* link inválido: abre o início do módulo */ }
+  if (!abrirLink(busca)) UI.view = '';
   ensureModulo(); aplicarSet(); render(); scrollTo(0, 0);
 });
 M.iniciarJanelas(); M.iniciarTopo();

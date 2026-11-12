@@ -29,7 +29,7 @@ import * as FE from '../contas/feriados.js';
 
 /* ---------------- MÓDULO CONFIGURAÇÕES ---------------- */
 // Um lugar só para os ajustes de todos os módulos. Cada tela grava no mesmo lugar de sempre, então o que muda aqui
-// vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação, Efetivo e Meu dia.
+// vale na hora para Atividades Pátio e Bateria, Escala e Efetivo, Operação e Efetivo.
 function vCfGeral() {
   const E = escala(); const card = (ic, t, sub, corpo, botoes) => `<div class="card cfc"><header><span class="cfi">${ic}</span><div class="minw"><h2>${t}</h2><p>${sub}</p></div></header><div class="body">${corpo}<div class="row-gap cfb">${botoes}</div></div></div>`;
   const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
@@ -104,7 +104,7 @@ function vCfEscala() {
       <td>${ed ? `<select class="in" data-escpes="${x.k}|${esc(x.c.area)}|${esc(x.c.id)}" aria-label="Turma de ${esc(title(x.c.nome))}"><option value="">${x.tf && !x.t ? `Da ficha (${esc(x.tf)})` : 'Sem turma'}</option>${Object.keys(x.r.turmas || {}).map(l => `<option ${l === x.t ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : esc(t || '—')}</td>
       <td>${p ? (p.trab ? `<span class="pill ok">${p.periodo === 'N' ? 'noite' : 'dia'}</span>` : '<span class="pill neu">folga</span>') : '<span class="pill warn">sem turma</span>'}</td></tr>`; }).join('')}
     </tbody></table><p class="empty" data-vazio ${pessoas.some(x => casa(kP(x), q)) ? 'hidden' : ''}>${pessoas.length ? 'Ninguém encontrado.' : 'Nenhuma pessoa em regime de turno nas Atividades.'}</p></div></div>`;
-  return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Atividades, Pessoas no turno, Equipamentos, RH, Meu dia e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
+  return `${cal}<div class="card"><header><h2>Regimes e turmas</h2><p>Vale para Atividades, Pessoas no turno, Equipamentos, RH e avisos no celular</p></header><div class="body cfreg">${reg}${ferH}</div>${barra}</div>${tab}`;
 }
 const dBRs = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;
 // Conferência do cadastro: o que falta ou não bate entre os módulos, com o atalho para corrigir.
@@ -347,8 +347,8 @@ export function editarAcessoSheet(uid) {
     toast('Acesso atualizado');
   });
 }
-// Abas que a pessoa pode ter, conforme os módulos dela (com o módulo de cada uma; Meu dia conta uma vez só).
-const viewsDaPessoa = u => { const ms = modsDe(u); return VIEWS.filter(v => (v.mod === 'all' ? ms.length > 0 : ms.includes(v.mod)) && (() => { const m = v.mod === 'all' ? ms.find(x => x !== 'administracao') || 'operacao' : v.mod; const p = perfilDe(u, m); return p && p !== 'admin' && configuravel(m, p, v); })() && (!v.reqU || v.reqU(u))); };
+// Abas que a pessoa pode ter, conforme os módulos dela (com o módulo de cada uma; Avisos no celular fica de fora: todos veem).
+const viewsDaPessoa = u => { const ms = modsDe(u); return VIEWS.filter(v => !v.livre && (v.mod === 'all' ? ms.length > 0 : ms.includes(v.mod)) && (() => { const m = v.mod === 'all' ? ms.find(x => x !== 'administracao') || 'operacao' : v.mod; const p = perfilDe(u, m); return p && p !== 'admin' && configuravel(m, p, v); })() && (!v.reqU || v.reqU(u))); };
 const modDaAba = (u, v) => (v.mod === 'all' ? modsDe(u).find(x => x !== 'administracao') || 'operacao' : v.mod);
 function celulaAbas(u) {
   if (perfilDe(u, 'administracao') === 'admin') return '<span class="muted small">Todas</span>';
@@ -382,7 +382,7 @@ export function abasPessoaSheet(uid) {
 /* ---------------- PERFIS E PERMISSÕES ---------------- */
 // Uma tabela por módulo (abas × perfis daquele módulo). Rascunho em UI.perm até salvar, com as chaves novas
 // 'módulo|perfil'; o que estava gravado no formato antigo (uma chave por perfil) entra no rascunho já convertido.
-const abasDoModulo = mod => VIEWS.filter(v => (v.mod === mod || (v.mod === 'all' && mod !== 'administracao')) && !['usuarios', 'perfis', 'gimport'].includes(v.id));
+const abasDoModulo = mod => VIEWS.filter(v => !v.livre && (v.mod === mod || (v.mod === 'all' && mod !== 'administracao')) && !['usuarios', 'perfis', 'gimport'].includes(v.id));
 export function rascunhoPerm() {
   if (!UI.perm) {
     const c = permCfg(); UI.perm = {};
