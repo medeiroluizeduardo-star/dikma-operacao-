@@ -39,8 +39,8 @@ Arquivos:
   semana no **mesmo lote** (`DB.apagarFotoAtividade`; espera o servidor, sem sinal dá erro). A foto que vale para várias
   atividades ("Marcar restantes") sai de todas (a tela avisa). O líder só apaga a foto **No banco** (ainda não
   exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
-- **Queda zero**: não fica mais nas fotos. É um lançamento separado no fim do Apontar (cartão "Queda zero" do dia);
-  veja `public/telas/queda-zero.js`. Os registros antigos feitos junto da foto aparecem nesse cartão.
+- **Queda zero**: não fica nas fotos nem no Apontar. Tem aba própria em Operação › Queda zero
+  (`public/telas/queda-zero.js`). Os registros antigos feitos junto da foto aparecem lá, no dia deles.
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos

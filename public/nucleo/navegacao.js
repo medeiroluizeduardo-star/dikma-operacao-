@@ -33,6 +33,7 @@ export const VIEWS = [
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao'), mesDados: true, conj: true },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Atividades', mod: 'operacao', req: opSets, conj: true },
+  { id: 'quedazero', nome: 'Queda zero', ic: 'queda', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'lanc', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
   { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
   { id: 'einsp', nome: 'Inspeções 5S e segurança', ic: 'capacete', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
