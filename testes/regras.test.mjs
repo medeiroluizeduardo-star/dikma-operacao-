@@ -243,6 +243,14 @@ test('Atividades: líder aponta só na própria área e não muda a área da sem
   await assertSucceeds(updateDoc(doc(db('coord'), 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }));
   await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { s: { 'B1-001': 'R______' } }));
 });
+test('Queda zero: quem aponta na área grava e apaga; outra área e quem só lê não', async () => {
+  const v = { i: [{ e: 'pa', p: 'coque', q: 3 }], t: 0.024 };
+  await assertSucceeds(updateDoc(doc(db('liderRec'), 'semanas', SEM), { 'qz.REC-001|2': v }));
+  await assertSucceeds(updateDoc(doc(db('liderRec'), 'semanas', SEM), { 'qz.REC-001|2': deleteField() }));
+  await assertFails(updateDoc(doc(db('liderRec'), 'semanas', SEM_PREP), { 'qz.PRE-001|2': v }));
+  await assertFails(updateDoc(doc(db('leitorG'), 'semanas', SEM), { 'qz.REC-001|2': v }));
+  await assertSucceeds(updateDoc(doc(db('sup'), 'b_semanas', SEM_B1), { 'qz.B1-001|2': v }));
+});
 test('Atividades: fora da programação só pelo coordenador e pelo supervisor da área', async () => {
   const fp = (pid, k) => ({ [`fp.${pid}|${k}`]: { por: 'x', nome: 'X', em: '2026-10-21' } });
   await assertFails(updateDoc(doc(db('liderRec'), 'semanas', SEM), { 's.REC-001': 'P______', ...fp('REC-001', 0) }));

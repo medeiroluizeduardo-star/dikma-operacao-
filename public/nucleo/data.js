@@ -472,6 +472,11 @@ export function apontarComFotos(docId, changes, fotos) {
   track(b.commit());
   return ids;
 }
+// Queda zero (opcional) de uma atividade num dia: qz['PID|k'] = { i: [{ e, p, q }], t } na semana; v = null apaga.
+export function salvarQuedaZero(docId, area, key, v) {
+  const k = setDaArea(area || '') || cur;
+  return track(updateDoc(doc(db, C('semanas', k), docId), new FieldPath('qz', key), v || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid));
+}
 const dataDe = v => (v && v.toDate ? v.toDate() : v || null);
 const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date(), exportadoEm: dataDe(x.exportadoEm), lixeiraEm: dataDe(x.lixeiraEm), removidaEm: dataDe(x.removidaEm) }; };
 // Fotos (leves, com miniatura) de uma atividade num dia. Também as do código antigo (campo ref).

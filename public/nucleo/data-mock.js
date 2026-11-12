@@ -364,6 +364,11 @@ export function apontarComFotos(docId, changes, fotos) {
   Object.assign(w, toLocal(docId, w)); changed();
   return ids;
 }
+export function salvarQuedaZero(docId, area, key, v) {
+  const w = S[setDaArea(area || '') || cur].semanas[docId]; if (!w) return;
+  w.qz = w.qz || {}; if (v) w.qz[key] = v; else delete w.qz[key];
+  Object.assign(w, toLocal(docId, w)); changed();
+}
 export async function apagarFotoAtividade(f) {
   await pausa(); const i = EV.findIndex(x => x.id === f.id); if (i < 0) throw new Error('Foto não encontrada');
   const e = EV[i]; EV.splice(i, 1);
