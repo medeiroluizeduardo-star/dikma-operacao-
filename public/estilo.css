@@ -1716,3 +1716,17 @@ table.efd tr.grp-row:has(.efg):hover th{background:color-mix(in srgb,var(--ink) 
   .conf .rchips.semlanc .vertodos{grid-column:1/-1;justify-self:start}
   .conf .conf-f .rchip{padding:4px 9px}
 }
+/* Presença por dia: botões dos 7 dias da semana e uma coluna só com a situação */
+.efdias{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;max-width:520px}
+.efdia{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 2px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink-2);font:inherit;cursor:pointer;min-height:44px}
+.efdia span{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.efdia b{font-size:15px}
+.efdia.hoje{border-color:var(--accent)}
+.efdia.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.efdia:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+table.efdia1{width:100%}
+table.efdia1 td.efsit{white-space:nowrap}
+table.efdia1 td.efsit .sit{vertical-align:middle}
+table.efdia1 .efsitn{margin-left:8px;font-size:12.5px;color:var(--ink-2);vertical-align:middle}
+table.efdia1 .efsitn.bad{color:var(--st-nreal)}
+@media (max-width:860px){table.efdia1 td.efsit{white-space:normal}table.efdia1 .efsitn{font-size:11.5px;margin-left:4px}table.efdia1 td:first-child{width:58%}}
