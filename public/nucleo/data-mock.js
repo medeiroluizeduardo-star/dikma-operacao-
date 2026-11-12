@@ -364,6 +364,7 @@ export function apontarComFotos(docId, changes, fotos) {
   Object.assign(w, toLocal(docId, w)); changed();
   return ids;
 }
+export async function salvarItemQZ(tipo, nome) { cache.qzListas = cache.qzListas || {}; const l = cache.qzListas[tipo] = cache.qzListas[tipo] || []; if (!l.includes(nome)) l.push(nome); changed(); }
 export function salvarQuedaZero(docId, area, key, v) {
   const w = S[setDaArea(area || '') || cur].semanas[docId]; if (!w) return;
   w.qz = w.qz || {}; if (v) w.qz[key] = v; else delete w.qz[key];

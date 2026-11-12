@@ -300,6 +300,8 @@ function startData() {
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
   // Fotos das atividades: obrigatoriedade, mínimo, máximo e situações (Administração › Fotos das atividades).
   on(doc(db, 'config', 'fotos'), s => { cache.fotosCfg = s.exists() ? s.data() : null; cache.fotosCfgLoaded = true; changed(); });
+  // Queda zero: locais e motivos cadastrados pelo pessoal (além das listas padrão de contas/queda-zero.js).
+  on(doc(db, 'config', 'quedazero'), s => { cache.qzListas = s.exists() ? s.data() : {}; changed(); });
   if (ehAdminU(me)) on(doc(db, 'avisos_enviados', 'estado'), s => { const x = s.exists() ? s.data() : null; cache.avisosEstado = x ? { ...x, enviados: undefined, ultimaExecucao: x.ultimaExecucao && x.ultimaExecucao.toDate ? x.ultimaExecucao.toDate() : null } : null; changed(); });
   on(doc(db, 'avisos', me.uid), s => { cache.meusAvisos = s.exists() ? s.data() : null; changed(); });
   if (ehAdminU(me)) on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
@@ -477,6 +479,8 @@ export function salvarQuedaZero(docId, area, key, v) {
   const k = setDaArea(area || '') || cur;
   return track(updateDoc(doc(db, C('semanas', k), docId), new FieldPath('qz', key), v || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid));
 }
+// Cadastra um local ou motivo novo da Queda zero (tipo = 'locais' ou 'motivos'), para todos verem.
+export const salvarItemQZ = (tipo, nome) => track(setDoc(doc(db, 'config', 'quedazero'), { [tipo]: arrayUnion(nome), atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));
 const dataDe = v => (v && v.toDate ? v.toDate() : v || null);
 const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date(), exportadoEm: dataDe(x.exportadoEm), lixeiraEm: dataDe(x.lixeiraEm), removidaEm: dataDe(x.removidaEm) }; };
 // Fotos (leves, com miniatura) de uma atividade num dia. Também as do código antigo (campo ref).

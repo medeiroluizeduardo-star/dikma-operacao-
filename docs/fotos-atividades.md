@@ -41,6 +41,8 @@ Arquivos:
   exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
 - **Queda zero**: não fica nas fotos nem no Apontar. Tem aba própria em Operação › Queda zero
   (`public/telas/queda-zero.js`). Os registros antigos feitos junto da foto aparecem lá, no dia deles.
+  Cada lançamento pode ter local (transportador) e motivo das listas de `public/contas/queda-zero.js`; nomes novos
+  cadastrados na hora ficam em `config/quedazero` (`locais`, `motivos`) e aparecem para todos.
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { acessoDoLegado } from './legado.mjs';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField, increment } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField, increment, arrayUnion } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -438,6 +438,15 @@ test('Fotos (Parte 2) na Bateria (b_) e fotos antigas (só ref): o administrador
   await assertSucceeds(marcarExp('admin', 'pv1'));
   await assertSucceeds(updateDoc(doc(db('admin'), 'evidencias', 'pv1'), { lixeiraEm: serverTimestamp() }));
   await assertSucceeds(apagarDeVez('admin', ['pv1']));
+});
+test('Queda zero: locais e motivos novos, quem aponta cadastra e todos leem', async () => {
+  const add = (u, x) => setDoc(doc(db(u), 'config', 'quedazero'), { locais: arrayUnion('C9999'), atualizadoEm: serverTimestamp(), por: 'x', ...x }, { merge: true });
+  await assertSucceeds(add('liderRec'));
+  await assertSucceeds(add('sup', { motivos: arrayUnion('Vazamento') }));
+  await assertSucceeds(getDoc(doc(db('leitorG'), 'config', 'quedazero')));
+  await assertFails(add('leitorG'));
+  await assertFails(add(null));
+  await assertFails(add('liderRec', { outro: 1 }));
 });
 test('Fotos: config/fotos todos leem; só o administrador grava, dentro dos limites', async () => {
   const cfg = (x = {}) => ({ obrig: true, min: 1, max: 3, situacoes: ['R', 'E'], desde: '2026-11-09', atualizadoEm: serverTimestamp(), por: 'Admin', ...x });

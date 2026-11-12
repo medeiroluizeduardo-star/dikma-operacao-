@@ -17,6 +17,22 @@ export const QZ_EQUIP = [
   { id: 'pa', nome: 'Pá', coque: 0.008, carvao: 0.009 }
 ];
 export const QZ_MAX_LINHAS = 12;
+// Local (transportador) e motivo da queda: listas da operação (12/11/2026). Os itens novos que o pessoal cadastra
+// ficam em config/quedazero ({ locais, motivos }) e aparecem para todos depois destes.
+export const QZ_LOCAIS = [
+  'C5601', 'C5602', 'C5604', 'C5605', 'C5607', 'C5608', 'ST0801', 'ST0802', 'SR205', 'BC211', 'BC211A', 'BC214',
+  'BC215', 'BC215A', 'BC216', 'RE1201', 'RE1202', 'C5610', 'C5610A', 'C5611', 'C5611A', 'C5613A', 'C5614', 'C5614A',
+  'C5613', 'C5615', 'C1', 'C2', 'C3', 'C4', 'C5617', 'C5617AR', 'C5618', 'C5619', 'C5620', 'C5621', 'WF13,14E15',
+  'C5618A', 'C5619A', 'C5620A', 'C5625A', 'WF1À12', 'C5', 'C6', 'C7', 'C9', 'C10', 'C11', 'C12', 'C13', 'BC331',
+  'BC332', 'BC332A', 'BC332B', 'BC333', 'BC334', 'RECLAME 02', 'TECO TECO', 'CK1', 'CK2', 'CK3', 'CK3BIS', 'CK7',
+  'CK7BIS', 'CK4', 'CK5', 'CK5BIS', 'CK6', 'CK8', 'CBK1', 'CK9', 'CK10', 'CK10 BIS', 'CK11', 'CK21', 'CK22', 'CKE1',
+  'CKE2', 'CK202', 'CK203', 'CK204', 'CK205', 'CK206', 'CR1', 'CR2', 'CR3', 'SC5601', 'SC5602', 'TT3', 'TT1', 'TT4',
+  'TT5', 'TT9', 'PV25A', 'PV20A', 'DG1-COQUE', 'DG2', 'DG-3', 'HC5605', 'LCK1', 'SK1', 'SK2', 'MH5601', 'MH5602'
+];
+export const QZ_MOTIVOS = [
+  'Transbordo', 'Furo em calha', 'Chuva', 'Vedação', 'Limpeza estruturas', 'Umidade', 'Desalinhamento', 'Lama da Vale', 'Sonda', 'Retorno de material', 'Falha elétrica', 'Sobrecarga', 'Operacional', 'Em análise', 'Perda de correia', 'Limpeza pista', 'Limpeza máquina', 'Limpeza canaleta', 'Raspador ineficiente', 'Arrastador ineficiente', 'Queda no processo', 'Acúmulo', 'Rasgo de borda', 'Outros'
+];
+export const QZ_NOME_MAX = 40;
 export const QZ_MAX_QTD = 9999;
 
 const eqDe = id => QZ_EQUIP.find(x => x.id === id);
@@ -75,3 +91,19 @@ export function qzDoDia(doc, k) {
 }
 // Total do dia (toneladas).
 export const totalDiaQZ = (doc, k) => Math.round(qzDoDia(doc, k).reduce((n, x) => n + (Number(x.v.t) || 0), 0) * 1e6) / 1e6;
+// Compara nomes sem diferença de maiúsculas, acentos e espaços ("SR 205" = "SR205", "Falha eletrica" = "Falha elétrica").
+export const chaveNomeQZ = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toUpperCase();
+// Lista completa (padrão + cadastrados, sem repetir). extras = config/quedazero.locais ou .motivos.
+export function listaQZ(padrao, extras) {
+  const vistos = new Set(padrao.map(chaveNomeQZ)); const mais = [];
+  for (const x of Array.isArray(extras) ? extras : []) { const t = String(x || '').replace(/\s+/g, ' ').trim(); const c = chaveNomeQZ(t); if (t && !vistos.has(c)) { vistos.add(c); mais.push(t); } }
+  return [...padrao, ...mais.sort((a, b) => a.localeCompare(b, 'pt-BR'))];
+}
+// Confere um nome novo digitado: devolve { nome, existe (o nome igual que já está na lista), erro }.
+export function novoNomeQZ(txt, lista) {
+  const nome = String(txt || '').replace(/\s+/g, ' ').trim();
+  if (nome.length < 2) return { nome, erro: 'Escreva o nome (pelo menos 2 letras).' };
+  if (nome.length > QZ_NOME_MAX) return { nome, erro: `Nome muito grande (até ${QZ_NOME_MAX} letras).` };
+  const igual = lista.find(x => chaveNomeQZ(x) === chaveNomeQZ(nome));
+  return { nome: igual || nome, existe: !!igual, erro: '' };
+}
