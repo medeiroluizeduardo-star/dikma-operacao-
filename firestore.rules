@@ -299,6 +299,16 @@ service cloud.firestore {
         && (!request.resource.data.obrig || request.resource.data.situacoes.size() >= 1);
     }
 
+    // Queda zero: locais e motivos cadastrados pelo pessoal (as listas padrão ficam no código). Todos leem; quem aponta
+    // (líder para cima) ou o administrador acrescenta.
+    match /config/quedazero {
+      allow read: if ativo();
+      allow create, update: if (admin() || (ativo() && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']))
+        && request.resource.data.keys().hasOnly(['locais', 'motivos', 'atualizadoEm', 'por'])
+        && request.resource.data.get('locais', []) is list && request.resource.data.get('locais', []).size() <= 500
+        && request.resource.data.get('motivos', []) is list && request.resource.data.get('motivos', []).size() <= 200;
+    }
+
     // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
     match /b_config/sistema {
       allow read: if ba();

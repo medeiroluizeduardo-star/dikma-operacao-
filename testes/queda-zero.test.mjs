@@ -48,3 +48,15 @@ test('Queda zero: lançamentos do dia (novos e antigos, da atividade) e total', 
   assert.equal(Q.totalDiaQZ(doc, 3), 16);
   assert.deepEqual(Q.qzDoDia({}, 2), []);
 });
+test('Queda zero: listas de locais e motivos, sem repetir, e nomes novos', () => {
+  const chaves = l => new Set(l.map(Q.chaveNomeQZ)).size;
+  assert.equal(chaves(Q.QZ_LOCAIS), Q.QZ_LOCAIS.length, 'locais sem repetição');
+  assert.equal(chaves(Q.QZ_MOTIVOS), Q.QZ_MOTIVOS.length, 'motivos sem repetição');
+  assert.ok(Q.QZ_LOCAIS.includes('SR205') && Q.QZ_LOCAIS.includes('TECO TECO'));
+  assert.equal(Q.chaveNomeQZ('SR 205'), Q.chaveNomeQZ('sr205'));
+  assert.deepEqual(Q.listaQZ(['C1', 'C2'], ['Zeta', 'c 1', 'Alfa', 'Alfa ']), ['C1', 'C2', 'Alfa', 'Zeta']);
+  assert.deepEqual(Q.novoNomeQZ('  sr 205 ', Q.QZ_LOCAIS), { nome: 'SR205', existe: true, erro: '' });
+  assert.deepEqual(Q.novoNomeQZ('Vazamento  de  óleo', Q.QZ_MOTIVOS), { nome: 'Vazamento de óleo', existe: false, erro: '' });
+  assert.match(Q.novoNomeQZ('x', []).erro, /pelo menos/);
+  assert.match(Q.novoNomeQZ('x'.repeat(41), []).erro, /muito grande/);
+});

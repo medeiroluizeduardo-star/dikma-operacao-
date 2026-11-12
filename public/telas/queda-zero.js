@@ -9,7 +9,7 @@ import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { diasDe, rotasDa } from '../calc/atividades.js';
-import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ } from '../contas/queda-zero.js';
+import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 function linhaQZ(l = {}) {
@@ -66,6 +66,26 @@ function gravarQZ(doc, key, k, novo, rotulo) {
 }
 const areaQZ = () => { const a = areaScope(); return a === 'TODAS' ? (AREAS.includes(UI.apArea) ? UI.apArea : AREAS[0]) : a; };
 const docAtual = () => DB.cache.semanas[areaQZ() + '|' + UI.ini];
+// Campo de lista (local ou motivo) com "+ Novo…": escolher na lista ou cadastrar um nome novo (vale para todos).
+const NOVO = '__novo__';
+function campoLista(id, rotulo, nomeItem, lista, atual) {
+  const opc = lista.includes(atual) || !atual ? lista : [atual, ...lista];
+  return `<label class="sel"><span>${rotulo} (opcional)</span><select class="in" id="${id}"><option value="">Escolha…</option>${opc.map(x => `<option${x === atual ? ' selected' : ''}>${esc(x)}</option>`).join('')}<option value="${NOVO}">+ Novo ${nomeItem}…</option></select></label>
+    <label class="sel" id="${id}NovoL" hidden><span>Nome do novo ${nomeItem}</span><input class="in" id="${id}Novo" maxlength="${QZ_NOME_MAX}" autocomplete="off"></label>`;
+}
+function ligarLista(id) {
+  const s = $(id); if (!s) return;
+  const f = () => { const novo = s.value === NOVO; $(id + 'NovoL').hidden = !novo; if (novo) $(id + 'Novo').focus(); };
+  s.addEventListener('change', f);
+}
+// Valor escolhido; um nome novo entra na lista de todos (config/quedazero). Erro de digitação vira exceção (a janela mostra).
+function lerLista(id, lista, tipo) {
+  const v = $(id).value;
+  if (v !== NOVO) return v;
+  const x = novoNomeQZ($(id + 'Novo').value, lista); if (x.erro) throw new Error(x.erro);
+  if (!x.existe) Promise.resolve(DB.salvarItemQZ(tipo, x.nome)).catch(() => toast('Não foi possível cadastrar o novo nome na lista'));
+  return x.nome;
+}
 // Janela para lançar (key vazia) ou corrigir um lançamento do dia k.
 export function editarQZ(doc, k, key) {
   const atual = key ? (doc.qz || {})[key] || null : null;
@@ -75,18 +95,21 @@ export function editarQZ(doc, k, key) {
   const rotas = rotasDa(doc.area).filter(x => x.carga > 0).map(x => x.rota);
   if (rota0 && !rotas.includes(rota0)) rotas.unshift(rota0);
   const rotulo0 = `${AREA_S[doc.area] || doc.area}${rota0 ? ' · ' + rota0 : ''}`;
+  const L = DB.cache.qzListas || {};
+  const locais = listaQZ(QZ_LOCAIS, L.locais), motivos = listaQZ(QZ_MOTIVOS, L.motivos);
   let ler = null;
   formSheet(atual ? 'Corrigir queda zero' : 'Lançar queda zero', `${esc(AREA_S[doc.area] || doc.area)} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}${ativ ? `<br>Lançada junto da atividade: ${esc(ativ)}` : ''}`,
-    blocoQZ(atual, true) + `<label class="sel"><span>Rota (opcional)</span><select class="in" id="qzRota"><option value="">Sem rota</option>${rotas.map(x => `<option${x === rota0 ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label><label class="sel"><span>Local ou observação (opcional)</span><input class="in" id="qzObs" maxlength="120" autocomplete="off" placeholder="Ex.: correia 3, perto da torre" value="${esc((atual && atual.o) || '')}"></label>`
+    blocoQZ(atual, true) + `<label class="sel"><span>Rota (opcional)</span><select class="in" id="qzRota"><option value="">Sem rota</option>${rotas.map(x => `<option${x === rota0 ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>${campoLista('qzLoc', 'Local (transportador)', 'local', locais, atual && atual.l)}${campoLista('qzMot', 'Motivo', 'motivo', motivos, atual && atual.m)}<label class="sel"><span>Observação (opcional)</span><input class="in" id="qzObs" maxlength="120" autocomplete="off" placeholder="Ex.: perto da torre" value="${esc((atual && atual.o) || '')}"></label>`
     + (atual ? `<button type="button" class="btn sm danger" id="qzApagar">${I.lixo} Apagar este lançamento</button>` : ''), 'Salvar', async () => {
       const r = ler(); if (r.erro) throw new Error(r.erro);
       if (!r.itens.length) { if (!atual) throw new Error('Preencha pelo menos um equipamento com a quantidade.'); gravarQZ(doc, key, k, null, rotulo0); toast('Lançamento apagado'); render(); return; }
       const o = ($('qzObs').value || '').replace(/\s+/g, ' ').trim().slice(0, 120);
       const rota = $('qzRota').value || '';
-      const novo = { ...valorQZ(r), ...(rota ? { r: rota } : {}), ...(o ? { o } : {}) };
+      const l = lerLista('qzLoc', locais, 'locais'), m = lerLista('qzMot', motivos, 'motivos');
+      const novo = { ...valorQZ(r), ...(rota ? { r: rota } : {}), ...(l ? { l } : {}), ...(m ? { m } : {}), ...(o ? { o } : {}) };
       gravarQZ(doc, key || chaveNovaQZ(k), k, novo, `${AREA_S[doc.area] || doc.area}${rota ? ' · ' + rota : ''}`); toast(`Queda zero: ${fmtT(r.t)}`); render();
     });
-  ler = ligarQZ();
+  ler = ligarQZ(); ligarLista('qzLoc'); ligarLista('qzMot');
   const ap = $('qzApagar');
   if (ap) ap.addEventListener('click', () => {
     if (ap.dataset.conf) { gravarQZ(doc, key, k, null, rotulo0); $('layer').innerHTML = ''; toast('Lançamento apagado'); render(); return; }
@@ -100,7 +123,7 @@ function cartaoQZ(doc, k, edit) {
   const l = qzDoDia(doc, k);
   if (!l.length && !edit) return '';
   const linha = ({ key, v, pid }) => {
-    const onde = [v.r || (pid ? (PL.get(pid) || {}).rota : ''), v.o, pid ? (PL.get(pid) || {}).ativ || pid : ''].filter(Boolean).map(esc).join(' · ');
+    const onde = [v.l, v.m, v.r || (pid ? (PL.get(pid) || {}).rota : ''), v.o, pid ? (PL.get(pid) || {}).ativ || pid : ''].filter(Boolean).map(esc).join(' · ');
     const corpo = `<b class="num">${esc(fmtT(v.t))}</b> <span>${esc(textoQZ(v))}</span>${onde ? `<span class="muted small">${onde}</span>` : ''}`;
     return edit ? `<button type="button" class="qzitem" data-act="qzEditar" data-k="${esc(key)}" aria-label="Corrigir o lançamento de ${esc(fmtT(v.t))}">${corpo}</button>` : `<div class="qzitem">${corpo}</div>`;
   };
@@ -119,10 +142,17 @@ export function vQuedaZero() {
   if (!doc) return chips + `<div class="card"><div class="empty">Esta semana ainda não foi gerada para ${AREA_S[area]}.</div></div>`;
   const dias = DAYS.map((d, j) => { const dt = add(UI.ini, j); const t = totalDiaQZ(doc, j); return `<button class="dbtn qzdia ${dt === TODAY ? 'hoje' : ''}" data-dia="${j}" aria-pressed="${j === k}" aria-label="${d} ${dt.slice(8)}${t ? ` · ${fmtT(t)}` : ''}"><small>${d}</small><b>${dt.slice(8)}</b><span class="num">${t ? esc(fmtCurto(t)) : '—'}</span></button>`; }).join('');
   const semana = DAYS.reduce((n, _, j) => n + totalDiaQZ(doc, j), 0);
-  const mes = Object.values(DB.cache.semanas).filter(w => w && w.area === area && w.mes === UI.mes).reduce((n, w) => n + DAYS.reduce((m, _, j) => m + (diasDe(w)[j].slice(0, 7) === UI.mes ? totalDiaQZ(w, j) : 0), 0), 0);
+  // Lançamentos do mês (semanas da área no mês escolhido, só os dias do mês): total e soma por local e por motivo.
+  const doMes = Object.values(DB.cache.semanas).filter(w => w && w.area === area && w.mes === UI.mes)
+    .flatMap(w => DAYS.flatMap((_, j) => (diasDe(w)[j].slice(0, 7) === UI.mes ? qzDoDia(w, j).map(x => x.v) : [])));
+  const mes = doMes.reduce((n, v) => n + (Number(v.t) || 0), 0);
+  const porMes = campo => { const m = new Map(); for (const v of doMes) { const c = v[campo] || 'Não informado'; m.set(c, (m.get(c) || 0) + (Number(v.t) || 0)); } return [...m].sort((x, y) => y[1] - x[1]); };
+  const tabela = (tit, l) => `<div class="tw"><table><thead><tr><th>${tit}</th><th class="r">Toneladas</th></tr></thead><tbody>${l.map(([n, t]) => `<tr><td>${esc(n)}</td><td class="r num">${esc(fmtCurto(t))}</td></tr>`).join('')}</tbody></table></div>`;
+  const resumoMes = doMes.length ? `<details class="calc qztab" open><summary>No mês: por local e por motivo</summary><div class="grid2">${tabela('Local', porMes('l'))}${tabela('Motivo', porMes('m'))}</div></details>` : '';
   return chips + `<div class="dayscroll" role="group" aria-label="Dia">${dias}</div>
     <div class="kpis qzkpis"><div class="kpi"><span class="lbl">Semana</span><span class="v num">${esc(fmtCurto(semana))}</span></div><div class="kpi"><span class="lbl">Mês ${esc(UI.mes.slice(5))}/${esc(UI.mes.slice(0, 4))}</span><span class="v num">${esc(fmtCurto(mes))}</span></div></div>`
     + cartaoQZ(doc, k, canEdit(area))
+    + resumoMes
     + '<details class="calc qztab"><summary>Tabela usada no cálculo (toneladas por equipamento)</summary><div class="tw"><table><thead><tr><th>Equipamento</th><th class="r">Coque</th><th class="r">Carvão</th></tr></thead><tbody>'
     + QZ_EQUIP.map(x => `<tr><td>${esc(x.nome)}</td><td class="r num">${num(x.coque)}</td><td class="r num">${num(x.carvao)}</td></tr>`).join('') + '</tbody></table></div><p class="muted small m0">Resultado = valor da tabela × quantidade de equipamentos.</p></details>';
 }
