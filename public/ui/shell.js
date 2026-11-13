@@ -172,7 +172,7 @@ function renderNav() {
   }
   pintar('nav', h);
   pintar('who', DEMO
-    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button>${histBtn()}<button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button>`
+    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button>${histBtn()}<button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button><a class="btn rail-btn" href="guia.html">Guia visual</a>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos no celular</button>${histBtn()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
   // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
