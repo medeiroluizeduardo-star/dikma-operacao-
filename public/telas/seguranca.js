@@ -8,13 +8,14 @@ import { MESES_L, SETS, add, addMonth, today } from '../contas/cal.js';
 import { campoBusca } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { ESQUELETO } from '../ui/movimento.js';
-import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg, PERG_CARTAO, VALIDA_CARTAO, validaCartao, pendenteCartao } from '../contas/segcalc.js';
+import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg, PERG_CARTAO, VALIDA_CARTAO, validaCartao, pendenteCartao, painelSeg } from '../contas/segcalc.js';
+import { indicadores, variacao, etiqueta, tabela, recolhido } from '../ui/padrao.js';
 import { DB, framed, esc, title, $ } from '../nucleo/base.js';
-import { ME, UI, isAdmin } from '../nucleo/estado.js';
+import { ME, UI, isAdmin, salvarUI } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { toast, formSheet } from '../ui/janelas.js';
-import { render, schedule, isMobile } from '../ui/shell.js';
+import { render, schedule, isMobile, trocarTela } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 import { telaTreinos } from './treinos.js';
 import { veTreinos, painelTreinos, vigentes, situacaoTreino, diasAte, tipoOficial, areaDe, ehNA, ANTECEDENCIA } from '../contas/treinos.js';
@@ -539,41 +540,86 @@ export function criarSeguranca() {
     return h;
   }
 
-  // Gráfico de colunas (SVG próprio): interações e anomalias por mês.
+  // ---------- Painel da Segurança ----------
+  // Gráfico de colunas (SVG próprio): interações, anomalias e Cartões Amarelos dos últimos 6 meses.
+  const SERIES = [['inter', 'Interações', 'var(--marca)'], ['anom', 'Anomalias', 'var(--critico)'], ['cartao', 'Cartões Amarelos', 'var(--atencao)']];
   function colunas(porMes) {
-    const W = 560, H = 190, b = 26, top = 18, n = porMes.length || 1, gw = (W - 20) / n, bw = Math.min(26, gw / 3);
-    const mx = Math.max(1, ...porMes.map(x => Math.max(x.inter, x.anom)));
+    const W = 600, H = 200, b = 26, top = 18, n = porMes.length || 1, gw = (W - 20) / n, bw = Math.min(22, (gw - 18) / 3);
+    const mx = Math.max(1, ...porMes.map(x => Math.max(...SERIES.map(([k]) => x[k] || 0))));
     const y = v => H - b - (v / mx) * (H - b - top);
-    const barras = porMes.map((x, i) => { const cx = 10 + gw * i + gw / 2; return `<g><rect x="${cx - bw - 2}" y="${y(x.inter)}" width="${bw}" height="${H - b - y(x.inter)}" rx="3" fill="var(--focus)"><title>${mesNome(x.mes)}: ${x.inter} interações</title></rect><rect x="${cx + 2}" y="${y(x.anom)}" width="${bw}" height="${H - b - y(x.anom)}" rx="3" fill="var(--st-atr)"><title>${mesNome(x.mes)}: ${x.anom} anomalias</title></rect>
-      <text x="${cx - bw / 2 - 2}" y="${y(x.inter) - 4}" text-anchor="middle" class="sgsv-n">${x.inter || ''}</text><text x="${cx + bw / 2 + 2}" y="${y(x.anom) - 4}" text-anchor="middle" class="sgsv-n">${x.anom || ''}</text>
-      <text x="${cx}" y="${H - 8}" text-anchor="middle" class="sgsv-x">${MESES_L[+x.mes.slice(5, 7) - 1].slice(0, 3)}</text></g>`; }).join('');
-    return `<svg class="sgsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Interações e anomalias por mês: ${porMes.map(x => `${mesNome(x.mes)} ${x.inter} e ${x.anom}`).join('; ')}"><line x1="0" x2="${W}" y1="${H - b}" y2="${H - b}" stroke="var(--line)"/>${barras}</svg>`;
+    const barras = porMes.map((x, i) => { const x0 = 10 + gw * i + gw / 2 - (bw * 3 + 6) / 2;
+      return `<g>${SERIES.map(([k, nome, cor], j) => { const v = x[k] || 0, bx = x0 + j * (bw + 3);
+        return `<rect x="${bx}" y="${y(v)}" width="${bw}" height="${H - b - y(v)}" rx="3" fill="${cor}"><title>${mesNome(x.mes)}: ${v} ${nome.toLowerCase()}</title></rect>${v ? `<text x="${bx + bw / 2}" y="${y(v) - 4}" text-anchor="middle" class="sgsv-n">${v}</text>` : ''}`; }).join('')}
+      <text x="${10 + gw * i + gw / 2}" y="${H - 8}" text-anchor="middle" class="sgsv-x${x.mes === U.pMes ? ' at' : ''}">${MESES_L[+x.mes.slice(5, 7) - 1].slice(0, 3)}</text></g>`; }).join('');
+    return `<svg class="sgsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Por mês: ${porMes.map(x => `${mesNome(x.mes)}: ${x.inter} interações, ${x.anom} anomalias, ${x.cartao} cartões`).join('; ')}"><line x1="0" x2="${W}" y1="${H - b}" y2="${H - b}" stroke="var(--line)"/>${barras}</svg>`;
   }
-  const barras = (l, cor, total, fmt = title) => { const mx = l.length ? l[0][1] : 1; return `<div class="bars">${l.map(([n, v]) => `<div class="barrow"><span class="n">${esc(fmt(n))}${total ? `<small>${Math.round(v / total * 100)}%</small>` : ''}</span><div class="stack"><i style="width:${v / mx * 100}%;background:${cor}"></i></div><span class="p num">${v}</span></div>`).join('')}</div>`; };
+  const legenda = () => `<div class="legend">${SERIES.map(([, n, c]) => `<span><i style="background:${c}"></i>${n}</span>`).join('')}</div>`;
+  const barras = (l, cor, total, fmt = title) => { const mx = l.length ? Math.max(1, ...l.map(x => x[1])) : 1; return `<div class="bars">${l.map(([n, v]) => `<div class="barrow"><span class="n">${esc(fmt(n))}${total ? `<small>${Math.round(v / total * 100)}%</small>` : ''}</span><div class="stack"><i style="width:${v / mx * 100}%;background:${cor}"></i></div><span class="p num">${v}</span></div>`).join('')}</div>`; };
+  const cartaoP = (titulo, sub, corpo, extra = '') => `<section class="card sgp-card"><header><h2>${titulo}</h2>${sub ? `<p>${sub}</p>` : ''}${extra}</header><div class="body">${corpo}</div></section>`;
+  const irBtn = (v, sit, txt = 'Ver') => `<button type="button" class="btn sm" data-act="sgIr" data-v="${v}"${sit ? ` data-sgsit="${sit}"` : ''}>${txt}</button>`;
+
+  // O que pede ação agora (respeita a área escolhida): cada linha leva direto para a fila certa.
+  function atencao(area) {
+    const d = hoje(), em2 = add(d, 2), daA = l => l.filter(x => !area || x.area === area);
+    const ab = daA(S().anom).filter(abertaSeg);
+    const l = [
+      ['critico', ab.filter(a => vencidaSeg(a, d)).length, 'anomalia com prazo vencido', 'anomalias com prazo vencido', 'sganom', 'vencidas'],
+      ['atencao', ab.filter(a => a.trat && a.trat.prazo && a.trat.prazo >= d && a.trat.prazo <= em2).length, 'anomalia vence em até 2 dias', 'anomalias vencem em até 2 dias', 'sganom', 'abertas'],
+      ['atencao', ab.filter(a => !(a.trat && a.trat.resp)).length, 'anomalia sem responsável', 'anomalias sem responsável', 'sganom', 'abertas'],
+      ['info', ab.filter(a => comigoSeg(ME, a)).length, 'anomalia com você', 'anomalias com você', 'sganom', 'comigo'],
+      ['atencao', daA(S().cartao).filter(c => pendenteCartao(c) && validaCartao(ME, c)).length, 'Cartão Amarelo para validar', 'Cartões Amarelos para validar', 'sgcartao', 'pendentes']
+    ];
+    if (veTreinos(ME) && (DB.cache.treinos || []).length) { const t = painelTreinos(DB.cache.treinos, d).total; l.push(['critico', t.vencido, 'treinamento ou ASO vencido', 'treinamentos ou ASO vencidos', 'sgtrein', '']); }
+    const itens = l.filter(x => x[1] > 0);
+    if (!itens.length) return `<div class="sgp-ok">${I.ok}<div><b>Nada pendente agora</b><span>Sem prazo vencido, sem anomalia sem dono e sem cartão esperando validação.</span></div></div>`;
+    return `<ul class="sgp-at">${itens.map(([s, n, um, varios, v, sit]) => `<li class="${s}"><b class="num">${n}</b><span>${n === 1 ? um : varios}</span>${irBtn(v, sit)}</li>`).join('')}</ul>`;
+  }
+
   function vPainel() {
     const meses = []; for (let i = 5; i >= 0; i--) meses.push(addMonth(U.pMes, -i));
     DB.segWatch(meses);
-    const inter = S().inter, anom = S().anom;
-    const ind = indicadoresSeg({ inter, anom, mes: U.pMes, meses, hoje: hoje(), areas: L().areas.map(a => a.nome) });
-    const ant = indicadoresSeg({ inter, anom, mes: addMonth(U.pMes, -1), hoje: hoje() });
-    const dif = ind.interMes - ant.interMes;
-    let h = `<div class="filters">${selMes('sgPMes', U.pMes)}<span class="muted small" style="align-self:flex-end">Contas com ${quemVe()}</span>${podeExportar() ? `<button class="btn" data-act="expSegTudo" style="align-self:flex-end">${I.dl} Exportar o mês</button>` : ''}</div>`;
-    h += `<div class="kpis">
-      <div class="kpi hero"><span class="lbl">Interações no mês</span><span class="v num">${ind.interMes}${ant.interMes || ind.interMes ? `<small class="dif ${dif >= 0 ? 'up' : 'down'}" title="Mês anterior: ${ant.interMes}">${dif === 0 ? '=' : dif > 0 ? '▲ ' + dif : '▼ ' + -dif}</small>` : ''}</span><span class="s">${ind.comDesvio} com desvio (${ind.interMes ? Math.round(ind.comDesvio / ind.interMes * 100) : 0}%)</span></div>
-      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Anomalias do mês</span><span class="v num">${ind.anomMes}</span><span class="s">${ind.abertasMes} em aberto · ${ind.concluidasMes} concluída${ind.concluidasMes === 1 ? '' : 's'}</span></div>
-      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Em aberto agora</span><span class="v num">${ind.abertasAgora}</span><span class="s">${ind.vencidas} com prazo vencido</span></div>
-      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-real)"></i>Concluídas no mês</span><span class="v num">${ind.concluidasNoMes}</span><span class="s">pela data da conclusão</span></div>
-      <div class="kpi"><span class="lbl">Tempo médio de tratamento</span><span class="v vsm">${ind.tempoMedio == null ? '—' : fmtDias(ind.tempoMedio)}</span><span class="s">das concluídas no mês</span></div></div>`;
-    h += `<div class="grid2"><div class="card"><header><h2>Por mês</h2><p>Últimos 6 meses</p></header><div class="body"><div class="legend"><span><i style="background:var(--focus)"></i>Interações</span><span><i style="background:var(--st-atr)"></i>Anomalias</span></div>${colunas(ind.porMes)}</div></div>
-      <div class="card"><header><h2>Desvios mais frequentes</h2><p>${mesNome(U.pMes)} · nas interações</p></header><div class="body">${ind.desvios.length ? barras(ind.desvios.slice(0, 8), 'var(--st-nreal)', ind.interMes, x => x) : vazio('Nenhum desvio no mês', 'Os desvios marcados nas interações aparecem aqui.')}</div></div></div>`;
-    // Reincidência: o mesmo desvio na mesma área 3 vezes ou mais no mês (pede uma ação na área). E a situação dos treinamentos.
-    { const n = new Map(); for (const r of inter) if (r.mes === U.pMes) for (const dv of r.desvios || []) { const k = r.area + '|' + dv; n.set(k, (n.get(k) || 0) + 1); }
-      const rep = [...n].filter(([, v]) => v >= 3).sort((a, b) => b[1] - a[1]);
-      h += `<div class="card"><header><h2>Desvios que se repetem</h2><p>${mesNome(U.pMes)} · o mesmo desvio na mesma área 3 vezes ou mais</p></header>${rep.length ? `<div class="tw"><table><thead><tr><th>Desvio</th><th>Área</th><th class="r">Vezes</th></tr></thead><tbody>${rep.slice(0, 8).map(([k, v]) => { const [area, dv] = k.split('|'); return `<tr><td>${esc(dv)}</td><td>${esc(area)}</td><td class="r num">${v}</td></tr>`; }).join('')}</tbody></table></div>` : '<div class="body"><p class="muted small m0">Nenhum desvio repetido 3 vezes na mesma área.</p></div>'}</div>`;
-      if (veTreinos(ME)) h += painelTr(); }
-    h += `<div class="grid2"><div class="card"><header><h2>Interações por pessoa</h2><p>${mesNome(U.pMes)} · pelo responsável</p></header><div class="body">${ind.porPessoa.length ? barras(ind.porPessoa.slice(0, 10), 'var(--focus)') : vazio('Nenhuma interação no mês', 'Quem registra aparece aqui.')}</div></div>
-      <div class="card"><header><h2>Por área</h2><p>${mesNome(U.pMes)} · anomalias abertas × concluídas</p></header><div class="body">${ind.porArea.some(x => x.inter || x.abertas || x.concluidas) ? `<div class="legend"><span><i style="background:var(--st-nreal)"></i>Abertas</span><span><i style="background:var(--st-real)"></i>Concluídas</span></div><div class="bars">${ind.porArea.map(x => { const t = Math.max(1, ...ind.porArea.map(z => z.abertas + z.concluidas)); return `<div class="barrow"><span class="n">${esc(title(x.area))}<small class="num">${x.inter} interaç${x.inter === 1 ? 'ão' : 'ões'}</small></span><div class="stack">${x.abertas ? `<i style="width:${x.abertas / t * 100}%;background:var(--st-nreal)" title="${x.abertas} abertas"></i>` : ''}${x.concluidas ? `<i style="width:${x.concluidas / t * 100}%;background:var(--st-real)" title="${x.concluidas} concluídas"></i>` : ''}</div><span class="p num">${x.abertas + x.concluidas}</span></div>`; }).join('')}</div>` : vazio('Nada registrado no mês', 'As áreas aparecem aqui quando houver registros.')}</div></div></div>`;
-    return h;
+    const nomesArea = L().areas.map(a => a.nome);
+    const p = painelSeg({ inter: S().inter, anom: S().anom, cartao: S().cartao, mes: U.pMes, meses, hoje: hoje(), areas: nomesArea, area: U.area });
+    const ant = painelSeg({ inter: S().inter, anom: S().anom, cartao: S().cartao, mes: addMonth(U.pMes, -1), hoje: hoje(), area: U.area });
+    const pctDesvio = p.interMes ? Math.round(p.comDesvio / p.interMes * 100) : 0;
+    const serie = k => p.porMes.map(x => x[k]);
+    const pe = (...l) => l.filter(Boolean).map(x => `<span>${x}</span>`).join('');
+    const sitPrazo = p.prazo.pct == null ? '' : p.prazo.pct >= 90 ? 'ok' : p.prazo.pct >= 70 ? 'atencao' : 'critico';
+    const ondeTxt = U.area ? title(U.area) : quemVe();
+    // filtros + atalhos para registrar (o painel também é a porta de entrada do módulo)
+    let h = `<div class="filters">${selMes('sgPMes', U.pMes)}${selArea()}<span class="muted small" style="align-self:flex-end">Contas com ${esc(ondeTxt)}</span>
+      ${podeExportar() ? `<button class="btn" data-act="expSegTudo" style="align-self:flex-end">${I.dl} Exportar o mês</button>` : ''}</div>`;
+    if (podeRegistrar()) h += `<div class="sgp-reg" role="group" aria-label="Registrar"><span class="muted small">Registrar</span>
+      <button type="button" class="btn" data-act="sgNova" data-tipo="inter">${I.conversa} Interação</button>
+      <button type="button" class="btn" data-act="sgNova" data-tipo="anom">${I.anomalia} Anomalia</button>
+      <button type="button" class="btn" data-act="sgNova" data-tipo="cartao">${I.cartao} Cartão Amarelo</button></div>`;
+    h += indicadores([
+      { rotulo: 'Interações no mês', valor: String(p.interMes), serie: serie('inter'), variacao: variacao(p.interMes, ant.interMes) + pe(`${pctDesvio}% com desvio`) },
+      { rotulo: 'Anomalias em aberto', valor: String(p.abertasAgora), serie: serie('anom'), situacao: p.vencidas ? 'critico' : p.semResp ? 'atencao' : p.abertasAgora ? '' : 'ok',
+        variacao: pe(p.vencidas ? `<b class="sgp-c">${p.vencidas} com prazo vencido</b>` : 'nenhuma vencida', p.semResp ? `${p.semResp} sem responsável` : '') },
+      { rotulo: 'Tratadas no prazo', valor: p.prazo.pct == null ? '—' : String(p.prazo.pct), unidade: p.prazo.pct == null ? '' : '%', situacao: sitPrazo,
+        variacao: pe(p.prazo.concluidas ? `${p.prazo.noPrazo} de ${p.prazo.concluidas} concluídas` : 'nenhuma concluída com prazo', p.tempoMedio == null ? '' : `média ${fmtDias(p.tempoMedio)}`) },
+      { rotulo: 'Cartões Amarelos', valor: String(p.cartaoMes), serie: serie('cartao'), situacao: p.cartaoPendentes ? 'atencao' : '',
+        variacao: pe(p.cartaoPendentes ? `${p.cartaoPendentes} falta${p.cartaoPendentes === 1 ? '' : 'm'} validar` : 'todos validados', p.cartaoValidados ? `${p.cartaoValidados} validado${p.cartaoValidados === 1 ? '' : 's'} no mês` : '') }
+    ]);
+    h += `<div class="grid2 sgp-g">${cartaoP('Precisa de atenção', `Agora · ${esc(ondeTxt)}`, atencao(U.area))}
+      ${cartaoP('Evolução', 'Últimos 6 meses', legenda() + colunas(p.porMes))}</div>`;
+    // Por área: uma linha por área com registro, as que têm prazo vencido primeiro.
+    const etqN = (n, s) => (n ? etiqueta(String(n), s) : '<span class="muted">0</span>');
+    h += cartaoP('Por área', `${mesNome(U.pMes)} · em aberto e vencidas contam o que está aberto hoje`, p.porArea.length
+      ? tabela([{ t: 'Área' }, { t: 'Interações', n: true }, { t: 'Com desvio', n: true }, { t: 'Anomalias do mês', n: true }, { t: 'Em aberto', n: true }, { t: 'Vencidas', n: true }, { t: 'Cartões', n: true }],
+        p.porArea.map(x => [`<b>${esc(title(x.area))}</b>`, x.inter, x.comDesvio == null ? '<span class="muted">—</span>' : x.comDesvio + '%', x.anomMes, x.abertasAgora, etqN(x.vencidas, 'critico'), x.cartoes]), { rotulo: 'Segurança por área' })
+      : vazio('Nada registrado no mês', 'As áreas aparecem aqui quando houver registros.'));
+    // Desvios (com a reincidência) e Cartão Amarelo
+    const rep = p.repetidos.length ? `<h4 class="sgp-h4">Se repetem na mesma área (3 vezes ou mais)</h4><ul class="sgp-rep">${p.repetidos.slice(0, 6).map(r => `<li><span>${esc(r.desvio)}</span><small class="muted">${esc(title(r.area))}</small>${etiqueta(r.vezes + 'x', 'critico')}</li>`).join('')}</ul>` : '<p class="muted small sgp-nota">Nenhum desvio repetido 3 vezes na mesma área.</p>';
+    h += `<div class="grid2 sgp-g">${cartaoP('Desvios mais frequentes', `${mesNome(U.pMes)} · nas interações`, (p.desvios.length ? barras(p.desvios.slice(0, 6), 'var(--critico)', p.interMes, x => x) : vazio('Nenhum desvio no mês', 'Os desvios marcados nas interações aparecem aqui.')) + rep)}
+      ${cartaoP('Cartão Amarelo', `${mesNome(U.pMes)} · o que faltou`, p.cartaoMes
+        ? `${barras(p.faltou, 'var(--atencao)', p.cartaoMes, x => title(x.replace('?', '')))}<p class="muted small sgp-nota">${p.cartaoValidados} de ${p.cartaoMes} validado${p.cartaoMes === 1 ? '' : 's'} pelo líder ou pela segurança.</p>`
+        : vazio(`Nenhum cartão em ${mesNome(U.pMes)}`, 'Os cartões dados em campo aparecem aqui.'), irBtn('sgcartao', 'todos', 'Abrir'))}</div>`;
+    if (veTreinos(ME)) h += painelTr();
+    // O que não pede ação fica recolhido.
+    h += recolhido(`Interações por pessoa · ${mesNome(U.pMes)}`, p.porPessoa.length ? barras(p.porPessoa.slice(0, 10), 'var(--marca)') : '<p class="muted small m0">Nenhuma interação no mês.</p>');
+    return `<div class="sgp">${h}</div>`;
   }
 
   // ---------- Administração › Segurança: listas dos formulários ----------
@@ -622,6 +668,8 @@ export function criarSeguranca() {
   acoes.sgAssumir = (t, d) => assumir(d.id);
   acoes.sgSit = (t, d) => { U.sit = d.sgsit; render(); };
   acoes.sgCSit = (t, d) => { U.csit = d.sgsit; render(); };
+  // Do painel para a fila certa (ex.: Anomalias › Vencidas).
+  acoes.sgIr = (t, d) => { if (d.sgsit) { if (d.v === 'sgcartao') U.csit = d.sgsit; else U.sit = d.sgsit; } UI.view = d.v; salvarUI(); trocarTela(d.v); };
   acoes.sgValidar = (t, d) => abrirValidar(d.id);
   acoes.expSegCartao = () => exportar({ arquivo: `Cartão Amarelo ${U.csit === 'pendentes' ? 'falta validar' : U.mes}`, cartao: S().cartao.filter(c => (!U.area || c.area === U.area) && filtroCartao(c)) });
   acoes.sgFoto = (t, d) => verFoto(d.id, (t.querySelector('img') || {}).src);
