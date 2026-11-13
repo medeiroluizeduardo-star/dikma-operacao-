@@ -1,0 +1,115 @@
+/* Dikma Gestão — guia visual (padrão 2.0).
+   Tudo aqui é NOVO e não muda nenhuma tela que já existe: só valores (variáveis) e componentes com o prefixo "p-".
+   As telas novas usam estes componentes (ui/padrao.js monta o HTML); as antigas passam para o padrão aos poucos,
+   um módulo por vez. A página guia.html mostra cada peça (abrir /guia.html).
+
+   Regras do padrão:
+   - Espaçamento só nos 6 degraus: 4, 8, 12, 16, 24 e 32 px (--s1 a --s6).
+   - 3 tamanhos de título: tela (--tit-1), cartão (--tit-2) e subtítulo (--tit-3).
+   - Cores de situação (ok, atenção, crítico, informação) separadas das cores da marca (azul Dikma e laranja).
+   - Um só laranja para a ação principal (--acao); no máximo uma ação principal por tela.
+   - Painel: no topo no máximo 4 números; o detalhe vem embaixo; o que não pede ação fica recolhido. */
+:root{
+  /* espaçamentos */
+  --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+  /* títulos */
+  --tit-1:26px; --tit-2:19px; --tit-3:15px;
+  /* marca */
+  --marca:#272662; --marca-2:#3D3AB5; --acao:#C94418; --acao-tinta:#FFFFFF;
+  /* situação: cor do texto/ícone (forte) e fundo (suave) */
+  --ok:#1E8A4C; --atencao:#A06F00; --critico:#C62F2F; --info:#2A62C4;
+  --ok-f:color-mix(in srgb,var(--ok) 13%,var(--surface)); --atencao-f:color-mix(in srgb,var(--atencao) 14%,var(--surface));
+  --critico-f:color-mix(in srgb,var(--critico) 12%,var(--surface)); --info-f:color-mix(in srgb,var(--info) 12%,var(--surface));
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --marca:#8C8AF0; --marca-2:#B3B1F6; --acao:#C94418;
+  --ok:#3CB872; --atencao:#E3B23C; --critico:#EE6262; --info:#6EA0F0}}
+:root[data-theme="dark"]{
+  --marca:#8C8AF0; --marca-2:#B3B1F6; --acao:#C94418;
+  --ok:#3CB872; --atencao:#E3B23C; --critico:#EE6262; --info:#6EA0F0}
+
+/* texto só para leitor de tela */
+.p-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* títulos */
+.p-t1{font-family:var(--f-display);font-size:var(--tit-1);font-weight:700;line-height:1.05;letter-spacing:.01em;margin:0}
+.p-t2{font-family:var(--f-display);font-size:var(--tit-2);font-weight:700;line-height:1.1;letter-spacing:.02em;text-transform:uppercase;margin:0}
+.p-t3{font-family:var(--f-body);font-size:var(--tit-3);font-weight:600;line-height:1.3;margin:0}
+
+/* botão da ação principal (o único laranja da tela) */
+.p-acao{display:inline-flex;align-items:center;justify-content:center;gap:var(--s2);min-height:40px;padding:var(--s2) var(--s4);border-radius:8px;border:1px solid var(--acao);background:var(--acao);color:var(--acao-tinta);font-weight:600;white-space:nowrap}
+.p-acao:hover{filter:brightness(1.08)}
+.p-acao svg{width:16px;height:16px}
+
+/* cabeçalho de tela: título + frase curta à esquerda, ação principal à direita, filtros embaixo */
+.p-cab{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s3) var(--s4);align-items:start;padding-bottom:var(--s4);border-bottom:1px solid var(--line-2)}
+.p-cab-txt p{margin:var(--s1) 0 0;color:var(--ink-3);font-size:13px}
+.p-cab-mod{display:inline-flex;align-items:center;gap:var(--s1);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:600;color:var(--marca);margin-bottom:var(--s1)}
+.p-cab-mod svg{width:14px;height:14px}
+.p-cab-acao{display:flex;gap:var(--s2);align-items:center}
+.p-cab-filtros{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:var(--s2);align-items:end}
+
+/* cartões de indicador: no máximo 4 por linha */
+.p-inds{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--s3)}
+.p-ind{background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:var(--s4);display:flex;flex-direction:column;gap:var(--s1);min-width:0;box-shadow:var(--e1,none)}
+.p-ind-rot{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--ink-3)}
+.p-ind-v{font-family:var(--f-display);font-size:36px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.p-ind-v small{font-size:18px;color:var(--ink-3);margin-left:2px}
+.p-ind-pe{display:flex;flex-wrap:wrap;gap:var(--s1) var(--s3);align-items:center;font-size:12px;color:var(--ink-3)}
+.p-ind-var{font-weight:600;font-variant-numeric:tabular-nums}
+.p-ind-var.bom{color:var(--ok)}.p-ind-var.ruim{color:var(--critico)}.p-ind-var.neutro{color:var(--ink-3)}
+.p-ind-tend{display:block;width:100%;height:28px;margin-top:var(--s1);color:var(--marca)}
+.p-ind-tend polyline{fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.p-ind.ok{border-left:3px solid var(--ok)}.p-ind.atencao{border-left:3px solid var(--atencao)}.p-ind.critico{border-left:3px solid var(--critico)}
+
+/* etiqueta de situação: sempre cor + texto (nunca só a cor) */
+.p-etq{display:inline-flex;align-items:center;gap:var(--s1);font-size:12px;font-weight:600;line-height:1;border-radius:999px;padding:5px 10px;white-space:nowrap;border:1px solid transparent}
+.p-etq::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.p-etq.ok{color:var(--ok);background:var(--ok-f)}
+.p-etq.atencao{color:var(--atencao);background:var(--atencao-f)}
+.p-etq.critico{color:var(--critico);background:var(--critico-f)}
+.p-etq.info{color:var(--info);background:var(--info-f)}
+.p-etq.neutro{color:var(--ink-2);background:var(--surface-2);border-color:var(--line)}
+
+/* tabela padrão: cabeçalho fixo, números à direita, ações na última coluna */
+.p-tabela{overflow:auto;max-height:420px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface)}
+.p-tabela table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+.p-tabela th{position:sticky;top:0;z-index:1;background:var(--surface-2);text-align:left;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;padding:var(--s2) var(--s3);border-bottom:1px solid var(--line);white-space:nowrap}
+.p-tabela td{padding:var(--s2) var(--s3);border-bottom:1px solid var(--line-2);vertical-align:middle}
+.p-tabela tr:last-child td{border-bottom:0}
+.p-tabela .n{text-align:right;font-variant-numeric:tabular-nums}
+.p-tabela .acoes{text-align:right;white-space:nowrap;width:1%}
+.p-tabela tbody tr:hover td{background:color-mix(in srgb,var(--marca) 5%,var(--surface))}
+
+/* tela vazia e carregando */
+.p-vazio{display:flex;flex-direction:column;align-items:center;gap:var(--s2);text-align:center;padding:var(--s6) var(--s4);color:var(--ink-3);border:1px dashed var(--line);border-radius:10px}
+.p-vazio svg{width:28px;height:28px;color:var(--ink-3)}
+.p-vazio b{color:var(--ink);font-size:var(--tit-3)}
+.p-vazio p{margin:0;max-width:44ch;font-size:13px}
+.p-carregando{display:flex;flex-direction:column;gap:var(--s3);padding:var(--s4)}
+.p-carregando i{display:block;height:14px;border-radius:6px;background:linear-gradient(90deg,var(--surface-2) 0,color-mix(in srgb,var(--line) 70%,var(--surface-2)) 40%,var(--surface-2) 80%) 0 0/200% 100%}
+.p-carregando i:nth-child(1){width:40%;height:20px}.p-carregando i:nth-child(2){width:90%}.p-carregando i:nth-child(3){width:70%}
+@media (prefers-reduced-motion:no-preference){.p-carregando i{animation:p-brilho 1.2s linear infinite}@keyframes p-brilho{to{background-position:-200% 0}}}
+
+/* área recolhida (o que não pede ação) */
+.p-recolhe{border:1px solid var(--line-2);border-radius:10px;background:var(--surface)}
+.p-recolhe>summary{cursor:pointer;padding:var(--s3) var(--s4);font-weight:600;list-style:none;display:flex;gap:var(--s2);align-items:center}
+.p-recolhe>summary::-webkit-details-marker{display:none}
+.p-recolhe>summary::before{content:"▸";color:var(--ink-3);transition:transform var(--t1,.12s)}
+.p-recolhe[open]>summary::before{transform:rotate(90deg)}
+.p-recolhe>div{padding:0 var(--s4) var(--s4)}
+
+/* formulário em uma coluna no celular, botões grandes */
+.p-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s3) var(--s4)}
+.p-campo{display:flex;flex-direction:column;gap:var(--s1);min-width:0}
+.p-campo span{font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--ink-3)}
+.p-campo input,.p-campo select,.p-campo textarea{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:var(--s2) var(--s3);min-height:40px;width:100%;font:inherit;color:inherit}
+
+@media (max-width:640px){
+  .p-cab{grid-template-columns:1fr}
+  .p-cab-acao .p-acao{width:100%}
+  .p-inds{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .p-ind-v{font-size:30px}
+  .p-form{grid-template-columns:1fr}
+  .p-acao{min-height:44px}
+}

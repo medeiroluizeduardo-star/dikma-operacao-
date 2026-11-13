@@ -119,3 +119,27 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
     await ctx.close();
   });
 }
+
+// Página do guia visual (guia.html): sem erros, sem arquivo faltando e sem rolagem lateral, no computador e no celular.
+for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celular', { width: 390, height: 844 }]]) {
+  test(`guia visual no ${nome}`, async () => {
+    const ctx = await navegador.newContext({ viewport: tela, serviceWorkers: 'block', locale: 'pt-BR', ...(nome === 'celular' ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}) });
+    await ctx.route(u => !u.href.startsWith(base), r => r.abort());
+    const page = await ctx.newPage();
+    const erros = [];
+    page.on('pageerror', e => erros.push('Erro de JavaScript: ' + e.message));
+    page.on('console', m => { if (m.type() === 'error' && !/net::ERR_FAILED|ERR_BLOCKED_BY_CLIENT|fonts\.googleapis/.test(m.text())) erros.push('Console: ' + m.text()); });
+    page.on('response', r => { if (r.url().startsWith(base) && r.status() >= 400) erros.push(`Arquivo faltando (${r.status()}): ${r.url().slice(base.length)}`); });
+    await page.goto(base + 'guia.html');
+    await page.waitForSelector('#guia .p-cab', { timeout: 10000 });
+    for (const t of ['dark', 'light']) {
+      await page.click(`[data-tema="${t}"]`);
+      const r = await page.evaluate(() => ({ largura: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth), secoes: document.querySelectorAll('#guia .g-sec').length, preso: !!document.querySelector('#guia [aria-busy="true"]') }));
+      assert.ok(r.secoes >= 10, `guia com poucas seções (${r.secoes})`);
+      assert.equal(r.preso, false, 'guia preso no "Carregando"');
+      assert.ok(r.largura <= tela.width + 1, `rolagem lateral no guia (${t}): ${r.largura}px numa tela de ${tela.width}px`);
+    }
+    assert.deepEqual(erros, [], 'erros no guia');
+    await ctx.close();
+  });
+}
