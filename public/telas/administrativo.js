@@ -4,7 +4,9 @@
 // Férias marcadas aqui aparecem sozinhas como FE no Efetivo diário e na folha.
 import { SETS, AREA_S, today, add, ddmm, MESES_L } from '../contas/cal.js';
 import { normRegime, letra, comoEra } from '../contas/escala.js';
-import { editaAdm, indiceFerias } from '../contas/acessos.js';
+import { editaAdm, indiceFerias, ehAdminU } from '../contas/acessos.js';
+import { quadroEf, aguardandoEf, podeEf, ultimaEf, horaEf } from '../contas/efetivo-dia.js';
+import { etiqueta } from '../ui/padrao.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
@@ -200,7 +202,7 @@ export function criarAdministrativo(X) {
     const foot = vis.length ? `<tfoot><tr><th colspan="${mob ? 1 : 2}" class="fnome">Presentes</th>${vi.map(i => [datas[i], i]).map(([dt, i]) => `<td class="c num${dt === TODAY ? ' today' : ''}">${dt > TODAY ? '' : `<b class="${pres[i] < quadro[i] ? 'menos' : ''}">${pres[i]}</b><span class="muted">/${quadro[i]}</span>`}</td>`).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot">${resumo[k] || ''}</td>`).join('')}</tr></tfoot>` : '';
     const nPes = GR.reduce((n, g) => n + g.pessoas.length, 0); const nFora = GR.filter(g => g.virt).reduce((n, g) => n + g.pessoas.length, 0);
     const pelaFicha = folhaPelaFicha(comp); const nSem = GR.filter(g => g.nome === SEM_FICHA).reduce((n, g) => n + g.pessoas.length, 0);
-    return `<div class="mini"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>
+    return `<div class="mini"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>${quadroEfRH(conj, datas)}
       <div class="card"><header><h2>Frequência</h2><p>${ed ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'} · ${SETS[conj].curto} · ${dBR(datas[0])} a ${dBR(datas[datas.length - 1])}</p>${ed && !pelaFicha ? `<span class="r"><button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button></span>` : ''}</header>
         <div class="body lbar efbar efbar1">${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${GR.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar" style="margin-left:auto">${I.dl} Exportar Excel</button>` : ''}</div>
         ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
@@ -209,6 +211,36 @@ export function criarAdministrativo(X) {
         ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Presença do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
         ${mob ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
         <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
+  }
+  // Efetivo do dia: cada área com o status do envio do líder; o RH · Administrativo valida ou devolve (com motivo) e o
+  // administrador reabre o dia validado. Status em contas/efetivo-dia.js; o líder envia na Operação › Presença.
+  const quemEf = () => ({ valida: pode(), admin: ehAdminU(ME()) });
+  const diasEf = datas => datas.filter(d => d <= TODAY);
+  function diaEfRH(datas) { const ds = diasEf(datas); if (!ds.includes(U.efD)) U.efD = ds.includes(TODAY) ? TODAY : ds[ds.length - 1] || null; return U.efD; }
+  const areasEfRH = conj => { const tem = new Set((A().colabs[conj] || []).map(c => c.area)); return [...SETS[conj].areas, ...(SETS[conj].gerais || [])].filter(a => tem.has(a)); };
+  function quadroEfRH(conj, datas) {
+    const dia = diaEfRH(datas); if (!dia || !DB.efDocs) return '';
+    const docs = DB.efDocs(conj); const ds = diasEf(datas); const i = ds.indexOf(dia); const q = quemEf();
+    const linhas = quadroEf(areasEfRH(conj), docs, dia, TODAY).map(x => {
+      const env = ultimaEf(x.doc, 'enviado');
+      const det = x.st === 'devolvido' ? `Devolvido por ${esc(x.doc.nome)}: ${esc(x.doc.mot)}` : x.st === 'validado' ? `Validado por ${esc(x.doc.nome)} em ${horaEf((ultimaEf(x.doc, 'validado') || {}).em)}` : x.st === 'aberto' ? `Reaberto por ${esc(x.doc.nome)}; aguardando novo envio` : env ? `Enviado por ${esc(env.nome)} em ${horaEf(env.em)}` : 'O líder ainda não enviou';
+      const bts = [podeEf('validado', x.doc, q) ? `<button type="button" class="btn sm pri" data-a="efVal" data-v="${esc(x.area)}">Validar</button>` : '',
+        podeEf('devolvido', x.doc, q) ? `<button type="button" class="btn sm" data-a="efDev" data-v="${esc(x.area)}">Devolver</button>` : '',
+        podeEf('aberto', x.doc, q) ? `<button type="button" class="btn sm" data-a="efReab" data-v="${esc(x.area)}">Reabrir</button>` : ''].join('');
+      return `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(AREA_S[x.area] || x.area)}</b>${etiqueta(x.nome, x.tom)}</div><div class="muted small">${det}</div></div>${bts ? `<div class="row-gap">${bts}</div>` : ''}</div>`;
+    }).join('');
+    const ag = aguardandoEf(docs).filter(d => datas.includes(d.data) && d.data !== dia);
+    const nav = `<div class="row-gap"><button type="button" class="btn ghost sm" data-a="efDia" data-v="${ds[i - 1] || ''}" ${i > 0 ? '' : 'disabled'} aria-label="Dia anterior">‹</button><b>${dBR(dia)}${dia === TODAY ? ' (hoje)' : ''}</b><button type="button" class="btn ghost sm" data-a="efDia" data-v="${ds[i + 1] || ''}" ${i < ds.length - 1 ? '' : 'disabled'} aria-label="Dia seguinte">›</button></div>`;
+    return `<div class="card efenvcard"><header><h2>Efetivo do dia</h2><p>${SETS[conj].curto} · o que os líderes enviaram${q.valida ? ': confira na folha e valide' : ''}</p><span class="r">${nav}</span></header>
+      ${ag.length ? `<div class="body pt0 pb0 efst">Aguardando validação em outros dias: ${ag.slice(0, 8).map(d => `<button type="button" class="btn ghost link" data-a="efDia" data-v="${d.data}">${ddmm(d.data)} · ${esc(AREA_S[d.area] || d.area)}</button>`).join(' ')}${ag.length > 8 ? ` e mais ${ag.length - 8}` : ''}</div>` : ''}
+      <div class="body stackcol">${linhas || '<p class="muted m0">Nenhuma área com pessoas na Presença.</p>'}</div></div>`;
+  }
+  function efAcaoRH(area, acao, mot = '', ok = '') {
+    const conj = U.conj, dia = U.efD; const doc = DB.efDocs(conj)[`${dia}_${area}`] || null;
+    if (!podeEf(acao, doc, quemEf())) { toast('Não é possível fazer isso neste dia.'); return; }
+    DB.efGravar(conj, dia, area, acao, mot);
+    DB.log(`Efetivo do dia: ${{ validado: 'validou', devolvido: 'devolveu', aberto: 'reabriu' }[acao]} ${AREA_S[area] || area} de ${ddmm(dia)} (${SETS[conj].curto})${mot ? ' · ' + mot : ''}`, 'rh');
+    if (ok) toast(ok); render();
   }
   const achar = (doc, gi, k) => { const g = gruposDe(U.conj, U.comp, doc)[+gi]; return { g, p: g && g.pessoas.find(x => x.k === k) }; };
   // Lançar: o mesmo jeito do Efetivo diário (situação → até quando)
@@ -621,6 +653,10 @@ export function criarAdministrativo(X) {
       const grupos = ant.grupos.map(g => ({ ...g, pessoas: g.pessoas.filter(p => !p.desligado).map(p => ({ ...p, notas: [] })) }));
       await DB.admSalvarComp(U.conj, U.comp, { ini: datas[0], fim: datas[datas.length - 1], grupos, d: {} }); toast(`Folha de ${periodoComp(U.comp)} aberta`); render();
     }
+    else if (a === 'efDia') { if (v) { U.efD = v; render(); } }
+    else if (a === 'efVal') { efAcaoRH(v, 'validado', '', 'Efetivo validado'); }
+    else if (a === 'efDev') formSheet(`Devolver · ${AREA_S[v] || v}`, `${dBR(U.efD)} · ${SETS[U.conj].curto}`, '<label class="sel"><span>Motivo (o líder vê na Presença)</span><textarea class="in" id="efMot" rows="3" maxlength="300" required placeholder="Ex.: falta do João sem justificativa"></textarea></label>', 'Devolver', async () => { const m = $('efMot').value.trim(); if (!m) throw new Error('Escreva o motivo da devolução.'); efAcaoRH(v, 'devolvido', m, 'Efetivo devolvido ao líder'); });
+    else if (a === 'efReab') formSheet(`Reabrir · ${AREA_S[v] || v}`, `${dBR(U.efD)} · ${SETS[U.conj].curto}`, '<p class="m0">O líder volta a poder mudar a presença deste dia e precisa enviar de novo.</p>', 'Reabrir', async () => { efAcaoRH(v, 'aberto', '', 'Dia reaberto'); });
     else if (a === 'exportar') exportar();
     else if (a === 'exportarFerias') exportarFerias();
     else if (a === 'ir') { UI.view = v; render(); scrollTo(0, 0); }

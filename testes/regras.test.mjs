@@ -1278,3 +1278,32 @@ test('Erros nos aparelhos: quem tem cadastro grava o próprio erro (campos curto
   await assertSucceeds(getDocs(collection(db('admin'), 'erros')));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'erros', 'e1')));
 });
+
+test('Efetivo do dia: o líder envia a área dele; o RH valida ou devolve; validado, só o administrador reabre', async () => {
+  const D = '2026-11-20';
+  const ef = (uid, area, st, extra = {}) => ({ area, data: D, mes: '2026-11', st, por: uid, nome: uid, em: serverTimestamp(), mot: '', hist: [{ st, nome: uid, em: '2026-11-20T11:00:00.000Z' }], ...extra });
+  const ref = (u, area, col = 'efetivoDia') => doc(db(u), col, `${D}_${area}`);
+  await assertFails(setDoc(ref('liderRec', 'PREPARAÇÃO'), ef('liderRec', 'PREPARAÇÃO', 'enviado')), 'líder em outra área');
+  await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderPrep', 'RECEBIMENTO', 'enviado')), 'em nome de outra pessoa');
+  await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), { ...ef('liderRec', 'RECEBIMENTO', 'enviado'), em: Timestamp.fromDate(new Date('2026-01-01')) }), 'hora do aparelho');
+  await assertFails(setDoc(doc(db('liderRec'), 'efetivoDia', `${D}_PREPARAÇÃO`), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'id de outra área');
+  await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'validado')), 'o líder não valida');
+  await assertFails(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'validado')), 'o RH não valida o que não foi enviado');
+  await assertSucceeds(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')));
+  await assertSucceeds(setDoc(ref('supVarias', 'PREPARAÇÃO'), ef('supVarias', 'PREPARAÇÃO', 'enviado')), 'supervisor numa das áreas dele');
+  await assertSucceeds(getDoc(ref('rhSo', 'RECEBIMENTO')), 'o RH lê');
+  await assertSucceeds(getDoc(ref('rhLeitorNovo', 'RECEBIMENTO')), 'RH somente leitura lê');
+  await assertFails(getDoc(ref('segReg', 'RECEBIMENTO')), 'quem não lê a presença não lê');
+  await assertFails(setDoc(ref('rhLeitorNovo', 'RECEBIMENTO'), ef('rhLeitorNovo', 'RECEBIMENTO', 'validado')), 'RH somente leitura não valida');
+  await assertFails(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'devolvido')), 'devolver pede o motivo');
+  await assertSucceeds(setDoc(ref('rhSo', 'PREPARAÇÃO'), ef('rhSo', 'PREPARAÇÃO', 'devolvido', { mot: 'Falta sem justificativa' })));
+  await assertSucceeds(setDoc(ref('liderPrep', 'PREPARAÇÃO'), ef('liderPrep', 'PREPARAÇÃO', 'enviado')), 'reenviar depois de devolvido');
+  await assertSucceeds(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'validado')));
+  await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'validado não volta pelo líder');
+  await assertFails(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'aberto')), 'o RH não reabre');
+  await assertSucceeds(setDoc(ref('admin', 'RECEBIMENTO'), ef('admin', 'RECEBIMENTO', 'aberto')), 'o administrador reabre');
+  await assertSucceeds(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'reaberto: o líder envia de novo');
+  await assertFails(deleteDoc(ref('liderRec', 'RECEBIMENTO')));
+  await assertFails(setDoc(ref('liderRec', 'BATERIA 1', 'b_efetivoDia'), ef('liderRec', 'BATERIA 1', 'enviado')), 'sem a Bateria');
+  await assertSucceeds(setDoc(ref('supBat', 'BATERIA 1', 'b_efetivoDia'), ef('supBat', 'BATERIA 1', 'enviado')), 'Bateria');
+});

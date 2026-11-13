@@ -350,6 +350,12 @@ tr.acima td{background:color-mix(in srgb,var(--st-nreal) 7%,transparent)}
 .ckbt .btn.on.warn{background:color-mix(in srgb,var(--st-atr) 16%,transparent);border-color:var(--st-atr);color:var(--st-atr)}
 .ckbt .btn.on.bad{background:color-mix(in srgb,var(--st-nreal) 16%,transparent);border-color:var(--st-nreal);color:var(--st-nreal)}
 .ckok{font-size:13.5px}
+/* Efetivo do dia (envio ao RH, na Presença e na Frequência) */
+.efenv{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s2) var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
+.efenv:last-child{border-bottom:0}
+.efenv>.minw{flex:1 1 240px}
+.efenv .row-gap{flex-wrap:wrap}
+.efst{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;font-size:13px;margin:var(--s1) 0}
 /* rodapé "Presentes" no celular: presentes em cima, total embaixo (antes os números encostavam uns nos outros) */
 @media (max-width:860px){.efd tfoot td.c{padding-left:1px;padding-right:1px;line-height:1.1}.efd tfoot td.c b{display:block;font-size:13px}.efd tfoot td.c .muted{display:block;font-size:10px}.efd tfoot th{font-size:10.5px;letter-spacing:.02em}}
 .folhas{display:flex;flex-direction:column;gap:18px}
