@@ -104,6 +104,42 @@ export function indicadoresSeg({ inter = [], anom = [], mes, meses = [], hoje, a
   };
 }
 
+// Dia (AAAA-MM-DD, hora local) em que a anomalia foi concluída.
+const diaLocal = iso => { const d = new Date(Date.parse(iso)); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+// Concluída dentro do prazo? null quando não tinha prazo (não entra na conta).
+export const noPrazoSeg = a => (a && a.status === 'concluida' && a.trat && a.trat.prazo && a.conclEm ? diaLocal(a.conclEm) <= a.trat.prazo : null);
+
+// Painel da Segurança: os números do indicadoresSeg + Cartão Amarelo, prazo, pendências, áreas e reincidência.
+// cartao: cartões carregados (os do mês e os pendentes de qualquer mês); area: '' = todas.
+export function painelSeg({ inter = [], anom = [], cartao = [], mes, meses = [], hoje, areas = [], area = '' }) {
+  const daArea = l => (area ? l.filter(x => x.area === area) : l);
+  inter = daArea(inter); anom = daArea(anom); cartao = daArea(cartao);
+  const base = indicadoresSeg({ inter, anom, mes, meses, hoje, areas: area ? [area] : areas });
+  const cM = cartao.filter(c => c.mes === mes);
+  const concl = anom.filter(a => a.status === 'concluida' && diaLocal(a.conclEm).slice(0, 7) === mes);
+  const comPrazo = concl.filter(a => noPrazoSeg(a) != null), noPrazo = comPrazo.filter(noPrazoSeg).length;
+  const abertas = anom.filter(abertaSeg);
+  // Reincidência: o mesmo desvio na mesma área 3 vezes ou mais no mês.
+  const rep = new Map(); for (const r of inter) if (r.mes === mes) for (const dv of r.desvios || []) { const k = r.area + '|' + dv; rep.set(k, (rep.get(k) || 0) + 1); }
+  const pct = (a, b) => (b ? Math.round(a / b * 100) : null);
+  return {
+    ...base,
+    porMes: base.porMes.map(x => ({ ...x, cartao: cartao.filter(c => c.mes === x.mes).length })),
+    prazo: { concluidas: comPrazo.length, noPrazo, pct: pct(noPrazo, comPrazo.length), semPrazo: concl.length - comPrazo.length },
+    semResp: abertas.filter(a => !(a.trat && a.trat.resp)).length,
+    cartaoMes: cM.length, cartaoValidados: cM.filter(c => c.status === 'validado').length,
+    cartaoPendentes: cartao.filter(pendenteCartao).length,
+    faltou: PERG_CARTAO.map(p => [p, cM.filter(c => (c.faltou || []).includes(p)).length]),
+    repetidos: [...rep].filter(([, v]) => v >= 3).sort((a, b) => b[1] - a[1]).map(([k, v]) => { const [ar, dv] = k.split('|'); return { area: ar, desvio: dv, vezes: v }; }),
+    porArea: base.porArea.map(x => {
+      const iA = inter.filter(r => r.mes === mes && r.area === x.area), ab = abertas.filter(a => a.area === x.area);
+      return { ...x, comDesvio: pct(iA.filter(r => (r.desvios || []).length).length, iA.length), anomMes: anom.filter(a => a.mes === mes && a.area === x.area).length,
+        abertasAgora: ab.length, vencidas: ab.filter(a => vencidaSeg(a, hoje)).length, cartoes: cM.filter(c => c.area === x.area).length };
+    }).filter(x => x.inter || x.anomMes || x.abertasAgora || x.cartoes)
+      .sort((a, b) => b.vencidas - a.vencidas || b.abertasAgora - a.abertasAgora || b.inter - a.inter || (a.area < b.area ? -1 : 1))
+  };
+}
+
 // ---- Avisos no celular (rotina do GitHub) ----
 // anom: anomalias em aberto (aberta ou em tratamento) · usuarios: { uid: cadastro } · agoraMs, hoje, amanha.
 // Devolve [{ tipo: 'nova' | 'amanha' | 'vencida', uid, a, chave }]: anomalia nova (até 24 h) para quem trata e para

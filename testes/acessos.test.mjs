@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
-import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/contas/segcalc.js';
+import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg, painelSeg, noPrazoSeg } from '../public/contas/segcalc.js';
 import { areasFichaDe } from '../public/contas/pessoas.js';
 
 const ord = l => [...l].sort();
@@ -237,6 +237,28 @@ test('Segurança: listas padrão dos formulários e contas do painel', () => {
   assert.equal(r.anomMes, 2); assert.equal(r.concluidasNoMes, 1); assert.equal(r.vencidas, 1); assert.equal(Math.round(r.tempoMedio), 2);
   assert.deepEqual(r.porMes.map(x => x.inter), [1, 2]);
   assert.deepEqual(r.porArea[0], { area: 'BATERIA', inter: 2, abertas: 1, concluidas: 1 });
+});
+
+test('Painel da Segurança: no prazo, Cartão Amarelo, pendências, reincidência e filtro de área', () => {
+  const em = Date.parse('2026-10-01T08:00:00');
+  const inter = [1, 2, 3].map(i => ({ mes: '2026-10', area: 'BATERIA', desvios: ['EPI'], resp: 'Ana' + i })).concat([{ mes: '2026-10', area: 'PÁTIO', desvios: [] }]);
+  const anom = [
+    { mes: '2026-10', area: 'BATERIA', status: 'concluida', em, conclEm: '2026-10-04T12:00:00', trat: { prazo: '2026-10-05', resp: 'X' } },
+    { mes: '2026-10', area: 'BATERIA', status: 'concluida', em, conclEm: '2026-10-08T12:00:00', trat: { prazo: '2026-10-05', resp: 'X' } },
+    { mes: '2026-10', area: 'PÁTIO', status: 'concluida', em, conclEm: '2026-10-08T12:00:00' },
+    { mes: '2026-09', area: 'BATERIA', status: 'aberta', em, trat: { prazo: '2026-10-01' } }];
+  const cartao = [{ mes: '2026-10', area: 'BATERIA', status: 'validado', faltou: ['O AMBIENTE ESTÁ SEGURO?'] }, { mes: '2026-09', area: 'PÁTIO', status: 'pendente', faltou: [] }];
+  const r = painelSeg({ inter, anom, cartao, mes: '2026-10', meses: ['2026-09', '2026-10'], hoje: '2026-10-10', areas: ['BATERIA', 'PÁTIO'] });
+  assert.equal(noPrazoSeg(anom[0]), true); assert.equal(noPrazoSeg(anom[1]), false); assert.equal(noPrazoSeg(anom[2]), null);
+  assert.deepEqual(r.prazo, { concluidas: 2, noPrazo: 1, pct: 50, semPrazo: 1 });
+  assert.equal(r.semResp, 1); assert.equal(r.vencidas, 1);
+  assert.equal(r.cartaoMes, 1); assert.equal(r.cartaoValidados, 1); assert.equal(r.cartaoPendentes, 1, 'pendente de outro mês também conta');
+  assert.deepEqual(r.porMes.map(x => x.cartao), [1, 1]);
+  assert.deepEqual(r.repetidos, [{ area: 'BATERIA', desvio: 'EPI', vezes: 3 }]);
+  assert.equal(r.porArea[0].area, 'BATERIA', 'área com vencida vem primeiro');
+  assert.equal(r.porArea[0].comDesvio, 100); assert.equal(r.porArea[1].comDesvio, 0);
+  const p = painelSeg({ inter, anom, cartao, mes: '2026-10', meses: ['2026-10'], hoje: '2026-10-10', areas: ['BATERIA', 'PÁTIO'], area: 'PÁTIO' });
+  assert.equal(p.interMes, 1); assert.equal(p.cartaoPendentes, 1); assert.equal(p.vencidas, 0); assert.deepEqual(p.porArea.map(x => x.area), ['PÁTIO']);
 });
 
 test('Histórico de alterações: o administrador vê todos os módulos; o gestor de cada módulo só o dele; os outros, nada', () => {
