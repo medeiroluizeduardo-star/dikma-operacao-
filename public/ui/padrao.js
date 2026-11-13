@@ -61,3 +61,11 @@ export const carregando = () => '<div class="p-carregando" aria-busy="true" aria
 
 // Área recolhida (o que não pede ação agora).
 export const recolhido = (titulo, html, aberto = false) => `<details class="p-recolhe"${aberto ? ' open' : ''}><summary>${esc(titulo)}</summary><div>${html}</div></details>`;
+
+// Abas de uma ficha (ex.: Dados | Lotação). lista: [[valor, texto]]; attr: nome do data-* que leva o valor
+// (o clique é tratado pela tela, ex.: attr 'co-aba' → data-co-aba="dados").
+export const abas = (lista = [], atual = '', attr = 'aba', rotulo = '') => `<div class="p-abas" role="tablist"${rotulo ? ` aria-label="${esc(rotulo)}"` : ''}>`
+  + lista.map(([v, t]) => `<button type="button" role="tab" data-${attr}="${esc(v)}" aria-selected="${v === atual}">${esc(t)}</button>`).join('') + '</div>';
+
+// Lista de dados (rótulo e valor) da ficha. itens: [[rótulo, valor (HTML pronto)]]; valor vazio mostra "—".
+export const dados = (itens = []) => `<dl class="p-dados">${itens.map(([r, v]) => `<div><dt>${esc(r)}</dt><dd>${v === '' || v == null ? '<span class="p-falta">—</span>' : v}</dd></div>`).join('')}</dl>`;

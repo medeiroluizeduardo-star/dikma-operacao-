@@ -416,6 +416,7 @@ async function seniorExemplo() {
 }
 export async function gImportarOcorrencias(lista) { cache.g.ocorr = [...cache.g.ocorr, ...lista.map(o => ({ assinadoEm: null, testemunha: '', ...o, id: gid(), metodo: o.status === 'pendente' ? null : 'importado', assinaturaId: null }))]; gch(); }
 export async function gSalvarColabs(itens) { cache.g.colabs = itens; gch(); }
+export async function rhSalvarFicha(n) { const l = (cache.g.colabs || []).slice(); const i = l.findIndex(c => String(c.mat) === String(n.mat)); if (i >= 0) l[i] = n; else l.push(n); cache.g.colabs = l.sort((x, y) => String(x.nome).localeCompare(String(y.nome))); gch(); }
 export async function gSalvarConfig(patch) { cache.g.config = { ...cache.g.config, ...patch }; gch(); }
 export async function gAtualizarOcorrencia(id, patch) { cache.g.ocorr = cache.g.ocorr.map(o => (o.id === id ? { ...o, ...patch } : o)); gch(); }
 export function gNovaOcorrencia(o) { const x = { id: gid(), ...o, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '' }; cache.g.ocorr = [...cache.g.ocorr, x]; gch(); return x; }
@@ -467,7 +468,9 @@ async function iniciarAdm() {
   for (const k of SET_KEYS) cache.adm.colabs[k] = Object.values(S[k].colabs).flat();
   cache.adm.sit = { patio: sitProxy('patio'), bateria: sitProxy('bateria') };
   cache.adm.jus = { patio: jusProxy('patio'), bateria: jusProxy('bateria') };
-  cache.adm.rh = cache.g.colabs || [];
+  // o cadastro do RH é a mesma lista das fichas (gcolab) da demonstração
+  if (!Object.getOwnPropertyDescriptor(cache.adm, 'rh').get) Object.defineProperty(cache.adm, 'rh', { get: () => cache.g.colabs || [], set: () => {}, enumerable: true });
+  cache.adm.rhLoaded = true;
   if (admPronto) return;
   admPronto = true;
   let salvo = null; try { salvo = JSON.parse(localStorage.getItem(LSA) || 'null'); } catch (e) { /* ignora */ }

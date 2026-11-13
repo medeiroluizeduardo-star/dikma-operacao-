@@ -122,6 +122,7 @@ function renderTela() {
   if (arq === 'SG') return tela(comModulo('SG', m => m.render(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
+  if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
   if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? modulo('RE').vResumoOutro() : comModulo('AD', m => m.render(v)));
   if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
   if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));

@@ -683,7 +683,12 @@ test('acesso Administrativo: lê e grava folha e férias; lê pessoas e presenç
   await assertSucceeds(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-02': 'AT' } }, { merge: true }));
   await assertSucceeds(setDoc(doc(d, 'b_situacao', '2026-10'), { v: { 'B001|2026-10-02': 'FT' } }, { merge: true }));
   await assertFails(setDoc(doc(d, 'colaboradores', 'RECEBIMENTO'), { itens: [] }));
-  await assertFails(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [] }));
+  // RH › Colaboradores: o Administrativo grava o cadastro (com a marca de quem gravou), mas não apaga a ficha
+  await assertSucceeds(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [{ mat: 'REC', nome: 'Pessoa RECEBIMENTO', matArc: 'A123' }] }));
+  await assertSucceeds(setDoc(doc(d, 'gcolab', 'GERAL'), { itens: [{ mat: 'GER', nome: 'Pessoa GERAL' }, { mat: '999', nome: 'NOVA' }] }));
+  await assertFails(setDoc0(doc(d, 'gcolab', 'GERAL'), { itens: [] }), 'cadastro sem a marca de quem gravou');
+  await assertFails(setDoc(doc(d, 'gcolab', 'GERAL'), { itens: [], outro: 1 }), 'campo fora do formato');
+  await assertFails(deleteDoc(doc(d, 'gcolab', 'GERAL')));
 });
 test('acesso Administrativo somente leitura: consulta e não altera', async () => {
   const d = db('admLeitor');
@@ -693,6 +698,7 @@ test('acesso Administrativo somente leitura: consulta e não altera', async () =
   await assertFails(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [] }));
   await assertFails(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-03': 'FT' } }, { merge: true }));
   await assertFails(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
+  await assertFails(setDoc(doc(d, 'gcolab', 'GERAL'), { itens: [] }), 'somente leitura não grava o cadastro');
 });
 test('treinamentos, NRs e ASO: saíram do RH; o RH não lê nem grava; o administrador grava; quem não tem a Segurança não vê', async () => {
   await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'treinos', 't1'), { nome: 'PESSOA TESTE', tipo: 'ASO', validade: '2026-12-01' }); });

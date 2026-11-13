@@ -9,7 +9,8 @@ rules_version = '2';
 //     Operação · Técnico de Processo em todas as áreas do escopo, e o administrador; ações das causas = Operação ou Gestão (supervisor para cima) na área.
 //   - Plano, rotas, gerador = Administração: administrador, ou 'Dos módulos' com Gestão · Gestor no escopo.
 //   - Equipamentos (eq*) = escopo Equipamentos: Operação grava; Gestão lê (e lança a Avaliação mensal).
-//   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas.
+//   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas. O cadastro (gcolab) também é gravado pelo
+//     RH · Administrativo (RH › Colaboradores).
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
 //   - Usuários, config/permissoes = Administração completa (administrador).
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
@@ -464,10 +465,11 @@ service cloud.firestore {
     }
     // Fichas dos colaboradores, um documento por área.
     function gcolabOk(ch) { return soCampos(ch, ['itens', 'atualizadoPor', 'atualizadoEm']) && fLista(request.resource.data, ch, 'itens', 3000); }
+    // Gravam: quem administra as fichas e o RH · Administrativo (RH › Colaboradores, o cadastro único).
     match /gcolab/{area} {
       allow read: if todasFichas() || minhaFicha(area) || acAdm();
-      allow create: if admMod('gestao') && marcaOk() && gcolabOk(novos());
-      allow update: if admMod('gestao') && marcaOk() && gcolabOk(mudados());
+      allow create: if (admMod('gestao') || admEdita()) && marcaOk() && gcolabOk(novos());
+      allow update: if (admMod('gestao') || admEdita()) && marcaOk() && gcolabOk(mudados());
       allow delete: if admMod('gestao');
     }
     // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,

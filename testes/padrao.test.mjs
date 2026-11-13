@@ -47,3 +47,14 @@ test('carregando e recolhido', () => {
   assert.match(carregando(), /aria-busy="true"/);
   assert.match(recolhido('T', 'x', true), /<details class="p-recolhe" open>/);
 });
+
+test('abas e lista de dados da ficha', async () => {
+  const { abas, dados } = await import('../public/ui/padrao.js');
+  const h = abas([['dados', 'Dados'], ['lot', 'Lotação']], 'lot', 'co-aba', 'Ficha');
+  assert.match(h, /role="tablist" aria-label="Ficha"/);
+  assert.match(h, /data-co-aba="lot" aria-selected="true"/);
+  assert.match(h, /data-co-aba="dados" aria-selected="false"/);
+  const d = dados([['Nome', 'Ana'], ['Demissão', '']]);
+  assert.match(d, /<dt>Nome<\/dt><dd>Ana<\/dd>/);
+  assert.match(d, /<dt>Demissão<\/dt><dd><span class="p-falta">—<\/span>/);
+});

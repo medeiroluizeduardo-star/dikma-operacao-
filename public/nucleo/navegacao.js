@@ -7,6 +7,7 @@ import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
 import { supConjs } from '../contas/segcalc.js';
 import { veTreinos } from '../contas/treinos.js';
+import { acoes } from './acoes.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
 // mod: all (Avisos no celular, em todos os módulos; abre pelo Mais e pelo menu lateral) · operacao · gestao · seguranca · rh · administracao
@@ -54,7 +55,7 @@ export const VIEWS = [
   { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'ma', conj: true },
   { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
-  { id: 'gcolab', nome: 'Colaboradores', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
+  { id: 'gcolab', nome: 'Fichas de acompanhamento', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
   { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
@@ -65,7 +66,8 @@ export const VIEWS = [
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
-  // ---- RH: frequência e férias (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
+  // ---- RH: cadastro dos colaboradores (colaboradores.js), frequência e férias (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
+  { id: 'rcolab', nome: 'Colaboradores', ic: 'users', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'CO' },
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência e férias', mod: 'rh', req: temRH },
   { id: 'aferias', nome: 'Férias', ic: 'ferias', grp: 'Frequência e férias', mod: 'rh', req: temRH },
   { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência e férias', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
@@ -101,12 +103,13 @@ export const SUB_E = {
 };
 export const SUB_G = {
   gpainel: 'Indicadores das fichas de acompanhamento',
-  gcolab: 'Cadastro, controle da ficha e assinaturas de cada colaborador',
+  gcolab: 'Integração, ocorrências e assinaturas de cada colaborador',
   gimpr: 'Ficha (Folhas 1 e 2) e via de assinatura',
   gimport: 'Colaboradores e ocorrências a partir de uma planilha',
   gtipos: 'Tipos, texto padrão e o que vai para a Folha 1'
 };
 export const SUB_A = {
+  rcolab: 'Cadastro único: dados, matrículas Dikma e Arcelor, área, rota e liderança',
   afreq: 'Folha de frequência de 16 a 15, por grupo',
   aferias: 'Planejamento, quem está de férias e data limite',
   aimport: 'Planilhas de frequência e de férias'
@@ -119,7 +122,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', qpainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Presença', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', qpainel: 'Indicadores', gpainel: 'Indicadores' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { esdia: 'Presença do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', painel: 'Atividades', epainel: 'Equipamentos', qpainel: 'Queda zero', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
@@ -130,9 +133,9 @@ export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nom
 // Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
   operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos, Efetivo e Indicadores', key: 'operacao', inicio: 'apontar' },
-  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas e indicadores das fichas', key: 'gestao', inicio: 'prog' },
+  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas de acompanhamento e indicadores', key: 'gestao', inicio: 'prog' },
   seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, treinamentos e indicadores', key: 'seguranca', inicio: 'sganom' },
-  rh: { nome: 'RH', curto: 'RH', sub: 'Frequência e férias', key: 'rh', inicio: 'afreq' },
+  rh: { nome: 'RH', curto: 'RH', sub: 'Colaboradores, frequência e férias', key: 'rh', inicio: 'afreq' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
 // Itens do seletor de módulos: os módulos que a pessoa tem.
@@ -194,7 +197,7 @@ const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['prog', 'gcolab', 'gpainel', 'causas', 'eaval'],
   seguranca: () => ['sganom', 'sginter', 'sgtrein', 'sgpainel'],
-  rh: () => ['afreq', 'aferias', 'fpainel'],
+  rh: () => ['rcolab', 'afreq', 'aferias', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {
@@ -221,3 +224,12 @@ export function trocarConjunto(k) {
   UI.esSet = k; UI.eRota = '*'; UI.confirm = null;
   aplicarSet(); ensureModulo(); salvarUI(); trocarTela(UI.view);
 }
+
+// Da ficha de acompanhamento (Gestão) para o cadastro da mesma pessoa (RH › Colaboradores), e de volta.
+function abrirEm(mod, view, ajustar) {
+  if (!modsDe(ME).includes(mod)) return;
+  UI.modulo = mod; UI.modOpen = false; UI.confirm = null; UI.more = 0; aplicarSet(); UI.view = view; ajustar();
+  salvarUI(); trocarTela(view);
+}
+acoes.irCadastro = (t, d) => abrirEm('rh', 'rcolab', () => { UI.co.mat = d.mat || null; UI.co.aba = 'dados'; });
+acoes.irFicha = (t, d) => abrirEm('gestao', 'gcolab', () => { UI.g.mat = d.mat || null; });
