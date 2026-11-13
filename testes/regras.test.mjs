@@ -847,7 +847,7 @@ test('perfil Administrativo: vê as Atividades sem apontar; edita Frequência e 
   await assertFails(setDoc(doc(d, 'config', 'sistema'), { rotas: [] }));
   await assertFails(updateDoc(doc(d, 'usuarios', 'admv'), { papel: 'admin' }));
 });
-test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e colhe assinatura; não muda o cadastro das fichas', async () => {
+test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e colhe assinatura; grava o cadastro pelo RH, sem apagar', async () => {
   const d = db('admv');
   await assertSucceeds(getDocs(collection(d, 'gcolab')));
   await assertSucceeds(getDocs(collection(d, 'gocorr')));
@@ -855,7 +855,9 @@ test('perfil Administrativo: fichas de todas as áreas, registra ocorrência e c
   await assertFails(setDoc(doc(d, 'gocorr', 'adm-oc2'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'outro' }));
   await assertSucceeds(updateDoc(doc(d, 'gocorr', 'pre1'), { recolhe: 'ASSISTENTE ADM' }));
   await assertSucceeds(setDoc(doc(d, 'gassin', 'adm-as1'), { area: 'BATERIA 1', por: 'admv', metodo: 'tela' }));
-  await assertFails(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [] }));
+  // tem o RH · Administrativo: grava o cadastro (RH › Colaboradores), mas não apaga a ficha
+  await assertSucceeds(setDoc(doc(d, 'gcolab', 'RECEBIMENTO'), { itens: [{ mat: 'REC', nome: 'Pessoa RECEBIMENTO' }] }));
+  await assertFails(deleteDoc(doc(d, 'gcolab', 'RECEBIMENTO')));
   await assertFails(deleteDoc(doc(d, 'gocorr', 'rec1')));
   await assertFails(setDoc(doc(db('admvSo'), 'gocorr', 'adm-oc3'), { area: 'PREPARAÇÃO', status: 'pendente', desc: 'Atestado', criadoPor: 'admvSo' }), 'sem o Efetivo marcado não registra ocorrência');
 });
