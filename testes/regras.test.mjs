@@ -51,6 +51,8 @@ const USUARIOS = {
   eqGeLeitor: { papel: 'leitor', modulos: ['equipamentos'], acesso: { gestao: 'leitor' }, escopos: ['equipamentos'] },
   eqGeSup: { papel: 'supervisor', modulos: ['equipamentos'], acesso: { gestao: 'supervisor' }, escopos: ['equipamentos'] },
   eqOpLider: { papel: 'lider', modulos: ['equipamentos'], acesso: { operacao: 'lider' }, escopos: ['equipamentos'] },
+  eqOpLider2: { papel: 'lider', modulos: ['equipamentos'], acesso: { operacao: 'lider' }, escopos: ['equipamentos'] },
+  eqOpSup: { papel: 'supervisor', modulos: ['equipamentos'], acesso: { operacao: 'supervisor' }, escopos: ['equipamentos'] },
   // Fase 3 (Segurança): perfis da Segurança e supervisores de área (Operação · Supervisor) sem perfil na Segurança.
   segReg2: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] },
   segTrata: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'trata' }, escopos: [] },
@@ -75,6 +77,10 @@ for (const [k, u] of Object.entries(USUARIOS)) {
   if (u.semConverter) { const { semConverter, ...x } = u; USUARIOS[k] = x; continue; }
   if (!u.acesso) { const r = acessoDoLegado(u); USUARIOS[k] = { ...u, acesso: r.acesso, escopos: r.escopos }; }
 }
+// Lançamento, parada e inspeção de equipamento válidos, em nome de quem grava (por) com a hora do servidor (em).
+const LANC = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', tipo: 'CARREGADEIRA', op: 'OPERADOR TESTE', area: 'PÁTIO', setor: null, status: 'EM OPERAÇÃO', ini: '07:00', fim: null, he: 0, heOrigem: '', sub: '', obs: '', por, em: serverTimestamp() });
+const PAR = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', op: 'OPERADOR TESTE', ini: '09:00', fim: null, causa: 'MECÂNICA', desc: 'VAZAMENTO', os: '123', por, em: serverTimestamp() });
+const INSP = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', op: 'OPERADOR TESTE', itens: { a1: 'C', s1: 'NC' }, p5s: 1, pseg: 0, inspetor: 'INSPETOR', obs: '', por, em: serverTimestamp() });
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
 // db('liderRec') = banco visto por essa pessoa; db(null) = sem login; db('semPerfil') = conta sem cadastro no sistema
@@ -929,14 +935,103 @@ test('Administração Dos módulos: Gestor da Gestão cuida do plano, das rotas 
   await assertFails(setDoc(doc(d, 'config', 'permissoes'), { x: 2 }));
 });
 test('Equipamentos por módulo: a Operação lança; a Gestão lê e só lança a Avaliação mensal', async () => {
-  await assertSucceeds(setDoc(doc(db('eqOpLider'), 'eqlanc', 'mx1'), { mes: '2026-10' }));
+  await assertSucceeds(setDoc(doc(db('eqOpLider'), 'eqlanc', 'mx1'), LANC('eqOpLider')));
   await assertSucceeds(getDoc(doc(db('eqGeLeitor'), 'eqlanc', 'l1')));
   await assertSucceeds(getDoc(doc(db('eqGeLeitor'), 'eq', 'cadastro')));
-  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqlanc', 'mx2'), { mes: '2026-10' }));
-  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqaval', '2026-10'), { x: 1 }));
-  await assertSucceeds(setDoc(doc(db('eqGeSup'), 'eqaval', '2026-10'), { x: 1 }));
-  await assertFails(setDoc(doc(db('eqGeSup'), 'eqlanc', 'mx3'), { mes: '2026-10' }), 'a Gestão não lança na Operação');
+  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqlanc', 'mx2'), LANC('eqGeLeitor')));
+  await assertFails(setDoc(doc(db('eqGeLeitor'), 'eqaval', '2026-10'), { itens: { OP: { s5: 1 } } }));
+  await assertSucceeds(setDoc(doc(db('eqGeSup'), 'eqaval', '2026-10'), { itens: { OP: { s5: 1 } } }, { merge: true }));
+  await assertFails(setDoc(doc(db('eqGeSup'), 'eqaval', '2026-11'), { x: 1 }), 'avaliação só com itens');
+  await assertFails(setDoc(doc(db('eqGeSup'), 'eqlanc', 'mx3'), LANC('eqGeSup')), 'a Gestão não lança na Operação');
   await assertFails(getDoc(doc(db('eqGeSup'), 'semanas', SEM)), 'escopo só Equipamentos');
+});
+// Equipamentos (S5): quem lançou, o supervisor para cima e o administrador alteram e apagam; os outros líderes só mudam
+// o status e fecham horário/troca no lançamento e liberam/substituem a parada. por e em não mudam depois.
+test('Equipamentos: lançamento, parada e inspeção de outra pessoa: o líder só faz o que a operação do dia pede', async () => {
+  const L1 = db('eqOpLider'), L2 = db('eqOpLider2'), S = db('eqOpSup');
+  await assertSucceeds(setDoc(doc(L1, 'eqlanc', 'aut1'), LANC('eqOpLider')));
+  await assertSucceeds(setDoc(doc(L1, 'eqpar', 'aut1'), PAR('eqOpLider')));
+  await assertSucceeds(setDoc(doc(L1, 'eqinsp', 'aut1'), INSP('eqOpLider')));
+  // o autor altera e apaga o que é dele
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'aut1'), { op: 'OUTRO OPERADOR', he: 2, heOrigem: 'DIKMA' }));
+  // outro líder: status, fim e troca no lançamento; fim, substituição na parada
+  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { status: 'FALTA' }), 'outro líder muda o status');
+  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { fim: '14:00', trocaPara: 'CB-02' }), 'outro líder fecha a troca');
+  await assertSucceeds(updateDoc(doc(L2, 'eqpar', 'aut1'), { fim: '11:30' }), 'outro líder libera a parada');
+  await assertSucceeds(updateDoc(doc(L2, 'eqpar', 'aut1'), { subst: 'CB-02', lancSub: 'x1' }), 'outro líder substitui');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { op: 'TERCEIRO' }), 'outro líder não troca o operador');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { he: 5 }), 'outro líder não lança hora extra no registro dos outros');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { data: '2026-10-21', mes: '2026-10' }), 'nem a data');
+  await assertFails(updateDoc(doc(L2, 'eqpar', 'aut1'), { causa: 'OUTRA' }), 'nem a causa da parada');
+  await assertFails(updateDoc(doc(L2, 'eqinsp', 'aut1'), { obs: 'mudou' }), 'nem a inspeção');
+  for (const c of ['eqlanc', 'eqpar', 'eqinsp']) await assertFails(deleteDoc(doc(L2, c, 'aut1')), `outro líder não apaga ${c}`);
+  // ninguém muda o autor nem a hora do lançamento
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { por: 'eqOpLider2' }), 'o autor não passa o registro para outro');
+  await assertFails(updateDoc(doc(S, 'eqlanc', 'aut1'), { em: serverTimestamp() }), 'nem o supervisor muda a hora do lançamento');
+  // supervisor e administrador alteram e apagam de qualquer pessoa
+  await assertSucceeds(updateDoc(doc(S, 'eqlanc', 'aut1'), { op: 'CORRIGIDO', obs: 'acerto' }));
+  await assertSucceeds(updateDoc(doc(S, 'eqinsp', 'aut1'), { obs: 'acerto' }));
+  await assertSucceeds(deleteDoc(doc(S, 'eqinsp', 'aut1')));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'eqpar', 'aut1')));
+  await assertSucceeds(deleteDoc(doc(L1, 'eqlanc', 'aut1')), 'o autor apaga o dele');
+  // criar só em nome próprio e com a hora do servidor
+  await assertFails(setDoc(doc(L1, 'eqlanc', 'aut2'), LANC('eqOpLider2')), 'em nome de outra pessoa');
+  await assertFails(setDoc(doc(L1, 'eqlanc', 'aut3'), { ...LANC('eqOpLider'), em: Timestamp.now() }), 'com hora do aparelho');
+  const { por: _p, ...semAutor } = LANC('eqOpLider');
+  await assertFails(setDoc(doc(L1, 'eqlanc', 'aut4'), semAutor), 'sem autor');
+});
+test('Equipamentos: formato e tamanho dos lançamentos, paradas e inspeções', async () => {
+  const L1 = db('eqOpLider');
+  const ruins = [
+    ['eqlanc', { data: undefined }, 'sem data'], ['eqlanc', { data: '20/10/2026', mes: '2026-10' }, 'data fora do formato'],
+    ['eqlanc', { mes: '2026-11' }, 'mês diferente da data'], ['eqlanc', { eq: '' }, 'sem equipamento'], ['eqlanc', { eq: 'X'.repeat(31) }, 'equipamento grande demais'],
+    ['eqlanc', { obs: 'x'.repeat(501) }, 'observação grande demais'], ['eqlanc', { he: 30 }, 'hora extra acima de 24 h'], ['eqlanc', { he: '2' }, 'hora extra em texto'],
+    ['eqlanc', { ini: '7h' }, 'hora fora do formato'], ['eqlanc', { op: ['A'] }, 'operador que não é texto'],
+    ['eqpar', { desc: 'x'.repeat(501) }, 'descrição da parada grande demais'], ['eqpar', { fim: 'amanhã' }, 'liberação fora do formato'],
+    ['eqinsp', { itens: 'tudo ok' }, 'itens que não são lista de itens'], ['eqinsp', { p5s: 200 }, 'nota fora da faixa']
+  ];
+  const base = { eqlanc: LANC, eqpar: PAR, eqinsp: INSP };
+  let i = 0;
+  const sem = o => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  for (const [c, extra, msg] of ruins) await assertFails(setDoc(doc(L1, c, 'ruim' + i++), sem({ ...base[c]('eqOpLider'), ...extra })), msg);
+  const lixo = { ...LANC('eqOpLider') }; for (let k = 0; k < 40; k++) lixo['c' + k] = k;
+  await assertFails(setDoc(doc(L1, 'eqlanc', 'ruimMuitos'), lixo), 'campos demais');
+  await assertSucceeds(setDoc(doc(L1, 'eqlanc', 'bom1'), LANC('eqOpLider')));
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'bom1'), { obs: 'x'.repeat(600) }), 'alteração também confere o tamanho');
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'bom1'), { fim: null, ini: '7:05' }));
+  // registro antigo (de antes dos limites) continua podendo ser alterado nos outros campos
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'eqlanc', 'antigo1'), { ...LANC('eqOpLider'), em: Timestamp.now(), obs: 'x'.repeat(900) }); });
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'antigo1'), { status: 'FALTA' }));
+});
+test('Presença, cadastro, folha, férias e treinamentos: só os campos e tamanhos esperados', async () => {
+  const lider = db('liderRec'), adm = db('admAn'), sg = db('segReg');
+  // presença do mês: v, cob, he, hed, jus, ck (mapas)
+  await assertSucceeds(setDoc(doc(lider, 'situacao', '2026-10'), { jus: { 'C001|2026-10-02': 'Atestado' } }, { merge: true }));
+  await assertFails(setDoc(doc(lider, 'situacao', '2026-10'), { lixo: 'x' }, { merge: true }), 'campo que não existe na presença');
+  await assertFails(setDoc(doc(lider, 'situacao', '2026-10'), { v: 'FT' }, { merge: true }), 'presença que não é mapa');
+  // cadastro das Atividades e fichas
+  await assertSucceeds(setDoc(doc(db('admin'), 'colaboradores', 'PREPARAÇÃO'), { itens: [{ id: 'C900', nome: 'X' }], maiorId: 900 }));
+  await assertFails(setDoc(doc(db('admin'), 'colaboradores', 'PREPARAÇÃO'), { itens: 'X', maiorId: 900 }), 'lista que não é lista');
+  await assertFails(setDoc(doc(db('admin'), 'colaboradores', 'PREPARAÇÃO'), { itens: [], extra: 1 }), 'campo a mais no cadastro');
+  await assertFails(setDoc(doc(db('admin'), 'gcolab', 'GERAL'), { itens: [], extra: 1 }), 'campo a mais nas fichas');
+  await assertSucceeds(setDoc(doc(db('admin'), 'gcolab', 'GERAL'), { itens: [{ mat: 'GER', nome: 'Pessoa GERAL' }] }));
+  // folha de frequência: id = conj|competência
+  await assertSucceeds(setDoc(doc(adm, 'freqcomp', 'bateria|2026-11'), { conj: 'bateria', competencia: '2026-11', ini: '2026-10-16', fim: '2026-11-15', grupos: [], d: {} }));
+  await assertFails(setDoc(doc(adm, 'freqcomp', 'bateria|2026-12'), { conj: 'patio', competencia: '2026-12', grupos: [], d: {} }), 'id diferente do conjunto');
+  await assertFails(setDoc(doc(adm, 'freqcomp', 'patio|2026-13x'), { conj: 'patio', competencia: '2026-13x', grupos: [] }), 'competência fora do formato');
+  await assertFails(updateDoc(doc(adm, 'freqcomp', 'bateria|2026-11'), { conj: 'patio' }), 'não muda o conjunto');
+  await assertFails(updateDoc(doc(adm, 'freqcomp', 'bateria|2026-11'), { grupos: 'G' }), 'grupos que não é lista');
+  await assertSucceeds(updateDoc(doc(adm, 'freqcomp', 'bateria|2026-11'), new FieldPath('d', 'B001', '2026-10-20'), 'FT', 'atualizadoEm', serverTimestamp()));
+  // férias
+  await assertSucceeds(setDoc(doc(adm, 'ferias', 'fv1'), { nome: 'PESSOA', mat: 1234, inicio: '2026-12-01', dias: 30, termino: '2026-12-30' }));
+  await assertFails(setDoc(doc(adm, 'ferias', 'fv2'), { nome: '', inicio: '2026-12-01' }), 'férias sem nome');
+  await assertFails(setDoc(doc(adm, 'ferias', 'fv3'), { nome: 'PESSOA', inicio: '01/12/2026' }), 'data fora do formato');
+  await assertFails(updateDoc(doc(adm, 'ferias', 'fv1'), { dias: 500 }), 'dias demais');
+  // treinamentos
+  await assertSucceeds(setDoc(doc(sg, 'treinos', 'tv1'), { nome: 'PESSOA', tipo: 'NR-35', realizado: '2026-01-10', validade: '2028-01-10', na: false }));
+  await assertFails(setDoc(doc(sg, 'treinos', 'tv2'), { nome: 'PESSOA', tipo: 'NR-35', validade: 'nunca' }), 'validade fora do formato');
+  await assertFails(setDoc(doc(sg, 'treinos', 'tv3'), { nome: 'PESSOA', tipo: '' }), 'sem tipo');
+  await assertFails(updateDoc(doc(sg, 'treinos', 'tv1'), { obs: 'x'.repeat(501) }), 'observação grande demais');
 });
 test('bloqueado com acesso por módulo guardado: não lê nem grava nada', async () => {
   for (const [c, id] of [['semanas', SEM], ['config', 'sistema'], ['eq', 'cadastro'], ['gcolab', 'RECEBIMENTO'], ['freqcomp', 'patio|2026-10'], ['usuarios', 'liderRec']]) await assertFails(getDoc(doc(db('bloqNovo'), c, id)));
@@ -1084,7 +1179,7 @@ test('Limpeza de dados: o administrador apaga semanas, aprovações, Segurança,
     await setDoc(doc(d, 'b_aprov', 'BATERIA 1|2026-01-05'), { area: 'BATERIA 1', mes: '2026-01', v: {} });
     await setDoc(doc(d, 'b_config', 'sistema'), { rotas: [], meses: ['2026-01', '2026-11'] });
     await setDoc(doc(d, 'config', 'sistema'), { rotas: [], meses: ['2026-01', '2026-11'] }, { merge: true });
-    for (const c of ['eqlanc', 'eqpar', 'eqinsp']) for (const id of ['lp1', 'lp2']) await setDoc(doc(d, c, id), { mes: '2026-01' });
+    for (const c of ['eqlanc', 'eqpar', 'eqinsp']) for (const id of ['lp1', 'lp2']) await setDoc(doc(d, c, id), { mes: '2026-01', data: '2026-01-10', por: 'eqOpLider' });
     for (const id of ['lh1', 'lh2']) await setDoc(doc(d, 'historico', id), { t: 'antigo' });
     await setDoc(doc(d, 'seginter', 'lpi'), { ...SEG_BASE, ...INTER_X, ...PAT, mes: '2026-01', data: '2026-01-10', por: 'segReg', em: Timestamp.now() });
     await setDoc(doc(d, 'seganom', 'lpa'), { ...SEG_BASE, ...ANOM_X, ...PAT, mes: '2026-01', data: '2026-01-10', por: 'segReg', em: Timestamp.now(), fotos: ['lpf'] });
@@ -1103,7 +1198,8 @@ test('Limpeza de dados: o administrador apaga semanas, aprovações, Segurança,
   }
   // equipamentos: sem o escopo Equipamentos ninguém apaga; quem lança na Operação continua apagando o lançamento (como antes)
   for (const u of ['gestorP', 'coord', 'sup', 'liderRec', 'admModulo', 'eqGeLeitor', 'eqGeSup']) for (const c of ['eqlanc', 'eqpar', 'eqinsp']) await assertFails(deleteDoc(doc(db(u), c, 'lp1')), `${u} ${c}`);
-  await assertSucceeds(deleteDoc(doc(db('eqOpLider'), 'eqlanc', 'lp2')), 'edição de sempre: quem lança apaga o lançamento');
+  await assertSucceeds(deleteDoc(doc(db('eqOpLider'), 'eqlanc', 'lp2')), 'quem lançou apaga o próprio lançamento');
+  await assertFails(deleteDoc(doc(db('eqOpLider2'), 'eqpar', 'lp2')), 'outro líder não apaga');
   // líder não marca a dispensa (dx) nem mexe na lista de meses
   await assertFails(updateDoc(doc(db('liderRec'), 'semanas', 'RECEBIMENTO|2026-01-05'), { 's.X1': '__RN___', 'dx.X1|0': '2026-11-03' }), 'líder não dispensa');
   await assertFails(updateDoc(doc(db('sup'), 'semanas', 'RECEBIMENTO|2026-01-05'), { 'dx.X1|0': '2026-11-03' }), 'supervisor não dispensa');

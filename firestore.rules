@@ -13,8 +13,8 @@ rules_version = '2';
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
 //   - Usuários, config/permissoes = Administração completa (administrador).
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
-//     administrador; Segurança (seginter, seganom, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp) seguem como
-//     antes: quem lança na Operação apaga o próprio lançamento um a um (o administrador também).
+//     administrador; Segurança (seginter, seganom, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
+//     o supervisor para cima e o administrador apagam um a um (veja o bloco de equipamentos).
 //   - Fotos das atividades (evidencias, evidenciasArquivo e b_): cria quem aponta na área, em nome próprio; lê quem lê
 //     as semanas; o autor só ajusta refs (24 h); exportação/lixeira/remoção e apagar = administrador; config/fotos =
 //     administrador. Parte 2 (Relatórios e arquivo de fotos): lixeira só da foto exportada; a foto completa só sai do
@@ -106,6 +106,23 @@ service cloud.firestore {
     // GitHub usam a chave de serviço e não passam por aqui.
     function marcaOk() { return request.resource.data.get('atualizadoPor', '') == request.auth.uid && request.resource.data.get('atualizadoEm', null) == request.time; }
 
+    // ---------- Formato dos dados (limites de campos e tamanhos) ----------
+    // Cada gravação só passa com os campos no tipo e no tamanho esperados. ch = campos conferidos: na criação, todos
+    // (novos()); na alteração, só os que mudaram (mudados()). Assim um registro antigo, de antes destes limites, continua
+    // podendo ser alterado nos outros campos. Campo ausente ou vazio (null) sempre passa.
+    function novos() { return request.resource.data.keys(); }
+    function mudados() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function fTxt(d, ch, k, max) { return !(k in ch) || !(k in d) || d[k] == null || (d[k] is string && d[k].size() <= max); }
+    function fTxtNum(d, ch, k, max) { return fTxt(d, ch, k, max) || d[k] is number; }   // matrícula: texto ou número
+    function fNum(d, ch, k, min, max) { return !(k in ch) || !(k in d) || d[k] == null || (d[k] is number && d[k] >= min && d[k] <= max); }
+    function fMapa(d, ch, k, max) { return !(k in ch) || !(k in d) || (d[k] is map && d[k].size() <= max); }
+    function fLista(d, ch, k, max) { return !(k in ch) || !(k in d) || (d[k] is list && d[k].size() <= max); }
+    function fDia(d, ch, k) { return !(k in ch) || !(k in d) || d[k] == null || (d[k] is string && d[k].matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')); }
+    function fHora(d, ch, k) { return !(k in ch) || !(k in d) || d[k] == null || (d[k] is string && d[k].matches('[0-9]{1,2}:[0-9]{2}(:[0-9]{2})?')); }
+    function fSim(d, ch, k) { return !(k in ch) || !(k in d) || d[k] == null || d[k] is bool; }
+    // Campos de cima permitidos (só os que mudam; os que já existem no banco não atrapalham).
+    function soCampos(ch, lista) { return ch.hasOnly(lista); }
+
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
     // Ninguém grava pelo site: o administrador é criado ou recuperado pela rotina do GitHub
     // "Administrador do sistema", que usa a chave de serviço (não passa por estas regras).
@@ -153,16 +170,27 @@ service cloud.firestore {
       allow write: if admMod('operacao');
     }
 
+    // Cadastro das Atividades (colaboradores e b_colaboradores): { itens[], maiorId } + a marca de quem gravou.
+    function colabsOk(ch) { let d = request.resource.data;
+      return soCampos(ch, ['itens', 'maiorId', 'atualizadoPor', 'atualizadoEm']) && fLista(d, ch, 'itens', 2000) && fNum(d, ch, 'maiorId', 0, 100000); }
+    // Presença do mês (situacao e b_situacao): v = código do dia; cob, he, hed, jus, ck = cobertura, horas extras,
+    // justificativas e conferência. Cada um é um mapa 'PESSOA|AAAA-MM-DD' → valor (até 40 mil por mês).
+    function sitOk(ch) { let d = request.resource.data;
+      return soCampos(ch, ['v', 'cob', 'he', 'hed', 'jus', 'ck', 'atualizadoPor', 'atualizadoEm'])
+        && fMapa(d, ch, 'v', 40000) && fMapa(d, ch, 'cob', 40000) && fMapa(d, ch, 'he', 40000) && fMapa(d, ch, 'hed', 40000)
+        && fMapa(d, ch, 'jus', 40000) && fMapa(d, ch, 'ck', 40000); }
     match /colaboradores/{area} {
       allow read: if op() || acAdm();
-      allow create, update: if (admMod('operacao') || admMod('gestao')) && marcaOk();
+      allow create: if (admMod('operacao') || admMod('gestao')) && marcaOk() && colabsOk(novos());
+      allow update: if (admMod('operacao') || admMod('gestao')) && marcaOk() && colabsOk(mudados());
       allow delete: if admMod('operacao') || admMod('gestao');
     }
 
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
       allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
-      allow create, update: if lancaSit('patio') && marcaOk();
+      allow create: if lancaSit('patio') && marcaOk() && sitOk(novos());
+      allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados());
       allow delete: if lancaSit('patio');
     }
 
@@ -328,12 +356,14 @@ service cloud.firestore {
     }
     match /b_colaboradores/{area} {
       allow read: if ba() || acAdm();
-      allow create, update: if (admMod('bateria') || admMod('gestao')) && marcaOk();
+      allow create: if (admMod('bateria') || admMod('gestao')) && marcaOk() && colabsOk(novos());
+      allow update: if (admMod('bateria') || admMod('gestao')) && marcaOk() && colabsOk(mudados());
       allow delete: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
       allow read: if ba() || acAdm() || eqm();
-      allow create, update: if lancaSit('bateria') && marcaOk();
+      allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos());
+      allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados());
       allow delete: if lancaSit('bateria');
     }
     match /b_semanas/{id} {
@@ -365,15 +395,65 @@ service cloud.firestore {
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------
+    // eq/cadastro = { operadores[], frota[] }; eq/config = turnos, causas, metas, pesos, feriados (administração).
+    function eqCadOk(ch) { let d = request.resource.data; return fLista(d, ch, 'operadores', 2000) && fLista(d, ch, 'frota', 1000); }
     match /eq/{docId} {
       allow read: if eqm();
-      allow write: if admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')));
+      allow create: if (admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')))) && eqCadOk(novos());
+      allow update: if (admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')))) && eqCadOk(mudados());
+      allow delete: if admMod('equipamentos');
     }
+    // Lançamentos, paradas e inspeções (S5): cada registro guarda quem lançou (por) e quando (em, hora do servidor), que
+    // não mudam depois. Alterar e apagar: o autor, o supervisor para cima (Operação · Gestor, Coordenador ou Supervisor) e
+    // o administrador. Os outros líderes só fazem o que a operação do dia pede no registro de outra pessoa: mudar o
+    // status e fechar o horário/troca do lançamento (status, fim, trocaPara) e liberar ou substituir a parada (fim,
+    // subst, lancSub). Inspeção de outra pessoa: o líder não altera nem apaga.
+    function eqSup() { return eqm() && (admin() || pEm('operacao') in ['gestor', 'coordenador', 'supervisor']); }
+    function eqAutor() { return resource.data.get('por', '') == request.auth.uid; }
+    function eqDataOk(d, ch) { return !ch.hasAny(['data', 'mes']) || dataOk(d); }
+    function eqCria() { let d = request.resource.data;
+      return eqEdita() && d.get('por', '') == request.auth.uid && d.get('em', null) == request.time && dataOk(d) && d.keys().size() <= 40; }
+    function eqAltera(livres) { let ch = mudados();
+      return eqEdita() && !ch.hasAny(['por', 'em']) && eqDataOk(request.resource.data, ch) && request.resource.data.keys().size() <= 40
+        && (eqSup() || eqAutor() || ch.hasOnly(livres)); }
+    function eqApaga() { return eqEdita() && (eqSup() || eqAutor()); }
+    function lancOk(ch) { let d = request.resource.data;
+      return fTxt(d, ch, 'eq', 30) && fTxt(d, ch, 'tipo', 60) && fTxt(d, ch, 'op', 120) && fTxt(d, ch, 'area', 80) && fTxt(d, ch, 'setor', 80)
+        && fTxt(d, ch, 'status', 40) && fHora(d, ch, 'ini') && fHora(d, ch, 'fim') && fNum(d, ch, 'he', 0, 24) && fTxt(d, ch, 'heOrigem', 10)
+        && fTxt(d, ch, 'sub', 120) && fTxt(d, ch, 'obs', 500) && fTxt(d, ch, 'trocaPara', 30) && fTxt(d, ch, 'voltaDe', 30); }
+    function parOk(ch) { let d = request.resource.data;
+      return fTxt(d, ch, 'eq', 30) && fTxt(d, ch, 'op', 120) && fHora(d, ch, 'ini') && fHora(d, ch, 'fim') && fTxt(d, ch, 'causa', 120)
+        && fTxt(d, ch, 'desc', 500) && fTxt(d, ch, 'os', 40) && fTxt(d, ch, 'subst', 30) && fTxt(d, ch, 'lancSub', 40); }
+    function inspOk(ch) { let d = request.resource.data;
+      return fTxt(d, ch, 'eq', 30) && fTxt(d, ch, 'op', 120) && fMapa(d, ch, 'itens', 60) && fNum(d, ch, 'p5s', 0, 100) && fNum(d, ch, 'pseg', 0, 100)
+        && fTxt(d, ch, 'inspetor', 120) && fTxt(d, ch, 'obs', 500); }
     // Lançamentos: quem tem a Frequência também lê, porque a hora extra da Operação entra na folha.
-    match /eqlanc/{id} { allow read: if eqm() || acAdm(); allow create, update, delete: if eqEdita(); }
-    match /eqpar/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
-    match /eqinsp/{id} { allow read: if eqm(); allow create, update, delete: if eqEdita(); }
-    match /eqaval/{mes} { allow read: if eqm(); allow write: if eqAvalEdita(); }
+    match /eqlanc/{id} {
+      allow read: if eqm() || acAdm();
+      allow create: if eqCria() && request.resource.data.get('eq', '') is string && request.resource.data.get('eq', '').size() > 0 && lancOk(novos());
+      allow update: if eqAltera(['status', 'fim', 'trocaPara']) && lancOk(mudados());
+      allow delete: if eqApaga();
+    }
+    match /eqpar/{id} {
+      allow read: if eqm();
+      allow create: if eqCria() && request.resource.data.get('eq', '') is string && request.resource.data.get('eq', '').size() > 0 && parOk(novos());
+      allow update: if eqAltera(['fim', 'subst', 'lancSub']) && parOk(mudados());
+      allow delete: if eqApaga();
+    }
+    match /eqinsp/{id} {
+      allow read: if eqm();
+      allow create: if eqCria() && inspOk(novos());
+      allow update: if eqAltera([]) && inspOk(mudados());
+      allow delete: if eqApaga();
+    }
+    // Avaliação mensal: { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }.
+    function avalOk(ch) { return soCampos(ch, ['itens']) && fMapa(request.resource.data, ch, 'itens', 2000); }
+    match /eqaval/{mes} {
+      allow read: if eqm();
+      allow create: if eqAvalEdita() && mes.matches('[0-9]{4}-[0-9]{2}') && avalOk(novos());
+      allow update: if eqAvalEdita() && avalOk(mudados());
+      allow delete: if eqAvalEdita();
+    }
 
     // ---------- Módulo Efetivo: fichas de acompanhamento ----------
     // gestao/config: tipos de ocorrência e texto da ficha (todos do Efetivo). gestao/colaboradores: lista antiga,
@@ -383,9 +463,11 @@ service cloud.firestore {
       allow write: if admMod('gestao');
     }
     // Fichas dos colaboradores, um documento por área.
+    function gcolabOk(ch) { return soCampos(ch, ['itens', 'atualizadoPor', 'atualizadoEm']) && fLista(request.resource.data, ch, 'itens', 3000); }
     match /gcolab/{area} {
       allow read: if todasFichas() || minhaFicha(area) || acAdm();
-      allow create, update: if admMod('gestao') && marcaOk();
+      allow create: if admMod('gestao') && marcaOk() && gcolabOk(novos());
+      allow update: if admMod('gestao') && marcaOk() && gcolabOk(mudados());
       allow delete: if admMod('gestao');
     }
     // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,
@@ -446,23 +528,45 @@ service cloud.firestore {
     // ---------- Acesso Administrativo ----------
     // Folha de frequência de cada competência (16 a 15): grupos, pessoas e os dias de quem não está nas Atividades.
     // Quem está nas Atividades tem a presença em situacao/b_situacao (a mesma do Efetivo diário).
+    // id = 'conj|AAAA-MM' (conj = patio ou bateria); grupos[] = grupos e pessoas; d e jus = dias e justificativas por pessoa.
+    function compOk(d, ch) {
+      return fTxt(d, ch, 'conj', 10) && fTxt(d, ch, 'competencia', 7) && fDia(d, ch, 'ini') && fDia(d, ch, 'fim') && fLista(d, ch, 'grupos', 300)
+        && fMapa(d, ch, 'd', 3000) && fMapa(d, ch, 'jus', 3000) && fTxt(d, ch, 'aba', 120) && d.keys().size() <= 30; }
     match /freqcomp/{id} {
       allow read: if acAdm() || eqm();   // Equipe e frota (Operação) lê a folha para a situação dos operadores
-      allow write: if admEdita();
+      allow create: if admEdita() && request.resource.data.get('conj', '') in ['patio', 'bateria'] && request.resource.data.get('competencia', '') is string
+        && id == request.resource.data.conj + '|' + request.resource.data.competencia && request.resource.data.competencia.matches('[0-9]{4}-[0-9]{2}')
+        && compOk(request.resource.data, novos());
+      allow update: if admEdita() && !mudados().hasAny(['conj', 'competencia']) && compOk(request.resource.data, mudados());
+      allow delete: if admEdita();
     }
-    // Férias: um documento por período.
+    // Férias: um documento por período. nome obrigatório; datas AAAA-MM-DD; dias de 0 a 365.
+    function feriasOk(d, ch) {
+      return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'setor', 80) && fTxt(d, ch, 'funcao', 120) && fTxt(d, ch, 'horario', 40)
+        && fDia(d, ch, 'inicio') && fDia(d, ch, 'termino') && fDia(d, ch, 'retorno') && fDia(d, ch, 'limite') && fDia(d, ch, 'admissao')
+        && fNum(d, ch, 'dias', 0, 365) && fTxt(d, ch, 'substituto', 300) && fTxt(d, ch, 'obs', 500) && fTxt(d, ch, 'aba', 120)
+        && fTxt(d, ch, 'mesPlanejado', 7) && d.keys().size() <= 30; }
     match /ferias/{id} {
       allow read: if acAdm();
-      allow write: if admEdita();
+      allow create: if admEdita() && request.resource.data.get('nome', '') is string && request.resource.data.get('nome', '').size() > 0 && feriasOk(request.resource.data, novos());
+      allow update: if admEdita() && feriasOk(request.resource.data, mudados());
+      allow delete: if admEdita();
     }
     // Treinamentos, NRs e ASO (Segurança › Treinamentos e ASO; saiu do RH em 2026-11-10): um documento por treinamento
     // feito. Quem tem a Segurança lê; os técnicos de segurança (registra, trata, gestor) e o administrador gravam, um a um
     // ou pela importação da planilha. Os "não se aplica" de cada pessoa ficam num documento só (naTipos).
     function treinoLe() { return ativo() && (admin() || pEm('seguranca') != ''); }
     function treinoEdita() { return ativo() && (admin() || pEm('seguranca') in ['registra', 'trata', 'gestor']); }
+    function treinoOk(d, ch) {
+      return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'tipo', 120)
+        && fTxt(d, ch, 'setor', 80) && fTxt(d, ch, 'area', 80) && fTxt(d, ch, 'conj', 10) && fTxt(d, ch, 'supervisor', 150) && fTxt(d, ch, 'turno', 40)
+        && fTxt(d, ch, 'funcao', 120) && fDia(d, ch, 'admissao') && fDia(d, ch, 'realizado') && fDia(d, ch, 'validade') && fTxt(d, ch, 'obs', 500)
+        && fSim(d, ch, 'na') && fLista(d, ch, 'naTipos', 200) && d.keys().size() <= 30; }
     match /treinos/{id} {
       allow read: if treinoLe();
-      allow write: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string;
+      allow create: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string
+        && request.resource.data.tipo.size() > 0 && request.resource.data.nome.size() > 0 && treinoOk(request.resource.data, novos());
+      allow update: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string && treinoOk(request.resource.data, mudados());
       allow delete: if treinoEdita();
     }
     // adm/feriasAtivas: resumo das férias de agora e dos próximos meses, lido pela Operação (marca FE sozinho).
