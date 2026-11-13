@@ -207,7 +207,7 @@ document.addEventListener('change', e => {
   if (t.id === 'mockUser') { DB.mockSwitch(t.value); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(ME ? ME.nome : '')); return; }
   if (t.dataset.rcfg) { const [i, f] = t.dataset.rcfg.split('|'); const rs = rotas().map((r, j) => (j === +i ? { ...r, [f]: Math.max(0, +t.value || 0) } : r)); DB.cache.config.rotas = rs; DB.saveRotas(rs); toast('Rota atualizada'); }
   // Formulário de acesso por módulo (novo usuário e editar acesso): atualiza o resumo de como fica hoje.
-  if (t.dataset.acf) { const px = t.dataset.acf; const st = CF().lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = CF().resumoAcesso(st); return; }
+  if (t.dataset.acf) { const px = t.dataset.acf; const st = CF().lerAcesso(px); if (px === 'nu') UI.nuAcesso = st; const r = $(px + 'Res'); if (r) r.innerHTML = CF().resumoAcesso(st); const er = $(px === 'nu' ? 'nuErr' : 'shErr'); if (er) er.hidden = true; return; }
   // Plano padrão: rota, local, atividade e tipo editáveis na própria linha
   if (t.dataset.prota || t.dataset.pcampo) {
     if (!admDe('ativ')) return;

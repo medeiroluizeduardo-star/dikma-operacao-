@@ -3,7 +3,7 @@
 import { SETS, SITS, AUSENTE, add, today } from '../contas/cal.js';
 import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBRIVEL } from '../contas/situacao.js';
 import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../contas/hoje.js';
-import { indiceFerias, indiceDesligados } from '../contas/acessos.js';
+import { indiceFerias, indiceDesligados, areasDoCadastro } from '../contas/acessos.js';
 import { criarEscala, normRegime, letra, fatorRota, comoEra, anotarTroca } from '../contas/escala.js';
 import { DB, title } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
@@ -163,6 +163,6 @@ export function removerCobertura(ausId, dt) {
   if (cod === 'HE' && prev && !prev.trab) { DB.setSit(key, null, r.k); DB.setSitExtra('he', key, null, r.k); DB.setSitExtra('hed', key, null, r.k); }
 }
 // Áreas de um conjunto (Pátio ou Bateria) em que a pessoa lança a presença — sem depender do módulo aberto.
-export const areasSitDe = k => { const p = perfil('operacao'); if (!ME || !setsDe(ME, 'operacao').includes(k) || !podeItem('i_efetivo', 'operacao') || !['admin', 'gestor', 'coordenador', 'supervisor', 'lider'].includes(p)) return []; if (p === 'admin' || ['gestor', 'coordenador'].includes(p)) return SETS[k].areas; return [ME.area, p === 'supervisor' ? ME.area2 : null].filter(a => a && SETS[k].areas.includes(a)); };
+export const areasSitDe = k => { const p = perfil('operacao'); if (!ME || !setsDe(ME, 'operacao').includes(k) || !podeItem('i_efetivo', 'operacao') || !['admin', 'gestor', 'coordenador', 'supervisor', 'lider'].includes(p)) return []; if (p === 'admin' || ['gestor', 'coordenador'].includes(p)) return SETS[k].areas; return areasDoCadastro(ME, p === 'supervisor').filter(a => SETS[k].areas.includes(a)); };
 export const colabsDoSet = k => Object.values((DB.dados(k) || {}).colabs || {}).flat();
 export const sitDoSet = (k, key) => { const m = key.split('|')[1].slice(0, 7); return (((DB.dados(k) || {}).sitByMonth || {})[m] || {})[key]; };

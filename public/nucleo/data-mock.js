@@ -102,6 +102,7 @@ async function fresh() {
     { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'coordenador', gestao: 'coordenador' }, ['patio', 'bateria']) },
     { uid: 'tec', nome: 'Técnico de Processo (demonstração)', login: 'tecnico', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'tecnico', gestao: 'leitor' }, ['patio', 'bateria']) },
     { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'], ...ac({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria']) },
+    { uid: 'sup4', nome: 'Supervisor de várias áreas', login: 'supervisor4', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2'], modulos: ['operacao', 'bateria', 'gestao'], ...ac({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria']) },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'leitor', rh: 'leitor' }, ['patio']) },
     { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'], ...ac({ rh: 'administrativo' }, []) },
     { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'administrativo', rh: 'administrativo' }, ['patio']) },
@@ -117,7 +118,7 @@ function usuariosSeguranca() {
   const reg = { acesso: { seguranca: 'registra' }, escopos: [] };
   const tra = { acesso: { operacao: 'supervisor', gestao: 'supervisor', seguranca: 'trata' }, escopos: ['patio'] };
   const lei = { acesso: { seguranca: 'leitor' }, escopos: [] };
-  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
+  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2, areas: v.areas }; };
   return [{ uid: 'segr', nome: 'Técnico de Segurança', login: 'seguranca', senha: '123456', ...reg, ...leg(reg, {}) },
     { uid: 'segt', nome: 'Supervisor da Preparação (Segurança)', login: 'seguranca.trata', senha: '123456', ...tra, ...leg(tra, { fichas: true, area: 'PREPARAÇÃO' }) },
     { uid: 'segl', nome: 'Consulta da Segurança', login: 'seguranca.leitor', senha: '123456', ...lei, ...leg(lei, {}) }];
@@ -133,7 +134,7 @@ function liderGestao(u) {
 // Perfis diferentes por módulo: aponta na Operação como líder e só consulta a Gestão; e uma Administração
 // "Dos módulos" de quem é Gestor só na Gestão do Pátio.
 function usuariosMistos() {
-  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2 }; };
+  const leg = (x, extras) => { const v = legadoDoAcesso(x.acesso, x.escopos, extras); return { papel: v.papel, modulos: v.modulos, acessos: v.acessos, area: v.area, area2: v.area2, areas: v.areas }; };
   const mis = { acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'] };
   const mod = { acesso: { gestao: 'gestor', rh: 'leitor', administracao: 'modulo' }, escopos: ['patio'] };
   return [{ uid: 'misto', nome: 'Líder (Gestão só leitura)', login: 'misto', senha: '123456', ...mis, ...leg(mis, { fichas: false, area: 'RECEBIMENTO' }) },
@@ -194,12 +195,12 @@ export async function signIn(login, senha) {
 export async function signInGoogle() { throw new Error('Na demonstração use usuário e senha.'); }
 export async function signOut() { me = null; persist(); cb.onAuth({ status: 'signedOut' }); }
 export async function criarPrimeiroAdmin() { /* não usado na demonstração */ }
-export async function criarUsuario({ nome, login, senha, papel, area, area2, modulos, acessos, acesso, escopos }) {
+export async function criarUsuario({ nome, login, senha, papel, area, area2, areas, modulos, acessos, acesso, escopos }) {
   login = normLogin(login);
   if (!loginValido(login)) throw new Error('Usuário inválido. Use de 3 a 30 letras minúsculas, números, ponto, hífen ou sublinhado.');
   if (cache.usuarios.some(u => u.login === login)) throw new Error(`O usuário "${login}" já existe.`);
   if (String(senha).length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
-  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], ...(acesso ? { acesso, escopos: escopos || [] } : {}), trocarSenha: true }); changed();
+  cache.usuarios.push({ uid: 'u' + Date.now().toString(36), nome, login, senha, papel, area: area || null, area2: area2 || null, areas: areas || [], modulos: modulos || ['operacao'], acessos: acessos || ['operacao'], ...(acesso ? { acesso, escopos: escopos || [] } : {}), trocarSenha: true }); changed();
 }
 export async function redefinirSenha(uid, nova) {
   if (uid === me.uid) throw new Error('Para a sua própria senha, use "Alterar minha senha".');

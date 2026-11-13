@@ -10,7 +10,8 @@ import { normNome } from './planilhas-adm.js';
 // Modelo no cadastro usuarios/{uid}:
 //   acesso  = { operacao?: perfil, gestao?: perfil, seguranca?: perfil, rh?: perfil, administracao?: 'admin' | 'modulo' }
 //   escopos = parte de ['patio', 'bateria', 'equipamentos'] (conjuntos usados dentro da Operação e da Gestão)
-// As áreas continuam em area/area2 (líder 1, supervisor até 2; gestor e coordenador todas) e as exceções em abas.
+// Áreas: líder 1 (area); supervisor quantas precisar (lista areas; area e area2 guardam as duas primeiras, para quem
+// ainda lê os campos antigos); gestor e coordenador todas. As exceções ficam em abas.
 // Do cadastro antigo ficam só: papel (qualquer perfil = ativo; 'bloqueado' = sem acesso) e 'gestao' em modulos
 // (= Gestão com as Fichas de acompanhamento). A tela Usuários ainda grava os campos antigos tirados do acesso
 // (legadoDoAcesso); a rotina dos avisos e as telas não usam mais o papel único para dar permissão.
@@ -29,12 +30,12 @@ export const perfilNome = (mod, p) => (mod === 'administracao' ? { admin: 'Compl
 export const ORDEM_PAPEL = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 
 // { acesso, escopos } → campos antigos que ainda são gravados junto (papel = ativo/bloqueado, modulos = Fichas).
-// extras = { fichas (padrão: sim, se tem Gestão), area, area2, bloqueado }.
-// Devolve { papel, modulos, acessos, area, area2 }.
+// extras = { fichas (padrão: sim, se tem Gestão), areas (lista) ou area/area2 (cadastro antigo), bloqueado }.
+// Devolve { papel, modulos, acessos, area, area2, areas }.
 export function legadoDoAcesso(acesso, escopos, extras = {}) {
   const a = acesso || {}; const esc = new Set(escopos || []);
-  const area = extras.area || null, area2 = extras.area2 || null;
-  if (a.administracao === 'admin') return { papel: extras.bloqueado ? 'bloqueado' : 'admin', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'], area: null, area2: null };
+  const lista = areasDoCadastro(extras, true);
+  if (a.administracao === 'admin') return { papel: extras.bloqueado ? 'bloqueado' : 'admin', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'], area: null, area2: null, areas: [] };
   // Papel antigo = o perfil mais alto entre os módulos (Segurança fica de fora: não existe no modelo antigo).
   const cands = [a.operacao, a.gestao, a.rh, a.administracao === 'modulo' ? 'gestor' : null].filter(Boolean);
   let papel = ORDEM_PAPEL.find(p => cands.includes(p)) || 'leitor';
@@ -50,12 +51,16 @@ export function legadoDoAcesso(acesso, escopos, extras = {}) {
   // antigo (sem modulos = Atividades Pátio).
   if (!modulos.length) modulos.push('seguranca');
   if (extras.bloqueado) papel = 'bloqueado';
-  // A área vale para quem é líder ou supervisor em algum módulo (Operação ou Gestão); a 2ª, para quem é supervisor.
+  // A área vale para quem é líder ou supervisor em algum módulo (Operação ou Gestão); as outras, para quem é supervisor.
   const pm = [a.operacao, a.gestao];
   const comArea = pm.some(p => ['lider', 'supervisor'].includes(p)) || ['lider', 'supervisor'].includes(papel);
-  const comArea2 = pm.includes('supervisor') || papel === 'supervisor';
-  return { papel, modulos, acessos: ['operacao'], area: comArea ? area : null, area2: comArea2 ? area2 : null };
+  const comVarias = pm.includes('supervisor') || papel === 'supervisor';
+  const areas = comVarias ? lista : comArea ? lista.slice(0, 1) : [];
+  return { papel, modulos, acessos: ['operacao'], area: areas[0] || null, area2: comVarias ? areas[1] || null : null, areas };
 }
+// Áreas de um cadastro: a area e, para o supervisor (sup), também area2 e a lista areas (sem repetir). As telas, a
+// rotina dos avisos e as regras do banco fazem a mesma conta.
+export const areasDoCadastro = (u, sup) => (!u ? [] : [...new Set([u.area, ...(sup ? [u.area2, ...(Array.isArray(u.areas) ? u.areas : [])] : [])].filter(Boolean))]);
 // O acesso do usuário (campos acesso e escopos). Sem o campo acesso: nenhum módulo (convertido: false).
 // fichas = 'gestao' em modulos (o administrador tem sempre).
 export function acessoDe(u) {
@@ -116,7 +121,7 @@ const VISTA = new WeakMap();
 export function usuarioEm(u, mod) {
   if (!u) return u;
   const p = perfilDe(u, mod) || 'sem';
-  const k = [u.papel, u.area, u.area2, u.nome, u.trocarSenha].join('|');
+  const k = [u.papel, u.area, u.area2, (u.areas || []).join(','), u.nome, u.trocarSenha].join('|');
   let c = VISTA.get(u); if (!c || c.a !== u.acesso || c.e !== u.escopos || c.m !== u.modulos || c.abas !== u.abas || c.k !== k) { c = { a: u.acesso, e: u.escopos, m: u.modulos, abas: u.abas, k, v: {} }; VISTA.set(u, c); }
   const x = c.v[mod]; if (x && x.papel === p) return x;
   return (c.v[mod] = { ...u, papel: p, modulos: marcasDe(u), area2: u.area2 });
