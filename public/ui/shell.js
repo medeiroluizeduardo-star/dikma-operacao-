@@ -87,16 +87,19 @@ function mockSwitcher() {
 let ULT = '';
 export function render() {
   const view = $('view');
+  // Campo da tela salvo ao sair dele (Tab, "próximo" no celular): redesenha logo depois, quando o cursor já chegou ao campo
+  // seguinte. Redesenhar no meio da troca fazia o cursor sumir e o próximo Tab levar ao topo da página.
+  { const ev = window.event; if (ev && ev.type === 'change' && ev.target && view && view.contains(ev.target) && AUTH.status === 'ready') { schedule(); return; } }
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
   const nav = k !== ULT || !!view.querySelector('.skel');
-  const pos = nav ? null : M.guardarRolagem(view);
+  const pos = nav ? null : M.guardarRolagem(view), foco = nav ? null : M.guardarFoco(view);
   VIEW_MUDOU = false;
   if (nav && AUTH.status === 'ready') M.prepararEntrada(view);
   renderTela();
   if (AUTH.status !== 'ready') { ULT = ''; M.cancelarEntrada(view); return; }
   ULT = k;
   if (nav && view.querySelector('.skel')) M.cancelarEntrada(view);
-  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); }
+  if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); M.restaurarFoco(view, foco); }
   M.moverIndicador();
   if (UI.flash && Date.now() - UI.flash.t > 500) UI.flash = null;
   if (UI.flash) {

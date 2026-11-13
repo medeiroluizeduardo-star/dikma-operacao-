@@ -64,6 +64,34 @@ function contarNumeros(root) {
 export function guardarRolagem(view) {
   return [...view.querySelectorAll('.tw')].map(el => [el.scrollLeft, el.scrollTop]);
 }
+// ---------- mantém o campo com o cursor (e a rolagem da página) quando a tela é redesenhada ----------
+// Sem isto, depois de salvar um campo o cursor sumia e o próximo Tab (ou "próximo" no teclado do celular) levava ao topo.
+// O campo é achado de novo pelo id ou pelos atributos data-* (ex.: data-rcfg="3|ef").
+const CAMPOS = 'input,select,textarea,button';
+export function guardarFoco(view) {
+  const a = document.activeElement;
+  if (!a || a === document.body || !view.contains(a) || !a.matches(CAMPOS)) return null;
+  // Seletor do campo: id; senão os data-*; senão a posição entre os campos da tela. k = qual deles, se houver vários iguais.
+  let sel = CAMPOS;
+  if (a.id) sel = '#' + CSS.escape(a.id);
+  else {
+    const ds = [...a.attributes].filter(x => x.name.startsWith('data-'));
+    if (ds.length) sel = a.tagName.toLowerCase() + ds.map(x => `[${x.name}="${CSS.escape(x.value)}"]`).join('');
+  }
+  let k = 0; try { k = [...view.querySelectorAll(sel)].indexOf(a); } catch (e) { return null; }
+  let pos = null; try { pos = [a.selectionStart, a.selectionEnd]; } catch (e) { /* campo sem cursor (número, lista) */ }
+  return { sel, k: Math.max(0, k), pos, y: scrollY };
+}
+export function restaurarFoco(view, f) {
+  if (!f) return;
+  const a = document.activeElement;
+  if (a && a !== document.body && view.contains(a)) return; // o foco já está num campo da tela
+  let n = null; try { n = view.querySelectorAll(f.sel)[f.k]; } catch (e) { return; }
+  if (!n || n.disabled) return;
+  n.focus({ preventScroll: true });
+  if (f.pos && f.pos[0] != null) { try { n.setSelectionRange(f.pos[0], f.pos[1]); } catch (e) { /* ignora */ } }
+  if (scrollY !== f.y) scrollTo(scrollX, f.y);
+}
 // Dados que chegam logo depois da troca de tela redesenham a tela: as barras não crescem de novo (piscavam).
 export function semRepetir(view) { view.classList.remove('barras'); }
 export function restaurarRolagem(view, pos) {
