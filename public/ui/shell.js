@@ -252,7 +252,7 @@ function indiceBusca() {
   for (const m of modsMenu()) if (!mesmoItem(m, UI.modulo)) out.push({ t: MODS[m].nome, d: `Módulo · ${subMod(m)}`, k: 'tela', ir: () => { trocarModulo(m); } });
   if (UI.modulo === 'rh') { // RH: pessoas das folhas de frequência e das férias
     const vistos = new Set(); const A = DB.cache.adm || {};
-    for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'aferias'; if (UI.a) { UI.a.fQ = f.nome; UI.a.fAba = 'todas'; } } }); }
+    for (const f of A.ferias || []) { const k = f.mat || f.nome; if (vistos.has(k)) continue; vistos.add(k); out.push({ t: title(f.nome), d: `Férias · ${f.setor || ''}${f.mat ? ' · matrícula ' + f.mat : ''}`, k: 'pessoa', ir: () => { UI.view = 'rcolab'; Object.assign(UI.co, { mat: f.mat ? String(f.mat) : null, aba: 'fer', q: f.mat ? '' : f.nome, f: 'todos' }); } }); }
     for (const [id, c] of Object.entries(A.comps || {})) if (c) for (const g of c.grupos || []) for (const p of g.pessoas) { const k = p.mat || p.nome; if (vistos.has('f' + k)) continue; vistos.add('f' + k); out.push({ t: title(p.nome), d: `Frequência · ${id.startsWith('bateria') ? 'Bateria' : 'Pátio'} · ${g.nome}`, k: 'pessoa', ir: () => { UI.view = 'afreq'; if (UI.a) { UI.a.conj = id.split('|')[0]; UI.a.q = p.nome; } } }); }
   }
   for (const k of setsDe(ME)) {

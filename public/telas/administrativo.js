@@ -205,7 +205,7 @@ export function criarAdministrativo(X) {
         <div class="body lbar efbar efbar1">${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${GR.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar" style="margin-left:auto">${I.dl} Exportar Excel</button>` : ''}</div>
         ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
         <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit P">${I.ok}<i class="peri D">D</i></span> Turno diurno</span><span><span class="sit P">${I.ok}<i class="peri N">N</i></span> Turno noturno (conta no dia em que começa)</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span><span class="muted">Quem está na Presença do dia tem a mesma presença aqui e lá.</span></div></details>
-        ${pelaFicha ? `<p class="body pt0 pb0 m0 small muted">Os grupos vêm do líder imediato de cada ficha em Gestão › Colaboradores (supervisão = líder da ficha do líder). Para mudar líder, função ou área, edite a ficha.${nSem ? ` <b>${nSem} pessoa${nSem === 1 ? '' : 's'} sem ficha</b>: cadastre em Colaboradores com a mesma matrícula.` : ''}</p>` : ''}
+        ${pelaFicha ? `<p class="body pt0 pb0 m0 small muted">Os grupos vêm do líder imediato de cada ficha em RH › Colaboradores (supervisão = líder da ficha do líder). Para mudar líder, função ou área, edite a ficha.${nSem ? ` <b>${nSem} pessoa${nSem === 1 ? '' : 's'} sem ficha</b>: cadastre em Colaboradores com a mesma matrícula.` : ''}</p>` : ''}
         ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Presença do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
         ${mob ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
         <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
@@ -271,20 +271,25 @@ export function criarAdministrativo(X) {
       doc.grupos = grupos; await DB.admSalvarGrupos(conj, comp, grupos); toast(`${title(p.nome)} incluído${p.ativ ? ' · ligado às Atividades' : ''}`); render();
     });
   }
+  // "Ver férias": abre a aba Férias da ficha em RH › Colaboradores (sem achar a ficha, a lista já filtrada pelo nome).
+  function verFerias(p) {
+    const rh = criarBusca(A().rh || [])(p.nome, p.mat); const mat = p.mat || (rh ? String(rh.item.mat || '') : '');
+    Object.assign(UI.co, { mat: mat || null, aba: 'fer', q: mat ? '' : p.nome, f: 'todos' }); UI.view = 'rcolab'; render(); scrollTo(0, 0);
+  }
   function menuPessoa(gi, k) {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
     const { p } = achar(doc, gi, k); if (!p) return;
     const ed = pode();
-    if (folhaPelaFicha(comp)) { // grupos pela ficha: líder, função e área se mudam na ficha (Gestão › Colaboradores)
-      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Mesma presença da Presença do dia' : 'Só na folha'} · ${p.semFicha ? 'sem ficha: cadastre em Gestão › Colaboradores com a mesma matrícula' : 'para mudar o líder ou a função, edite a ficha em Gestão › Colaboradores'}`,
-        [{ t: 'Ver férias', v: 'fer' }], o => { if (o.v === 'fer') { U.fQ = p.nome; UI.view = 'aferias'; render(); } });
+    if (folhaPelaFicha(comp)) { // grupos pela ficha: líder, função e área se mudam na ficha (RH › Colaboradores)
+      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Mesma presença da Presença do dia' : 'Só na folha'} · ${p.semFicha ? 'sem ficha: cadastre em RH › Colaboradores com a mesma matrícula' : 'para mudar o líder ou a função, edite a ficha em RH › Colaboradores'}`,
+        [{ t: 'Ver férias', v: 'fer' }], o => { if (o.v === 'fer') verFerias(p); });
       return;
     }
     if (p.virt) { // da Presença do dia, ainda fora da folha: incluir num grupo da folha
       sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}Na Presença do dia (${esc(p.ativ)}), fora da folha · mesma presença`,
         [...(ed ? doc.grupos.map((g, i) => ({ t: 'Incluir em ' + g.nome, v: 'in:' + i })) : []), { t: 'Ver férias', v: 'fer' }],
         async o => {
-          if (o.v === 'fer') { U.fQ = p.nome; UI.view = 'aferias'; render(); return; }
+          if (o.v === 'fer') { verFerias(p); return; }
           const i = +o.v.slice(3); const rh = criarBusca(A().rh || [])(p.nome, p.mat); const mat = p.mat || (rh ? String(rh.item.mat || '') : '');
           const novo = { k: mat || 'n:' + normNome(p.nome), nome: p.nome, mat, turma: p.turma, obs: '', notas: [], ativ: p.ativ, desligado: null };
           if (doc.grupos.some(g => g.pessoas.some(x => x.k === novo.k))) { toast('Essa pessoa já está na folha.'); return; }
@@ -296,7 +301,7 @@ export function criarAdministrativo(X) {
     sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Presença em comum com a Presença do dia (' + esc(p.ativ) + ')' : 'Só na folha'}${p.notas && p.notas.length ? ' · ' + esc(p.notas.join(' · ')) : ''}`,
       [...(ed ? [...doc.grupos.map((g, i) => (i === +gi ? null : { t: 'Mover para ' + g.nome, v: 'mv:' + i })).filter(Boolean), { t: 'Tirar desta folha', d: 'Os lançamentos ficam guardados', v: 'rm' }] : []), { t: 'Ver férias', v: 'fer' }],
       async o => {
-        if (o.v === 'fer') { U.fQ = p.nome; UI.view = 'aferias'; render(); return; }
+        if (o.v === 'fer') { verFerias(p); return; }
         let grupos = doc.grupos.map(g => ({ ...g, pessoas: g.pessoas.filter(x => x.k !== k) }));
         if (o.v.startsWith('mv:')) { const i = +o.v.slice(3); grupos[i] = { ...grupos[i], pessoas: [...grupos[i].pessoas, p].sort((a, b) => a.nome.localeCompare(b.nome)) }; }
         doc.grupos = grupos; await DB.admSalvarGrupos(conj, comp, grupos); toast(o.v === 'rm' ? 'Tirado da folha' : 'Mudou de grupo'); render();
@@ -340,51 +345,18 @@ export function criarAdministrativo(X) {
   }
 
   /* ---------- Férias ---------- */
-  const situacaoFerias = f => {
-    if (!f.inicio) return { t: 'Sem data', cls: 'neu' };
-    if (f.termino && f.termino < TODAY) return { t: 'Gozada', cls: 'ok' };
-    if (f.inicio <= TODAY) return { t: `Em férias · volta ${dBR(f.retorno || addDias(f.termino, 1))}`, cls: 'warn' };
-    const n = diasEntre(TODAY, f.inicio); return { t: n === 1 ? 'Começa amanhã' : `Começa em ${n} dias`, cls: n <= 15 ? 'warn' : 'neu' };
-  };
-  function vFerias() {
-    const L = A().ferias || [];
-    if (!A().fLoaded) return '<div class="card skel"><i></i><i></i><i></i></div>';
-    const setores = [...new Set(L.map(f => f.setor).filter(Boolean))].sort();
-    const q = normNome(U.fQ || '');
-    let l = L.filter(f => (!U.fSetor || f.setor === U.fSetor) && (!q || normNome(f.nome).includes(q) || String(f.mat || '').includes(q)));
-    const em60 = add(TODAY, 60), mesSel = U.fMes || TODAY.slice(0, 7);
-    if (U.fAba === 'agora') l = l.filter(f => f.inicio && ((f.inicio <= TODAY && (f.termino || '') >= TODAY) || (f.inicio > TODAY && f.inicio <= em60))).sort((a, b) => (a.inicio < b.inicio ? -1 : 1));
-    else if (U.fAba === 'mes') l = l.filter(f => (f.inicio ? f.inicio.slice(0, 7) === mesSel : f.mesPlanejado === mesSel)).sort((a, b) => String(a.inicio || '9').localeCompare(String(b.inicio || '9')) || a.nome.localeCompare(b.nome));
-    else if (U.fAba === 'limite') {
-      const marcadas = new Set(L.filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || normNome(f.nome)));
-      l = l.filter(f => f.limite && f.limite <= add(TODAY, 90) && !marcadas.has(f.mat || normNome(f.nome))).sort((a, b) => (a.limite < b.limite ? -1 : 1));
-    } else l = l.sort((a, b) => String(b.inicio || '').localeCompare(String(a.inicio || '')));
-    const emFerias = L.filter(f => f.inicio && f.inicio <= TODAY && (f.termino || '') >= TODAY).length;
-    const comecam = L.filter(f => f.inicio && f.inicio > TODAY && f.inicio <= add(TODAY, 30)).length;
-    const marcadasT = new Set(L.filter(f => f.inicio && f.inicio >= TODAY.slice(0, 7) + '-01').map(f => f.mat || normNome(f.nome)));
-    const vencendo = L.filter(f => f.limite && f.limite <= add(TODAY, 60) && !marcadasT.has(f.mat || normNome(f.nome))).length;
-    const limF = X.isMobile() ? Math.min(UI.more || 20, 300) : 300; // celular: 20 por vez
-    const meses = []; for (let i = -2; i <= 12; i++) meses.push(compMais(TODAY.slice(0, 7), i));
-    return `<div class="mini"><div><b class="num" style="color:var(--st-atr)">${emFerias}</b><span>Em férias hoje</span></div><div><b class="num">${comecam}</b><span>Começam em 30 dias</span></div><div><b class="num" style="color:var(--st-nreal)">${vencendo}</b><span>Limite vencido ou em 60 dias, sem data</span></div></div>
-      <div class="card"><div class="body lbar">
-        <div class="rchips" role="group" aria-label="Mostrar">${[['agora', 'Agora e próximos 60 dias'], ['mes', 'Por mês'], ['limite', 'Data limite'], ['todas', 'Todas']].map(([k, t]) => `<button class="rchip" data-a="fAba" data-v="${k}" aria-pressed="${U.fAba === k}">${t}</button>`).join('')}</div>
-        ${U.fAba === 'mes' ? `<label class="sel"><span>Mês</span><select class="in" id="aFMes">${meses.map(m => `<option value="${m}" ${m === mesSel ? 'selected' : ''}>${nomeComp(m)}</option>`).join('')}</select></label>` : ''}
-        <label class="sel"><span>Setor</span><select class="in" id="aFSetor"><option value="">Todos</option>${setores.map(s => `<option ${s === U.fSetor ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
-        <label class="sel grow"><span>Buscar</span><input class="in" id="aFQ" type="search" placeholder="Nome ou matrícula" value="${esc(U.fQ || '')}"></label>
-        ${pode() ? `<button class="btn pri" data-a="novaFerias">${I.plus} Férias</button>` : ''}
-        ${!X.framed ? `<button class="btn sm" data-a="exportarFerias">${I.dl} Exportar</button>` : ''}
-      </div>
-      ${l.length ? `<div class="plist ferlist">${l.slice(0, limF).map(f => { const s = situacaoFerias(f); const lim = f.limite && !f.inicio ? diasEntre(TODAY, f.limite) : null; return `<button class="pitem ferit" data-a="ferias" data-v="${esc(f.id)}"><div class="minw"><div class="t">${esc(title(f.nome))} <span class="muted small">${f.mat ? '· ' + esc(f.mat) : ''}</span></div><div class="l">${esc(f.setor || '')}${f.funcao ? ' · ' + esc(title(f.funcao)) : ''}${f.horario ? ' · ' + esc(f.horario) : ''}</div><div class="l">${f.inicio ? `<b>${dBR(f.inicio)} a ${dBR(f.termino)}</b> (${f.dias || ''} dias) · retorno ${dBR(f.retorno)}` : `Planejada para ${f.mesPlanejado ? nomeComp(f.mesPlanejado) : '—'}`}${f.substituto ? ' · ' + esc(f.substituto) : ''}</div></div><div class="fer-r"><span class="pill ${s.cls}">${esc(s.t)}</span>${f.limite ? `<small class="${lim != null && lim <= 60 ? 'bad' : 'muted'}">limite ${dBR(f.limite)}</small>` : ''}</div></button>`; }).join('')}</div>${l.length > limF ? (limF < 300 ? `<div class="body pt0"><button class="btn center" data-act="more" data-n="${limF + 40}">Mostrar mais ${Math.min(40, l.length - limF)} (faltam ${l.length - limF})</button></div>` : `<p class="muted small body">Mostrando 300 de ${l.length}. Use a busca ou o setor.</p>`) : ''}` : `<div class="empty">${U.fAba === 'limite' ? 'Ninguém com data limite nos próximos 90 dias sem férias marcadas.' : 'Nenhuma férias com esses filtros.'}</div>`}</div>`;
-  }
-  function formFerias(id) {
+
+  // Férias de uma pessoa (aberto pela ficha em RH › Colaboradores). pessoa = { nome, mat, setor } para férias novas.
+  function formFerias(id, pessoa = null) {
     const f = id ? A().ferias.find(x => x.id === id) : null;
     const ed = pode();
     if (!ed && f) { sheet(title(f.nome), `${dBR(f.inicio)} a ${dBR(f.termino)}`, [{ t: 'Fechar', v: '' }], () => {}); return; }
     const ops = opcoesPessoa();
     const v = (k, d = '') => esc(f && f[k] != null ? f[k] : d);
-    formSheet(f ? 'Férias de ' + title(f.nome) : 'Novas férias', f ? esc(f.setor || '') : 'Escolha a pessoa e as datas', `
-      ${f ? '' : `<label class="sel"><span>Nome</span><input class="in" id="afNome" list="afLista" autocomplete="off" required></label><datalist id="afLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist>`}
-      <div class="g2eq"><label class="sel"><span>Setor</span><input class="in" id="afSetor" value="${v('setor', U.conj === 'bateria' ? 'BATERIA' : 'PATIO')}"></label><label class="sel"><span>Horário</span><input class="in" id="afHor" value="${v('horario', 'ADM')}"></label></div>
+    const pes = f || pessoa;
+    formSheet(f ? 'Férias de ' + title(f.nome) : 'Novas férias', f ? esc(f.setor || '') : pessoa ? `${esc(title(pessoa.nome))}${pessoa.mat ? ' · matrícula ' + esc(pessoa.mat) : ''}` : 'Escolha a pessoa e as datas', `
+      ${pes ? '' : `<label class="sel"><span>Nome</span><input class="in" id="afNome" list="afLista" autocomplete="off" required></label><datalist id="afLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist>`}
+      <div class="g2eq"><label class="sel"><span>Setor</span><input class="in" id="afSetor" value="${v('setor', (pessoa && pessoa.setor) || (U.conj === 'bateria' ? 'BATERIA' : 'PATIO'))}"></label><label class="sel"><span>Horário</span><input class="in" id="afHor" value="${v('horario', 'ADM')}"></label></div>
       <div class="g2eq"><label class="sel"><span>Início</span><input class="in" type="date" id="afIni" value="${v('inicio')}"></label><label class="sel"><span>Dias</span><input class="in" type="number" min="5" max="30" id="afDias" value="${v('dias', 30)}"></label></div>
       <div class="g2eq"><label class="sel"><span>Retorno</span><input class="in" type="date" id="afRet" value="${v('retorno')}"></label><label class="sel"><span>Data limite</span><input class="in" type="date" id="afLim" value="${v('limite')}"></label></div>
       <label class="sel"><span>Substituto / observação</span><input class="in" id="afSub" value="${v('substituto')}"></label>
@@ -392,8 +364,8 @@ export function criarAdministrativo(X) {
       ${f ? '<button type="button" class="btn ghost danger sm" id="afDel">Excluir estas férias</button>' : ''}`, 'Salvar', async () => {
       const ini = $('afIni').value || null, dias = +$('afDias').value || 30;
       const termino = ini ? addDias(ini, dias - 1) : null;
-      let nome = f ? f.nome : $('afNome').value.trim().toUpperCase(); let mat = f ? f.mat : '';
-      if (!f) { if (normNome(nome).split(' ').length < 2) throw new Error('Informe o nome completo.'); const r = criarBusca(A().rh || [])(nome); if (r) { mat = String(r.item.mat || ''); nome = r.item.nome; } }
+      let nome = pes ? pes.nome : $('afNome').value.trim().toUpperCase(); let mat = pes ? String(pes.mat || '') : '';
+      if (!pes) { if (normNome(nome).split(' ').length < 2) throw new Error('Informe o nome completo.'); const r = criarBusca(A().rh || [])(nome); if (r) { mat = String(r.item.mat || ''); nome = r.item.nome; } }
       const dados = { nome, mat, setor: $('afSetor').value.trim().toUpperCase(), horario: $('afHor').value.trim().toUpperCase(), inicio: ini, dias, termino, retorno: $('afRet').value || (termino ? addDias(termino, 1) : null), limite: $('afLim').value || null, substituto: $('afSub').value.trim(), mesPlanejado: ini ? ini.slice(0, 7) : (f && f.mesPlanejado) || null };
       if (!f) Object.assign(dados, { funcao: '', admissao: null });
       if (dados.limite && termino && termino > dados.limite) toast('Atenção: as férias terminam depois da data limite');
@@ -402,6 +374,10 @@ export function criarAdministrativo(X) {
     const calc = () => { const i = $('afIni') && $('afIni').value, d = +($('afDias') && $('afDias').value) || 30; const out = $('afCalc'); if (!out) return; if (!i) { out.textContent = 'Sem início, fica como planejada.'; return; } const t = addDias(i, d - 1); out.textContent = `Termina em ${dBR(t)}. Retorno sugerido: ${dBR(addDias(t, 1))}.`; if ($('afRet') && !$('afRet').value) $('afRet').placeholder = addDias(t, 1); };
     ['afIni', 'afDias'].forEach(k => { const e = $(k); if (e) e.addEventListener('input', calc); }); calc();
     const del = $('afDel'); if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.feriasExcluir(f.id); document.getElementById('layer').innerHTML = ''; toast('Férias excluídas'); render(); });
+  }
+
+  function exportarFerias() {
+    return baixarExcel('ferias', [{ nome: 'Férias', linhas: [['Matrícula', 'Nome', 'Setor', 'Função', 'Horário', 'Admissão', 'Data limite', 'Início', 'Dias', 'Término', 'Retorno', 'Substituto / observação'], ...A().ferias.slice().sort((x, y) => String(x.inicio || '9').localeCompare(String(y.inicio || '9')) || x.nome.localeCompare(y.nome)).map(f => [f.mat, f.nome, f.setor, f.funcao, f.horario, dataBR(f.admissao), dataBR(f.limite), dataBR(f.inicio), f.inicio ? f.dias : '', dataBR(f.termino), dataBR(f.retorno), f.substituto])] }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
   /* ---------- Importar ---------- */
@@ -646,10 +622,7 @@ export function criarAdministrativo(X) {
       await DB.admSalvarComp(U.conj, U.comp, { ini: datas[0], fim: datas[datas.length - 1], grupos, d: {} }); toast(`Folha de ${periodoComp(U.comp)} aberta`); render();
     }
     else if (a === 'exportar') exportar();
-    else if (a === 'fAba') { U.fAba = v; UI.more = 0; render(); }
-    else if (a === 'novaFerias') formFerias(null);
-    else if (a === 'ferias') formFerias(v);
-    else if (a === 'exportarFerias') baixarExcel('ferias', [{ nome: 'Férias', linhas: [['Matrícula', 'Nome', 'Setor', 'Função', 'Horário', 'Admissão', 'Data limite', 'Início', 'Dias', 'Término', 'Retorno', 'Substituto / observação'], ...A().ferias.slice().sort((x, y) => String(x.inicio || '9').localeCompare(String(y.inicio || '9')) || x.nome.localeCompare(y.nome)).map(f => [f.mat, f.nome, f.setor, f.funcao, f.horario, dataBR(f.admissao), dataBR(f.limite), dataBR(f.inicio), f.inicio ? f.dias : '', dataBR(f.termino), dataBR(f.retorno), f.substituto])] }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+    else if (a === 'exportarFerias') exportarFerias();
     else if (a === 'ir') { UI.view = v; render(); scrollTo(0, 0); }
     else if (a === 'impSeeds') impSeeds();
     else if (a === 'impConj') { U.impConj = v; render(); }
@@ -664,21 +637,17 @@ export function criarAdministrativo(X) {
   document.addEventListener('input', e => {
     if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aQ') { U.q = e.target.value; (X.agendar || render)(); }
-    if (e.target.id === 'aFQ') { U.fQ = e.target.value; UI.more = 0; (X.agendar || render)(); }
   });
   document.addEventListener('change', e => {
     if (UI.modulo !== 'rh') return;
-    if (e.target.id === 'aFSetor') { U.fSetor = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
-    if (e.target.id === 'aFMes') { U.fMes = e.target.value; UI.more = 0; render(); }
     if (e.target.id === 'aImpArq' && e.target.files[0]) impArquivo(e.target.files[0]);
   });
 
   function renderView(view) {
     if (view === 'afreq') return vFreq();
-    if (view === 'aferias') return vFerias();
     if (view === 'aimport') return vImport();
     return vFreq();
   }
-  return { render: renderView, topo, painel: vPainelFreq, resumoSemana, resumoDia, resumoMes, badge: () => 0 };
+  return { render: renderView, formFerias, exportarFerias, podeFerias: pode, topo, painel: vPainelFreq, resumoSemana, resumoDia, resumoMes, badge: () => 0 };
 }

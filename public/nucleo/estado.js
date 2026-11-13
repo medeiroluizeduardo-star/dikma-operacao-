@@ -50,7 +50,7 @@ UI.co = { q: '', f: 'ativos', fa: '', mat: null, aba: 'dados' };
 UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' };
 // Segurança (telas/seguranca.js): mês e filtros das listas, situação da fila de anomalias e mês do painel.
 UI.sg = { mes: TODAY.slice(0, 7), area: '', sit: 'abertas', q: '', pMes: TODAY.slice(0, 7) };
-UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], fAba: 'agora', fSetor: '', fQ: '', imp: null, q: '' };
+UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], imp: null, q: '' };
 export const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 // gravarUI: só a memória do aparelho · salvarUI: memória + histórico (botão Voltar).
 export const gravarUI = () => { try { localStorage.setItem('coqueria-ui', JSON.stringify({ v5: 1, view: UI.view, modulo: UI.modulo, esSet: UI.esSet, cfSet: UI.cfSet, apArea: UI.apArea, aRotaPor: UI.aRotaPor })); } catch (e) { /* ignora */ } };
