@@ -11,6 +11,7 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
 import { caixaBusca } from '../ui/busca.js';
+import { passaFiltroFreq, filtrosFreqAtivos, rotasFreq } from '../contas/filtro-freq.js';
 import { gruposPelaFicha, folhaPelaFicha, SEM_FICHA } from '../contas/folha-ficha.js';
 import { situacaoDoDia, contagemDia, CONTA, AUSENCIA, presente as presenteSit } from '../contas/situacao.js';
 
@@ -164,14 +165,20 @@ export function criarAdministrativo(X) {
     const mob = X.isMobile();
     const semanas = []; datas.forEach((dt, i) => { const dw = new Date(dt + 'T12:00:00').getDay(); if (!semanas.length || dw === 1) semanas.push([]); semanas[semanas.length - 1].push(i); });
     if (U.fSem == null || !semanas[U.fSem]) { const iH = datas.indexOf(TODAY); U.fSem = iH >= 0 ? semanas.findIndex(w => w.includes(iH)) : 0; }
-    const vi = mob ? semanas[U.fSem] : datas.map((_, i) => i);
+    if (U.fDia && !datas.includes(U.fDia)) U.fDia = '';
+    const vi = U.fDia ? [datas.indexOf(U.fDia)] : mob ? semanas[U.fSem] : datas.map((_, i) => i);
     const ncol = vi.length + (mob ? 1 : 2 + CONTA.length);
     const q = normNome(U.q || ''); const ed = pode();
     const GR = gruposDe(conj, comp, doc);
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
+    // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Presença do dia.
+    const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
+    const filtra = !!(F.area || F.rota || F.turno); const procura = !!q || filtra;
+    const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
+    const passa = (g, p) => { if (!filtra) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
     const todos = U.grp === '*' || !!q;
-    const vis = GR.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q))) })).filter(x => (x.ps.length || (ed && !q && !x.g.virt && !x.g.auto)) && (todos || String(x.gi) === String(U.grp))); // grupo vazio: só quem edita vê (para incluir, renomear ou apagar)
-    const recolhe = todos && !q && vis.length > 4;
+    const vis = GR.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q)) && passa(g, p)) })).filter(x => (x.ps.length || (ed && !procura && !x.g.virt && !x.g.auto)) && (todos || String(x.gi) === String(U.grp))); // grupo vazio: só quem edita vê (para incluir, renomear ou apagar)
+    const recolhe = todos && !procura && vis.length > 4;
     const ab = new Set(U.abertos);
     const hojeNa = datas.includes(TODAY);
     const resumo = { FT: 0, AT: 0, AB: 0, SP: 0, HE: 0, FE: 0, pessoas: 0 };
@@ -205,12 +212,27 @@ export function criarAdministrativo(X) {
     return `<div class="mini"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>${quadroEfRH(conj, datas)}
       <div class="card"><header><h2>Frequência</h2><p>${ed ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'} · ${SETS[conj].curto} · ${dBR(datas[0])} a ${dBR(datas[datas.length - 1])}</p>${ed && !pelaFicha ? `<span class="r"><button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button></span>` : ''}</header>
         <div class="body lbar efbar efbar1">${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${GR.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar" style="margin-left:auto">${I.dl} Exportar Excel</button>` : ''}</div>
+        ${filtrosFreq(conj, datas, F, resumo.pessoas)}
         ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
         <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit P">${I.ok}<i class="peri D">D</i></span> Turno diurno</span><span><span class="sit P">${I.ok}<i class="peri N">N</i></span> Turno noturno (conta no dia em que começa)</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span><span class="muted">Quem está na Presença do dia tem a mesma presença aqui e lá.</span></div></details>
         ${pelaFicha ? `<p class="body pt0 pb0 m0 small muted">Os grupos vêm do líder imediato de cada ficha em RH › Colaboradores (supervisão = líder da ficha do líder). Para mudar líder, função ou área, edite a ficha.${nSem ? ` <b>${nSem} pessoa${nSem === 1 ? '' : 's'} sem ficha</b>: cadastre em Colaboradores com a mesma matrícula.` : ''}</p>` : ''}
         ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Presença do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
-        ${mob ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
-        <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${q ? 'Ninguém encontrado com essa busca.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
+        ${mob && !U.fDia ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
+        <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${procura ? 'Ninguém encontrado com essa busca ou esses filtros.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
+  }
+  const hojeNaComp = datas => datas.includes(TODAY);
+  // Segunda linha de filtros: dia (uma coluna só), área, rota (da área escolhida) e turno. "Limpar" desliga todos.
+  function filtrosFreq(conj, datas, F, n) {
+    const cs = A().colabs[conj] || []; const areas = areasEfRH(conj); const rotas = rotasFreq(cs, F.area);
+    const turmas = [...new Set(cs.map(c => letra(c.turma)).filter(Boolean))].sort();
+    const op = (v, t, at) => `<option value="${esc(v)}" ${v === at ? 'selected' : ''}>${esc(t)}</option>`;
+    const sel = (id, rot, opts) => `<label class="sel"><span>${rot}</span><select class="in" id="${id}" aria-label="${rot}">${opts}</select></label>`;
+    const nAt = filtrosFreqAtivos({ ...F, dia: U.fDia });
+    return `<div class="body pt0 lbar efbar ffreq">${sel('aDia', 'Dia', op('', 'Todos os dias', U.fDia || '') + datas.map(d => op(d, `${DIA_L[new Date(d + 'T12:00:00').getDay()]} ${ddmm(d)}${d === TODAY ? ' (hoje)' : ''}`, U.fDia || '')).join(''))}
+      ${sel('aArea', 'Área', op('', 'Todas as áreas', F.area) + areas.map(a => op(a, AREA_S[a] || a, F.area)).join(''))}
+      ${sel('aRota', 'Rota', op('', 'Todas as rotas', F.rota) + rotas.map(r => op(r, title(r), F.rota)).join(''))}
+      ${sel('aTurno', 'Turno', op('', 'Todos', F.turno) + op('ADM', 'Administrativo', F.turno) + op('TURNO', 'Turno (todas as turmas)', F.turno) + turmas.map(t => op(t, 'Turma ' + t, F.turno)).join(''))}
+      ${nAt ? `<span class="muted small"><b>${n}</b> pessoa${n === 1 ? '' : 's'} · ${nAt} filtro${nAt > 1 ? 's' : ''}</span><button type="button" class="btn sm ghost" data-a="limparF">Limpar filtros</button>` : ''}</div>`;
   }
   // Efetivo do dia: cada área com o status do envio do líder; o RH · Administrativo valida ou devolve (com motivo) e o
   // administrador reabre o dia validado. Status em contas/efetivo-dia.js; o líder envia na Operação › Presença.
@@ -221,7 +243,7 @@ export function criarAdministrativo(X) {
   function quadroEfRH(conj, datas) {
     const dia = diaEfRH(datas); if (!dia || !DB.efDocs) return '';
     const docs = DB.efDocs(conj); const ds = diasEf(datas); const i = ds.indexOf(dia); const q = quemEf();
-    const linhas = quadroEf(areasEfRH(conj), docs, dia, TODAY).map(x => {
+    const linhas = quadroEf(U.fArea ? [U.fArea] : areasEfRH(conj), docs, dia, TODAY).map(x => {
       const env = ultimaEf(x.doc, 'enviado');
       const det = x.st === 'devolvido' ? `Devolvido por ${esc(x.doc.nome)}: ${esc(x.doc.mot)}` : x.st === 'validado' ? `Validado por ${esc(x.doc.nome)} em ${horaEf((ultimaEf(x.doc, 'validado') || {}).em)}` : x.st === 'aberto' ? `Reaberto por ${esc(x.doc.nome)}; aguardando novo envio` : env ? `Enviado por ${esc(env.nome)} em ${horaEf(env.em)}` : 'O líder ainda não enviou';
       const bts = [podeEf('validado', x.doc, q) ? `<button type="button" class="btn sm pri" data-a="efVal" data-v="${esc(x.area)}">Validar</button>` : '',
@@ -629,11 +651,12 @@ export function criarAdministrativo(X) {
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-a]'); if (!t || t.closest('#layer') || UI.modulo !== 'rh') return;
     const a = t.dataset.a, v = t.dataset.v;
-    if (a === 'conj') { U.conj = v; render(); }
+    if (a === 'conj') { U.conj = v; U.fArea = U.fRota = ''; render(); }
     else if (a === 'comp') { U.comp = compMais(U.comp, +v); U.fSem = null; render(); }
     else if (a === 'fsem') { U.fSem = Math.max(0, (U.fSem || 0) + (+v)); render(); }
     else if (a === 'soGrupo') { U.grp = v; render(); }
     else if (a === 'limparQ') { U.q = ''; render(); }
+    else if (a === 'limparF') { U.fDia = U.fArea = U.fRota = U.fTurno = ''; render(); }
     else if (a === 'grupo') { const s = new Set(U.abertos); if (s.has(v)) s.delete(v); else s.add(v); U.abertos = [...s]; render(); }
     else if (a === 'todos') { const doc = A().comps[U.conj + '|' + U.comp]; U.abertos = U.abertos.length || !doc ? [] : gruposDe(U.conj, U.comp, doc).map((_, i) => String(i)); render(); }
     else if (a === 'cel') lancar(t.dataset.g, t.dataset.p, t.dataset.dt);
@@ -677,6 +700,10 @@ export function criarAdministrativo(X) {
   document.addEventListener('change', e => {
     if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
+    if (e.target.id === 'aDia') { U.fDia = e.target.value; if (U.fDia && U.fDia <= TODAY) U.efD = U.fDia; render(); }
+    if (e.target.id === 'aArea') { U.fArea = e.target.value; U.fRota = ''; render(); }
+    if (e.target.id === 'aRota') { U.fRota = e.target.value; render(); }
+    if (e.target.id === 'aTurno') { U.fTurno = e.target.value; render(); }
     if (e.target.id === 'aImpArq' && e.target.files[0]) impArquivo(e.target.files[0]);
   });
 
