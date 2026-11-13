@@ -9,6 +9,7 @@ import { campoBusca, definirValor, semAcento } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from '../contas/lideres.js';
 import { canonLideres } from '../contas/planilhas-adm.js';
+import { modsDe, ME as EU } from '../nucleo/estado.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
@@ -169,7 +170,7 @@ export function criarGestao(X) {
       ${selArea('gFaC')}
       ${!framed && !matchMedia('(max-width:860px)').matches ? `<button class="btn" data-g="expOc" style="align-self:flex-end" title="Ocorrências de quem está na lista">${I.dl} Exportar ocorrências</button>` : ''}
       ${podeEditar() ? `<button class="btn" data-g="novaOc" style="align-self:flex-end">${I.plus} Ocorrência</button>` : ''}
-      ${isAdmin() ? `<button class="btn" data-g="lideres" style="align-self:flex-end" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button><button class="btn pri" data-g="novoColab" style="align-self:flex-end">${I.plus} Colaborador</button>` : ''}</div>
+      ${modsDe(EU).includes('rh') ? '<button class="btn" data-go="rcolab" style="align-self:flex-end" title="O cadastro (dados, matrículas, área e liderança) fica no RH">Cadastro no RH</button>' : ''}</div>
       <div class="rchips">${[['ativos', 'Ativos'], ['exp', 'Em experiência'], ['integ', 'Integração incompleta'], ['pend', 'Pendente assinatura'], ['comigo', 'Comigo para recolher'], ['rec', 'Recusaram'], ['desl', 'Desligados'], ['todos', 'Todos']].filter(([k]) => k === 'ativos' || U.filtro === k || (k === 'todos' ? n('todos') !== n('ativos') : n(k) > 0)).map(([k, t]) => `<button class="rchip" data-gf="${k}" aria-pressed="${U.filtro === k}">${t}<span class="c num">${n(k)}</span></button>`).join('')}</div>`;
     if (adm && SEL.size) h += `<div class="selbar" role="region" aria-label="Selecionados"><b>${SEL.size} selecionado(s)</b><button class="btn danger" data-g="excluirSel">Excluir selecionados</button><button class="btn" data-g="limparSel">Limpar seleção</button></div>`;
     if (!lista.length) return h + '<div class="card"><div class="empty">Ninguém com esse filtro.</div></div>';
@@ -191,9 +192,9 @@ export function criarGestao(X) {
     const x = indice().get(mat); if (!x) { U.mat = null; return vColab(); }
     const c = x.c; const f1 = tiposF1();
     let h = `<div class="row-gap"><button class="btn" data-g="voltar">← Colaboradores</button></div>
-    <div class="card"><div class="body ficha-hd"><div class="minw"><h2 class="disp">${esc(title(c.nome))}</h2><p class="muted m0">Matrícula <b class="mono">${c.mat}</b>${c.subsetor || c.setor ? ' · ' + esc(c.subsetor || c.setor) : ''} · ${esc(PES.lotacao(c).txt)}${c.funcao ? ' · ' + esc(c.funcao) : ''}${c.turma ? ' · Turma ' + esc(c.turma) : ''}${c.lider ? ' · Líder: ' + esc(title(c.lider)) : ''}</p>
+    <div class="card"><div class="body ficha-hd"><div class="minw"><h2 class="disp">${esc(title(c.nome))}</h2><p class="muted m0">Matrícula Dikma <b class="mono">${c.mat}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}${c.subsetor || c.setor ? ' · ' + esc(c.subsetor || c.setor) : ''} · ${esc(PES.lotacao(c).txt)}${c.funcao ? ' · ' + esc(c.funcao) : ''}${c.turma ? ' · Turma ' + esc(c.turma) : ''}${c.lider ? ' · Líder: ' + esc(title(c.lider)) : ''}</p>
       <p class="muted m0">Admissão ${dBR(c.adm) || '—'} · ${x.tempo}${c.dem ? ' · Demissão ' + dBR(c.dem) : ''}</p><div class="row-gap" style="margin-top:8px">${pillSt(x.status)}${x.exp ? `<span class="pill ext">Experiência · ${x.dc} dias</span>` : ''}${c.intAnt ? '<span class="pill neu">Integração anterior</span>' : ''}</div></div>
-      <div class="row-gap">${podeEditar() && x.ativo ? `<button class="btn pri" data-g="novaOc" data-mat="${c.mat}">${I.plus} Nova ocorrência</button>` : ''}${podeEditar() && x.pend.length ? `<button class="btn" data-g="assinar" data-mat="${c.mat}">✍ Assinar pendentes (${x.pend.length})</button>` : ''}<button class="btn" data-g="imprimir" data-mat="${c.mat}">${I.print} Imprimir</button>${isAdmin() ? `<button class="btn" data-g="editColab" data-mat="${c.mat}">Editar</button><button class="btn ghost danger" data-g="excluirColab" data-mat="${c.mat}">Excluir</button>` : ''}</div></div></div>
+      <div class="row-gap">${podeEditar() && x.ativo ? `<button class="btn pri" data-g="novaOc" data-mat="${c.mat}">${I.plus} Nova ocorrência</button>` : ''}${podeEditar() && x.pend.length ? `<button class="btn" data-g="assinar" data-mat="${c.mat}">✍ Assinar pendentes (${x.pend.length})</button>` : ''}<button class="btn" data-g="imprimir" data-mat="${c.mat}">${I.print} Imprimir</button>${modsDe(EU).includes('rh') ? `<button class="btn" data-act="irCadastro" data-mat="${c.mat}">Cadastro</button>` : ''}${isAdmin() ? `<button class="btn ghost danger" data-g="excluirColab" data-mat="${c.mat}">Excluir</button>` : ''}</div></div></div>
     <div class="grid2"><div class="card"><header><h2>Folha 1 · Integração</h2><p>${x.nInt} de ${f1.length}</p></header><div class="body"><div class="plist">${f1.map((t, i) => `<div class="pitem"><div class="minw"><div class="t">${esc(t.tipo)}</div><div class="l">${esc(t.texto)}</div></div><span class="${x.integ[i] ? 'pill ok' : 'pill warn'}">${x.integ[i] === 'Anterior' ? 'Anterior' : x.integ[i] ? dBR(x.integ[i]) : 'Pendente'}</span></div>`).join('')}</div></div></div>
     <div class="card"><header><h2>Folha 2 · Ocorrências</h2><p>${x.f2.length} de 33 linhas</p></header><div class="body">${ocLista(x.oc.slice().reverse())}</div></div></div>`;
     return h;
@@ -359,7 +360,8 @@ export function criarGestao(X) {
     const eqc = (DB.cache.e && DB.cache.e.config) || {};
     const opt = (l, v, nome = x => x) => l.map(x => `<option value="${esc(x)}" ${x === v ? 'selected' : ''}>${esc(nome(x))}</option>`).join('');
     formSheet(mat ? 'Editar colaborador' : 'Novo colaborador', mat ? `${esc(title(c.nome))} · ${c.mat}` : '', `
-      <div class="row2"><label class="sel"><span>Matrícula</span><input class="in" id="ncMat" value="${esc(c.mat)}" ${mat ? 'readonly' : ''} inputmode="numeric"></label><label class="sel"><span>Admissão</span><input class="in" type="date" id="ncAdm" value="${c.adm || ''}"></label></div>
+      <div class="row2"><label class="sel"><span>Matrícula Dikma</span><input class="in" id="ncMat" value="${esc(c.mat)}" ${mat ? 'readonly' : ''} inputmode="numeric"></label><label class="sel"><span>Matrícula Arcelor</span><input class="in" id="ncArc" value="${esc(c.matArc || '')}" autocomplete="off"></label></div>
+      <label class="sel"><span>Admissão</span><input class="in" type="date" id="ncAdm" value="${c.adm || ''}"></label>
       <label class="sel"><span>Nome completo</span><input class="in" id="ncNome" value="${esc(c.nome)}"></label>
       <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="ncSetor" list="dlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio"><datalist id="dlSetor">${[...new Set([...RH_PADRAO, ...G().colabs.map(x => x.setor).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label>
       <label class="sel"><span>Setor (RH)</span><input class="in" id="ncSub" list="dlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento"><datalist id="dlSub">${[...new Set([...RH_PADRAO, ...G().colabs.map(x => x.subsetor).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></label></div>
@@ -373,8 +375,11 @@ export function criarGestao(X) {
       <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('ncLid', nomeLider(c.lider), opcoesLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
       <label class="sel"><span>Demissão</span><input class="in" type="date" id="ncDem" value="${c.dem || ''}"></label>
       <label class="switch"><input type="checkbox" id="ncAnt" ${c.intAnt ? 'checked' : ''}><span>Integração feita antes do sistema ("Anterior")</span></label>`, 'Salvar', async () => {
-      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim() };
-      if (!n.mat || !n.nome) throw new Error('Informe matrícula e nome.');
+      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim(), matArc: $('ncArc').value.trim().toUpperCase() };
+      if (!n.matArc) delete n.matArc;
+      if (!n.mat || !n.nome) throw new Error('Informe matrícula Dikma e nome.');
+      if (n.matArc) { const o = G().colabs.find(x => x.matArc && String(x.matArc) === n.matArc && String(x.mat) !== n.mat); if (o) throw new Error(`A matrícula Arcelor ${n.matArc} já é de ${title(o.nome)}.`); }
+      if (n.dem && n.adm && n.dem < n.adm) throw new Error('A demissão não pode ser antes da admissão.');
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '', desde: ($('ncDesde') && $('ncDesde').value) || TODAY };
       if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Presença do dia)
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
@@ -680,6 +685,9 @@ export function criarGestao(X) {
       const v = vazio(); if (v) return v;
       return ({ gpainel: vPainel, gcolab: vColab, gimpr: vImpr, gtipos: vTipos, gimport: () => (isAdmin() ? IMP.view() : vPainel()) }[view] || vPainel)();
     },
-    badge: () => (G().loaded && G().config ? pendentesVelhas() : 0)
+    badge: () => (G().loaded && G().config ? pendentesVelhas() : 0),
+    // RH › Colaboradores abre daqui o formulário completo e os Líderes (só quem administra as fichas).
+    editarColab: mat => (isAdmin() ? colabForm(mat) : null),
+    lideres: () => (isAdmin() ? lideresSheet() : null)
   };
 }

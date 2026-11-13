@@ -25,7 +25,8 @@ function indice(lista) {
 }
 
 // Nome do grupo de cada ficha: líder (grafias parecidas viram uma só) e a supervisão (líder da ficha do líder).
-export function criarGrupoDaFicha(fichas) {
+// Líder imediato e supervisor imediato (= líder da ficha do líder) de cada ficha: { lider, sup } ('' quando não há).
+export function criarLiderancaDaFicha(fichas) {
   const F = (fichas || []).filter(f => f && f.nome);
   const canon = canonLideres(F.map(f => f.lider).filter(Boolean), F);
   const memo = new Map();
@@ -34,12 +35,19 @@ export function criarGrupoDaFicha(fichas) {
     const c = F.filter(f => mesmoComeco(f.nome, lid) && chaveLider(f.nome).startsWith(k + ' ')); return c.length === 1 ? c[0] : null;
   };
   return f => {
-    if (!f) return SEM_FICHA;
-    const l = nomeLider(f.lider); if (!l) return SEM_LIDER;
+    const l = nomeLider(f && f.lider); if (!l) return { lider: '', sup: '' };
     const lid = canon.grafia(l); if (memo.has(lid)) return memo.get(lid);
-    const fl = fichaDoLider(lid); const sup = fl && nomeLider(fl.lider) ? canon.grafia(nomeLider(fl.lider)) : '';
-    const nome = `LIDER ${lid}${sup && chaveLider(sup) !== chaveLider(lid) ? ' - SUPERVISÃO ' + sup : ''}`;
-    memo.set(lid, nome); return nome;
+    const fl = fichaDoLider(lid); const s = fl && nomeLider(fl.lider) ? canon.grafia(nomeLider(fl.lider)) : '';
+    const r = { lider: lid, sup: s && chaveLider(s) !== chaveLider(lid) ? s : '' };
+    memo.set(lid, r); return r;
+  };
+}
+export function criarGrupoDaFicha(fichas) {
+  const ld = criarLiderancaDaFicha(fichas);
+  return f => {
+    if (!f) return SEM_FICHA;
+    const { lider, sup } = ld(f); if (!lider) return SEM_LIDER;
+    return `LIDER ${lider}${sup ? ' - SUPERVISÃO ' + sup : ''}`;
   };
 }
 

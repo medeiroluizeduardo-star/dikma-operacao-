@@ -703,17 +703,31 @@ export async function importar(seed, meses, aPartirDe) {
 //   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
 // ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
 // adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], rhLoaded: false };
 const admSubs = new Map();
 function startAdm(on) {
-  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], rhLoaded: false };
+  fichasRH = {};
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
-  on(collection(db, 'gcolab'), qs => { cache.adm.rh = qs.docs.flatMap(d => d.data().itens || []); changed(); });
+  on(collection(db, 'gcolab'), qs => { fichasRH = Object.fromEntries(qs.docs.map(d => [d.id, d.data().itens || []])); cache.adm.rh = Object.values(fichasRH).flat(); cache.adm.rhLoaded = true; changed(); });
   for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
 }
 let admOn = false;
+// Cadastro dos colaboradores como o RH recebe (gcolab, um documento por área): { ÁREA: itens[] }.
+let fichasRH = {};
+// RH › Colaboradores (RH · Administrativo): grava UM colaborador no documento da área em que ele já está (novo: GERAL).
+// Só os dados do cadastro; área de atuação, rota e função, que mudam também Atividades e Equipamentos, ficam com o
+// administrador (Gestão › formulário completo, gSalvarColabs). Não espera o servidor: sem sinal, fica na fila.
+export function rhSalvarFicha(n) {
+  const mat = String(n.mat);
+  const a = Object.keys(fichasRH).find(k => !k.startsWith('_') && (fichasRH[k] || []).some(c => String(c.mat) === mat)) || FICHA_GERAL;
+  const l = (fichasRH[a] || []).slice(); const i = l.findIndex(c => String(c.mat) === mat);
+  if (i >= 0) l[i] = n; else l.push(n);
+  fichasRH[a] = l; cache.adm.rh = Object.values(fichasRH).flat(); changed();
+  return track(setDoc(doc(db, 'gcolab', a), { itens: l, ...marca() }));
+}
 // Liga uma competência (folha) e os meses de presença que ela cobre.
 export function admWatch(conj, comp) {
   if (!db || !me || !admOn) return;
