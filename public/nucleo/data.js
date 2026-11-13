@@ -88,7 +88,7 @@ import { idEf, novoEf } from '../contas/efetivo-dia.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
-const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
+const novoSet = () => ({ config: null, configLoaded: false, configErro: null, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
@@ -286,7 +286,13 @@ function startData() {
   for (const k of SET_KEYS) {
     const st = S[k];
     if (!temSet(me, k)) { st.configLoaded = true; continue; }
-    on(doc(db, C('config', k), 'sistema'), s => { st.config = s.exists() ? s.data() : null; st.configLoaded = true; changed(); });
+    // Só conclui que a planilha não foi importada com a resposta do servidor: a cópia do aparelho vazia (primeira vez
+    // no aparelho, ou sem conexão com o banco) mostrava "Primeiro acesso" por engano. Erro (ex.: sem permissão) fica
+    // guardado para a tela explicar.
+    dataSubs.push(onSnapshot(doc(db, C('config', k), 'sistema'), { includeMetadataChanges: true }, s => {
+      if (!s.exists() && s.metadata.fromCache) return;
+      st.config = s.exists() ? s.data() : null; st.configErro = null; st.configLoaded = true; changed();
+    }, e => { st.configErro = e.code || e.message || 'erro'; st.configLoaded = true; changed(); cb.onError && cb.onError(e); }));
     on(collection(db, C('plano', k)), qs => { st.plano = {}; qs.forEach(d => { st.plano[d.id] = d.data().itens || []; }); changed(); });
     // plano de ação das causas de não realização (acoes/{id}: { causa, area, acao, resp, prazo, status, em, por })
     on(collection(db, C('acoes', k)), qs => { st.acoes = {}; qs.forEach(d => { st.acoes[d.id] = { id: d.id, ...d.data() }; }); changed(); });
