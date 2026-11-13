@@ -60,9 +60,9 @@ export const ocorrOpc = (c, cod) => { if (!['FT', 'ATR', 'SA'].includes(cod)) re
 export function salvarJus(c, dias, j) {
   const oc = j.ocorr; delete j.ocorr;
   const v = { ...j, por: ME.uid, nomePor: ME.nome || ME.login || '', em: new Date().toISOString() };
-  if (oc) { const f = fichaDe(c); if (f) { const o = DB.gNovaOcorrencia({ data: dias[0], mat: f.mat, nome: f.nome, tipo: oc, desc: `${SIT_NOME[j.cod]}${dias.length > 1 ? ` de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : ` em ${ddmm(dias[0])}`}: ${textoJus({ ...j, obs: '' })}`, lider: String(ME.nome || '').toUpperCase(), recolhe: String(f.lider || ME.nome || '').toUpperCase(), status: 'pendente' }); v.ocorr = (o && o.id) || true; DB.log(`Efetivo: ocorrência "${oc}" para ${title(f.nome)} a partir da justificativa`); } }
+  if (oc) { const f = fichaDe(c); if (f) { const o = DB.gNovaOcorrencia({ data: dias[0], mat: f.mat, nome: f.nome, tipo: oc, desc: `${SIT_NOME[j.cod]}${dias.length > 1 ? ` de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : ` em ${ddmm(dias[0])}`}: ${textoJus({ ...j, obs: '' })}`, lider: String(ME.nome || '').toUpperCase(), recolhe: String(f.lider || ME.nome || '').toUpperCase(), status: 'pendente' }); v.ocorr = (o && o.id) || true; DB.log(`Efetivo: ocorrência "${oc}" para ${title(f.nome)} a partir da justificativa`, 'operacao'); } }
   dias.forEach(d => DB.setSitExtra('jus', c.id + '|' + d, v));
-  DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus({ ...j, obs: '' })}`); // a observação não vai para o histórico (que todos leem)
+  DB.log(`${title(c.nome)} · justificativa de ${(SIT_NOME[j.cod] || j.cod).toLowerCase()} ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}: ${textoJus({ ...j, obs: '' })}`, 'operacao'); // a observação não vai para o histórico (que todos leem)
   toast('Justificativa salva');
 }
 
@@ -89,7 +89,7 @@ export function horarioHE(c, dias, fim, k) {
       const h = horasHE(x); if (h == null) throw new Error('Informe o início e o fim.'); if (h > 16) throw new Error('Mais de 16 horas de hora extra num dia: confira o horário.');
       const v = { ...x, por: ME.uid, nome: ME.nome || ME.login || '', em: new Date().toISOString() };
       dias.forEach(d => DB.setSitExtra('hed', c.id + '|' + d, v, k));
-      DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} das ${x.ini} às ${x.fim} (${fmtH(h)})`);
+      DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} das ${x.ini} às ${x.fim} (${fmtH(h)})`, 'operacao');
       toast(`Hora extra · ${x.ini} às ${x.fim} · ${fmtH(h)}`); if (fim) fim(); else render();
     });
   const atual = () => { const h = horasHE({ ini: $('heIni').value, fim: $('heFim').value, int: $('heInt').value }); const t = $('heTot'); if (t) t.innerHTML = h == null ? 'Informe o início e o fim' : `Total: <b>${fmtH(h)}</b>${h > 16 ? ' · confira, passou de 16 h' : ''}`; };

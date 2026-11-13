@@ -101,6 +101,10 @@ service cloud.firestore {
     function perfilEmEntre(mod, perfis) { return temMod(mod) && perfilEm(mod) in perfis; }
     function temEscopo(e) { return hasProfile() && esc(e); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
+    // Quem gravou e quando: nas coleções principais (semanas, presença, cadastro das Atividades, fichas e ocorrências)
+    // cada gravação do site traz atualizadoPor = quem está logado e atualizadoEm = hora do servidor. As rotinas do
+    // GitHub usam a chave de serviço e não passam por aqui.
+    function marcaOk() { return request.resource.data.get('atualizadoPor', '') == request.auth.uid && request.resource.data.get('atualizadoEm', null) == request.time; }
 
     // Marca que o sistema já tem administrador (a tela de login lê para saber o que mostrar).
     // Ninguém grava pelo site: o administrador é criado ou recuperado pela rotina do GitHub
@@ -151,13 +155,15 @@ service cloud.firestore {
 
     match /colaboradores/{area} {
       allow read: if op() || acAdm();
-      allow write: if admMod('operacao') || admMod('gestao');
+      allow create, update: if (admMod('operacao') || admMod('gestao')) && marcaOk();
+      allow delete: if admMod('operacao') || admMod('gestao');
     }
 
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
       allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
-      allow write: if lancaSit('patio');
+      allow create, update: if lancaSit('patio') && marcaOk();
+      allow delete: if lancaSit('patio');
     }
 
     // Apagar semanas e aprovações (Limpeza de dados) e o histórico: só o administrador. A dispensa das pendências
@@ -168,11 +174,11 @@ service cloud.firestore {
     // qz = queda zero (opcional, material recolhido) de cada célula: grava quem aponta na área (contas/queda-zero.js).
     match /semanas/{id} {
       allow read: if op();
-      allow create: if admMod('operacao');
+      allow create: if admMod('operacao') && marcaOk();
       allow delete: if admin();
-      allow update: if admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
+      allow update: if marcaOk() && (admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
         || (tecnicoEm('patio') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor']));
+        || (criaForaDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor'])));
     }
 
     // Aprovação dos apontamentos: o supervisor da área, o técnico de processo (todas as áreas do escopo) e o
@@ -193,16 +199,18 @@ service cloud.firestore {
     function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
     function acaoTodas(e) { return admin() || (ativo() && esc(e) && (pEm('operacao') in ['gestor', 'coordenador'] || pEm('gestao') in ['gestor', 'coordenador'])); }
     function acaoPode(area, m) { return area == 'TODAS' ? acaoTodas(m == 'operacao' ? 'patio' : 'bateria') : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
+    // Quem alterou a ação: atualizadoPor = quem está logado, com atualizadoEm novo (o site grava a hora do aparelho em texto).
+    function acaoMarca() { return request.resource.data.get('atualizadoPor', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['atualizadoEm']); }
     match /acoes/{id} {
       allow read: if op();
-      allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'operacao');
-      allow update: if acaoOk(request.resource.data) && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'operacao');
+      allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'operacao');
+      allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'operacao');
       allow delete: if admMod('operacao');
     }
     match /b_acoes/{id} {
       allow read: if ba();
-      allow create: if acaoOk(request.resource.data) && acaoPode(request.resource.data.area, 'bateria');
-      allow update: if acaoOk(request.resource.data) && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'bateria');
+      allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'bateria');
+      allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'bateria');
       allow delete: if admMod('bateria');
     }
 
@@ -320,19 +328,21 @@ service cloud.firestore {
     }
     match /b_colaboradores/{area} {
       allow read: if ba() || acAdm();
-      allow write: if admMod('bateria') || admMod('gestao');
+      allow create, update: if (admMod('bateria') || admMod('gestao')) && marcaOk();
+      allow delete: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
       allow read: if ba() || acAdm() || eqm();
-      allow write: if lancaSit('bateria');
+      allow create, update: if lancaSit('bateria') && marcaOk();
+      allow delete: if lancaSit('bateria');
     }
     match /b_semanas/{id} {
       allow read: if ba();
-      allow create: if admMod('bateria');
+      allow create: if admMod('bateria') && marcaOk();
       allow delete: if admin();
-      allow update: if admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
+      allow update: if marcaOk() && (admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
         || (tecnicoEm('bateria') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
-        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor']));
+        || (criaForaDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor'])));
     }
     function aprovaDaB(area) { return aprova(area, 'bateria'); }
     function acompanhaDaB(area) { return acompanha(area, 'bateria'); }
@@ -375,20 +385,21 @@ service cloud.firestore {
     // Fichas dos colaboradores, um documento por área.
     match /gcolab/{area} {
       allow read: if todasFichas() || minhaFicha(area) || acAdm();
-      allow write: if admMod('gestao');
+      allow create, update: if admMod('gestao') && marcaOk();
+      allow delete: if admMod('gestao');
     }
     // Ocorrências: da área, ou registradas pela pessoa, ou que ela vai recolher (recolhe = nome em maiúsculas,
     // comparado com usuarios/{uid}.nomeUp, que o sistema grava no cadastro).
     function veOcorr(o) { return hasProfile() && veOcorrU(perfil(), o); }
     function mudaOcorr(o) {
       let u = perfil();
-      return admGestaoU(u) || (geEditaU(u) && veOcorrU(u, o) && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe']));
+      return admGestaoU(u) || (geEditaU(u) && veOcorrU(u, o) && soAltera(['status', 'assinadoEm', 'assinaturaId', 'metodo', 'testemunha', 'recolhe', 'atualizadoEm', 'atualizadoPor']));
     }
     match /gocorr/{id} {
       allow read: if veOcorr(resource.data);
-      allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid
+      allow create: if geEdita() && request.resource.data.criadoPor == request.auth.uid && request.resource.data.criadoEm == request.time
         && request.resource.data.area is string && (todasFichas() || minhaFicha(request.resource.data.area));
-      allow update: if hasProfile() && mudaOcorr(resource.data);
+      allow update: if hasProfile() && marcaOk() && mudaOcorr(resource.data);
       allow delete: if admMod('gestao');
     }
     // Assinaturas: não mudam depois de gravadas (a administração só acerta a área quando a pessoa muda de área).
@@ -570,12 +581,22 @@ service cloud.firestore {
       allow read, write: if ativo() && request.auth.uid == uid;
     }
 
+    // Histórico de alterações (contas/acessos.js › modsHistorico): o administrador lê tudo, também os registros antigos,
+    // sem módulo; o gestor de cada módulo lê só os do módulo dele (no RH, o Administrativo). A Administração fica só com
+    // o administrador. Quem grava: o próprio usuário, com o nome do cadastro e a hora do servidor; ninguém altera.
+    function veHist(m) {
+      return admin() || (ativo() && ((m == 'operacao' && pEm('operacao') == 'gestor') || (m == 'gestao' && pEm('gestao') == 'gestor')
+        || (m == 'seguranca' && pEm('seguranca') == 'gestor') || (m == 'rh' && pEm('rh') == 'administrativo')));
+    }
     match /historico/{id} {
-      allow read: if ativo();
+      allow read: if veHist(resource.data.get('mod', ''));
       allow create: if ativo()
-        && request.resource.data.keys().hasOnly(['at', 'uid', 'nome', 't'])
+        && request.resource.data.keys().hasOnly(['at', 'uid', 'nome', 't', 'mod'])
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.at == request.time;
+        && request.resource.data.at == request.time
+        && request.resource.data.nome == perfil().get('nome', '')
+        && request.resource.data.mod in ['operacao', 'gestao', 'seguranca', 'rh', 'administracao']
+        && request.resource.data.t is string && request.resource.data.t.size() <= 1000;
       allow update: if false;
       allow delete: if admin();   // Limpeza de dados (histórico antigo)
     }

@@ -6,6 +6,7 @@ import { pedirJus } from '../ui/presenca.js';
 import { letra, periodosDe } from '../contas/escala.js';
 import { DEMO, DB, PAINEL_URL, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from './base.js';
 import { AUTH, ME, PL, COLABS, SK, UI, salvarUI, rotas, isAdmin, podeItem, admDe, myAreas, myArea, canEdit, canEditSit, papelNome, rebuild, modsDe, setsDe, aplicarSet, moduloNovo } from './estado.js';
+import { veHistorico } from '../contas/acessos.js';
 import { acoes } from './acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { setSt, tirarFora } from '../calc/atividades.js';
@@ -63,7 +64,7 @@ document.addEventListener('click', async e => {
       const vs = abasDoMenu().filter(v => !naBarra.includes(v.id));
       // "Mais" em seções: as abas desta área primeiro, depois as outras áreas e, por fim, conta e tela.
       const outros = modsMenu().filter(m => !mesmoItem(m, UI.modulo)).map((m, i) => ({ t: MODS[m].nome, d: subMod(m), id: '__mod_' + m, ic: `<span class="opt-ic">${MOD_IC[m] || I.swap}</span>`, sec: i ? '' : 'Outros módulos' }));
-      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), { t: 'Avisos no celular', id: 'avisos', d: 'Ligar, desligar e escolher os avisos', ic: `<span class="opt-ic">${I.celular}</span>` }, { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
+      const extra = [...(isAdmin() ? [{ t: 'Meu painel', id: '__painel', d: 'Gestão de processos e Medição · abre o Painel Coqueria', ic: `<span class="opt-ic">${I.painel}</span>` }] : []), { t: 'Avisos no celular', id: 'avisos', d: 'Ligar, desligar e escolher os avisos', ic: `<span class="opt-ic">${I.celular}</span>` }, ...(veHistorico(ME) && !isAdmin() ? [{ t: 'Histórico de alterações', id: 'historico', d: 'Quem mudou o quê nos seus módulos', ic: `<span class="opt-ic">${I.relogio}</span>` }] : []), { t: 'Tema da tela', id: '__tema', d: TEMAS[temaAtual()], ic: `<span class="opt-ic">${IC_TEMA[temaAtual()]}</span>` }, { t: 'Alterar minha senha', id: '__senha', ic: `<span class="opt-ic">${I.key}</span>` }, ...(DEMO ? [{ t: 'Trocar usuário (demonstração)', id: '__user', d: title(ME.nome) + ' · ' + papelNome(ME.papel) }] : []), { t: 'Sair', id: '__out', d: title(ME.nome || '') + ' · ' + papelNome(ME.papel), ic: `<span class="opt-ic">${I.out}</span>` }];
       if (extra.length) extra[0].sec = 'Conta e tela';
       return sheet('Mais', '', [...vs.map((v, i) => ({ t: nomeCurto(v), id: v.id, ic: `<span class="opt-ic">${I[v.ic]}</span>`, ...(SELOS[v.id] ? { d: SELOS[v.id].n + ' ' + SELOS[v.id].txt, fim: `<span class="badge">${numSelo(SELOS[v.id].n)}</span>` } : {}), sec: i ? '' : 'Neste módulo · ' + MODS[UI.modulo].curto })), ...outros, ...extra], o => { if (o.id.startsWith('__mod_')) return trocarModulo(o.id.slice(6)); if (o.id === '__out') return DB.signOut(); if (o.id === '__painel') { window.open(PAINEL_URL, '_blank', 'noopener'); return; } if (o.id === '__senha') return alterarSenhaSheet(); if (o.id === '__tema') return temaSheet(); if (o.id === '__user') return sheet('Entrar como', 'Simula o login de cada perfil', DB.cache.usuarios.map(u => ({ t: title(u.nome), d: papelNome(u.papel) + (u.area ? ' · ' + AREA_S[u.area] : ''), uid: u.uid, cur: u.uid === ME.uid })), x => { DB.mockSwitch(x.uid); UI.area = 'TODAS'; UI.aRota = null; UI.eRota = null; toast('Entrou como ' + title(x.t)); }); UI.view = o.id; UI.confirm = null; trocarTela(o.id); });
     }
@@ -126,15 +127,15 @@ document.addEventListener('click', async e => {
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); render(); planoNaProgramacao(itens.find(x => x.id === id)); return;
   }
   if (d.eye) { toggleEye(t); return; }
-  if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); if (novo !== 'HE') { DB.setSitExtra('he', key, null); DB.setSitExtra('hed', key, null); } DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`); render(); return; }
-  if (d.ckok) { const [a, per] = d.ckok.split('|'); const g = equipeCheckin().find(x => x.a === a && x.per === per); if (!g) return; const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, `${ME.uid}|${curto(title(ME.nome || ME.login || ''))}|${new Date().toTimeString().slice(0, 5)}|${pres}/${g.ps.length}`); DB.log(`Check-in ${PER_NOME[per].toLowerCase()} · ${AREA_S[a]}: ${pres} de ${g.ps.length} presentes`); toast('Check-in confirmado'); render(); return; }
+  if (d.ck) { const [id, v] = d.ck.split('|'); const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const key = id + '|' + TODAY; const atual = DB.sit(key); const novo = v === 'P' ? (atual === 'HE' ? 'HE' : null) : v; DB.setSit(key, novo); if (v === 'P' || v === 'ATR') removerCobertura(id, TODAY); if (novo !== 'HE') { DB.setSitExtra('he', key, null); DB.setSitExtra('hed', key, null); } DB.log(`${title(c.nome)} · check-in ${v === 'P' ? 'presente' : v === 'FT' ? 'falta' : 'atraso'} em ${ddmm(TODAY)}`, 'operacao'); render(); return; }
+  if (d.ckok) { const [a, per] = d.ckok.split('|'); const g = equipeCheckin().find(x => x.a === a && x.per === per); if (!g) return; const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && x.v !== 'ATR').length; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, `${ME.uid}|${curto(title(ME.nome || ME.login || ''))}|${new Date().toTimeString().slice(0, 5)}|${pres}/${g.ps.length}`); DB.log(`Check-in ${PER_NOME[per].toLowerCase()} · ${AREA_S[a]}: ${pres} de ${g.ps.length} presentes`, 'operacao'); toast('Check-in confirmado'); render(); return; }
   if (d.ckre) { const [a, per] = d.ckre.split('|'); if (!myAreas().includes(a)) return; DB.setSitExtra('ck', `ck|${TODAY}|${a}|${per}`, null); render(); return; }
   if (d.just) { const [i, k] = d.just.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc && canEdit(doc.area)) pedirJustificativa(doc, i, k, m => { setSt(doc, i, k, 'N', m); toast('Justificativa atualizada'); render(); }); return; }
   if (d.reset) {
     const u = DB.cache.usuarios.find(x => x.uid === d.reset); const nova = senhaAleatoria();
     return formSheet('Redefinir senha', `${esc(title(u.nome))} · <span class="mono">${esc(u.login)}</span>`, `<label class="sel"><span>Nova senha provisória</span><input class="in" id="rsSenha" minlength="8" value="${nova}"></label><p class="muted small m0">Passe essa senha para a pessoa. No próximo acesso ela cria a própria senha.</p>`, 'Redefinir', async () => {
       const v = $('rsSenha').value.trim(); if (v.length < 8) throw new Error('A senha precisa ter pelo menos 8 caracteres.');
-      await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`); toast(`Senha de ${u.login} redefinida`);
+      await DB.redefinirSenha(u.uid, v); DB.log(`Redefiniu a senha de ${u.login}`, 'administracao'); toast(`Senha de ${u.login} redefinida`);
     });
   }
   if (d.uabas) { CF().abasPessoaSheet(d.uabas); return; }
@@ -144,7 +145,7 @@ document.addEventListener('click', async e => {
     if (u.papel === 'admin' && DB.cache.usuarios.filter(x => x.papel === 'admin').length < 2) { toast('Não dá para apagar o único administrador'); return; }
     return formSheet('Apagar usuário', `${esc(title(u.nome))}${u.login ? ` · <span class="mono">${esc(u.login)}</span>` : ''}`, `<p class="m0">A pessoa perde o acesso ao sistema na hora. O que ela já registrou (apontamentos, fotos, ocorrências, histórico) continua no sistema.</p><p class="muted small m0">Para só suspender o acesso sem apagar, mude o perfil para <b>Bloqueado</b>. O nome de usuário fica livre para ser cadastrado de novo.</p><label class="switch"><input type="checkbox" id="udOk"><span>Confirmo que quero apagar este usuário</span></label>`, 'Apagar usuário', async () => {
       if (!$('udOk').checked) throw new Error('Marque a confirmação.');
-      await DB.excluirUsuario(u.uid); DB.log(`Apagou o usuário ${u.login || u.nome}`); toast(`Usuário ${u.login || title(u.nome)} apagado`);
+      await DB.excluirUsuario(u.uid); DB.log(`Apagou o usuário ${u.login || u.nome}`, 'administracao'); toast(`Usuário ${u.login || title(u.nome)} apagado`);
     });
   }
   if (d.ntog != null) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') !== 'true'); return; }
@@ -176,7 +177,7 @@ document.addEventListener('submit', async e => {
       const ac = CF().validarAcesso(CF().lerAcesso('nu'), null);
       UI.busy = true;
       await DB.criarUsuario({ nome: nome.toUpperCase(), login, senha, ...ac });
-      DB.log(`Cadastrou o usuário ${login} (${CF().textoAcesso(ac.acesso)})`);
+      DB.log(`Cadastrou o usuário ${login} (${CF().textoAcesso(ac.acesso)})`, 'administracao');
       UI.busy = false; UI.senhaSug = null; UI.nuAcesso = null; render();
       formSheet('Usuário cadastrado', '', `<p class="m0">Passe estes dados para <b>${esc(title(nome))}</b>:</p><div class="credbox"><div><span>Endereço</span><b>${esc(location.origin)}</b></div><div><span>Usuário</span><b>${esc(login)}</b></div><div><span>Senha provisória</span><b>${esc(senha)}</b></div></div><p class="muted small m0">No primeiro acesso a pessoa cria a própria senha.</p>`, 'Copiar dados', async () => {
         // copia endereço, usuário e senha prontos para colar no WhatsApp ou no e-mail
@@ -196,7 +197,7 @@ document.addEventListener('change', e => {
     if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = CF().rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
     if (dd.escn) { const [k, f] = dd.escn.split('|'); CF().rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
     if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
-    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? comTurma(c, t.value) : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
+    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? comTurma(c, t.value) : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`, 'operacao'); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
   if (t.dataset.mdPref) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
@@ -215,7 +216,7 @@ document.addEventListener('change', e => {
     if (v === p[campo]) return;
     const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, [campo]: v } : x));
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); rebuild();
-    DB.log(`Plano padrão: ${id} · ${{ rota: 'rota', local: 'local', ativ: 'atividade', tipo: 'tipo' }[campo]} "${p[campo]}" → "${v}"`); toast('Plano atualizado · vale para os meses gerados e já gerados'); render(); return;
+    DB.log(`Plano padrão: ${id} · ${{ rota: 'rota', local: 'local', ativ: 'atividade', tipo: 'tipo' }[campo]} "${p[campo]}" → "${v}"`, 'operacao'); toast('Plano atualizado · vale para os meses gerados e já gerados'); render(); return;
   }
   // Renomear rota: troca na lista de rotas, no plano padrão e nos colaboradores da rota (mesma área)
   if (t.dataset.rnome) {
@@ -228,7 +229,7 @@ document.addEventListener('change', e => {
     const pl = (DB.cache.plano[r.area] || []); if (pl.some(x => x.rota === velho)) { const itens = pl.map(x => (x.rota === velho ? { ...x, rota: novo } : x)); DB.cache.plano[r.area] = itens; DB.savePlano(r.area, itens); }
     const cs = (DB.cache.colabs[r.area] || []); if (cs.some(x => x.rota === velho)) { const itens = cs.map(x => (x.rota === velho ? { ...x, rota: novo } : x)); DB.cache.colabs[r.area] = itens; DB.salvarColabsArea(r.area, itens); }
     if (UI.aRotaPor && UI.aRotaPor[r.area] === velho) UI.aRotaPor[r.area] = novo; if (UI.aRota === velho) UI.aRota = novo;
-    rebuild(); DB.log(`Rota renomeada: ${velho} → ${novo} (${AREA_S[r.area]})`); toast(`Rota renomeada para ${novo}`); render(); return;
+    rebuild(); DB.log(`Rota renomeada: ${velho} → ${novo} (${AREA_S[r.area]})`, 'operacao'); toast(`Rota renomeada para ${novo}`); render(); return;
   }
   if (t.dataset.hecfg) { if (!admDe('ativ')) return; const he = { ...heCfg(), [t.dataset.hecfg]: Math.max(0, Math.min(t.dataset.hecfg === 'limite' ? 31 : 24, +t.value || 0)) }; DB.saveConfig({ he }); toast('Ajuste salvo'); render(); return; }
 });

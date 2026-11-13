@@ -15,6 +15,7 @@ import { fotosSemana, indicadorFotos, cfgF } from './fotos.js';
 import { fotosDaCel } from '../contas/fotos.js';
 import { agruparAprov } from '../contas/aprovacao.js';
 import { abre } from '../ui/dobra.js';
+import { modsHistorico } from '../contas/acessos.js';
 
 
 /* ---------------- PAINEL ---------------- */
@@ -71,11 +72,13 @@ export function vPainel() {
   </tbody></table></div></div>`;
   { const { por, total } = contarCausas(docs); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5); const mx = cs.length ? cs[0][1] : 1;
     h += `<div class="grid2"><div class="card"><header><h2>Por que não foi feito</h2><p>Principais causas no período</p><span class="r"><button class="btn sm" data-go="causas">Causas e ações</button></span></header><div class="body">${cs.length ? `<div class="bars">${cs.map(([c, n]) => `<div class="barrow"><span class="n">${esc(c)}<small>${pct(n, total)}% das não realizadas</small></span><div class="stack"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma não realizada no período.</div>'}</div></div>
-    <div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div></div>`; }
+    ${veLog() ? `<div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div>` : ''}</div>`; }
   return h;
 }
+// Últimos registros: só o histórico da Operação, e só para quem lê esse histórico (administrador e Gestor da Operação).
+const veLog = () => modsHistorico(ME).includes('operacao');
 function logHtml(n) {
-  const L = DB.cache.log;
+  const L = (DB.cache.log || []).filter(l => l.mod === 'operacao');
   if (!L.length) return '<div class="empty"><b>Nenhum registro ainda</b><span>Os apontamentos feitos no Apontar aparecem aqui.</span></div>';
   return `<div class="log">${L.slice(0, n).map(l => `<div><time>${fmtAt(l.at)}</time><span><b>${esc(title(l.nome))}</b> · ${esc(l.t)}</span></div>`).join('')}</div>`;
 }
@@ -212,7 +215,7 @@ function novaAcaoSheet(causa) {
     const acao = ($('acTxt').value || '').replace(/\s+/g, ' ').trim(); if (acao.length < 5) throw new Error('Descreva a ação.');
     const ar = $('acArea').value; if (!podeAcao(ar)) throw new Error('Seu perfil não cria ação nesta área.');
     await DB.salvarAcao('', { causa, area: ar, acao, resp: ($('acResp').value || '').trim(), prazo: $('acPrazo').value || '', status: 'aberta' });
-    DB.log(`Plano de ação: ${causa} → ${acao}`); toast('Ação criada'); render();
+    DB.log(`Plano de ação: ${causa} → ${acao}`, 'gestao'); toast('Ação criada'); render();
   });
 }
 
@@ -365,7 +368,7 @@ function exportCSV() {
 acoes.limparProg = (t, d) => { UI.q = ''; UI.soPend = false; UI.rota = 'TODAS'; UI.tipo = 'TODOS'; render(); };
 acoes.progTodas = (t, d) => { const area = areaScope(); const ks = new Set(); for (const doc of docsFor({ ini: UI.ini, area })) doc.ids.forEach(id => { const p = PL.get(id); if (p) ks.add(doc.area + '|' + p.rota); }); UI.progAbertas = (UI.progAbertas || []).length ? [] : [...ks]; render(); };
 acoes.novaAcao = (t, d) => { novaAcaoSheet(d.k); };
-acoes.acaoSt = (t, d) => { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) return; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); };
+acoes.acaoSt = (t, d) => { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) return; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`, 'gestao'); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); };
 acoes.aprv = (t, d) => { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } };
 acoes.devl = (t, d) => { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) pedirDevolucao(x); };
 acoes.aprvGrupo = (t, d) => { const [dt, a, r] = d.k.split('|'); const xs = listaAprov(areasAprov().filter(z => z === a)).filter(x => x.dt === dt && x.p.rota === r); aprovar(xs); toast(`${xs.length} aprovada${xs.length > 1 ? 's' : ''}`); render(); };
@@ -382,7 +385,7 @@ acoes.rotaok = (t, d) => {
   const [a, r] = d.k.split('|'); const byDoc = new Map();
   for (const x of atrasadasAll(a)) { const p = PL.get(x.doc.ids[x.i]); if (!p || p.rota !== r) continue; if (!byDoc.has(x.doc)) byDoc.set(x.doc, []); byDoc.get(x.doc).push(localChange(x.doc, x.i, x.k, 'R')); }
   let n = 0; for (const [doc, ch] of byDoc) { n += ch.length; gravarApont(doc, ch); }
-  DB.log(`${r}: ${n} atrasadas marcadas como realizadas`); UI.confirm = null; toast(`${n} marcadas como realizadas`); render();
+  DB.log(`${r}: ${n} atrasadas marcadas como realizadas`, 'operacao'); UI.confirm = null; toast(`${n} marcadas como realizadas`); render();
 };
 acoes.csv = (t, d) => { exportCSV(); };
 acoes.rotasTodas = (t, d) => { UI.rotasTodas = !UI.rotasTodas; render(); };

@@ -300,7 +300,7 @@ export function criarEquip(X) {
       if (!op) throw new Error('Escolha o operador da lista.');
       const n = { data, mes: data.slice(0, 7), eq, tipo: (calc().frotaMap.get(eq) || {}).tipo || '', op, area: $('flArea').value, setor: $('flSetor').value || null, status: $('flSt').value, ini: $('flIni').value || null, fim: $('flFim').value || null, he: +$('flHe').value || 0, heOrigem: (+$('flHe').value || 0) ? $('flHeO').value : '', sub: $('flSub').value || '', obs: $('flObs').value.trim() };
       if (n.he && !n.heOrigem) throw new Error('Informe se a hora extra foi a pedido da Dikma ou da ArcelorMittal.');
-      if (novo) { DB.eAdd('lanc', n); DB.log(`Operação: lançou ${eq} · ${short(n.op)} em ${dBR(data)}`); } else { DB.eUpd('lanc', l.id, n); }
+      if (novo) { DB.eAdd('lanc', n); DB.log(`Operação: lançou ${eq} · ${short(n.op)} em ${dBR(data)}`, 'operacao'); } else { DB.eUpd('lanc', l.id, n); }
       toast(novo ? 'Lançamento salvo' : 'Lançamento atualizado');
     });
     const del = document.querySelector('#fSheet [data-del]');
@@ -349,13 +349,13 @@ export function criarEquip(X) {
       let pid = par ? par.id : null;
       if (par) DB.eUpd('par', par.id, { subst: B, lancSub: id2 });
       else pid = DB.eAdd('par', { data, mes: data.slice(0, 7), eq: A, op, ini: hora, fim: null, causa, desc: $('fsDesc').value.trim().toUpperCase(), os: $('fsOs').value.trim(), subst: B, lancSub: id2 });
-      DB.log(`Operação: ${A} danificado, ${op ? short(op) + ' seguiu' : 'substituído'} no ${B} às ${hora}`);
+      DB.log(`Operação: ${A} danificado, ${op ? short(op) + ' seguiu' : 'substituído'} no ${B} às ${hora}`, 'operacao');
       // Desfazer: volta tudo como estava (lançamento original, parada e reserva).
       const desfazer = () => {
         if (id2) DB.eDel('lanc', id2);
         if (L1) DB.eUpd('lanc', L1.id, { fim: fimOrig || null, trocaPara: null });
         if (par) DB.eUpd('par', par.id, { subst: null, lancSub: null }); else if (pid) DB.eDel('par', pid);
-        DB.log(`Operação: desfez a troca de ${A} por ${B}`); toast('Troca desfeita');
+        DB.log(`Operação: desfez a troca de ${A} por ${B}`, 'operacao'); toast('Troca desfeita');
       };
       toast(`${A} parado · ${op ? short(op).split(' ')[0] + ' segue' : 'segue'} no ${B}`, { desfazer });
     });
@@ -379,7 +379,7 @@ export function criarEquip(X) {
     const lista = base.filter(l => { const o = C.opMap.get(l.op); return !o || (!C.ausenteEm(o, d) && C.escalado(o, d)); });
     sheet('Copiar lançamentos', `${lista.length} alocações de ${dBR(ant)} para ${dBR(d)} (status "Em operação", horário do turno). Operadores ausentes ou de folga na escala ficam de fora.`, [{ t: `Copiar ${lista.length} alocações`, v: 'ok' }], () => {
       for (const l of lista) DB.eAdd('lanc', { data: d, mes: d.slice(0, 7), eq: l.eq, tipo: l.tipo, op: l.op, area: l.area, status: 'EM OPERAÇÃO', ini: null, fim: null, he: 0, sub: '', obs: '' });
-      DB.log(`Operação: copiou ${lista.length} alocações de ${dBR(ant)} para ${dBR(d)}`); toast(`${lista.length} alocações criadas`);
+      DB.log(`Operação: copiou ${lista.length} alocações de ${dBR(ant)} para ${dBR(d)}`, 'operacao'); toast(`${lista.length} alocações criadas`);
     });
   }
 
@@ -461,7 +461,7 @@ export function criarEquip(X) {
       if (!data || !eq || !ini) throw new Error('Informe data, equipamento e a hora em que parou.');
       if (!$('fpCausa').value) throw new Error('Escolha a causa.');
       const n = { data, mes: data.slice(0, 7), eq, op: $('fpOp').value, ini, fim: $('fpFim').value || null, causa: $('fpCausa').value, desc: $('fpDesc').value.trim().toUpperCase(), os: $('fpOs').value.trim() };
-      if (novo) { DB.eAdd('par', n); DB.log(`Operação: parada ${eq} · ${n.causa.toLowerCase()}`); } else DB.eUpd('par', p.id, n);
+      if (novo) { DB.eAdd('par', n); DB.log(`Operação: parada ${eq} · ${n.causa.toLowerCase()}`, 'operacao'); } else DB.eUpd('par', p.id, n);
       toast(n.fim ? 'Parada salva' : `${eq} registrado como parado (sem liberação)`);
     });
     const del = document.querySelector('#fSheet [data-del]');
@@ -537,7 +537,7 @@ export function criarEquip(X) {
       let lista = E().cad.operadores.slice();
       if (!nome) { n.nome = $('foNome').value.trim().toUpperCase(); if (!n.nome) throw new Error('Informe o nome.'); if (lista.some(x => x.nome === n.nome)) throw new Error('Já existe esse operador.'); lista.push(n); }
       else lista = lista.map(x => (x.nome === nome ? n : x));
-      DB.eSalvarCad({ operadores: lista }); if (nome && n.funcao !== o.funcao && PES && isAdmin()) PES.syncFuncao(n, n.funcao); DB.log(`Operação: ${nome ? 'atualizou' : 'cadastrou'} ${short(n.nome)}${n.situacao !== 'TRABALHANDO' ? ' (' + n.situacao.toLowerCase() + ')' : ''}`); toast('Operador salvo');
+      DB.eSalvarCad({ operadores: lista }); if (nome && n.funcao !== o.funcao && PES && isAdmin()) PES.syncFuncao(n, n.funcao); DB.log(`Operação: ${nome ? 'atualizou' : 'cadastrou'} ${short(n.nome)}${n.situacao !== 'TRABALHANDO' ? ' (' + n.situacao.toLowerCase() + ')' : ''}`, 'operacao'); toast('Operador salvo');
     });
     const del = document.querySelector('#fSheet [data-del]');
     if (del) del.onclick = () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Confirmar remoção'; return; } DB.eSalvarCad({ operadores: E().cad.operadores.filter(x => x.nome !== nome) }); $('layer').innerHTML = ''; toast('Operador removido'); render(); };
@@ -566,7 +566,7 @@ export function criarEquip(X) {
       const n = { data: $('fiData').value, mes: $('fiData').value.slice(0, 7), eq: $('fiEq').value.trim().toUpperCase(), op: $('fiOp').value, itens, inspetor: $('fiInsp').value.trim(), obs: $('fiObs').value.trim() };
       if (!n.data || !n.op) throw new Error('Informe data e operador.');
       n.p5s = conformidade(itens, ITENS_5S); n.pseg = conformidade(itens, ITENS_SEG);
-      DB.eAdd('insp', n); DB.log(`Operação: inspeção de ${short(n.op)} (5S ${pc(n.p5s || 0)}, segurança ${pc(n.pseg || 0)})`); toast('Inspeção salva');
+      DB.eAdd('insp', n); DB.log(`Operação: inspeção de ${short(n.op)} (5S ${pc(n.p5s || 0)}, segurança ${pc(n.pseg || 0)})`, 'operacao'); toast('Inspeção salva');
     });
     document.querySelectorAll('#fSheet .tri').forEach(tr => { tr.onclick = e => { const b = e.target.closest('[data-v]'); if (!b) return; itens[tr.dataset.k] = b.dataset.v; tr.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); }; });
   }
@@ -679,7 +679,7 @@ export function criarEquip(X) {
             DB.eUpd('lanc', L2.id, { fim: f, trocaPara: p.eq });
             DB.eAdd('lanc', { data: L2.data, mes: L2.data.slice(0, 7), eq: p.eq, tipo: (calc().frotaMap.get(p.eq) || {}).tipo || '', op: p.op, area: L2.area, status: 'EM OPERAÇÃO', ini: f, fim: L2.fim || null, he: 0, sub: '', obs: `Voltou do reserva ${L2.eq}`, voltaDe: L2.eq });
           }
-          DB.log(`Operação: liberou ${p.eq} às ${f}`); toast(`${p.eq} liberado`);
+          DB.log(`Operação: liberou ${p.eq} às ${f}`, 'operacao'); toast(`${p.eq} liberado`);
         });
         const ag = $('lbAgora'); if (ag) ag.onclick = () => { $('lbFim').value = agoraHM(); };
         break;
@@ -709,7 +709,7 @@ export function criarEquip(X) {
       case 'delFer': ferAtiv(DB.eSalvarConfig({ feriados: E().config.feriados.filter(f => !(f.data === d.data && f.desc === d.desc)) })); break;
       case 'importar': {
         UI.busy = true; render();
-        try { const s = await DB.seed('seed-equip.json'); await DB.eImportar(s); DB.log('Operação: importou a planilha de controle de equipamentos'); toast('Planilha importada'); }
+        try { const s = await DB.seed('seed-equip.json'); await DB.eImportar(s); DB.log('Operação: importou a planilha de controle de equipamentos', 'operacao'); toast('Planilha importada'); }
         catch (err) { toast('Erro ao importar: ' + (err.message || err)); }
         UI.busy = false; render(); break;
       }

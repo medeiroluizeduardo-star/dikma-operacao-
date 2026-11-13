@@ -118,7 +118,7 @@ export function lancarEfetivo(key) {
     fim: k < 6 ? { t: 'Até domingo', v: domingo } : null,
     aoExtra: v => {
       if (v === 'cob') return passoCobertura(c, dt, [dt], null, fimToque);
-      if (v === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`); fimToque(); toast('Substituto removido'); return; }
+      if (v === 'semcob') { removerCobertura(id, dt); DB.log(`${title(c.nome)} · ${ddmm(dt)} sem substituto`, 'operacao'); fimToque(); toast('Substituto removido'); return; }
       if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
       if (v === 'heo') return passoHE(c, [dt], null, fimToque);
       if (v === 'heh') return horarioHE(c, [dt], fimToque);
@@ -130,8 +130,8 @@ export function lancarEfetivo(key) {
       const gravar = d => { if (!v) return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
       dias.forEach(d => { DB.setSit(id + '|' + d, gravar(d)); if (!AUS_COBRIVEL.has(v)) removerCobertura(id, d); if (v !== 'HE') (DB.setSitExtra('he', id + '|' + d, null), DB.setSitExtra('hed', id + '|' + d, null)); const ju = DB.sitInfo(id + '|' + d).jus; if (ju && ju.cod !== v) DB.setSitExtra('jus', id + '|' + d, null); });
       const nome = !v ? 'automático' : SIT_NOME[v];
-      DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`);
-      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null), DB.setSitExtra('jus', id + '|' + d, inf.jus || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`); render(); };
+      DB.log(`${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''} → ${nome}`, 'operacao');
+      const desfazer = () => { antes.forEach(([d, x, inf]) => { DB.setSit(id + '|' + d, x); (DB.setSitExtra('he', id + '|' + d, inf.he || null), DB.setSitExtra('hed', id + '|' + d, inf.hed || null), DB.setSitExtra('jus', id + '|' + d, inf.jus || null)); }); DB.log(`${title(c.nome)} · desfez a mudança de ${ddmm(dt)}`, 'operacao'); render(); };
       fimToque();
       const segue = () => { if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque); if (v === 'HE') return passoHE(c, dias, desfazer, fimToque); toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer }); };
       // falta, atraso, atestado…: pede a justificativa (pode deixar para depois) e segue para o substituto
@@ -152,7 +152,7 @@ function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
       const sid = $('spSub').value; if (!sid) { if (desfazerBase) toast('Lançado sem substituto', { desfazer: desfazerBase }); return; }
       const r = refSub(sid); const s = r.c; if (!s) throw new Error('Escolha o substituto da lista.'); const heOrig = (document.querySelector('input[name="spHeo"]:checked') || {}).value || 'DIKMA'; const feitos = [];
       for (const d of dias) { removerCobertura(id, d); DB.setSitExtra('cob', id + '|' + d, sid); if (folgaNoDia(sitDoSub(r, d))) { DB.setSit(r.id + '|' + d, 'HE', r.k); DB.setSitExtra('he', r.id + '|' + d, heOrig, r.k); feitos.push(d); } }
-      DB.log(`${title(s.nome)}${r.outro ? ' (' + SETS[r.k].curto + ')' : ''} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`);
+      DB.log(`${title(s.nome)}${r.outro ? ' (' + SETS[r.k].curto + ')' : ''} cobre ${title(c.nome)} · ${ddmm(dt)}${dias.length > 1 ? ' a ' + ddmm(dias[dias.length - 1]) : ''}${feitos.length ? ` (hora extra a pedido da ${HE_ORIG[heOrig]})` : ''}`, 'operacao');
       fimToque();
       toast(`${curto(title(s.nome))} cobre ${curto(title(c.nome))}${feitos.length ? ' · hora extra ' + HE_ORIG[heOrig] : ''}`, { desfazer: () => { dias.forEach(d => removerCobertura(id, d)); if (desfazerBase) desfazerBase(); render(); } });
       // Virou hora extra: já pede o horário (senão cai em "Sem horário" no Banco de horas extras)
@@ -167,7 +167,7 @@ function passoCobertura(c, dt, dias, desfazerBase, fimToque) {
 function passoHE(c, dias, desfazer, fimToque) {
   sheet('Hora extra a pedido de quem?', `${esc(title(c.nome))} · ${dias.length > 1 ? `${dias.length} dias` : ddmm(dias[0])}`, [...Object.entries(HE_ORIG).map(([k, n]) => ({ t: n, v: k })), { t: 'Não informar agora', v: '' }], o => {
     if (!o.v) { if (desfazer) toast('Hora extra lançada', { desfazer }); return; }
-    dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined); horarioHE(c, dias, fimToque);
+    dias.forEach(d => DB.setSitExtra('he', c.id + '|' + d, o.v)); DB.log(`${title(c.nome)} · hora extra ${ddmm(dias[0])} a pedido da ${HE_ORIG[o.v]}`, 'operacao'); fimToque(); toast(`Hora extra · ${HE_ORIG[o.v]}`, desfazer ? { desfazer } : undefined); horarioHE(c, dias, fimToque);
   });
 }
 
@@ -205,7 +205,7 @@ export function turmaSheet(id) {
   const prox = l => { const ds = []; for (let i = 0; i < 8; i++) { const d = add(TODAY, i); const p = escala().previsto(rg, l, d); ds.push(p ? (p.trab ? '●' : '○') : '?'); } return ds.join(' '); };
   sheet(`Turma de ${title(c.nome)}`, `${esc(r.nome)} · ● trabalha ○ folga, a partir de hoje`, [...letras.map(l => ({ t: `Turma ${l}`, d: prox(l), v: l, cur: l === atual })), { t: 'Sem turma', d: 'A folga não é marcada sozinha', v: '' }], o => {
     const itens = (DB.cache.colabs[c.area] || []).map(x => (x.id === c.id ? comTurma(x, o.v) : x));
-    DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
+    DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`, 'operacao'); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
   });
 }
 // Abre Pessoas no turno (Presença do dia) no conjunto atual, já na rota (area|rota) quando vier de um link.

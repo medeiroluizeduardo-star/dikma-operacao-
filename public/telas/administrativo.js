@@ -228,7 +228,7 @@ export function criarAdministrativo(X) {
       aoEscolher: (cod, lista) => {
         const antes = lista.map(x => [x, codigo(conj, comp, doc, g, p, x, cmap)]);
         lista.forEach(x => { DB.admSetCodigo(conj, comp, p, x, cod); const ju = jusDe(conj, doc, p, x); if (ju && ju.cod !== cod) DB.admSetJus(conj, comp, p, x, null); if (p.ativ && X.limparPresenca) X.limparPresenca(conj, p.ativ, x, cod); limparFolha(conj, comp, doc, p, x, cod); });
-        DB.log(`Frequência: ${title(p.nome)} → ${cod ? NOMES_CODIGO[cod] : 'automático'} ${lista.length > 1 ? `de ${ddmm(dt)} a ${ddmm(lista[lista.length - 1])}` : 'em ' + ddmm(dt)}`);
+        DB.log(`Frequência: ${title(p.nome)} → ${cod ? NOMES_CODIGO[cod] : 'automático'} ${lista.length > 1 ? `de ${ddmm(dt)} a ${ddmm(lista[lista.length - 1])}` : 'em ' + ddmm(dt)}`, 'rh');
         render();
         const b = document.querySelector(`[data-a="cel"][data-p="${CSS.escape(p.k)}"][data-dt="${dt}"]`); if (b && X.pulsar) X.pulsar(b);
         if (JUS_CODS.includes(cod)) { justificar(conj, comp, p, lista, cod, null); return; }
@@ -248,7 +248,7 @@ export function criarAdministrativo(X) {
     pedirJus({ formSheet, nome: title(p.nome), dt: lista[0], cod, atual, salvar: j => {
       const v = { ...j, por: X.ME ? X.ME.uid : '', nomePor: X.ME ? (X.ME.nome || X.ME.login || '') : '', em: new Date().toISOString() };
       lista.forEach(x => DB.admSetJus(conj, comp, p, x, v));
-      DB.log(`Frequência: justificativa de ${(NOMES_CODIGO[cod] || cod).toLowerCase()} de ${title(p.nome)} ${ddmm(lista[0])}${lista.length > 1 ? ' a ' + ddmm(lista[lista.length - 1]) : ''}: ${textoJus({ ...j, obs: "" })}`);
+      DB.log(`Frequência: justificativa de ${(NOMES_CODIGO[cod] || cod).toLowerCase()} de ${title(p.nome)} ${ddmm(lista[0])}${lista.length > 1 ? ' a ' + ddmm(lista[lista.length - 1]) : ''}: ${textoJus({ ...j, obs: "" })}`, 'rh');
       toast('Justificativa salva'); render();
     } });
   }
@@ -289,7 +289,7 @@ export function criarAdministrativo(X) {
           const novo = { k: mat || 'n:' + normNome(p.nome), nome: p.nome, mat, turma: p.turma, obs: '', notas: [], ativ: p.ativ, desligado: null };
           if (doc.grupos.some(g => g.pessoas.some(x => x.k === novo.k))) { toast('Essa pessoa já está na folha.'); return; }
           const grupos = doc.grupos.map((g, j) => (j === i ? { ...g, pessoas: [...g.pessoas, novo].sort((a, b) => a.nome.localeCompare(b.nome)) } : g));
-          doc.grupos = grupos; await DB.admSalvarGrupos(conj, comp, grupos); DB.log(`Frequência: ${title(p.nome)} incluído na folha (${doc.grupos[i].nome})`); toast(`${title(p.nome)} incluído na folha`); render();
+          doc.grupos = grupos; await DB.admSalvarGrupos(conj, comp, grupos); DB.log(`Frequência: ${title(p.nome)} incluído na folha (${doc.grupos[i].nome})`, 'rh'); toast(`${title(p.nome)} incluído na folha`); render();
         });
       return;
     }
@@ -324,7 +324,7 @@ export function criarAdministrativo(X) {
       }
       const juntou = doc.grupos.length - grupos.length;
       doc.grupos = grupos; U.grp = '*'; await DB.admSalvarGrupos(conj, comp, grupos);
-      DB.log(`Frequência: grupo "${g.nome}" ${apagar ? 'apagado' : juntou ? 'juntado a outro' : 'renomeado'} (${SETS[conj].curto} ${periodoComp(comp)})`);
+      DB.log(`Frequência: grupo "${g.nome}" ${apagar ? 'apagado' : juntou ? 'juntado a outro' : 'renomeado'} (${SETS[conj].curto} ${periodoComp(comp)})`, 'rh');
       toast(apagar ? 'Grupo apagado' : juntou ? 'Grupo renomeado e juntado ao de mesmo nome' : 'Grupo renomeado'); render();
     });
   }
@@ -397,7 +397,7 @@ export function criarAdministrativo(X) {
       const dados = { nome, mat, setor: $('afSetor').value.trim().toUpperCase(), horario: $('afHor').value.trim().toUpperCase(), inicio: ini, dias, termino, retorno: $('afRet').value || (termino ? addDias(termino, 1) : null), limite: $('afLim').value || null, substituto: $('afSub').value.trim(), mesPlanejado: ini ? ini.slice(0, 7) : (f && f.mesPlanejado) || null };
       if (!f) Object.assign(dados, { funcao: '', admissao: null });
       if (dados.limite && termino && termino > dados.limite) toast('Atenção: as férias terminam depois da data limite');
-      await DB.feriasSalvar(f ? f.id : null, dados); DB.log(`Frequência: férias de ${title(nome)} ${ini ? `de ${ddmm(ini)} a ${ddmm(termino)}` : 'sem data'}`); toast('Férias salvas'); render();
+      await DB.feriasSalvar(f ? f.id : null, dados); DB.log(`Frequência: férias de ${title(nome)} ${ini ? `de ${ddmm(ini)} a ${ddmm(termino)}` : 'sem data'}`, 'rh'); toast('Férias salvas'); render();
     });
     const calc = () => { const i = $('afIni') && $('afIni').value, d = +($('afDias') && $('afDias').value) || 30; const out = $('afCalc'); if (!out) return; if (!i) { out.textContent = 'Sem início, fica como planejada.'; return; } const t = addDias(i, d - 1); out.textContent = `Termina em ${dBR(t)}. Retorno sugerido: ${dBR(addDias(t, 1))}.`; if ($('afRet') && !$('afRet').value) $('afRet').placeholder = addDias(t, 1); };
     ['afIni', 'afDias'].forEach(k => { const e = $(k); if (e) e.addEventListener('input', calc); }); calc();
@@ -452,7 +452,7 @@ export function criarAdministrativo(X) {
     st.busy = true; render();
     try {
       const n = await DB.admImportar({ comps: st.prep.comps, presenca: st.prep.presenca, ferias: st.prep.ferias, substituirFerias: st.subst });
-      DB.log(`Frequência: importou ${st.origem}`);
+      DB.log(`Frequência: importou ${st.origem}`, 'rh');
       U.imp = { feito: `${st.prep.comps.length} folha(s) gravada(s), ${n} dia(s) de presença preenchidos${st.prep.ferias ? `, ${st.prep.ferias.length} férias` : ''}.` };
       if (st.prep.comps.length) { const ult = st.prep.comps[st.prep.comps.length - 1]; U.conj = ult.conj; }
     } catch (e) { U.imp = { ...st, busy: false, erro: (e && e.message) || String(e) }; }

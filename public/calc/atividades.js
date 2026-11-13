@@ -64,7 +64,7 @@ export function setSt(doc, i, k, c, motivo, fotos) {
   UI.flash = { id: doc.id, i, k, t: Date.now() };
   gravarApont(doc, [ch], fotos);
   const p = PL.get(doc.ids[i]); const nm = { R: 'realizada', N: 'não realizada', P: 'voltou para programada', E: 'extra', _: 'extra removida' }[c];
-  DB.log(`${p ? p.ativ : doc.ids[i]} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → ${nm}${c === 'N' && motivo ? ' (' + motivo + ')' : ''}`);
+  DB.log(`${p ? p.ativ : doc.ids[i]} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → ${nm}${c === 'N' && motivo ? ' (' + motivo + ')' : ''}`, 'operacao');
 }
 
 // Inclui no dia uma atividade que não estava programada: ela entra como "a fazer" e o líder aponta se foi feita.
@@ -74,7 +74,7 @@ export function incluirFora(doc, i, k) {
   mudouDados(); doc.d[i] = str; if (doc.s) doc.s[pid] = str; doc.fp = doc.fp || {};
   const info = { por: ME.uid, nome: ME.nome || ME.login || '', em: new Date().toISOString() }; doc.fp[pid + '|' + k] = info;
   DB.setForaProg(doc.id, pid, k, str, info);
-  const p = PL.get(pid); DB.log(`${p ? p.ativ : pid} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → incluída fora da programação`);
+  const p = PL.get(pid); DB.log(`${p ? p.ativ : pid} · ${p ? p.rota : ''} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → incluída fora da programação`, 'operacao');
   toast('Incluída fora da programação · o líder aponta se foi feita'); render();
 }
 // Tira a atividade incluída, enquanto o líder ainda não apontou.
@@ -83,7 +83,7 @@ export function tirarFora(doc, i, k) {
   const pid = doc.ids[i]; const a = [...doc.d[i]]; if (a[k] !== 'P' || !(doc.fp && doc.fp[pid + '|' + k])) { toast('Já foi apontada: não dá para tirar'); return; }
   a[k] = '_'; const str = a.join(''); mudouDados(); doc.d[i] = str; if (doc.s) doc.s[pid] = str; delete doc.fp[pid + '|' + k];
   DB.setForaProg(doc.id, pid, k, str, null);
-  const p = PL.get(pid); DB.log(`${p ? p.ativ : pid} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → tirada da programação`);
+  const p = PL.get(pid); DB.log(`${p ? p.ativ : pid} · ${DAYS[k]} ${ddmm(add(doc.ini, k))} → tirada da programação`, 'operacao');
   toast('Atividade tirada do dia'); render();
 }
 export function escolherFora(doc, k, rota) {
@@ -138,14 +138,14 @@ export function aprovar(itens) {
   const porDoc = new Map();
   for (const x of itens) { if (!porDoc.has(x.doc)) porDoc.set(x.doc, {}); const c = x.doc.d[x.i][x.k]; const key = x.doc.ids[x.i] + '|' + x.k; porDoc.get(x.doc)[key] = c === 'N' ? { s: 'A', c, m: x.doc.m[key] || '' } : { s: 'A', c }; }
   for (const [doc, it] of porDoc) Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, it)).catch(() => toast('Não foi possível aprovar'));
-  if (itens.length) DB.log(`Aprovou ${itens.length === 1 ? `${itens[0].p.ativ} · ${itens[0].p.rota} · ${ddmm(itens[0].dt)}` : `${itens.length} apontamentos`}`);
+  if (itens.length) DB.log(`Aprovou ${itens.length === 1 ? `${itens[0].p.ativ} · ${itens[0].p.rota} · ${ddmm(itens[0].dt)}` : `${itens.length} apontamentos`}`, 'operacao');
 }
 export function devolver(x, mot) {
   const { doc, i, k } = x; const ant = doc.d[i][k];
   const ch = localChange(doc, i, k, ant === 'E' ? '_' : 'P');
   DB.setStatusMany(doc.id, [ch]);
   Promise.resolve(DB.setAprov(doc.id, doc.area, doc.mes, { [doc.ids[i] + '|' + k]: { s: 'D', c: 'P', ant, mot } })).catch(() => toast('Não foi possível devolver'));
-  DB.log(`Devolveu ao líder: ${x.p.ativ} · ${x.p.rota} · ${ddmm(x.dt)} (${mot})`);
+  DB.log(`Devolveu ao líder: ${x.p.ativ} · ${x.p.rota} · ${ddmm(x.dt)} (${mot})`, 'operacao');
 }
 export const CHIP = { P: '', R: '✓', N: '✕', E: '+', A: '!', X: '·', D: '–', F: '–' };
 export const ST_NOME = { P: 'Programado', R: 'Realizado', N: 'Não realizado', E: 'Extra', A: 'Atrasado', X: 'Não programada', D: 'Dispensada na limpeza', F: 'Feriado' };

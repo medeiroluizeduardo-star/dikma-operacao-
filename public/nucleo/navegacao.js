@@ -1,7 +1,7 @@
 // Navegação: abas (VIEWS), os 5 módulos (MODS), barra de baixo do celular e troca de módulo.
 // Para mudar o menu, comece por aqui: VIEWS diz em que módulo e grupo cada aba aparece e quem a vê.
 import { podeVer } from '../contas/permissoes.js';
-import { editaAdm } from '../contas/acessos.js';
+import { editaAdm, veHistorico } from '../contas/acessos.js';
 import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './estado.js';
 import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
@@ -29,6 +29,8 @@ const geEq = () => temEquipEm(ME, 'gestao');
 const temRH = () => !!perfil('rh');
 export const VIEWS = [
   { id: 'avisos', nome: 'Avisos no celular', ic: 'celular', grp: 'Conta', mod: 'all', fora: true, livre: true, sup: true },
+  // Histórico de alterações do gestor de cada módulo (só o do módulo dele); o administrador usa o da Administração (cfhist).
+  { id: 'historico', nome: 'Histórico de alterações', ic: 'relogio', grp: 'Conta', mod: 'all', fora: true, livre: true, req: () => veHistorico(ME) && !isAdmin() },
   // ---- Operação: o dia a dia no campo ----
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao'), mesDados: true, conj: true },
