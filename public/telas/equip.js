@@ -5,7 +5,7 @@ import { anotarTroca } from '../contas/escala.js';
 import { campoBusca, definirValor, semAcento, casa, filtrarLista, caixaBusca } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { criarBusca, competenciaDe } from '../contas/planilhas-adm.js';
-import { indiceFerias } from '../contas/acessos.js';
+import { indiceFerias, perfilDe } from '../contas/acessos.js';
 import { criarCalc, fimMes, ITENS_5S, ITENS_SEG, conformidade, STATUS_HE } from '../contas/eqcalc.js';
 import { situacaoDoDia, textoOperacao, feriadosOperacao } from '../contas/situacao.js';
 import { abre } from '../ui/dobra.js';
@@ -23,6 +23,11 @@ export function criarEquip(X) {
   const E = () => DB.cache.e;
   const ME = () => X.ME;
   const podeEditar = () => isAdmin() || (['gestor', 'coordenador', 'supervisor', 'lider'].includes(ME().papel) && (!X.podeItem || X.podeItem('i_operacao')));
+  // Alterar ou apagar um lançamento, parada ou inspeção: quem lançou, o supervisor para cima e o administrador (as
+  // regras do banco conferem o mesmo). Os outros líderes só mudam o status, liberam, trocam e substituem.
+  const supOuMais = () => isAdmin() || ['gestor', 'coordenador', 'supervisor'].includes(perfilDe(ME(), 'operacao'));
+  const podeMexer = x => !!x && podeEditar() && (supOuMais() || (!!x.por && x.por === ME().uid));
+  const SO_AUTOR = 'Só quem lançou, o supervisor ou o administrador altera este registro.';
   const U = UI.e; // valores iniciais em nucleo/estado.js
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
   const mesNome = ym => `${MESES_L[+ym.slice(5, 7) - 1]}/${ym.slice(0, 4)}`;
@@ -238,7 +243,7 @@ export function criarEquip(X) {
     const parTxt = l => (l.aberta ? `<span class="pill bad">parado desde ${l.aberta.ini}</span>` : l.nPar ? `<span class="pill neu">${l.nPar} parada${l.nPar > 1 ? 's' : ''} · ${h2(l.hpar)} h</span>` : '');
     const ajuda = '<p class="muted small m0 ajuda">Cada linha é um operador num equipamento no dia. <b>Janela</b> = horário do lançamento (vazio = turno da escala). <b>Operadas</b> = janela − paradas desse operador nesse equipamento. Ações: ${I.pend} registra uma parada · ${I.swap} troca o equipamento danificado por um reserva (o operador segue sem perder horas) · ✎ edita.</p>';
     if (matchMedia('(max-width:860px)').matches) {
-      return h + busca + `<div class="mlist" id="eLList">${linhas.map(l => `<div class="mcard" data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'}><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span>${trocaTxt(l)}</div>${ed ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
+      return h + busca + `<div class="mlist" id="eLList">${linhas.map(l => `<div class="mcard" data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'}><div class="row-between"><div><b class="mono">${esc(l.eq)}</b> <span class="muted small">${esc(l.tipo)}</span>${trocaTxt(l)}</div>${podeMexer(l) ? `<button class="btn ghost" data-e="editLanc" data-id="${l.id}" aria-label="Editar">✎</button>` : ''}</div>
         <div><b>${esc(short(l.op))}</b>${C.escalaDe(l.op, l.data) === '4x4' ? ' <span class="tag">4x4</span>' : ''} · <span class="small">${esc(l.setor ? AREA_S[l.setor] || l.setor : title(l.area))}</span>${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}</div>
         ${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(x => `<option ${x === l.status ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}
         <div class="row-between small"><span class="num">${l.ini || 'turno'} – ${l.fim || 'turno'} · janela ${h2(l.jan)} h</span><b class="num">${h2(l.hoper)} h operadas</b></div>
@@ -249,7 +254,7 @@ export function criarEquip(X) {
       ${linhas.map(l => `<tr data-k="${esc(kLanc(l))}" ${casa(kLanc(l), q) ? '' : 'hidden'} ${l.aberta ? 'class="parado"' : ''}><td><b class="mono">${esc(l.eq)}</b><div class="muted small">${esc(l.tipo)}</div>${trocaTxt(l)}</td><td>${esc(short(l.op))}${C.escalaDe(l.op, l.data) === '4x4' ? ' <span class="tag">4x4</span>' : ''}${l.sub ? `<div class="muted small">substituiu ${esc(short(l.sub))}</div>` : ''}${l.obs ? `<div class="muted small obs">${esc(l.obs)}</div>` : ''}${alMap.has(l.id) ? `<div class="pill warn">${esc(alMap.get(l.id))}</div>` : ''}</td><td class="small">${esc(title(l.area))}${l.setor ? ` · ${esc(AREA_S[l.setor] || l.setor)}` : ''}</td>
         <td>${ed ? `<select class="in sts ${STATUS_CLS[l.status] || ''}" data-est="${l.id}" aria-label="Status">${E().config.status.map(s => `<option ${s === l.status ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : `<span class="pill ${STATUS_CLS[l.status] || 'neu'}">${esc(l.status)}</span>`}</td>
         <td class="c num small">${l.ini || '—'} – ${l.fim || '—'}${l.he ? `<div class="pill ext" title="Hora extra${l.heOrigem ? ' a pedido da ' + (l.heOrigem === 'ARCELOR' ? 'ArcelorMittal' : 'Dikma') : ''}">HE ${hhmm(l.he)}${l.heOrigem ? ' · ' + (l.heOrigem === 'ARCELOR' ? 'Arcelor' : 'Dikma') : ''}</div>` : ''}</td><td class="r num">${h2(l.jan)}</td><td class="r num">${l.hpar ? h2(l.hpar) : ''}${l.aberta ? '<div><span class="pill bad">aberta</span></div>' : ''}</td><td class="r num"><b>${h2(l.hoper)}</b></td>
-        <td class="nowrap r acts">${ed ? `${l.trocaPara ? '' : l.aberta ? `<button class="btn sm pri" data-e="liberar" data-id="${l.aberta.id}">Liberar</button>` : `<button class="btn sm ic" data-e="parDe" data-id="${l.id}" title="Registrar parada" aria-label="Registrar parada de ${esc(l.eq)}">${I.pend}</button>`}${l.trocaPara ? '' : `<button class="btn sm ic" data-e="trocar" data-id="${l.id}" title="Trocar equipamento (danificado → reserva)" aria-label="Trocar ${esc(l.eq)} por um reserva">${I.swap}</button>`}<button class="btn sm ic ghost" data-e="editLanc" data-id="${l.id}" title="Editar" aria-label="Editar">✎</button>` : ''}</td></tr>`).join('')}
+        <td class="nowrap r acts">${ed ? `${l.trocaPara ? '' : l.aberta ? `<button class="btn sm pri" data-e="liberar" data-id="${l.aberta.id}">Liberar</button>` : `<button class="btn sm ic" data-e="parDe" data-id="${l.id}" title="Registrar parada" aria-label="Registrar parada de ${esc(l.eq)}">${I.pend}</button>`}${l.trocaPara ? '' : `<button class="btn sm ic" data-e="trocar" data-id="${l.id}" title="Trocar equipamento (danificado → reserva)" aria-label="Trocar ${esc(l.eq)} por um reserva">${I.swap}</button>`}${podeMexer(l) ? `<button class="btn sm ic ghost" data-e="editLanc" data-id="${l.id}" title="Editar" aria-label="Editar">✎</button>` : ''}` : ''}</td></tr>`).join('')}
       </tbody></table><p class="empty" data-vazio ${linhas.some(l => casa(kLanc(l), q)) ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div><div class="body pt0">${ajuda}</div></div>`;
     return h;
   }
@@ -438,7 +443,7 @@ export function criarEquip(X) {
       return `<div class="pitem ${!p.fim ? 'aberta' : ''}" data-k="${esc(k)}" ${casa(k, q) ? '' : 'hidden'}><div class="minw"><div class="t"><span class="mono">${esc(p.eq)}</span>${tipo ? ` <span class="muted small">${esc(title(tipo))}</span>` : ''} · ${esc(p.causa || 'sem causa')} <span class="pill ${p.resp === 'EQUIPAMENTO' ? 'bad' : p.resp === 'OPERADOR' ? 'warn' : 'neu'}">${esc((p.resp || '—').toLowerCase())}</span></div>
       <div class="l">${p.ini || '—'} às ${p.fim || '…'} · <b>${p.fim ? h2(p.dur) + ' h' : p.ini ? 'parado há ' + tempoTxt(desde) : 'sem hora de início'}</b> · ${esc(short(p.op))}${p.desc ? ' · ' + esc(p.desc) : ''}${p.os ? ' · OS ' + esc(p.os) : ''}</div>
       ${p.subst ? `<div style="margin-top:4px"><span class="pill ext">${I.swap} ${esc(short(p.op) || 'operador')} seguiu no ${esc(p.subst)}</span></div>` : ''}${al.has(p.id) && !(soAbertas && !p.fim && /SEM LIBERA/.test(al.get(p.id))) ? `<div class="pill warn" style="margin-top:4px">${esc(al.get(p.id))}</div>` : ''}</div>
-      <div class="row-gap">${!p.fim ? (podeEditar() ? `${!p.subst ? `<button class="btn" data-e="substPar" data-id="${p.id}" title="Passar o operador para um equipamento reserva">${I.swap} Substituir</button>` : ''}<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill bad">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeEditar() ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`; };
+      <div class="row-gap">${!p.fim ? (podeEditar() ? `${!p.subst ? `<button class="btn" data-e="substPar" data-id="${p.id}" title="Passar o operador para um equipamento reserva">${I.swap} Substituir</button>` : ''}<button class="btn pri" data-e="liberar" data-id="${p.id}">Liberar</button>` : '<span class="pill bad">Sem liberação</span>') : '<span class="pill ok">Liberado</span>'}${podeMexer(p) ? `<button class="btn ghost" data-e="editPar" data-id="${p.id}" aria-label="Editar">✎</button>` : ''}</div></div>`; };
     h += `<div class="card"><div class="lbar body">${caixaBusca('ePQ', q, 'Buscar equipamento, operador, causa ou OS')}<span class="muted small"><b id="ePN">${vis}</b> de ${l.length}</span></div><div class="body pt0" id="ePList"><div class="plist">${grupos.map(g => { const ab = g.l.filter(x => !x.fim).length; return `<div class="pday" data-grupo ${g.l.some(p => casa(kPar(p), q)) ? '' : 'hidden'}><div class="pgrp"><b>${semana(g.d)} ${dBR(g.d).slice(0, 5)}</b><span>${g.l.length} parada${g.l.length > 1 ? 's' : ''} · ${h2(g.l.reduce((t, x) => t + (x.dur || 0), 0))} h${ab ? ` · <em>${ab} sem liberação</em>` : ''}</span></div>${g.l.map(item).join('')}</div>`; }).join('')}<p class="empty" data-vazio ${vis ? 'hidden' : ''}>Nada encontrado nesta busca.</p></div></div></div>`;
     return h;
   }
@@ -550,7 +555,7 @@ export function criarEquip(X) {
     let h = `<div class="filters">${selMes('eInMes', U.inMes)}${podeEditar() ? `<button class="btn pri" data-e="novaInsp" style="align-self:flex-end">${I.plus} Inspeção</button>` : ''}</div>`;
     if (!l.length) return h + `<div class="card"><div class="empty"><b>Nenhuma inspeção em ${MESES_L[+U.inMes.slice(5) - 1].toLowerCase()}</b><span>As inspeções entram na nota de 5S e de segurança da classificação.</span>${podeEditar() ? `<button class="btn" data-e="novaInsp">${I.plus} Inspeção</button>` : ''}</div></div>`;
     h += `<div class="card"><div class="tw"><table><thead><tr><th>Data</th><th>Operador</th><th>Identificação</th><th class="r">5S</th><th class="r">Segurança</th><th>Não conformes</th><th>Inspetor</th><th></th></tr></thead><tbody>
-      ${l.map(x => { const nc = [...ITENS_5S, ...ITENS_SEG].filter(([k]) => (x.itens || {})[k] === 'NC').map(([, n]) => n); return `<tr><td class="num">${dBR(x.data)}</td><td><b>${esc(short(x.op))}</b></td><td class="mono">${esc(x.eq || '')}</td><td class="r num">${pcx(x.p5s)}</td><td class="r num">${pcx(x.pseg)}</td><td class="small">${nc.length ? `<span class="pill bad">${nc.length}</span> ${esc(nc.join(', '))}` : '<span class="pill ok">Tudo conforme</span>'}</td><td class="small">${esc(title(x.inspetor || ''))}</td><td>${podeEditar() ? `<button class="btn ghost danger" data-e="delInsp" data-id="${x.id}" aria-label="Excluir inspeção">✕</button>` : ''}</td></tr>`; }).join('')}
+      ${l.map(x => { const nc = [...ITENS_5S, ...ITENS_SEG].filter(([k]) => (x.itens || {})[k] === 'NC').map(([, n]) => n); return `<tr><td class="num">${dBR(x.data)}</td><td><b>${esc(short(x.op))}</b></td><td class="mono">${esc(x.eq || '')}</td><td class="r num">${pcx(x.p5s)}</td><td class="r num">${pcx(x.pseg)}</td><td class="small">${nc.length ? `<span class="pill bad">${nc.length}</span> ${esc(nc.join(', '))}` : '<span class="pill ok">Tudo conforme</span>'}</td><td class="small">${esc(title(x.inspetor || ''))}</td><td>${podeMexer(x) ? `<button class="btn ghost danger" data-e="delInsp" data-id="${x.id}" aria-label="Excluir inspeção">✕</button>` : ''}</td></tr>`; }).join('')}
       </tbody></table></div></div>`;
     return h;
   }
@@ -662,12 +667,12 @@ export function criarEquip(X) {
       case 'novoLanc': lancForm(null); break;
       case 'expLanc': exportarLanc(U.dia.slice(0, 7)); break;
       case 'expPar': exportarPar(); break;
-      case 'editLanc': lancForm(acharL(d.id)); break;
+      case 'editLanc': { const l = acharL(d.id); if (!l) break; if (!podeMexer(l)) { toast(SO_AUTOR); break; } lancForm(l); break; }
       case 'copiar': copiarDiaAnterior(); break;
       case 'lancOp': lancForm(null, { op: d.op }); break;
       case 'parDe': parForm(null, acharL(d.id)); break;
       case 'novaPar': parForm(null); break;
-      case 'editPar': { const p = acharP(d.id); if (p) parForm(p); break; }
+      case 'editPar': { const p = acharP(d.id); if (!p) break; if (!podeMexer(p)) { toast(SO_AUTOR); break; } parForm(p); break; }
       case 'liberar': {
         const p = acharP(d.id); if (!p) break;
         const L2 = p.lancSub ? E().lanc.find(x => x.id === p.lancSub) : null; const volta = !!(L2 && !L2.trocaPara && p.op);
@@ -703,7 +708,7 @@ export function criarEquip(X) {
       }
       case 'delEq': DB.eSalvarCad({ frota: E().cad.frota.filter(f => f.id !== d.id) }); toast(d.id + ' removido'); break;
       case 'novaInsp': inspForm(); break;
-      case 'delInsp': if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; return; } DB.eDel('insp', d.id); toast('Inspeção excluída'); break;
+      case 'delInsp': if (!podeMexer(E().insp.find(x => x.id === d.id))) { toast(SO_AUTOR); break; } if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; return; } DB.eDel('insp', d.id); toast('Inspeção excluída'); break;
       case 'recarregar': U.hist = null; render(); break;
       case 'delCausa': DB.eSalvarConfig({ causas: E().config.causas.filter((_, i) => i !== +d.i) }); break;
       case 'delFer': ferAtiv(DB.eSalvarConfig({ feriados: E().config.feriados.filter(f => !(f.data === d.data && f.desc === d.desc)) })); break;

@@ -445,7 +445,7 @@ async function carregarE(salvo) {
 const ech = () => { cache.eVersao++; changed(); };
 const ECOL = { lanc: 'lanc', par: 'par', insp: 'insp' };
 export function eWatch(ms) { ms.forEach(m => m && cache.e.meses.add(m)); }
-export function eAdd(t, o) { const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); cache.e[ECOL[t]] = [...cache.e[ECOL[t]], { id, ...o, mes: o.data.slice(0, 7) }]; ech(); return id; }
+export function eAdd(t, o) { const id = 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); cache.e[ECOL[t]] = [...cache.e[ECOL[t]], { id, ...o, mes: o.data.slice(0, 7), por: me && me.uid }]; ech(); return id; }
 export function eUpd(t, id, p) { cache.e[ECOL[t]] = cache.e[ECOL[t]].map(x => (x.id === id ? { ...x, ...p, mes: (p.data || x.data).slice(0, 7) } : x)); ech(); }
 export function eDel(t, id) { cache.e[ECOL[t]] = cache.e[ECOL[t]].filter(x => x.id !== id); ech(); }
 export async function eSalvarConfig(p) { cache.e.config = { ...cache.e.config, ...p }; ech(); }
