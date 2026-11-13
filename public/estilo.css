@@ -1501,6 +1501,13 @@ label.btn.dis{opacity:.45;pointer-events:none}
 .sgsit .badge.bad{background:var(--st-nreal);border-color:var(--st-nreal);color:#fff}
 .sgbusca{flex:1 1 200px;min-width:0;max-width:320px}
 .sgtab td{vertical-align:top}
+/* Cartão Amarelo: faixa do topo com as 3 perguntas (como no cartão de papel) */
+.sgcab{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--st-atr) 40%,transparent);background:color-mix(in srgb,#F2C230 22%,var(--surface))}
+.sgcab-ic{flex:0 0 auto;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:#F2C230;color:#2b2b2b}
+.sgcab-ic svg{width:22px;height:22px}
+.sgcab b{display:block;font-size:15px}
+.sgcab span{font-size:12.5px;color:var(--ink-2)}
+.sgtab .sgfalta{margin-top:4px}
 .sgtab .sgdesc{font-size:12.5px;color:var(--ink-2);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:420px}
 .sgtab tr.sgvenc td:first-child{box-shadow:inset 3px 0 0 var(--st-nreal)}
 .sgtab .pill{margin:1px 0}

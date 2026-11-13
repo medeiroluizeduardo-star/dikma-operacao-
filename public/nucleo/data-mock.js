@@ -629,41 +629,58 @@ function segExemplo() {
   for (const r of [...inter, ...anom]) r.minis = r.fotos.map(f => fotos[f].mini);
   return { cfg: null, inter, anom, fotos };
 }
+// Cartões Amarelos de exemplo (sem fotos): dois esperando validação e um validado pelo líder imediato.
+function cartoesExemplo() {
+  const hoje = today(); const dia = n => add(hoje, -n); const ms = (d, h = 9) => new Date(`${d}T${String(h).padStart(2, '0')}:40:00`).getTime();
+  const PAT = { area: 'PÁTIO DE CARVÃO', conj: 'patio' }, BAT = { area: 'BATERIA', conj: 'bateria' };
+  return [
+    [0, PAT, ['O AMBIENTE ESTÁ SEGURO?'], 'Correia rodando sem a proteção da polia durante a limpeza.', 'Parar e bloquear a correia antes de limpar, com a proteção no lugar.', 'COLABORADOR DE EXEMPLO 1', '10101', null],
+    [2, BAT, ['OS RECURSOS ESTÃO SUFICIENTES E ADEQUADOS?'], 'Sem detector de gás para entrar no porão da bateria.', 'Pegar o detector reserva no almoxarifado e medir antes de entrar.', 'COLABORADOR DE EXEMPLO 2', '10102', null],
+    [6, PAT, ['ME SINTO EM CONDIÇÕES PARA A TAREFA?', 'O AMBIENTE ESTÁ SEGURO?'], 'Tarefa em altura sem o treinamento NR-35 em dia.', 'Fazer com quem tem o NR-35 válido e cinto de segurança.', 'COLABORADOR DE EXEMPLO 3', '10103', { tipo: 'lider', nome: 'SUPERVISOR DA PREPARAÇÃO', mat: '90002', uid: 'segt' }]
+  ].map(([n, A, faltou, motivo, comoSeguro, comunic, mat, valid], i) => {
+    const data = dia(n); const c = { id: 'sc' + i, data, mes: data.slice(0, 7), ...A, faltou, motivo, comoSeguro, comunic, mat, fotos: [], minis: [], por: 'segr', porNome: 'Técnico de Segurança', em: ms(data, 8 + i), status: valid ? 'validado' : 'pendente' };
+    if (valid) c.valid = { ...valid, em: new Date(ms(data, 11)).toISOString() };
+    return c;
+  });
+}
 function iniciarSeg() {
   if (SEG) return;
   try { SEG = JSON.parse(localStorage.getItem(LSS) || 'null'); } catch (e) { SEG = null; }
   if (!SEG || !Array.isArray(SEG.inter)) { SEG = segExemplo(); segPersist(); }
+  if (!Array.isArray(SEG.cartao)) { SEG.cartao = cartoesExemplo(); segPersist(); }
   segVer++;
 }
 Object.defineProperty(cache, 'seg', {
   get: () => {
-    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 };
+    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], meses: new Set(), v: 0 };
     const k = segVer + '|' + (me ? me.uid : '');
-    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), cartao: SEG.cartao.filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
     return segMemo.v;
   },
   enumerable: false
 });
 const segId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const segChave = col => ({ seginter: 'inter', seganom: 'anom', segcartao: 'cartao' }[col]);
 export function segWatch() { /* tudo já está em memória */ }
 export function segNovo(col, dados, fotos) {
-  const id = segId(col === 'seginter' ? 'si' : 'sa'); const ids = fotos.map(() => segId('sf'));
+  const id = segId({ seginter: 'si', seganom: 'sa', segcartao: 'sc' }[col]); const ids = fotos.map(() => segId('sf'));
   fotos.forEach((f, i) => { SEG.fotos[ids[i]] = { reg: id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes }; });
-  SEG[col === 'seginter' ? 'inter' : 'anom'].push({ ...dados, id, fotos: ids, minis: fotos.map(f => f.mini), por: me.uid, porNome: me.nome || me.login || '', em: Date.now() });
+  SEG[segChave(col)].push({ ...dados, id, fotos: ids, minis: fotos.map(f => f.mini), por: me.uid, porNome: me.nome || me.login || '', em: Date.now() });
   segCh(); return id;
 }
-export async function segEditar(col, id, patch) { const l = SEG[col === 'seginter' ? 'inter' : 'anom']; const i = l.findIndex(x => x.id === id); if (i >= 0) l[i] = { ...l[i], ...patch }; segCh(); }
+export async function segEditar(col, id, patch) { const l = SEG[segChave(col)]; const i = l.findIndex(x => x.id === id); if (i >= 0) l[i] = { ...l[i], ...patch }; segCh(); }
 export function segTratar(a, patch, foto) {
   const p = { ...patch };
   if (foto) { const fid = segId('sf'); SEG.fotos[fid] = { reg: a.id, col: 'seganom', tipo: 'depois', mini: foto.mini, dados: foto.dados, ordem: 0, autor: a.por, por: me.uid, conj: a.conj || '', area: a.area, mes: a.mes }; p.trat = { ...p.trat, fotoDepois: fid, miniDepois: foto.mini }; }
   const i = SEG.anom.findIndex(x => x.id === a.id); if (i >= 0) SEG.anom[i] = { ...SEG.anom[i], ...p, atualizadoPor: me.uid };
   segCh();
 }
+export async function segValidar(c, patch) { const i = SEG.cartao.findIndex(x => x.id === c.id); if (i >= 0) SEG.cartao[i] = { ...SEG.cartao[i], ...patch, atualizadoPor: me.uid }; segCh(); }
 export async function segFoto(id) { const f = SEG && SEG.fotos[id]; return f ? f.dados : null; }
 export async function segSalvarCfg(cfg) { SEG.cfg = { ...cfg }; segCh(); }
 // Apagar um registro e as fotos dele (a tela só oferece ao administrador).
 export async function segExcluir(col, r) {
-  const k = col === 'seginter' ? 'inter' : 'anom'; SEG[k] = SEG[k].filter(x => x.id !== r.id);
+  const k = segChave(col); SEG[k] = SEG[k].filter(x => x.id !== r.id);
   for (const f of fotosDoReg(r)) delete SEG.fotos[f];
   segCh();
 }
@@ -679,7 +696,7 @@ function docsMock(col) {
   if (c === 'aprov') return Object.entries(S[k].aprov).map(([id, v]) => ({ id, area: id.split('|')[0], mes: monthOfWeek(id.split('|')[1]), v }));
   if (c === 'config') return S[k].config ? [{ id: 'sistema', ...S[k].config }] : [];
   if (col === 'eqlanc') return cache.e.lanc; if (col === 'eqpar') return cache.e.par; if (col === 'eqinsp') return cache.e.insp;
-  if (col === 'seginter') return SEG.inter; if (col === 'seganom') return SEG.anom;
+  if (segChave(col)) return SEG[segChave(col)];
   if (col === 'segfotos') return Object.entries(SEG.fotos).map(([id, f]) => ({ id, ...f }));
   if (col === 'historico') { cache.log.forEach((l, i) => { if (!l.id) l.id = 'h' + i + Date.now().toString(36); }); return cache.log; }
   return [];
@@ -698,7 +715,7 @@ export async function limpezaGravar(ops) {
     else if (c === 'aprov') delete S[k].aprov[o.id];
     else if (c === 'config') { if (o.tipo === 'alterar') aplicarCampos(S[k].config, o.campos); }
     else if (['eqlanc', 'eqpar', 'eqinsp'].includes(o.col)) { const f = { eqlanc: 'lanc', eqpar: 'par', eqinsp: 'insp' }[o.col]; cache.e[f] = cache.e[f].filter(x => x.id !== o.id); eq = true; }
-    else if (o.col === 'seginter' || o.col === 'seganom') { const f = o.col === 'seginter' ? 'inter' : 'anom'; SEG[f] = SEG[f].filter(x => x.id !== o.id); seg = true; }
+    else if (segChave(o.col)) { const f = segChave(o.col); SEG[f] = SEG[f].filter(x => x.id !== o.id); seg = true; }
     else if (o.col === 'segfotos') { delete SEG.fotos[o.id]; seg = true; }
     else if (o.col === 'historico') cache.log = cache.log.filter(x => x.id !== o.id);
   }

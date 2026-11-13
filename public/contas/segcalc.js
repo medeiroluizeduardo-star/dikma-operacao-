@@ -67,6 +67,15 @@ export const comigoSeg = (u, a) => !!u && !!a && !!a.trat && ((!!a.trat.respUid 
 export const fotosDoReg = r => [...new Set([...((r && r.fotos) || []), ...(r && r.trat && r.trat.fotoDepois ? [r.trat.fotoDepois] : [])].filter(Boolean))];
 export const diasTratamento = a => (a && a.status === 'concluida' && a.conclEm && a.em ? Math.max(0, (Date.parse(a.conclEm) - (+a.em)) / 864e5) : null);
 
+// ---- Cartão Amarelo (Direito ao Trabalho Seguro) ----
+// As 3 perguntas do cartão de papel: quem dá o cartão marca a que teve resposta NÃO.
+export const PERG_CARTAO = ['OS RECURSOS ESTÃO SUFICIENTES E ADEQUADOS?', 'ME SINTO EM CONDIÇÕES PARA A TAREFA?', 'O AMBIENTE ESTÁ SEGURO?'];
+// Quem valida (o "Validação" do cartão): Seg. do Trabalho = perfil trata/gestor da Segurança (e o administrador);
+// Líder imediato = o supervisor da área do cartão. Os mesmos que tratam as anomalias; as regras conferem igual.
+export const VALIDA_CARTAO = { lider: 'Líder imediato', seg: 'Seg. do Trabalho' };
+export const validaCartao = (u, c) => !!u && !!c && (trataTudoSeg(u) || supConjs(u).includes(c.conj));
+export const pendenteCartao = c => !!c && c.status !== 'validado';
+
 // ---- Painel ----
 const conta = (l, f) => { const m = new Map(); for (const x of l) for (const k of [].concat(f(x) || [])) if (k) m.set(k, (m.get(k) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)); };
 // Interações por pessoa (o RESPONSÁVEL do formulário): junta grafias diferentes do mesmo nome e mostra a primeira.

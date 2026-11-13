@@ -58,6 +58,8 @@
 //   seganom/{id}              registro de anomalia { data, hora, mes, area, conj, local, regime, desc, conseq, acao, causas,
 //                             sugest, comunic, mat, fotos[], minis[], por, porNome, em, status, trat{resp, respUid, prazo,
 //                             coment, fotoDepois, miniDepois, hist[]}, conclEm }
+//   segcartao/{id}            Cartão Amarelo { data, mes, area, conj, faltou[], motivo, comoSeguro, comunic, mat, fotos[],
+//                             minis[], por, porNome, em, status: pendente|validado, valid{tipo: lider|seg, nome, mat, uid, em} }
 //   segfotos/{id}             { reg, col, tipo: antes|depois, mini, dados, ordem, autor, por, conj, area, mes, em }  uma foto
 //                             por documento (até ~700 KB); a lista usa só as miniaturas que ficam no registro
 // Atividades Bateria: as mesmas coleções com o prefixo b_ (b_config/sistema, b_plano, b_colaboradores, b_situacao,
@@ -1066,14 +1068,14 @@ export async function eImportar(seed) {
 // Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
 // As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
 // dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
-function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], meses: new Set(), v: 0 }; }
+function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], meses: new Set(), v: 0 }; }
 cache.seg = novoSeg();
 let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
 const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
 function segJuntar() {
-  const inter = {}, anom = {};
-  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : anom; for (const x of l) alvo[x.id] = x; }
-  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom);
+  const inter = {}, anom = {}, cartao = {};
+  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segcartao') ? cartao : anom; for (const x of l) alvo[x.id] = x; }
+  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.cartao = Object.values(cartao);
   cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
 }
 function segOuvir(key, q) {
@@ -1094,13 +1096,15 @@ function startSeg() {
   const m = today().slice(0, 7);
   // em aberto: uma consulta por situação (só igualdades: não precisa de índice composto no banco)
   for (const st of ['aberta', 'tratamento']) filtrosSeg().forEach((f, i) => { const k = `seganom|${st}|${i}`; segIniciais.push(k); segOuvir(k, query(collection(db, 'seganom'), where('status', '==', st), ...f)); });
+  // Cartões Amarelos ainda sem validação (de qualquer mês)
+  filtrosSeg().forEach((f, i) => { const k = `segcartao|pendente|${i}`; segIniciais.push(k); segOuvir(k, query(collection(db, 'segcartao'), where('status', '==', 'pendente'), ...f)); });
   segWatch([addMonth(m, -1), m], true);
 }
 export function segWatch(meses, inicial) {
   if (!db || !me || !segOn) return;
   for (const m of new Set(meses.filter(Boolean))) {
     if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
-    for (const col of ['seginter', 'seganom']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
+    for (const col of ['seginter', 'seganom', 'segcartao']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
   }
 }
 // Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
@@ -1126,6 +1130,8 @@ export function segTratar(a, patch, foto) {
   b.update(doc(db, 'seganom', a.id), { ...p, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
   track(b.commit());
 }
+// Validação do Cartão Amarelo (só status, valid e o carimbo de quem gravou).
+export const segValidar = (c, patch) => track(updateDoc(doc(db, 'segcartao', c.id), { ...patch, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
 // Foto grande (só ao tocar na miniatura).
 export async function segFoto(id) { const s = await getDoc(doc(db, 'segfotos', id)); return s.exists() ? s.data().dados : null; }
 // Apagar um registro (só o administrador; as regras conferem): o registro e as fotos dele, num lote só.

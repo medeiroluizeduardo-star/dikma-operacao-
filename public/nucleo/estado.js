@@ -49,7 +49,7 @@ UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0,
 UI.co = { q: '', f: 'ativos', fa: '', mat: null, aba: 'dados' };
 UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' };
 // Segurança (telas/seguranca.js): mês e filtros das listas, situação da fila de anomalias e mês do painel.
-UI.sg = { mes: TODAY.slice(0, 7), area: '', sit: 'abertas', q: '', pMes: TODAY.slice(0, 7) };
+UI.sg = { mes: TODAY.slice(0, 7), area: '', sit: 'abertas', csit: 'pendentes', q: '', pMes: TODAY.slice(0, 7) };
 UI.a = { conj: 'patio', comp: competenciaDe(TODAY), abertos: [], imp: null, q: '', fDia: '', fArea: '', fRota: '', fTurno: '' };
 export const ultimoLogin = () => { try { return localStorage.getItem('dikma-ultimo-login') || ''; } catch (e) { return ''; } };
 // gravarUI: só a memória do aparelho · salvarUI: memória + histórico (botão Voltar).
