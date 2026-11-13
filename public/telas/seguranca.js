@@ -311,7 +311,7 @@ export function criarSeguranca() {
       `<p class="m0"><b>Excluir ${nome}${fotos}?</b> Não dá para desfazer.</p>${anom && abertaSeg(r) ? '<p class="muted small m0">Ela ainda está em aberto: some da fila e dos indicadores.</p>' : ''}`,
       'Excluir', async () => {
         await DB.segExcluir(col, r);
-        DB.log(`Segurança: excluiu ${anom ? 'uma anomalia' : 'uma interação'} de ${dBR(r.data)}${n ? ` (${n} foto${n > 1 ? 's' : ''})` : ''}`);
+        DB.log(`Segurança: excluiu ${anom ? 'uma anomalia' : 'uma interação'} de ${dBR(r.data)}${n ? ` (${n} foto${n > 1 ? 's' : ''})` : ''}`, 'seguranca');
         toast(`${anom ? 'Anomalia excluída' : 'Interação excluída'}${n ? ` com ${n === 1 ? 'a foto' : `as ${n} fotos`}` : ''}`); render();
       });
     const b = document.querySelector('#fSheet [type=submit]'); if (b) { b.classList.remove('pri'); b.classList.add('perigo'); }
@@ -543,7 +543,7 @@ export function criarSeguranca() {
     const cfg = { areas, tipos: linhas(CFG.tipos), regimes: linhas(CFG.regimes), desvios: linhas(CFG.desvios) };
     if (!areas.length || !cfg.tipos.length || !cfg.regimes.length || !cfg.desvios.length) { toast('Nenhuma lista pode ficar vazia'); return; }
     if (new Set(areas.map(a => a.nome)).size !== areas.length) { toast('Há área repetida'); return; }
-    await DB.segSalvarCfg(cfg); CFG = null; DB.log && DB.log('Segurança: listas dos formulários atualizadas'); toast('Listas salvas'); render();
+    await DB.segSalvarCfg(cfg); CFG = null; DB.log && DB.log('Segurança: listas dos formulários atualizadas', 'seguranca'); toast('Listas salvas'); render();
   };
   // Filtros das telas (mês, área, busca)
   document.addEventListener('change', e => {

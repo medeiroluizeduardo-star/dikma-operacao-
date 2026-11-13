@@ -343,7 +343,7 @@ export function editarAcessoSheet(uid) {
   formSheet('Acesso de ' + title(u.nome), u.login ? `<span class="mono">${esc(u.login)}</span>` : 'conta Google', html, 'Salvar acesso', async () => {
     const patch = validarAcesso(lerAcesso('ea'), uid);
     await DB.setUsuario(uid, patch);
-    DB.log(`Acesso de ${u.login || u.nome}: ${patch.papel === 'bloqueado' ? 'bloqueado · ' : ''}${textoAcesso(patch.acesso)}`);
+    DB.log(`Acesso de ${u.login || u.nome}: ${patch.papel === 'bloqueado' ? 'bloqueado · ' : ''}${textoAcesso(patch.acesso)}`, 'administracao');
     toast('Acesso atualizado');
   });
 }
@@ -374,7 +374,7 @@ export function abasPessoaSheet(uid) {
       if (!Object.keys(abas).length) abas = null;
     }
     await DB.setUsuario(uid, { abas });
-    DB.log(`Ajustou as abas de ${u.nome}${abas ? '' : ' (padrão do perfil)'}`);
+    DB.log(`Ajustou as abas de ${u.nome}${abas ? '' : ' (padrão do perfil)'}`, 'administracao');
     toast(abas ? 'Abas personalizadas salvas' : 'Voltou ao padrão do perfil');
   });
 }
@@ -449,7 +449,7 @@ acoes.novaRota = () => {
     const nova = { area, rota: nome, ef: Math.max(0, +$('nrEf').value || 0), carga: Math.max(0, +$('nrCarga').value || 0) };
     const rs = [...rotas()]; rs.splice(posNaArea(rs, area), 0, nova);
     DB.cache.config.rotas = rs; await DB.saveRotas(rs); rebuild();
-    DB.log(`Rota criada: ${nome} (${AREA_S[area]})`); toast(`Rota ${nome} criada`); render();
+    DB.log(`Rota criada: ${nome} (${AREA_S[area]})`, 'operacao'); toast(`Rota ${nome} criada`); render();
   });
 };
 
@@ -469,7 +469,7 @@ acoes.rotaExcluir = async (t, d) => {
   const i = +d.i; const r = rotas()[i]; UI.confirm = null; if (!r) return render();
   const rs = rotas().filter((x, j) => j !== i); const ex = [...rotasExcluidas(), r];
   DB.cache.config.rotas = rs; DB.cache.config.rotasExcluidas = ex; await DB.saveConfig({ rotas: rs, rotasExcluidas: ex }); rebuild();
-  DB.log(`Rota excluída: ${r.rota} (${AREA_S[r.area]})`); toast(`Rota ${r.rota} excluída · dá para restaurar mais abaixo`); render();
+  DB.log(`Rota excluída: ${r.rota} (${AREA_S[r.area]})`, 'operacao'); toast(`Rota ${r.rota} excluída · dá para restaurar mais abaixo`); render();
 };
 acoes.rotaRestaurar = async (t, d) => {
   if (!admDe('ativ')) return;
@@ -477,7 +477,7 @@ acoes.rotaRestaurar = async (t, d) => {
   if (rotas().some(x => x.area === r.area && x.rota === r.rota)) { toast('Já existe uma rota com esse nome nesta área. Mude o nome dela antes de restaurar.'); return; }
   const rs = [...rotas()]; rs.splice(posNaArea(rs, r.area), 0, r); const ex = rotasExcluidas().filter((x, j) => j !== i);
   DB.cache.config.rotas = rs; DB.cache.config.rotasExcluidas = ex; await DB.saveConfig({ rotas: rs, rotasExcluidas: ex }); rebuild();
-  DB.log(`Rota restaurada: ${r.rota} (${AREA_S[r.area]})`); toast(`Rota ${r.rota} restaurada`); render();
+  DB.log(`Rota restaurada: ${r.rota} (${AREA_S[r.area]})`, 'operacao'); toast(`Rota ${r.rota} restaurada`); render();
 };
 
 /* ---------------- IMPORTAR (primeiro acesso) ---------------- */
@@ -499,7 +499,7 @@ acoes.permSalvar = async (t, d) => {
     for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it) && !permR(R, g.mod, p, it.id)) o[it.id] = false;
     out[k] = o;
   }
-  await DB.salvarPermissoes(out); UI.perm = null; DB.log('Alterou as abas por perfil'); toast('Permissões salvas'); render();
+  await DB.salvarPermissoes(out); UI.perm = null; DB.log('Alterou as abas por perfil', 'administracao'); toast('Permissões salvas'); render();
 };
 acoes.permPadrao = (t, d) => { UI.perm = {}; render(); toast('Padrão carregado. Salve para aplicar'); };
 acoes.permDesfazer = (t, d) => { UI.perm = null; render(); };
@@ -510,7 +510,7 @@ acoes.escSalvar = async (t, d) => {
   // mantém a Operação igual: turmas 4x4 também no cadastro dela
   const t4 = (R.regimes['4x4'] || {}).turmas || {};
   if (VIEWS.find(v => v.id === 'econfig').req() && DB.cache.e && DB.cache.e.config) DB.eSalvarConfig({ turmas: Object.fromEntries(Object.entries(t4).filter(([, v]) => v)) });
-  UI.escR = null; DB.log('Atualizou as escalas e turnos'); toast('Escalas salvas · valem para todos os módulos'); render();
+  UI.escR = null; DB.log('Atualizou as escalas e turnos', 'administracao'); toast('Escalas salvas · valem para todos os módulos'); render();
   if (!mudouFer) return;
   if (!isAdmin()) { toast('Escalas salvas · as atividades dos feriados são ajustadas pela rotina automática em até 1 hora'); return; }
   try { await salvo; await aplicarFeriadosAtividades(); } catch (err) { toast('Não foi possível aplicar os feriados agora: ' + (err.message || err) + ' · a rotina automática tenta de novo em até 1 hora'); }
@@ -539,7 +539,7 @@ export async function aplicarFeriadosAtividades() {
     toast(`Aplicando feriados: ${n.feriado + n.volta} atividades`);
     for (let i = 0; i < ops.length; i += 400) await DB.limpezaGravar(ops.slice(i, i + 400));
     const txt = [n.feriado ? `${n.feriado} fora da conta (feriado)` : '', n.volta ? `${n.volta} voltaram a programadas` : ''].filter(Boolean).join(' · ');
-    DB.log(`Feriados nas atividades: ${txt}`); toast(`Feriados aplicados: ${txt}`); render();
+    DB.log(`Feriados nas atividades: ${txt}`, 'operacao'); toast(`Feriados aplicados: ${txt}`); render();
     return n;
   } finally { aplicandoFer = false; }
 }
@@ -551,17 +551,17 @@ acoes.escFicha = (t, d) => {
     const novos = itens.map(c => { const rg = escala().regimes[normRegime(c.regime, escala().regimes)]; if (rg && rg.tipo === 'ciclo' && !letra(c.turma)) { const tf = turmaFicha(c.nome); if (tf) { mudou = true; n++; return { ...c, turma: tf }; } } return c; });
     if (mudou) DB.salvarColabsArea(a, novos, k);
   }
-  DB.log(`Gravou ${n} turma(s) a partir das fichas do Efetivo`); toast(`${n} turma(s) gravadas`); render();
+  DB.log(`Gravou ${n} turma(s) a partir das fichas do Efetivo`, 'operacao'); toast(`${n} turma(s) gravadas`); render();
 };
 acoes.askDel = (t, d) => { UI.confirm = 'del:' + d.id; render(); };
 acoes.limparPF = (t, d) => { UI.pRota = ''; UI.pQ = ''; UI.more = 0; render(); };
 acoes.del = (t, d) => {
   const p = PL.get(d.id); const itens = DB.cache.plano[p.area].map(x => (x.id === d.id ? { ...x, ativo: false } : x));
-  DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); DB.log(`Plano padrão: removeu ${p.id} · ${p.ativ}`); UI.confirm = null; toast(`${p.id} removida do plano`); render(); planoNaProgramacao({ ...p, ativo: false });
+  DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); DB.log(`Plano padrão: removeu ${p.id} · ${p.ativ}`, 'operacao'); UI.confirm = null; toast(`${p.id} removida do plano`); render(); planoNaProgramacao({ ...p, ativo: false });
 };
 acoes.gerar = async (t, d) => {
   UI.busy = true; render();
-  try { await DB.gerarMes(UI.gMes, DB.cache.plano); DB.log(`Gerou a programação de ${monthLabel(UI.gMes)}`); toast(`${monthLabel(UI.gMes)} gerado`); UI.mes = UI.gMes; UI.ini = null; UI.gMes = null; }
+  try { await DB.gerarMes(UI.gMes, DB.cache.plano); DB.log(`Gerou a programação de ${monthLabel(UI.gMes)}`, 'operacao'); toast(`${monthLabel(UI.gMes)} gerado`); UI.mes = UI.gMes; UI.ini = null; UI.gMes = null; }
   catch (err) { toast('Erro ao gerar: ' + err.message); }
   UI.busy = false; render();
 };
@@ -570,7 +570,7 @@ acoes.importar = async (t, d) => {
   try {
     const seed = await DB.seed(SETS[SK].seed);
     await DB.importar(seed, [CUR_MONTH, addMonth(CUR_MONTH, 1), addMonth(CUR_MONTH, 2)], UI.impIni);
-    DB.log('Importou os dados da planilha e gerou a programação'); toast('Dados importados');
+    DB.log('Importou os dados da planilha e gerou a programação', 'operacao'); toast('Dados importados');
   } catch (err) { toast('Erro ao importar: ' + err.message); }
   UI.busy = false; render();
 };

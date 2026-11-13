@@ -81,7 +81,7 @@ async function gerarRelatorio() {
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.pptx`;
     mod.baixarBlob(blob, nome);
-    DB.log(`Relatório fotográfico ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`);
+    DB.log(`Relatório fotográfico ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`, 'administracao');
     terminar('', `Relatório gerado: ${nome} (${FA.fmtBytes(blob.size)}, ${n0(lim.total - lim.fora)} fotos).${lim.fora ? ` ${plural(lim.fora, 'foto ficou', 'fotos ficaram')} de fora pelo limite de ${FA.MAX_FOTOS_PPTX}: escolha uma rota ou um período menor.` : ''}`);
     toast('Relatório em PowerPoint baixado');
   } catch (e) { terminar(msgErro(e)); toast('Não foi possível gerar o relatório'); }
@@ -118,7 +118,7 @@ async function confirmarSalvo() {
     let feito = 0;
     for (const l of lotes) { await DB.marcarExportadas(Z.conj, l, Z.lote); feito += l.length; progresso(feito, itens.length, `Marcando ${n0(feito)} de ${n0(itens.length)}`); }
     Z.marcado = true; Z.blob = null;
-    DB.log(`Fotos exportadas: ${n0(itens.length)} no lote ${Z.lote} (${Z.nome})${Z.divergentes ? ` · ${Z.divergentes} com SHA-256 divergente` : ''}`);
+    DB.log(`Fotos exportadas: ${n0(itens.length)} no lote ${Z.lote} (${Z.nome})${Z.divergentes ? ` · ${Z.divergentes} com SHA-256 divergente` : ''}`, 'administracao');
     terminar('', `${plural(itens.length, 'foto marcada', 'fotos marcadas')} como exportada no lote ${Z.lote}.`);
     A.chave = ''; carregar(); toast('Fotos marcadas como exportadas');
   } catch (e) { terminar(msgErro(e)); toast('Erro ao marcar: veja a mensagem'); }
@@ -158,7 +158,7 @@ async function executar(acao, fotos, k) {
   let feito = 0;
   try {
     for (const l of lotes) { await fn(k, l); feito += l.length; progresso(feito, ids.length, `${n0(feito)} de ${n0(ids.length)}`); }
-    DB.log(`Fotos das atividades ${SETS[k].curto}: ${plural(ids.length, 'foto ' + NOMES[acao][1], 'fotos ' + NOMES[acao][2])}`);
+    DB.log(`Fotos das atividades ${SETS[k].curto}: ${plural(ids.length, 'foto ' + NOMES[acao][1], 'fotos ' + NOMES[acao][2])}`, 'administracao');
     terminar('', `${plural(ids.length, 'foto ' + NOMES[acao][1], 'fotos ' + NOMES[acao][2])}.`);
     toast(`${plural(ids.length, 'foto ' + NOMES[acao][1], 'fotos ' + NOMES[acao][2])}`);
   } catch (e) { terminar(`${msgErro(e)} · feito: ${n0(feito)} de ${n0(ids.length)}.`); toast('A ação parou no meio · veja a mensagem'); }

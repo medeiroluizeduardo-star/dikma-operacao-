@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { acessoDoLegado } from './legado.mjs';
-import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, collection, query, where, serverTimestamp, writeBatch, Timestamp, deleteField, increment, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc as setDoc0, updateDoc as updateDoc0, deleteDoc, collection, query, where, orderBy, limit, serverTimestamp, writeBatch as writeBatch0, Timestamp, deleteField, increment, arrayUnion, FieldPath } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -55,6 +55,9 @@ const USUARIOS = {
   segReg2: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] },
   segTrata: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'trata' }, escopos: [] },
   segGestor: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'gestor' }, escopos: [] },
+  // Histórico de alterações: Gestor de um módulo só.
+  opGestorSo: { papel: 'gestor', modulos: ['operacao'], acesso: { operacao: 'gestor' }, escopos: ['patio'] },
+  geGestorSo: { papel: 'gestor', modulos: ['gestao'], acesso: { gestao: 'gestor' }, escopos: [] },
   segLeitor: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'leitor' }, escopos: [] },
   supPatio: { papel: 'supervisor', area: 'PREPARAÇÃO', area2: null, modulos: ['operacao', 'gestao'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio'] },
   supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
@@ -75,7 +78,20 @@ for (const [k, u] of Object.entries(USUARIOS)) {
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
 
 // db('liderRec') = banco visto por essa pessoa; db(null) = sem login; db('semPerfil') = conta sem cadastro no sistema
-const db = uid => (uid ? env.authenticatedContext(uid).firestore() : env.unauthenticatedContext().firestore());
+const UID = new WeakMap();   // banco de cada usuário → uid (para a marca de quem gravou)
+const db = uid => { if (!uid) return env.unauthenticatedContext().firestore(); const f = env.authenticatedContext(uid).firestore(); UID.set(f, uid); if (f._delegate) UID.set(f._delegate, uid); return f; };
+// Quem gravou e quando: o site (nucleo/data.js › marca) manda atualizadoPor e atualizadoEm em toda gravação das coleções
+// principais. Estas versões de setDoc, updateDoc e writeBatch fazem o mesmo, como o site; o teste "quem gravou e
+// quando" usa as originais (setDoc0, updateDoc0) para provar que sem a marca, ou com outra pessoa, o banco recusa.
+const COM_MARCA = /^((b_)?(semanas|situacao|colaboradores)|gcolab|gocorr)$/;
+const marcaDe = ref => { const uid = UID.get(ref.firestore); return uid && COM_MARCA.test(ref.parent.id) ? { atualizadoPor: uid, atualizadoEm: serverTimestamp() } : null; };
+const comMarca = (ref, data, criar) => { const m = marcaDe(ref); if (!m) return data; return { ...data, ...m, ...(criar && ref.parent.id === 'gocorr' && !('criadoEm' in data) ? { criadoEm: serverTimestamp() } : {}) }; };
+const argsUpd = (ref, args) => { const m = marcaDe(ref); if (!m) return args; return typeof args[0] === 'string' || args[0] instanceof FieldPath ? [...args, 'atualizadoPor', m.atualizadoPor, 'atualizadoEm', m.atualizadoEm] : [{ ...args[0], ...m }]; };
+const setDoc = (ref, data, opt) => (opt ? setDoc0(ref, comMarca(ref, data, true), opt) : setDoc0(ref, comMarca(ref, data, true)));
+const updateDoc = (ref, ...args) => updateDoc0(ref, ...argsUpd(ref, args));
+const writeBatch = f => { const b = writeBatch0(f); const set = b.set.bind(b), upd = b.update.bind(b);
+  b.set = (ref, data, opt) => (opt ? set(ref, comMarca(ref, data, true), opt) : set(ref, comMarca(ref, data, true)));
+  b.update = (ref, ...args) => upd(ref, ...argsUpd(ref, args)); return b; };
 
 before(async () => {
   const host = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
@@ -475,12 +491,73 @@ test('Fotos: config/fotos todos leem; só o administrador grava, dentro dos limi
 });
 
 // ---------------- histórico, integração e avisos ----------------
-test('histórico: cada um registra só em nome próprio, ninguém altera e só o administrador apaga (Limpeza de dados)', async () => {
-  await assertSucceeds(setDoc(doc(db('liderRec'), 'historico', 'h2'), { at: serverTimestamp(), uid: 'liderRec', nome: 'x', t: 'y' }));
-  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), { at: serverTimestamp(), uid: 'admin', nome: 'x', t: 'y' }));
+test('histórico: cada um registra só em nome próprio (nome do cadastro, hora do servidor, com o módulo), ninguém altera e só o administrador apaga', async () => {
+  const h = (uid, x = {}) => ({ at: serverTimestamp(), uid, nome: uid, t: 'y', mod: 'operacao', ...x });
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'historico', 'h2'), h('liderRec')));
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), h('liderRec', { uid: 'admin' })), 'em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), h('liderRec', { nome: 'Outro Nome' })), 'com outro nome');
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), h('liderRec', { at: Timestamp.fromMillis(Date.now() - 864e5) })), 'com a hora do aparelho');
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), { at: serverTimestamp(), uid: 'liderRec', nome: 'liderRec', t: 'y' }), 'sem o módulo');
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), h('liderRec', { mod: 'outro' })), 'módulo que não existe');
+  await assertFails(setDoc(doc(db('liderRec'), 'historico', 'h3'), h('liderRec', { t: 'x'.repeat(1001) })), 'texto longo demais');
+  await assertFails(setDoc(doc(db('bloq'), 'historico', 'h3'), h('bloq')), 'bloqueado');
   await assertFails(updateDoc(doc(db('admin'), 'historico', 'h1'), { t: 'z' }));
   for (const u of ['liderRec', 'gestorP', 'gestorG', 'coord', 'sup', 'admModulo', 'segGestor']) await assertFails(deleteDoc(doc(db(u), 'historico', 'h1')), u);
   await assertSucceeds(deleteDoc(doc(db('admin'), 'historico', 'h1')));
+});
+test('histórico: só o administrador (tudo, também os antigos sem módulo) e o gestor de cada módulo (só o do módulo dele) leem', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const d = ctx.firestore(); const at = Timestamp.now();
+    for (const m of ['operacao', 'gestao', 'seguranca', 'rh', 'administracao']) await setDoc0(doc(d, 'historico', 'hm_' + m), { at, uid: 'admin', nome: 'admin', t: 'x', mod: m });
+    await setDoc0(doc(d, 'historico', 'hm_antigo'), { at, uid: 'admin', nome: 'admin', t: 'ocorrência para Fulano' });
+  });
+  const le = (uid, id) => getDoc(doc(db(uid), 'historico', id));
+  const lista = (uid, m) => getDocs(m ? query(collection(db(uid), 'historico'), where('mod', '==', m), orderBy('at', 'desc'), limit(40)) : query(collection(db(uid), 'historico'), orderBy('at', 'desc'), limit(40)));
+  for (const id of ['hm_operacao', 'hm_gestao', 'hm_seguranca', 'hm_rh', 'hm_administracao', 'hm_antigo']) await assertSucceeds(le('admin', id), id);
+  await assertSucceeds(lista('admin'));
+  // gestor de cada módulo: só o do módulo (no RH, o Administrativo); a Administração e os antigos, não
+  const casos = [['opGestorSo', 'operacao'], ['geGestorSo', 'gestao'], ['segGestor', 'seguranca'], ['rhSo', 'rh']];
+  for (const [uid, m] of casos) {
+    await assertSucceeds(le(uid, 'hm_' + m), uid + ' lê ' + m);
+    await assertSucceeds(lista(uid, m), uid + ' lista ' + m);
+    for (const o of ['operacao', 'gestao', 'seguranca', 'rh', 'administracao', 'antigo'].filter(x => x !== m)) await assertFails(le(uid, 'hm_' + o), uid + ' não lê ' + o);
+    await assertFails(lista(uid), uid + ' não lista tudo');
+  }
+  // quem não é gestor do módulo não lê nada (antes, todo usuário ativo lia o histórico)
+  for (const uid of ['liderRec', 'sup', 'coord', 'segLeitor', 'segReg', 'rhLeitorNovo', 'leitorG', 'admModulo', 'bloq']) {
+    for (const m of ['operacao', 'seguranca', 'rh', 'administracao', 'antigo']) await assertFails(le(uid, 'hm_' + m), uid + ' ' + m);
+    await assertFails(lista(uid, 'operacao'), uid + ' lista operacao');
+  }
+  await assertFails(lista('admModulo', 'administracao'), 'Administração Dos módulos não lê a Administração');
+});
+test('quem gravou e quando: semanas, presença, cadastro, fichas e ocorrências só aceitam a gravação com a marca de quem está logado e a hora do servidor', async () => {
+  const M = (uid, x = {}) => ({ atualizadoPor: uid, atualizadoEm: serverTimestamp(), ...x });
+  const ontem = Timestamp.fromMillis(Date.now() - 864e5);
+  const d = db('liderRec');
+  // semanas: com a marca passa; sem, com outra pessoa ou com a hora do aparelho, não
+  await assertSucceeds(updateDoc0(doc(d, 'semanas', SEM), M('liderRec', { 's.REC-009': 'R______' })));
+  await assertFails(updateDoc0(doc(d, 'semanas', SEM), { 's.REC-009': 'N______' }), 'semana sem a marca');
+  await assertFails(updateDoc0(doc(d, 'semanas', SEM), M('sup', { 's.REC-009': 'N______' })), 'semana em nome de outra pessoa');
+  await assertFails(updateDoc0(doc(d, 'semanas', SEM), M('liderRec', { 's.REC-009': 'N______', atualizadoEm: ontem })), 'semana com a hora do aparelho');
+  // presença do dia
+  await assertSucceeds(setDoc0(doc(d, 'situacao', '2026-10'), M('liderRec', { v: { 'C001|2026-10-10': 'FT' } }), { merge: true }));
+  await assertFails(setDoc0(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-11': 'FT' } }, { merge: true }), 'presença sem a marca');
+  await assertFails(setDoc0(doc(d, 'situacao', '2026-10'), M('admin', { v: { 'C001|2026-10-11': 'FT' } }), { merge: true }), 'presença em nome de outra pessoa');
+  // cadastro das Atividades e fichas (administração)
+  await assertSucceeds(setDoc0(doc(db('admin'), 'colaboradores', 'RECEBIMENTO'), M('admin', { itens: [] })));
+  await assertFails(setDoc0(doc(db('admin'), 'colaboradores', 'RECEBIMENTO'), { itens: [] }), 'cadastro sem a marca');
+  await assertSucceeds(setDoc0(doc(db('gestorG'), 'gcolab', 'GERAL'), M('gestorG', { itens: [] })));
+  await assertFails(setDoc0(doc(db('gestorG'), 'gcolab', 'GERAL'), M('admin', { itens: [] })), 'fichas em nome de outra pessoa');
+  // ocorrências: cria com criadoPor e criadoEm do servidor; altera com a marca
+  const g = db('liderG');
+  const oc = x => ({ area: 'RECEBIMENTO', status: 'pendente', desc: 'x', criadoPor: 'liderG', criadoEm: serverTimestamp(), ...x });
+  await assertSucceeds(setDoc0(doc(g, 'gocorr', 'qm1'), oc()));
+  await assertFails(setDoc0(doc(g, 'gocorr', 'qm2'), oc({ criadoEm: ontem })), 'ocorrência com a hora do aparelho');
+  await assertSucceeds(updateDoc0(doc(g, 'gocorr', 'qm1'), M('liderG', { recolhe: 'LÍDER GESTÃO' })));
+  await assertFails(updateDoc0(doc(g, 'gocorr', 'qm1'), { recolhe: '' }), 'ocorrência alterada sem a marca');
+  // Bateria (b_) igual
+  await assertFails(updateDoc0(doc(db('sup'), 'b_semanas', SEM_B1), { 's.B1-009': 'R______' }), 'Bateria sem a marca');
+  await assertSucceeds(updateDoc0(doc(db('sup'), 'b_semanas', SEM_B1), M('sup', { 's.B1-009': 'R______' })));  await env.withSecurityRulesDisabled(async ctx => { await deleteDoc(doc(ctx.firestore(), 'gocorr', 'qm1')); });
 });
 test('integração com o Senior: só o administrador lê', async () => {
   await assertFails(getDoc(doc(db('gestorG'), 'integracao', 'senior')));
@@ -787,17 +864,21 @@ test('Painel Coqueria: cada pessoa ativa lê e grava só o próprio painel; ning
 // ---------- plano de ação das causas ----------
 test('plano de ação: supervisor cria e conclui na área dele; coordenador também em todas; líder e leitura só leem', async () => {
   const a = { causa: 'Efetivo insuficiente', area: 'RECEBIMENTO', acao: 'Remanejar duas pessoas da Melhorias', resp: 'X', prazo: '2026-10-30', status: 'aberta' };
-  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), a));
-  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), { status: 'feita' }, { merge: true }));
+  const P = uid => ({ por: uid, porNome: uid });
+  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), { ...a, ...P('sup') }));
+  await assertSucceeds(setDoc(doc(db('sup'), 'acoes', 'ac1'), { status: 'feita', atualizadoPor: 'sup', atualizadoEm: new Date().toISOString() }, { merge: true }));
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac1'), { status: 'aberta' }, { merge: true }), 'sem dizer quem alterou');
+  await assertFails(setDoc(doc(db('coord'), 'acoes', 'ac1'), { status: 'aberta', atualizadoPor: 'sup', atualizadoEm: new Date().toISOString() }, { merge: true }), 'em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac1b'), { ...a, ...P('coord') }), 'cria em nome de outra pessoa');
   await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac1'), { area: 'PREPARAÇÃO' }, { merge: true }), 'não troca a área');
-  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac2'), { ...a, area: 'PREPARAÇÃO' }), 'fora da área dele');
-  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac3'), { ...a, area: 'TODAS' }), 'supervisor não cria para todas as áreas');
-  await assertSucceeds(setDoc(doc(db('coord'), 'acoes', 'ac4'), { ...a, area: 'TODAS' }));
-  await assertFails(setDoc(doc(db('liderRec'), 'acoes', 'ac5'), a), 'líder não cria ação');
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac2'), { ...a, ...P('sup'), area: 'PREPARAÇÃO' }), 'fora da área dele');
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac3'), { ...a, ...P('sup'), area: 'TODAS' }), 'supervisor não cria para todas as áreas');
+  await assertSucceeds(setDoc(doc(db('coord'), 'acoes', 'ac4'), { ...a, ...P('coord'), area: 'TODAS' }));
+  await assertFails(setDoc(doc(db('liderRec'), 'acoes', 'ac5'), { ...a, ...P('liderRec') }), 'líder não cria ação');
   await assertSucceeds(getDoc(doc(db('liderRec'), 'acoes', 'ac1')));
-  await assertFails(setDoc(doc(db('freqLeitor'), 'acoes', 'ac6'), a));
-  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac7'), { ...a, acao: 'x'.repeat(401) }), 'texto muito longo');
-  await assertSucceeds(setDoc(doc(db('sup'), 'b_acoes', 'b1'), { ...a, area: 'BATERIA 1' }));
+  await assertFails(setDoc(doc(db('freqLeitor'), 'acoes', 'ac6'), { ...a, ...P('freqLeitor') }));
+  await assertFails(setDoc(doc(db('sup'), 'acoes', 'ac7'), { ...a, ...P('sup'), acao: 'x'.repeat(401) }), 'texto muito longo');
+  await assertSucceeds(setDoc(doc(db('sup'), 'b_acoes', 'b1'), { ...a, ...P('sup'), area: 'BATERIA 1' }));
   await assertFails(deleteDoc(doc(db('sup'), 'acoes', 'ac1')));
 });
 
@@ -809,7 +890,7 @@ test('perfil por módulo: líder na Operação aponta e lança a presença; como
   await assertFails(updateDoc(doc(d, 'semanas', SEM_PREP), { s: { 'PRE-001': 'R______' } }), 'fora da área');
   await assertSucceeds(setDoc(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-09': 'FT' } }, { merge: true }));
   await assertFails(setDoc(doc(d, 'plano', 'RECEBIMENTO'), { itens: [] }), 'leitor na Gestão não grava o plano');
-  await assertFails(setDoc(doc(d, 'acoes', 'mx1'), { causa: 'Chuva', area: 'RECEBIMENTO', acao: 'Cobrir o pátio' }), 'leitor na Gestão não cria ação');
+  await assertFails(setDoc(doc(d, 'acoes', 'mx1'), { causa: 'Chuva', area: 'RECEBIMENTO', acao: 'Cobrir o pátio', por: 'opLiderGeLeitor' }), 'leitor na Gestão não cria ação');
   await assertFails(setDoc(doc(d, 'aprov', SEM), { area: 'RECEBIMENTO', mes: '2026-10', v: {} }, { merge: true }), 'líder não aprova');
   await assertFails(getDoc(doc(d, 'gcolab', 'RECEBIMENTO')), 'Gestão sem as Fichas');
   await assertFails(getDoc(doc(d, 'b_semanas', SEM_B1)), 'sem o escopo Bateria');
@@ -819,7 +900,7 @@ test('perfil por módulo: o papel antigo (o mais alto) não vale mais quando há
   await assertFails(setDoc(doc(d, 'aprov', SEM), { area: 'RECEBIMENTO', mes: '2026-10', v: {} }, { merge: true }), 'aprovar é da Operação · Supervisor');
   await assertSucceeds(updateDoc(doc(d, 'semanas', SEM), { s: { 'REC-002': 'R______' } }));
   await assertFails(updateDoc(doc(d, 'semanas', SEM_PREP), { s: { 'PRE-002': 'R______' } }), 'a 2ª área é só do supervisor; na Operação é líder');
-  await assertSucceeds(setDoc(doc(d, 'acoes', 'mx2'), { causa: 'Chuva', area: 'PREPARAÇÃO', acao: 'Cobrir o pátio' }), 'ações pela Gestão · Supervisor, na 2ª área');
+  await assertSucceeds(setDoc(doc(d, 'acoes', 'mx2'), { causa: 'Chuva', area: 'PREPARAÇÃO', acao: 'Cobrir o pátio', por: 'opLiderGeSup' }), 'ações pela Gestão · Supervisor, na 2ª área');
   await assertFails(setDoc(doc(db('admModSemGestor'), 'plano', 'RECEBIMENTO'), { itens: [] }), 'Dos módulos sem ser Gestor da Gestão');
   await assertFails(getDoc(doc(db('admModSemGestor'), 'seeds', 'seed')));
 });

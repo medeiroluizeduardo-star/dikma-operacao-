@@ -97,6 +97,16 @@ export function marcasDe(u) {
   if (perfilDe(u, 'rh')) l.push('frequencia');
   return l;
 }
+// Histórico de alterações: cada registro guarda o módulo (mod). O administrador vê tudo, também os registros antigos,
+// sem módulo; o gestor de cada módulo vê só o do módulo dele (no RH, que não tem Gestor, o Administrativo). As
+// alterações da Administração (usuários, perfis, escalas, limpeza) ficam só com o administrador. firestore.rules faz a
+// mesma conta (veHist).
+export const MODS_HIST = ['operacao', 'gestao', 'seguranca', 'rh', 'administracao'];
+export const GESTOR_HIST = { operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo' };
+export const NOME_MOD_HIST = { operacao: 'Operação', gestao: 'Gestão', seguranca: 'Segurança', rh: 'RH', administracao: 'Administração' };
+// Módulos cujo histórico a pessoa vê (o administrador: todos).
+export const modsHistorico = u => (ehAdminU(u) ? [...MODS_HIST] : Object.keys(GESTOR_HIST).filter(m => perfilDe(u, m) === GESTOR_HIST[m]));
+export const veHistorico = u => modsHistorico(u).length > 0;
 // RH: Frequência e férias (ler) e quem edita (Administrativo; somente leitura só consulta).
 export const temFreq = u => !!perfilDe(u, 'rh');
 export const editaAdm = u => ['admin', 'administrativo'].includes(perfilDe(u, 'rh'));

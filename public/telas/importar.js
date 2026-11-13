@@ -266,7 +266,7 @@ export function criarImportador(X) {
       if (sync.length) PES.sincronizarVarios(sync);
       const nOc = ST.ocorr ? P.ocorr.length : 0;
       if (nOc) await DB.gImportarOcorrencias(P.ocorr);
-      DB.log(`Efetivo: importou ${P.origem} (${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''})`);
+      DB.log(`Efetivo: importou ${P.origem} (${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''})`, 'gestao');
       toast(`Importado: ${P.novos.length} novos, ${nAt} atualizados${nOc ? ', ' + nOc + ' ocorrências' : ''}${nEx ? ', ' + nEx + ' excluídos' : ''}`);
       if (P.senior && DB.gSeniorAplicado) DB.gSeniorAplicado();
       ST.P = null; ST.arq = '';

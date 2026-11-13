@@ -143,7 +143,7 @@ acoes.allok = (t, d) => {
     const agora = is.filter(i => doc.d[i][k] === 'P'); if (!agora.length) { UI.confirm = null; render(); return; }
     const ch = agora.map(i => localChange(doc, i, k, 'R'));
     gravarApont(doc, ch, imgs && imgs.length ? montarFotos(doc, k, agora, imgs, 'R') : null);
-    DB.log(`${rota} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}: ${ch.length} atividades marcadas como realizadas${imgs && imgs.length ? ` (${imgs.length === 1 ? '1 foto' : imgs.length + ' fotos'})` : ''}`);
+    DB.log(`${rota} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}: ${ch.length} atividades marcadas como realizadas${imgs && imgs.length ? ` (${imgs.length === 1 ? '1 foto' : imgs.length + ' fotos'})` : ''}`, 'operacao');
     UI.confirm = null; toast(`${ch.length} atividades marcadas como realizadas${imgs && imgs.length ? ` · ${imgs.length === 1 ? '1 foto para todas' : imgs.length + ' fotos para todas'}` : ''}`); render();
   };
   if (!is.some(i => precisaFotos(doc, i, k, 'R'))) return marcar(null);

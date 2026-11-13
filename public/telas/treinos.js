@@ -160,7 +160,7 @@ function criarTreinos() {
       const dados = { nome, mat, tipo, area, conj: setDaArea(area) || '', realizado, validade, obs: $('trObs').value.trim(), na,
         turno: $('trTurno2').value.trim(), funcao: $('trFunc').value.trim().toUpperCase(), admissao: $('trAdm').value || null };
       await DB.treinoSalvar(t ? t.id : null, dados);
-      DB.log(`Treinamentos: ${tipo} de ${title(nome)}${validade ? ` válido até ${dBR(validade)}` : ''}`); toast('Treinamento salvo'); render();
+      DB.log(`Treinamentos: ${tipo} de ${title(nome)}${validade ? ` válido até ${dBR(validade)}` : ''}`, 'seguranca'); toast('Treinamento salvo'); render();
     });
     const sugerir = () => { const f = $('trFeito').value, m = mesesSugeridos($('trTp').value.trim()); if (f && m && !$('trVal').dataset.mexeu) $('trVal').value = addMeses(f, m); };
     ['trFeito', 'trTp'].forEach(k => $(k).addEventListener('input', sugerir));
@@ -168,7 +168,7 @@ function criarTreinos() {
     const ren = $('trRenovar');
     if (ren) ren.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; novo({ nome: t.nome, mat: t.mat, tipo: tipoOficial(t.tipo), setor: t.setor, area: t.area, conj: t.conj, supervisor: t.supervisor, turno: t.turno, funcao: t.funcao, admissao: t.admissao }); });
     const del = $('trDel');
-    if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.treinoExcluir(t.id); DB.log(`Treinamentos: excluiu ${t.tipo} de ${title(t.nome || '')}`); document.getElementById('layer').innerHTML = ''; toast('Treinamento excluído'); render(); });
+    if (del) del.addEventListener('click', () => { if (del.dataset.ok !== '1') { del.dataset.ok = '1'; del.textContent = 'Excluir mesmo?'; return; } DB.treinoExcluir(t.id); DB.log(`Treinamentos: excluiu ${t.tipo} de ${title(t.nome || '')}`, 'seguranca'); document.getElementById('layer').innerHTML = ''; toast('Treinamento excluído'); render(); });
   }
   // Renovação: novo registro da mesma pessoa e tipo (o antigo fica no histórico como "Renovado").
   function novo(base) {
@@ -179,7 +179,7 @@ function criarTreinos() {
       const realizado = $('trFeito').value || null, validade = $('trVal').value || null;
       if (realizado && validade && validade < realizado) throw new Error('A validade não pode ser antes da data em que foi feito.');
       await DB.treinoSalvar(null, { nome: base.nome, mat: base.mat || '', tipo: base.tipo, setor: base.setor || '', area: base.area || '', conj: base.conj || '', supervisor: base.supervisor || '', turno: base.turno || '', funcao: base.funcao || '', admissao: base.admissao || null, realizado, validade, obs: $('trObs').value.trim() });
-      DB.log(`Treinamentos: renovou ${base.tipo} de ${title(base.nome || '')}${validade ? ` até ${dBR(validade)}` : ''}`); toast('Renovação salva'); render();
+      DB.log(`Treinamentos: renovou ${base.tipo} de ${title(base.nome || '')}${validade ? ` até ${dBR(validade)}` : ''}`, 'seguranca'); toast('Renovação salva'); render();
     });
   }
   // Exporta no formato do controle da empresa (uma linha por colaborador) e, numa 2ª aba, a lista com o histórico.
@@ -234,7 +234,7 @@ function criarTreinos() {
         + (Object.keys(porArea).length ? `<br>Áreas: ${Object.keys(porArea).sort((a, b) => ordArea(a) - ordArea(b)).map(a => esc(tArea(a))).join(', ')}${achouArea ? ` (${achouArea} pela Presença do dia)` : ''}.` : '') : '';
       const gravar = conj => async () => {
         const itens = novos.map(t => (conjDe(t) ? t : { ...t, conj }));
-        try { await DB.treinosImportar(itens); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }
+        try { await DB.treinosImportar(itens); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`, 'seguranca'); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }
         catch (e) { toast('Não foi possível gravar: ' + ((e && e.message) || e)); }
       };
       const qual = n ? `Gravar ${n} ${pl(n, 'treinamento', 'treinamentos')}` : 'Gravar os "não se aplica"';

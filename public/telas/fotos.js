@@ -158,7 +158,7 @@ export async function verFotosCel(doc, i, k) {
       const x = lista.find(y => y.id === sim.dataset.sim); if (!x) return;
       sim.disabled = true; sim.textContent = 'Apagando…';
       DB.apagarFotoAtividade(x, conj).then(() => {
-        DB.log(`${p.ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → foto apagada${(x.refs || []).length > 1 ? ` (valia para ${x.refs.length} atividades)` : ''}`);
+        DB.log(`${p.ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → foto apagada${(x.refs || []).length > 1 ? ` (valia para ${x.refs.length} atividades)` : ''}`, 'operacao');
         toast('Foto apagada'); fechar(); render();
       }).catch(() => { sim.disabled = false; sim.innerHTML = `${I.lixo} Apagar a foto`; toast('Não deu para apagar a foto agora. Confira o sinal e tente de novo.'); });
     }
@@ -179,7 +179,7 @@ export async function verFotosCel(doc, i, k) {
 function juntarFotos(doc, i, k) {
   const cfg = cfgF(); const tem = fotosDaCel(doc, doc.ids[i], k); const sit = doc.d[i][k];
   passoFotos({ titulo: 'Adicionar foto', sub: `<b>${esc((PL.get(doc.ids[i]) || {}).ativ || '')}</b><br>${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, cfg: { obrig: true, min: Math.max(tem + 1, cfg.min), max: cfg.max }, tem, rotuloOk: 'Salvar as fotos',
-    aoConfirmar: imgs => { if (!canEdit(doc.area)) return toast('Seu perfil não pode apontar nesta área'); gravarApont(doc, [], montarFotos(doc, k, [i], imgs, sit)); DB.log(`${(PL.get(doc.ids[i]) || {}).ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${imgs.length} foto${imgs.length > 1 ? 's' : ''} anexada${imgs.length > 1 ? 's' : ''}`); toast(imgs.length > 1 ? `${imgs.length} fotos salvas` : 'Foto salva'); render(); } });
+    aoConfirmar: imgs => { if (!canEdit(doc.area)) return toast('Seu perfil não pode apontar nesta área'); gravarApont(doc, [], montarFotos(doc, k, [i], imgs, sit)); DB.log(`${(PL.get(doc.ids[i]) || {}).ativ || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${imgs.length} foto${imgs.length > 1 ? 's' : ''} anexada${imgs.length > 1 ? 's' : ''}`, 'operacao'); toast(imgs.length > 1 ? `${imgs.length} fotos salvas` : 'Foto salva'); render(); } });
 }
 // Fotos da atividade na semana (Programação): abre o primeiro dia com foto; os outros dias ficam no seletor.
 acoes.verFotosSem = (t, d) => {
@@ -246,7 +246,7 @@ acoes.cfFotosSalvar = async () => {
   if (!isAdmin()) return toast('Só o administrador altera a configuração das fotos');
   const R = lerForm(); const er = validarCfgFotos(R); if (er) return toast(er);
   await DB.salvarCfgFotos(R);
-  DB.log(`Fotos das atividades: ${R.obrig ? `obrigatória, ${R.min} a ${R.max} fotos (${R.situacoes.map(s => SITUACOES_FOTO.find(x => x[0] === s)[1]).join(', ')})` : `opcional, até ${R.max} fotos`}`);
+  DB.log(`Fotos das atividades: ${R.obrig ? `obrigatória, ${R.min} a ${R.max} fotos (${R.situacoes.map(s => SITUACOES_FOTO.find(x => x[0] === s)[1]).join(', ')})` : `opcional, até ${R.max} fotos`}`, 'administracao');
   UI.fotoR = null; toast('Configuração das fotos salva'); render();
 };
 acoes.cfFotosDesfazer = () => { UI.fotoR = null; render(); };

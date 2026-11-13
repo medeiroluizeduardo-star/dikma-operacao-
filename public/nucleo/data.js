@@ -13,7 +13,7 @@
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" },
 //                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
 //                             fe: { "REC-001|0": "Finados" } }     fe = feriado sem operação (a célula fica "_"; feriados.js)
-//   historico/{auto}          { at, uid, nome, t }
+//   historico/{auto}          { at, uid, nome, t, mod } (mod = módulo; os antigos não têm e só o administrador lê)
 //   treinos/{id}              { mat, nome, setor, tipo, realizado, validade, obs }  treinamentos, NRs e ASO (RH e Segurança; contas/treinos.js)
 //   gestao/config             { codigo, revisao, declaracao, tipos[] }      (módulo Gestão)
 //   gcolab/{ÁREA}             { itens: [ {mat, nome, area, funcao, turma, lider, adm, dem, intAnt} ] }  fichas, uma por área
@@ -75,7 +75,7 @@ import {
 import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU } from '../contas/acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST } from '../contas/acessos.js';
 import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
@@ -283,7 +283,9 @@ function startData() {
     on(collection(db, C('acoes', k)), qs => { st.acoes = {}; qs.forEach(d => { st.acoes[d.id] = { id: d.id, ...d.data() }; }); changed(); });
     on(collection(db, C('colaboradores', k)), qs => { st.colabs = {}; qs.forEach(d => { st.colabs[d.id] = d.data().itens || []; st.maiorId = Math.max(st.maiorId || 0, +d.data().maiorId || 0); }); st.colabsLoaded = !qs.metadata.fromCache || qs.size > 0; changed(); if (gestaoOn) conferirAreas(); });
   }
-  on(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(40)), qs => {
+  // Últimos registros das Atividades (painel da Operação): só quem lê o histórico da Operação (administrador e Gestor).
+  cache.log = [];
+  if (modsHistorico(me).includes('operacao')) on(query(collection(db, 'historico'), where('mod', '==', 'operacao'), orderBy('at', 'desc'), limit(40)), qs => {
     cache.log = qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { ...x, at: x.at ? x.at.toDate() : new Date() }; });
     changed();
   });
@@ -428,11 +430,11 @@ export function salvarAcao(id, dados) {
 // k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Usado para lançar a hora extra de quem cobre em outro conjunto.
 export function setSit(key, code, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao', k), m), { v: { [key]: code || deleteField() } }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { v: { [key]: code || deleteField() }, ...marca() }, { merge: true }));
 }
 export function setSitExtra(campo, key, val, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao', k), m), { [campo]: { [key]: val || deleteField() } }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { [campo]: { [key]: val || deleteField() }, ...marca() }, { merge: true }));
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, C('plano'), area), { itens }));
 // k = conjunto (patio | bateria); o cadastro do Efetivo grava nos dois, seja qual for o módulo aberto.
@@ -442,7 +444,7 @@ const numId = id => parseInt(String(id || '').replace(/\D/g, ''), 10) || 0;
 export function maiorIdUsado(k) { const st = S[k]; let m = st.maiorId || 0; for (const l of Object.values(st.colabs || {})) for (const x of l) m = Math.max(m, numId(x.id)); return m; }
 export function salvarColabsArea(area, itens, k = setDaArea(area) || cur) {
   const maiorId = Math.max(maiorIdUsado(k), ...itens.map(x => numId(x.id))); S[k].maiorId = maiorId;
-  return track(setDoc(doc(db, C('colaboradores', k), area), { itens, maiorId }));
+  return track(setDoc(doc(db, C('colaboradores', k), area), { itens, maiorId, ...marca() }));
 }
 export const saveRotas = rotas => track(updateDoc(doc(db, C('config'), 'sistema'), { rotas }));
 export const saveConfig = patch => track(updateDoc(doc(db, C('config'), 'sistema'), patch));
@@ -561,7 +563,8 @@ export async function semanasPeriodo(conj, meses) {
 }
 // Grava um lote e espera o servidor (sem sinal a tela nem começa): a tela mostra o progresso e para no erro.
 async function gravarLote(b) { pending++; syncMudou(); try { await b.commit(); } finally { pending--; syncMudou(); } }
-const marca = () => ({ atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+// Quem gravou e quando: o banco exige nas coleções principais (semanas, presença, cadastro, fichas; firestore.rules › marcaOk).
+function marca() { return { atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }; }
 // Exportada: itens [{ id, conf: 'ok' | 'divergente' | 'sem-sha' }] num lote só (até 400).
 export async function marcarExportadas(conj, itens, lote) {
   const b = writeBatch(db);
@@ -620,12 +623,21 @@ export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permisso
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));
-// Histórico de alterações completo (Administração › Histórico): lido só quando a tela abre.
+// Histórico de alterações (lido só quando a tela abre). O administrador lê tudo (também os antigos, sem módulo); o
+// gestor de um módulo lê só os registros do módulo (uma leitura por módulo, juntadas por hora).
+const deHist = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date() }; };
 export async function historicoLer(n = 500) {
-  const qs = await getDocs(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(n)));
-  return qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date() }; });
+  if (ehAdminU(me)) return (await getDocs(query(collection(db, 'historico'), orderBy('at', 'desc'), limit(n)))).docs.map(deHist);
+  const l = [];
+  for (const m of modsHistorico(me)) (await getDocs(query(collection(db, 'historico'), where('mod', '==', m), orderBy('at', 'desc'), limit(n)))).forEach(d => l.push(deHist(d)));
+  return l.sort((a, b) => b.at - a.at).slice(0, n);
 }
-export function log(t) { if (!me) return; addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || me.email, t }).catch(() => {}); }
+// Grava uma linha no histórico. mod = módulo da alteração (quem vê: contas/acessos.js › modsHistorico). O banco confere
+// quem gravou (uid e nome do cadastro) e a hora do servidor (firestore.rules › historico).
+export function log(t, mod) {
+  if (!me) return;
+  addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || '', t: String(t || '').slice(0, 1000), mod: MODS_HIST.includes(mod) ? mod : 'administracao' }).catch(() => {});
+}
 
 // Feriados sem operação lidos do servidor: Escalas e turnos (config/escalas) e os da Operação (eq/config).
 // completo = false quando não deu para ler os da Operação (aí quem aplica não desfaz nada; feriados.js).
@@ -658,7 +670,7 @@ export async function gerarMes(ym, planoPorArea, aPartirDe, k = cur) {
     for (const area of SETS[k].areas) {
       const id = area + '|' + ini; if (have.has(id)) continue;
       const w = novaSemana(area, ini, planoPorArea[area] || []); aplicarNaSemana(w, fer);
-      b.set(doc(db, C('semanas', k), id), { ...w, criadoEm: serverTimestamp() }); n += w.ids.length;
+      b.set(doc(db, C('semanas', k), id), { ...w, criadoEm: serverTimestamp(), ...marca() }); n += w.ids.length;
     }
   }
   b.update(doc(db, C('config', k), 'sistema'), { meses: arrayUnion(ym) });
@@ -680,8 +692,8 @@ export async function importar(seed, meses, aPartirDe) {
   const x = seedParaBanco(seed, areas);
   const b = writeBatch(db);
   b.set(doc(db, C('config', k), 'sistema'), { ...x.config, importadoEm: serverTimestamp() });
-  for (const a of areas) { b.set(doc(db, C('plano', k), a), { itens: x.plano[a] }); b.set(doc(db, C('colaboradores', k), a), { itens: x.colabs[a] }); }
-  for (const [m, v] of Object.entries(x.sit)) b.set(doc(db, C('situacao', k), m), { v });
+  for (const a of areas) { b.set(doc(db, C('plano', k), a), { itens: x.plano[a] }); b.set(doc(db, C('colaboradores', k), a), { itens: x.colabs[a], ...marca() }); }
+  for (const [m, v] of Object.entries(x.sit)) b.set(doc(db, C('situacao', k), m), { v, ...marca() });
   await b.commit();
   for (const m of meses) await gerarMes(m, x.plano, aPartirDe, k);
 }
@@ -715,12 +727,12 @@ export function admWatch(conj, comp) {
 }
 // Grava o código de uma pessoa num dia. Quem está nas Atividades grava na presença do dia (situacao) — a mesma do Efetivo diário.
 export function admSetCodigo(conj, comp, p, data, cod) {
-  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() } }, { merge: true }));
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() }, ...marca() }, { merge: true }));
   return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('d', p.k, data), cod || deleteField(), 'atualizadoEm', serverTimestamp()));
 }
 // Justificativa na Frequência: quem está nas Atividades grava junto da presença (situacao); os demais, na folha.
 export function admSetJus(conj, comp, p, data, val) {
-  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { jus: { [p.ativ + '|' + data]: val || deleteField() } }, { merge: true }));
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { jus: { [p.ativ + '|' + data]: val || deleteField() }, ...marca() }, { merge: true }));
   return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('jus', p.k, data), val || deleteField(), 'atualizadoEm', serverTimestamp()));
 }
 export const admSalvarComp = (conj, comp, dados) => track(setDoc(doc(db, 'freqcomp', conj + '|' + comp), { ...dados, conj, competencia: comp, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
@@ -769,7 +781,7 @@ export async function admImportar({ comps, presenca, ferias, substituirFerias })
       const novo = Object.fromEntries(Object.entries(v).filter(([key]) => !ja[key]));
       if (!Object.keys(novo).length) continue;
       n += Object.keys(novo).length;
-      await track(setDoc(doc(db, C('situacao', k), m), { v: novo }, { merge: true }));
+      await track(setDoc(doc(db, C('situacao', k), m), { v: novo, ...marca() }, { merge: true }));
     }
   }
   if (ferias) {
@@ -873,11 +885,11 @@ export function gSalvarColabs(itens) {
   for (const a of new Set([...Object.keys(grupos), ...Object.keys(fichasPorArea)])) {
     if (a.startsWith('_')) continue;
     const novo = grupos[a] || [];
-    if (!igual(novo, fichasPorArea[a] || [])) ops.push(['set', doc(db, 'gcolab', a), { itens: novo }]);
+    if (!igual(novo, fichasPorArea[a] || [])) ops.push(['set', doc(db, 'gcolab', a), { itens: novo, ...marca() }]);
   }
   const areaNova = new Map(); for (const [a, l] of Object.entries(grupos)) for (const c of l) areaNova.set(String(c.mat), a);
   const mudou = new Set();
-  for (const o of cache.g.ocorr || []) { const a = areaNova.get(String(o.mat)); if (a && o.area !== a) { ops.push(['upd', doc(db, 'gocorr', o.id), { area: a }]); mudou.add(String(o.mat)); } }
+  for (const o of cache.g.ocorr || []) { const a = areaNova.get(String(o.mat)); if (a && o.area !== a) { ops.push(['upd', doc(db, 'gocorr', o.id), { area: a, ...marca() }]); mudou.add(String(o.mat)); } }
   fichasPorArea = grupos; cache.g.colabs = itens;
   // Não espera o servidor: sem sinal, as gravações ficam na fila e sobem quando a conexão voltar.
   const t = [];
@@ -903,7 +915,7 @@ export function gNovaOcorrencia(o) {
   track(setDoc(r, { ...x, assinadoEm: null, assinaturaId: null, metodo: null, testemunha: '', criadoPor: me.uid, criadoEm: serverTimestamp() }));
   return { id: r.id, ...x };
 }
-export const gAtualizarOcorrencia = (id, patch) => track(updateDoc(doc(db, 'gocorr', id), patch));
+export const gAtualizarOcorrencia = (id, patch) => track(updateDoc(doc(db, 'gocorr', id), { ...patch, ...marca() }));
 export async function gExcluirOcorrencias(ids) {
   for (let i = 0; i < ids.length; i += 400) { const b = writeBatch(db); ids.slice(i, i + 400).forEach(id => b.delete(doc(db, 'gocorr', id))); await track(b.commit()); }
 }
@@ -914,7 +926,7 @@ export function gAssinar(a) {
   const oc = (cache.g.ocorr || []).find(o => a.ocorrIds.includes(o.id));
   const reg = { ...a, area: (oc && oc.area) || areaDaFicha(a.mat), por: me.uid, porNome: me.nome || me.login || '' };
   b.set(r, { ...reg, criadoEm: serverTimestamp() });
-  for (const id of a.ocorrIds) b.update(doc(db, 'gocorr', id), { status: a.metodo === 'recusa' ? 'recusada' : 'assinada', assinadoEm: a.metodo === 'recusa' ? null : a.em, assinaturaId: r.id, metodo: a.metodo, testemunha: (a.testemunhas || []).join(' e ') });
+  for (const id of a.ocorrIds) b.update(doc(db, 'gocorr', id), { status: a.metodo === 'recusa' ? 'recusada' : 'assinada', assinadoEm: a.metodo === 'recusa' ? null : a.em, assinaturaId: r.id, metodo: a.metodo, testemunha: (a.testemunhas || []).join(' e '), ...marca() });
   cache.gAssin[r.id] = reg;
   track(b.commit());
   return r.id;
@@ -1109,7 +1121,7 @@ export async function limpezaGravar(ops) {
   for (const o of ops) {
     const r = doc(db, o.col, o.id);
     if (o.tipo === 'apagar') b.delete(r);
-    else { const a = []; for (const [p, v] of o.campos) a.push(new FieldPath(...p), v === null ? deleteField() : v); b.update(r, ...a); }
+    else { const a = []; for (const [p, v] of o.campos) a.push(new FieldPath(...p), v === null ? deleteField() : v); if (/(^|_)semanas$/.test(o.col)) a.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid); b.update(r, ...a); }
   }
   pending++; syncMudou();
   try { await b.commit(); } finally { pending--; syncMudou(); }

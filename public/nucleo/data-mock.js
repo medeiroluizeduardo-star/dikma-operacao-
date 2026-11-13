@@ -1,7 +1,7 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
-import { legadoDoAcesso, marcasDe, ehAdminU } from '../contas/acessos.js';
+import { legadoDoAcesso, marcasDe, ehAdminU, modsHistorico, MODS_HIST } from '../contas/acessos.js';
 import { prepararImportacao } from '../contas/planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
 import { aplicarCampos } from '../contas/limpeza.js';
@@ -267,8 +267,9 @@ export async function salvarPrefsAvisos(prefs) { cache.meusAvisos = { ...(cache.
 export async function salvarChaveAvisos(vapid) { cache.avisosCfg = { vapid }; changed(); }
 export async function excluirUsuario(uid) { if (uid === me.uid) throw new Error('Você não pode apagar o seu próprio usuário.'); cache.usuarios = cache.usuarios.filter(u => u.uid !== uid); changed(); }
 export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find(u => u.uid === uid), patch); if (uid === me.uid) emitAuth(); changed(); }
-export async function historicoLer(n = 500) { return cache.log.slice(0, n).map(x => ({ ...x, at: x.at instanceof Date ? x.at : new Date(x.at) })); }
-export function log(t) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t }); cache.log = cache.log.slice(0, 40); changed(); }
+// O mesmo filtro das regras: o administrador vê tudo; o gestor, só os registros dos módulos dele.
+export async function historicoLer(n = 500) { const ms = modsHistorico(me); return cache.log.filter(x => ehAdminU(me) || ms.includes(x.mod)).slice(0, n).map(x => ({ ...x, at: x.at instanceof Date ? x.at : new Date(x.at) })); }
+export function log(t, mod) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t, mod: MODS_HIST.includes(mod) ? mod : 'administracao' }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;
   for (const ini of weeksOfMonth(ym)) { if (aPartirDe && ini < aPartirDe) continue; for (const a of SETS[cur].areas) { const id = a + '|' + ini; if (cache.semanas[id]) continue; const w = novaSemana(a, ini, planoPorArea[a]); aplicarNaSemana(w, feriadosMock()); cache.semanas[id] = toLocal(id, w); n += w.ids.length; } }

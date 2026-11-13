@@ -66,7 +66,7 @@ function gravarQZ(doc, key, k, novo, rotulo, fotos = []) {
   if (!fotos.length && JSON.stringify(novo) === JSON.stringify(antes)) return;
   doc.qz = doc.qz || {}; if (novo) doc.qz[key] = novo; else delete doc.qz[key];
   Promise.resolve(DB.salvarQuedaZero(doc.id, doc.area, key, novo, fotos)).catch(() => toast('Não foi possível gravar a queda zero'));
-  DB.log(`Queda zero · ${rotulo} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${novo ? `${fmtT(novo.t)} (${textoQZ(novo)})${fotos.length ? ` + ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}` : 'apagada'}`);
+  DB.log(`Queda zero · ${rotulo} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${novo ? `${fmtT(novo.t)} (${textoQZ(novo)})${fotos.length ? ` + ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}` : 'apagada'}`, 'operacao');
 }
 // Fotos do lançamento: o administrador e o líder da área apagam (o líder só a foto ainda não exportada), como nas
 // fotos das atividades; as regras do banco conferem o mesmo.
@@ -117,7 +117,7 @@ function ligarFotosQZ(doc, k, key) {
     DB.apagarFotosQZ(doc.id, doc.area, key, [x]).then(() => {
       salvas = salvas.filter(y => y.id !== x.id); tem = Math.max(0, tem - 1);
       const v0 = (doc.qz || {})[key]; if (v0) v0.f = tem;
-      DB.log(`Queda zero · ${AREA_S[doc.area] || doc.area} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → foto apagada`); toast('Foto apagada'); pintar();
+      DB.log(`Queda zero · ${AREA_S[doc.area] || doc.area} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → foto apagada`, 'operacao'); toast('Foto apagada'); pintar();
     }).catch(() => { a.disabled = false; toast('Não deu para apagar a foto agora. Confira o sinal e tente de novo.'); });
   });
   if (tem) DB.listarFotosCel(doc.id, pidFotoQZ(key), k, conjDe(doc)).then(l => { salvas = l; carregou = true; pintar(); }).catch(() => { carregou = true; pintar(); });
@@ -193,7 +193,7 @@ export function editarQZ(doc, k, key) {
       if (!ap.dataset.conf) { ap.dataset.conf = '1'; ap.innerHTML = `${I.lixo} Confirmar: apagar com ${l.length} foto${l.length > 1 ? 's' : ''}`; return; }
       ap.disabled = true;
       DB.apagarFotosQZ(doc.id, doc.area, key, l, true).then(() => {
-        delete doc.qz[key]; DB.log(`Queda zero · ${rotulo0} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → apagada (com ${l.length} foto${l.length > 1 ? 's' : ''})`);
+        delete doc.qz[key]; DB.log(`Queda zero · ${rotulo0} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → apagada (com ${l.length} foto${l.length > 1 ? 's' : ''})`, 'operacao');
         $('layer').innerHTML = ''; toast('Lançamento apagado'); render();
       }).catch(() => { ap.disabled = false; erro('Não deu para apagar agora. Confira o sinal e tente de novo.'); });
       return;

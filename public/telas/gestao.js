@@ -328,7 +328,7 @@ export function criarGestao(X) {
       const recolhe = $('noResp').value.trim().toUpperCase(); if (!recolhe) throw new Error('Informe quem vai recolher a assinatura.');
       const assinar = $('noAssinar').checked && !$('noAssBox').hidden;
       const o = DB.gNovaOcorrencia({ data, mat: m, nome: indice().get(m).c.nome, tipo, desc, lider, recolhe, status: 'pendente' });
-      DB.log(`Efetivo: ocorrência "${tipo}" para ${indice().get(m) ? title(indice().get(m).c.nome) : m}`);
+      DB.log(`Efetivo: registrou uma ocorrência "${tipo}"`, 'gestao');
       toast(souEu(recolhe) ? 'Ocorrência registrada' : `Ocorrência registrada · assinatura com ${title(recolhe)}`);
       if (assinar) setTimeout(() => assinarSheet(m, [o.id]), 50);
     });
@@ -387,7 +387,7 @@ export function criarGestao(X) {
       const mud = [];
       if (mat && L.area !== n.area) mud.push(`área ${PES.areaNome(L.area)} → ${PES.areaNome(n.area)}`);
       if (mat && (c.funcao || '') !== n.funcao) mud.push(`função ${c.funcao || '—'} → ${n.funcao || '—'}`);
-      DB.log(`Efetivo: ${mat ? 'editou' : 'cadastrou'} ${title(n.nome)}${mud.length ? ' (' + mud.join('; ') + ')' : ''}`);
+      DB.log(`Efetivo: ${mat ? 'editou' : 'cadastrou'} ${title(n.nome)}${mud.length ? ' (' + mud.join('; ') + ')' : ''}`, 'gestao');
       toast(mat ? 'Colaborador atualizado em todos os módulos' : 'Colaborador cadastrado');
     });
     const ar = $('ncArea'), rt = $('ncRota'), op = $('ncOp');
@@ -465,10 +465,10 @@ export function criarGestao(X) {
       const atual = trocarNasFichas(G().colabs, n => chaveLider(n) === l.chave, para); // conta de novo com a lista de agora
       if (!atual.mudou.length) throw new Error('Ninguém mais está com esse líder.');
       DB.gSalvarColabs(atual.itens);
-      DB.log(`Efetivo: ${modo === 'trocar' ? 'trocou o líder' : 'renomeou o líder'} ${title(l.nome)} → ${title(para)} (${pessoasTxt(atual.mudou.length)})`);
+      DB.log(`Efetivo: ${modo === 'trocar' ? 'trocou o líder' : 'renomeou o líder'} ${title(l.nome)} → ${title(para)} (${pessoasTxt(atual.mudou.length)})`, 'gestao');
       toast(`${pessoasTxt(atual.mudou.length)} com o líder ${title(para)}`, { desfazer: () => {
         DB.gSalvarColabs(G().colabs.map(c => (antes.has(String(c.mat)) && nomeLider(c.lider) === nomeLider(para) ? { ...c, lider: antes.get(String(c.mat)) } : c)));
-        DB.log(`Efetivo: desfez a troca de líder ${title(l.nome)} → ${title(para)}`); toast('Troca desfeita'); render();
+        DB.log(`Efetivo: desfez a troca de líder ${title(l.nome)} → ${title(para)}`, 'gestao'); toast('Troca desfeita'); render();
       } });
       render(); setTimeout(lideresSheet, 0);
     }, { aoCancelar: () => setTimeout(lideresSheet, 0) });
@@ -497,7 +497,7 @@ export function criarGestao(X) {
     if (op.modulos) PES.sincronizarVarios(removidos.map(c => ({ antes: c, c, o: { area: AREA_GERAL, op: false } })));
     let nOc = 0;
     if (op.ocorr) { const ids = G().ocorr.filter(o => set.has(String(o.mat))).map(o => o.id); nOc = ids.length; if (ids.length) DB.gExcluirOcorrencias(ids); }
-    DB.log(`Efetivo: excluiu ${removidos.length === 1 ? title(removidos[0].nome) + ' (' + removidos[0].mat + ')' : removidos.length + ' colaboradores'}${op.modulos ? ', também dos outros módulos' : ''}${nOc ? ' e ' + nOc + ' ocorrência(s)' : ''}`);
+    DB.log(`Efetivo: excluiu ${removidos.length === 1 ? title(removidos[0].nome) + ' (' + removidos[0].mat + ')' : removidos.length + ' colaboradores'}${op.modulos ? ', também dos outros módulos' : ''}${nOc ? ' e ' + nOc + ' ocorrência(s)' : ''}`, 'gestao');
     removidos.forEach(c => SEL.delete(c.mat)); if (set.has(String(U.mat))) U.mat = null;
     toast(removidos.length === 1 ? 'Colaborador excluído' : `${removidos.length} colaboradores excluídos`);
     render(); return removidos.length;
@@ -574,7 +574,7 @@ export function criarGestao(X) {
           if (!t1) throw new Error('Informe ao menos uma testemunha.');
           DB.gAssinar({ ...base, metodo: 'recusa', testemunhas: [t1, t2].filter(Boolean) });
         }
-        DB.log(`Efetivo: ${modo === 'recusa' ? 'registrou recusa' : 'colheu assinatura'} de ${title(x.c.nome)} (${ids.length} ocorrência(s))`);
+        DB.log(`Efetivo: ${modo === 'recusa' ? 'registrou recusa' : 'colheu assinatura'} (${ids.length} ocorrência(s))`, 'gestao');
         toast(modo === 'recusa' ? 'Recusa registrada' : 'Assinatura registrada');
         close();
       } catch (err) { showErr('sgErr', err); }
@@ -609,7 +609,7 @@ export function criarGestao(X) {
         const o = G().ocorr.find(x => x.id === d.id); if (!o) break;
         formSheet('Quem vai recolher a assinatura', `${esc(title(o.nome))} · ${esc(o.tipo)} · ${dBR(o.data)}`, `<div class="sel"><span>Responsável</span>${campoBusca('trResp', o.recolhe || '', opcoesResp, { livre: true, maiusculas: true, placeholder: 'Digite o nome' })}</div>`, 'Salvar', async () => {
           const v = $('trResp').value.trim().toUpperCase(); if (!v) throw new Error('Informe o responsável.');
-          DB.gAtualizarOcorrencia(o.id, { recolhe: v }); DB.log(`Efetivo: ${title(v)} vai recolher a assinatura de ${title(o.nome)}`); toast(`Assinatura com ${title(v)}`);
+          DB.gAtualizarOcorrencia(o.id, { recolhe: v }); DB.log(`Efetivo: ${title(v)} vai recolher a assinatura de uma ocorrência`, 'gestao'); toast(`Assinatura com ${title(v)}`);
         });
         break;
       }
@@ -638,14 +638,14 @@ export function criarGestao(X) {
       case 'editColab': colabForm(d.mat); break;
       case 'delOc': {
         if (t.dataset.ok !== '1') { t.dataset.ok = '1'; t.textContent = 'Excluir?'; setTimeout(() => { if (t.isConnected) { t.dataset.ok = ''; t.textContent = '✕'; } }, 3000); return; }
-        DB.gExcluirOcorrencia(d.id); DB.log('Efetivo: excluiu uma ocorrência'); toast('Ocorrência excluída'); break;
+        DB.gExcluirOcorrencia(d.id); DB.log('Efetivo: excluiu uma ocorrência', 'gestao'); toast('Ocorrência excluída'); break;
       }
       case 'addTipo': { const l = tipos().concat([{ tipo: 'Novo tipo', f1: false, texto: '', pos: null }]); DB.gSalvarConfig({ tipos: l }); break; }
       case 'delTipo': { const l = tipos().filter((_, i) => i !== +d.i); DB.gSalvarConfig({ tipos: l }); toast('Tipo excluído'); break; }
       default: if (isAdmin()) IMP.onClick(d); break;
       case 'importar': {
         UI.busy = true; render();
-        try { const s = await DB.seed('seed-gestao.json'); await DB.gImportar(s); DB.log('Efetivo: importou a planilha de fichas'); toast('Planilha de fichas importada'); }
+        try { const s = await DB.seed('seed-gestao.json'); await DB.gImportar(s); DB.log('Efetivo: importou a planilha de fichas', 'gestao'); toast('Planilha de fichas importada'); }
         catch (err) { toast('Erro ao importar: ' + (err.message || err)); }
         UI.busy = false; render(); break;
       }

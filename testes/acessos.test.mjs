@@ -2,7 +2,7 @@
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO } from '../public/contas/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
 import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/contas/segcalc.js';
 
@@ -222,4 +222,15 @@ test('Segurança: listas padrão dos formulários e contas do painel', () => {
   assert.equal(r.anomMes, 2); assert.equal(r.concluidasNoMes, 1); assert.equal(r.vencidas, 1); assert.equal(Math.round(r.tempoMedio), 2);
   assert.deepEqual(r.porMes.map(x => x.inter), [1, 2]);
   assert.deepEqual(r.porArea[0], { area: 'BATERIA', inter: 2, abertas: 1, concluidas: 1 });
+});
+
+test('Histórico de alterações: o administrador vê todos os módulos; o gestor de cada módulo só o dele; os outros, nada', () => {
+  const u = (acesso, x = {}) => ({ papel: 'leitor', acesso, escopos: ['patio'], ...x });
+  assert.deepEqual(modsHistorico(u({ administracao: 'admin' }, { papel: 'admin' })), ['operacao', 'gestao', 'seguranca', 'rh', 'administracao']);
+  assert.deepEqual(modsHistorico(u({ operacao: 'gestor', gestao: 'lider' })), ['operacao']);
+  assert.deepEqual(modsHistorico(u({ gestao: 'gestor', administracao: 'modulo' })), ['gestao'], 'Administração Dos módulos não vê a da Administração');
+  assert.deepEqual(modsHistorico(u({ seguranca: 'gestor', rh: 'administrativo' })), ['seguranca', 'rh'], 'no RH, o Administrativo');
+  for (const a of [{ operacao: 'lider' }, { operacao: 'coordenador', gestao: 'supervisor' }, { rh: 'leitor' }, { seguranca: 'trata' }, {}]) assert.equal(veHistorico(u(a)), false, JSON.stringify(a));
+  assert.equal(veHistorico(u({ operacao: 'gestor' }, { papel: 'bloqueado' })), false, 'bloqueado');
+  assert.equal(veHistorico(null), false);
 });

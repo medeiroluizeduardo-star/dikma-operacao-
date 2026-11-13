@@ -217,11 +217,11 @@ async function executar() {
   L.exec = { feito: 0, total: P.ops.length, rodando: true }; render();
   try {
     for (const l of lotes) { await DB.limpezaGravar(l); L.exec.feito += l.length; render(); }
-    L.exec.fim = true; L.cont = {}; DB.log(P.historico); toast('Limpeza concluída');
+    L.exec.fim = true; L.cont = {}; DB.log(P.historico, 'administracao'); toast('Limpeza concluída');
   } catch (e) {
     L.exec.erro = (e && (e.code === 'permission-denied' ? 'Sem permissão no banco para esta operação.' : e.message)) || 'Erro inesperado';
     L.exec.faltou = LP.faltou(P.ops, L.exec.feito);
-    DB.log(`${P.historico} · interrompida (${L.exec.feito} de ${L.exec.total} operações)`);
+    DB.log(`${P.historico} · interrompida (${L.exec.feito} de ${L.exec.total} operações)`, 'administracao');
     toast('Erro: a limpeza parou no meio · veja o que faltou');
   }
   L.exec.rodando = false; L.conf = ''; render();
