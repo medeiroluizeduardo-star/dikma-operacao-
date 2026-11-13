@@ -1,16 +1,17 @@
 // Decide quem recebe qual aviso agora. Função pura: recebe os dados já lidos e devolve as mensagens.
 // Usa as mesmas contas do site (public/contas/hoje.js), copiadas para esta pasta na hora de rodar.
-import { SETS, SET_KEYS, AREA_S, add, today } from './lib/cal.mjs';
+import { SETS, SET_KEYS, AREA_S, add, today, areasDoSet } from './lib/cal.mjs';
 import { resumoAtividades, resumoSemana, paradasAbertas, assinaturasPendentes } from './lib/hoje.mjs';
 import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
-import { JUS_CODS, CODIGOS } from './lib/situacao.mjs';
+import { JUS_CODS, CODIGOS, contagemDia } from './lib/situacao.mjs';
 import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
+import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, efetivo: true, efetivoRH: true };
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -24,7 +25,17 @@ function areasDe(u, k) {
   return areasDoCadastro(u, u.papel === 'supervisor').filter(a => SETS[k].areas.includes(a));
 }
 
+// Efetivo do dia: áreas da pessoa (líder: a dela; supervisor: as dele) que têm gente na Presença do conjunto.
+function areasEfDe(u, k, S) {
+  if (!mods(u).includes(SETS[k].mod) || !['lider', 'supervisor'].includes(u.papel)) return [];
+  const tem = new Set((S.colabs || []).map(c => c.area));
+  return areasDoCadastro(u, u.papel === 'supervisor').filter(a => areasDoSet(k).includes(a) && tem.has(a));
+}
+// A área trabalha no dia: alguém escalado (sem folga, férias ou desligamento). Domingo de área administrativa não cobra.
+const trabalhaNoDia = (S, area, dt) => contagemDia((S.colabs || []).filter(c => c.area === area), dt, { sitDe: (c, d) => ({ v: (S.sitDe ? S.sitDe(c, d) : (S.sit || {})[c.id + '|' + d]) || 'P' }) }).escalados > 0;
+
 // d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date,
+//       sets[k].ef = { id: doc do efetivoDia } (mês atual e anterior), avisosCfg = config/avisos (horas do efetivo),
 //       seg: { anom[] } (anomalias da Segurança em aberto, com em em milissegundos), treinos[] (RH: treinamentos, NRs e ASO) }
 export function planejar(d) {
   const agora = d.agora || new Date(); const hoje = d.hoje || today(); const hora = agora.getHours();
@@ -108,6 +119,51 @@ export function planejar(d) {
       }
       if (total) msgs.push({ uid: x.uid, titulo: total === 1 ? '1 falta ou atraso sem justificativa hoje' : `${total} faltas e atrasos sem justificativa hoje`, corpo: Object.entries(por).map(([a, n]) => `${AREA_S[a] || a} ${n}`).join(' · ') + '\nToque para justificar.', tag: 'justificativas', url: '/?m=gestao&v=esjus' });
       marcar.add(chave);
+    }
+  }
+  // 11) Efetivo do dia (contas/efetivo-dia.js). Só contagens e áreas, nunca nomes (o motivo da devolução fica na tela).
+  //     a) líder e supervisor: área que trabalha hoje e ainda não enviou (às 9h ou o horário configurado, uma vez por dia);
+  //     b) líder e supervisor: o RH devolveu o efetivo de um dia (na rodada seguinte, uma vez por devolução, até 10 dias);
+  //     c) RH · Administrativo (e administrador): efetivos enviados esperando validação (às 11h ou o configurado, uma vez por dia).
+  if (hoje >= EF_DESDE) {
+    const HE = horasEf(d.avisosCfg); // padrão 9h e 11h; o administrador muda em Avisos no celular
+    const devJa = new Set();
+    for (const x of alvo) {
+      if (!x.prefs.efetivo) continue;
+      const chave = `efp|${x.uid}|${hoje}`; const pend = [], devs = []; let mod = null;
+      for (const k of SET_KEYS) {
+        const S = d.sets[k]; if (!S) continue; const areas = areasEfDe(x.op, k, S); if (!areas.length) continue;
+        const ef = S.ef || {};
+        for (const a of areas) {
+          const doc = ef[idEf(hoje, a)];
+          if (!(doc && ['enviado', 'validado'].includes(doc.st)) && trabalhaNoDia(S, a, hoje)) { pend.push(a); mod = mod || SETS[k].mod; }
+        }
+        for (const [id, doc] of Object.entries(ef)) {
+          if (!doc || doc.st !== 'devolvido' || !areas.includes(doc.area) || doc.data < add(hoje, -10)) continue;
+          const h = (doc.hist || [])[(doc.hist || []).length - 1] || {};
+          const ch = `efd|${k}|${id}|${h.em || ''}`; if (d.enviados[ch]) continue;
+          devs.push({ ...doc, ch }); devJa.add(ch); mod = mod || SETS[k].mod;
+        }
+      }
+      if (hora >= HE.efLider && !d.enviados[chave]) {
+        if (pend.length) msgs.push({ uid: x.uid, titulo: pend.length === 1 ? `Efetivo de hoje não enviado: ${AREA_S[pend[0]] || pend[0]}` : `${pend.length} áreas sem enviar o efetivo de hoje`, corpo: (pend.length > 1 ? pend.map(a => AREA_S[a] || a).join(' · ') + '\n' : '') + 'Confira a Presença e envie ao RH.', tag: 'efetivo', url: `/?m=${mod}&v=esdia` });
+        marcar.add(chave);
+      }
+      if (devs.length) {
+        const dm = s => `${s.slice(8)}/${s.slice(5, 7)}`;
+        msgs.push({ uid: x.uid, titulo: devs.length === 1 ? `O RH devolveu o efetivo de ${dm(devs[0].data)} (${AREA_S[devs[0].area] || devs[0].area})` : `O RH devolveu ${devs.length} efetivos`, corpo: (devs.length > 1 ? devs.slice(0, 4).map(z => `${dm(z.data)} ${AREA_S[z.area] || z.area}`).join(' · ') + '\n' : '') + 'Veja o motivo na Presença, corrija e envie de novo.', tag: 'efetivo', url: `/?m=${mod}&v=esdia` });
+      }
+    }
+    devJa.forEach(ch => marcar.add(ch));
+    if (hora >= HE.efRH) {
+      const por = SET_KEYS.map(k => [k, d.sets[k] ? aguardandoEf(d.sets[k].ef).length : 0]).filter(([, n]) => n);
+      const total = por.reduce((n, [, v]) => n + v, 0);
+      for (const x of alvo) {
+        const chave = `efr|${x.uid}|${hoje}`;
+        if (!x.prefs.efetivoRH || d.enviados[chave] || !['admin', 'administrativo'].includes(usuarioEm(x.u, 'rh').papel)) continue;
+        marcar.add(chave);
+        if (total) msgs.push({ uid: x.uid, titulo: `${total} efetivo${total > 1 ? 's' : ''} aguardando validação do RH`, corpo: por.map(([k, n]) => `${SETS[k].curto} ${n}`).join(' · ') + '\nToque para conferir e validar na Frequência.', tag: 'efetivo', url: '/?m=rh&v=afreq' });
+      }
     }
   }
   // 3) Déficit de efetivo amanhã (uma vez por dia por pessoa, a partir das 17h), só nas áreas da pessoa

@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -269,4 +269,53 @@ test('treinamentos e ASO: o técnico de segurança também recebe, com o link da
   const m = planejar({ usuarios: us, avisos: { tec: tok, segl: tok }, paradas: [], ocorr: [], sets: {}, enviados: {}, treinos, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'treinos');
   assert.deepEqual(m.map(x => x.uid), ['tec']);
   assert.equal(m[0].url, '/?m=seguranca&v=sgtrein');
+});
+
+// ---------------- Efetivo do dia: não enviado, devolvido e esperando o RH ----------------
+test('Efetivo do dia: líder às 9h (área que trabalha e não enviou), devolução na hora e RH às 11h, sem nomes', () => {
+  const D = '2026-11-18'; // quarta-feira, depois que o Efetivo do dia entrou no ar
+  const us = {
+    lider: { papel: 'lider', nome: 'Líder', area: 'RECEBIMENTO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
+    sup: { papel: 'supervisor', nome: 'Sup', area: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
+    rh: { papel: 'administrativo', nome: 'RH', acesso: { rh: 'administrativo' }, escopos: [] },
+    leitorRh: { papel: 'leitor', nome: 'Leitor RH', acesso: { rh: 'leitor' }, escopos: [] }
+  };
+  const av = { lider: tok, sup: tok, rh: tok, leitorRh: tok };
+  const S = { plano: [], semanas: {}, rotas: [], sit: { [`C3|${D}`]: 'F' }, colabs: [
+    { id: 'C1', area: 'RECEBIMENTO', nome: 'FULANO DA SILVA' }, { id: 'C2', area: 'PREPARAÇÃO', nome: 'CICLANO SOUZA' }, { id: 'C3', area: 'FINAL DO PÁTIO', nome: 'BELTRANO LIMA' }] };
+  S.ef = {
+    [`${D}_PREPARAÇÃO`]: { area: 'PREPARAÇÃO', data: D, mes: D.slice(0, 7), st: 'enviado', hist: [{ st: 'enviado', em: `${D}T08:00:00Z` }] },
+    [`2026-11-17_RECEBIMENTO`]: { area: 'RECEBIMENTO', data: '2026-11-17', mes: '2026-11', st: 'devolvido', mot: 'falta do Fulano', hist: [{ st: 'enviado', em: '2026-11-17T09:00:00Z' }, { st: 'devolvido', em: '2026-11-18T07:00:00Z', mot: 'falta do Fulano' }] }
+  };
+  const run = (h, enviados = {}) => planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados, agora: new Date(`${D}T${String(h).padStart(2, '0')}:05:00`), hoje: D });
+  const r8 = run(8);
+  assert.equal(r8.msgs.filter(m => /não enviado|sem enviar/.test(m.titulo)).length, 0, 'antes das 9h não cobra o envio');
+  const dev = r8.msgs.filter(m => m.uid === 'lider' && m.tag === 'efetivo');
+  assert.equal(dev.length, 1); assert.equal(dev[0].titulo, 'O RH devolveu o efetivo de 17/11 (Recebimento)');
+  assert.equal(r8.msgs.filter(m => m.uid === 'sup' && /devolveu/.test(m.titulo)).length, 1, 'o supervisor da área também recebe');
+  const chDev = r8.marcar.find(k => k.startsWith('efd|'));
+  assert.ok(chDev); assert.equal(run(9, { [chDev]: D }).msgs.filter(m => /devolveu/.test(m.titulo)).length, 0, 'uma vez por devolução');
+  const r9 = run(9, { [chDev]: D });
+  assert.equal(r9.msgs.find(m => m.uid === 'lider').titulo, 'Efetivo de hoje não enviado: Recebimento');
+  assert.match(r9.msgs.find(m => m.uid === 'lider').url, /m=operacao&v=esdia/);
+  // supervisor: Preparação já enviou; Final do Pátio está de folga hoje; sobra Recebimento
+  assert.equal(r9.msgs.find(m => m.uid === 'sup').titulo, 'Efetivo de hoje não enviado: Recebimento');
+  assert.ok(r9.marcar.includes(`efp|lider|${D}`));
+  assert.equal(run(10, { [chDev]: D, [`efp|lider|${D}`]: D }).msgs.filter(m => m.uid === 'lider').length, 0, 'uma vez por dia');
+  assert.equal(r9.msgs.filter(m => m.uid === 'rh').length, 0, 'RH só a partir das 11h');
+  const r11 = run(11, { [chDev]: D });
+  const rh = r11.msgs.filter(m => m.uid === 'rh');
+  assert.equal(rh.length, 1); assert.equal(rh[0].titulo, '1 efetivo aguardando validação do RH'); assert.match(rh[0].corpo, /Pátio 1/); assert.equal(rh[0].url, '/?m=rh&v=afreq');
+  assert.equal(r11.msgs.filter(m => m.uid === 'leitorRh').length, 0, 'quem só consulta o RH não recebe');
+  for (const m of [...r8.msgs, ...r9.msgs, ...r11.msgs]) assert.ok(!/FULANO|Fulano|CICLANO|BELTRANO/.test(m.titulo + m.corpo), 'nome no aviso');
+  const desl = planejar({ usuarios: us, avisos: { ...av, lider: { tokens: ['t'], prefs: { efetivo: false } } }, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${D}T09:05:00`), hoje: D });
+  assert.equal(desl.msgs.filter(m => m.uid === 'lider').length, 0, 'aviso desligado nas preferências');
+  assert.equal(run(9).msgs.filter(m => m.uid === 'lider' && m.tag === 'efetivo').length, 2, 'devolução e envio pendente na mesma rodada');
+  // horários configurados pelo administrador (config/avisos.horas): líder às 14h e RH às 8h
+  const cfg = { horas: { efLider: 14, efRH: 8 } };
+  const h = (hr) => planejar({ avisosCfg: cfg, usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: { [chDev]: D }, agora: new Date(`${D}T${String(hr).padStart(2, '0')}:05:00`), hoje: D });
+  assert.equal(h(13).msgs.filter(m => m.uid === 'lider').length, 0, 'antes do horário configurado não cobra');
+  assert.equal(h(14).msgs.filter(m => m.uid === 'lider').length, 1);
+  assert.equal(h(8).msgs.filter(m => m.uid === 'rh').length, 1, 'RH no horário configurado');
+  assert.equal(planejar({ avisosCfg: { horas: { efLider: 3 } }, usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: { [chDev]: D }, agora: new Date(`${D}T08:05:00`), hoje: D }).msgs.filter(m => m.uid === 'lider').length, 0, 'horário fora da rotina volta ao padrão (9h)');
 });

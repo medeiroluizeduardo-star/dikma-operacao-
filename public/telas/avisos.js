@@ -5,8 +5,10 @@
 import { veTreinos } from '../contas/treinos.js';
 import { aprovaPapel } from '../contas/aprovacao.js';
 import { temSeg, trataTudoSeg, supConjs } from '../contas/segcalc.js';
+import { editaAdm } from '../contas/acessos.js';
+import { horasEf, HORAS_AVISO } from '../contas/efetivo-dia.js';
 
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, efetivo: true, efetivoRH: true };
 
 export function criarAvisos(X) {
   const { DB, esc, toast, render } = X;
@@ -25,6 +27,7 @@ export function criarAvisos(X) {
   function cardAvisos() {
     const cfg = DB.cache.avisosCfg || {}; const meus = DB.cache.meusAvisos; const ativo = DB.avisoAtivoAqui();
     const prefs = { ...PREFS_PADRAO, ...((meus && meus.prefs) || {}) };
+    const HE = horasEf(cfg);
     const opcoes = [
       temMod('equipamentos') && ['paradas', 'Parada sem liberação há mais de 2 horas'],
       temMod('gestao') && P('gestao') !== 'leitor' && ['assinaturas', 'Assinatura com você ou da sua área há mais de 7 dias (às 8h)'],
@@ -33,6 +36,8 @@ export function criarAvisos(X) {
       (temMod('operacao') || temMod('bateria')) && aprovaPapel(P('operacao')) && ['aprovacao', 'Apontamentos esperando sua aprovação há mais de 1 dia (às 8h)'],
       (temMod('operacao') || temMod('bateria')) && ['deficit', 'Rota com déficit de efetivo amanhã (às 17h)'],
       (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
+      (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(P('operacao')) && ['efetivo', `Efetivo do dia ainda não enviado (às ${HE.efLider}h) e devolvido pelo RH`],
+      editaAdm(ME()) && ['efetivoRH', `Efetivos enviados aguardando sua validação (às ${HE.efRH}h)`],
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
@@ -48,10 +53,15 @@ export function criarAvisos(X) {
         ${ativo ? `<button class="btn ghost sm" data-md-av="testar">Testar neste aparelho</button><button class="btn sm" data-md-av="desligar" ${ST.ocupado ? 'disabled' : ''}>Desligar</button>` : `<button class="btn pri sm" data-md-av="ligar" ${ST.ocupado || !ST.suportado ? 'disabled' : ''}>${ST.ocupado ? 'Ligando…' : 'Ligar avisos'}</button>`}</div>
       <div class="mchips">${opcoes.map(([k, t]) => `<label class="mchip"><input type="checkbox" data-md-pref="${k}" ${prefs[k] ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}`;
-    if (cfg.vapid && ehAdm()) corpo += estadoRotina();
+    if (cfg.vapid && ehAdm()) corpo += horarios(HE) + estadoRotina();
     return `<div class="card avisos-card"><header><h2>Neste aparelho</h2></header><div class="body stackcol" style="gap:12px">${corpo}</div></div>`;
   }
 
+  // Administrador: horários dos avisos do Efetivo do dia (valem para todos; a rotina roda de hora em hora, das 6h às 22h).
+  function horarios(HE) {
+    const sel = (k, rot) => `<label class="sel"><span>${rot}</span><select class="in" data-md-hora="${k}">${HORAS_AVISO.map(h => `<option value="${h}" ${h === HE[k] ? 'selected' : ''}>${h}h</option>`).join('')}</select></label>`;
+    return `<div class="stackcol" style="gap:8px"><b class="small">Horários dos avisos do Efetivo do dia (para todos)</b><div class="row-gap">${sel('efLider', 'Líder: efetivo não enviado')}${sel('efRH', 'RH: aguardando validação')}</div><p class="small muted m0">O aviso sai na primeira rodada da rotina a partir do horário escolhido (até alguns minutos depois).</p></div>`;
+  }
   // Administrador: como a rotina do GitHub está indo (gravado por ela a cada execução).
   function estadoRotina() {
     const e = DB.cache.avisosEstado;
@@ -89,6 +99,11 @@ export function criarAvisos(X) {
     } catch (e) { if (avisar) toast('Não foi possível mostrar o aviso neste aparelho'); }
   }
   function onChange(t) {
+    if (t.dataset.mdHora) {
+      if (!ehAdm()) return true;
+      const h = { ...horasEf(DB.cache.avisosCfg), [t.dataset.mdHora]: +t.value };
+      DB.salvarHorasAvisos(h); DB.log(`Avisos no celular: horário do efetivo (${t.dataset.mdHora === 'efRH' ? 'RH' : 'líder'}) às ${t.value}h`, 'administracao'); toast('Horário salvo'); return true;
+    }
     const k = t.dataset.mdPref; if (!k) return false;
     const prefs = { ...PREFS_PADRAO, ...((DB.cache.meusAvisos && DB.cache.meusAvisos.prefs) || {}), [k]: t.checked };
     DB.salvarPrefsAvisos(prefs); toast('Preferência salva'); return true;

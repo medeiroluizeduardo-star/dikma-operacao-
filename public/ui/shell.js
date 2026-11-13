@@ -16,7 +16,8 @@ import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
 import { problemaSenha } from '../contas/senha.js';
 import { AV, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
 import { vHistorico } from '../telas/historico.js';
-import { veHistorico } from '../contas/acessos.js';
+import { veHistorico, editaAdm } from '../contas/acessos.js';
+import { aguardandoEf } from '../contas/efetivo-dia.js';
 // Resumos (relatorios.js) e configurações (config.js) chegam só quando abertos (modulos.js: RE, CF).
 const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
 const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
@@ -158,6 +159,9 @@ function renderNav() {
   if (atr) SELOS.pend = { n: atr, txt: 'atrasadas nos últimos 60 dias' };
   if (apv) SELOS.aprovar = { n: apv, txt: 'aguardando aprovação' };
   if (gb) SELOS[ge ? 'gcolab' : 'elanc'] = { n: gb, txt: ge ? 'pendências com mais de 7 dias' : 'equipamentos parados' };
+  // RH: efetivos enviados pelos líderes esperando validação (os meses que a Frequência já abriu)
+  const efr = UI.modulo === 'rh' && editaAdm(ME) && DB.efDocs ? ['patio', 'bateria'].reduce((n, k) => n + aguardandoEf(DB.efDocs(k)).length, 0) : 0;
+  if (efr) SELOS.afreq = { n: efr, txt: 'efetivos aguardando validação' };
   const ms = modsMenu();
   const cur = MODS[UI.modulo];
   const linha = (m, atual) => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${atual ? MODS[m].sub : subMod(m)}</small></span>`; // no botão: o conjunto aberto; na lista: a área inteira

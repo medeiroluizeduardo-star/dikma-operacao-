@@ -11,7 +11,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
@@ -97,7 +97,10 @@ for (const k of SET_KEYS) {
     const ap = await db.doc(`${C('aprov')}/${a}|${ini}`).get(); if (ap.exists) aprov[ap.id] = ap.data().v || {};
   }
   for (const m of new Set([mes, amanha.slice(0, 7), ...(segunda ? [add(hoje, -7).slice(0, 7)] : [])])) { const s = await db.doc(`${C('situacao')}/${m}`).get(); if (s.exists) { Object.assign(sit, s.data().v || {}); Object.assign(jus, s.data().jus || {}); Object.assign(cob, s.data().cob || {}); } }
-  sets[k] = { plano, colabs, semanas, sit, jus, cob, aprov, rotas: cfg.data().rotas || [] };
+  // Efetivo do dia (efetivoDia/{data}_{área}): mês atual e anterior (envio que falta, devolvido, esperando o RH)
+  const ef = {};
+  for (const m of [addMonth(mes, -1), mes]) (await db.collection(C('efetivoDia')).where('mes', '==', m).get()).forEach(x => { ef[x.id] = x.data(); });
+  sets[k] = { plano, colabs, semanas, sit, jus, cob, aprov, ef, rotas: cfg.data().rotas || [] };
 }
 
 // A situação do dia é a mesma conta do site (public/contas/situacao.js): lançado, demissão na ficha, férias, folga da escala
@@ -131,7 +134,8 @@ const segAnom = [];
 for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where('status', '==', st).get()).forEach(x => { const a = x.data(); segAnom.push({ ...a, id: x.id, em: a.em && a.em.toMillis ? a.em.toMillis() : +a.em || 0 }); });
 // RH: treinamentos, NRs e ASO (só as datas e o tipo entram na conta; o aviso leva só números).
 const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() }));
-const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, agora: new Date() });
+const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }
