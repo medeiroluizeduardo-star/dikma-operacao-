@@ -10,6 +10,7 @@
 //   plano/{ÁREA}              { itens: [ {id, area, rota, local, ativ, tipo, dias:"1111100", ativo} ] }
 //   colaboradores/{ÁREA}      { itens: [ {id, area, rota, nome, funcao, regime} ] }
 //   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
+//   efetivoDia/{AAAA-MM-DD}_{ÁREA}  { area, data, mes, st, por, nome, em, mot, hist[] }  envio da presença ao RH (contas/efetivo-dia.js)
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" },
 //                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
 //                             fe: { "REC-001|0": "Finados" } }     fe = feriado sem operação (a célula fica "_"; feriados.js)
@@ -81,6 +82,7 @@ import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt } from '../contas/fotos.js';
+import { idEf, novoEf } from '../contas/efetivo-dia.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -378,7 +380,9 @@ function watchSet(k, meses) {
       qs.docChanges().forEach(x => { if (x.type === 'removed') delete st.aprov[x.doc.id]; else st.aprov[x.doc.id] = x.doc.data().v || {}; });
       changed();
     }, () => {});
-    monthSubs.set(key(m), [a, b, c]);
+    // Efetivo do dia (efetivoDia/{data}_{área}): status do envio da presença de cada área (contas/efetivo-dia.js)
+    const d = efOuvir(k, m);
+    monthSubs.set(key(m), [a, b, c, d]);
   }
   // limita os meses extras (fora da base) a 4 por conjunto
   const base = new Set(mesesBase());
@@ -391,6 +395,24 @@ function watchSet(k, meses) {
 }
 
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
+// ---------- Efetivo do dia (status do envio por área e dia; contas/efetivo-dia.js) ----------
+// efetivoDia/{AAAA-MM-DD}_{ÁREA} (b_efetivoDia na Bateria). Lido pela Operação (watchSet) e pelo RH (admWatch).
+const EF = { patio: {}, bateria: {} };
+function efOuvir(k, mes) {
+  return onSnapshot(query(collection(db, C('efetivoDia', k)), where('mes', '==', mes)), qs => {
+    qs.docChanges().forEach(x => { if (x.type === 'removed') delete EF[k][x.doc.id]; else EF[k][x.doc.id] = x.doc.data({ serverTimestamps: 'estimate' }); });
+    changed();
+  }, () => {});
+}
+export const efDia = (k, data, area) => EF[k][idEf(data, area)] || null;
+export const efDocs = k => EF[k];
+// Enviar, validar, devolver (com motivo) ou reabrir. Não espera o servidor: sem sinal, fica na fila do aparelho.
+export function efGravar(k, data, area, acao, mot = '') {
+  const id = idEf(data, area);
+  const x = novoEf(EF[k][id], data, area, acao, { uid: me.uid, nome: me.nome || me.login || '' }, new Date().toISOString(), mot);
+  EF[k][id] = { ...x, em: new Date() }; changed();
+  return track(setDoc(doc(db, C('efetivoDia', k), id), { ...x, em: serverTimestamp() }));
+}
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
 export const sitInfo = (key, k = cur) => { const m = key.split('|')[1].slice(0, 7); const x = ((S[k] || S[cur]).sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
 export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {}, jus: {} };
@@ -736,6 +758,7 @@ export function admWatch(conj, comp) {
   const [a, m] = comp.split('-').map(Number); const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
   for (const mes of [ant, comp]) {
     const k = 's|' + conj + '|' + mes; if (admSubs.has(k)) continue;
+    if (!admSubs.has('e' + k)) admSubs.set('e' + k, efOuvir(conj, mes));
     admSubs.set(k, onSnapshot(doc(db, C('situacao', conj), mes), s => { cache.adm.sit[conj][mes] = (s.exists() && s.data().v) || {}; (cache.adm.jus[conj] ||= {})[mes] = (s.exists() && s.data().jus) || {}; changed(); }, e => cb.onError && cb.onError(e)));
   }
 }

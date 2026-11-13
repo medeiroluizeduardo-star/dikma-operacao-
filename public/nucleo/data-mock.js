@@ -9,6 +9,7 @@ import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
 import { shaDe } from '../ui/fotos.js';
 import { QZ_EQUIP, QZ_LOCAIS, QZ_MOTIVOS, calcQZ } from '../contas/queda-zero.js';
+import { idEf, novoEf } from '../contas/efetivo-dia.js';
 
 export const isMock = true;
 const novoSet = () => ({ config: null, configLoaded: false, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
@@ -180,7 +181,7 @@ function emitAuth() {
   cb.onAuth({ status: 'ready', user: me });
 }
 export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === uid) || me; persist(); await iniciarAdm(); emitAuth(); changed(); }
-export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSA); localStorage.removeItem(LSS); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; SEG = null; iniciarSeg(); await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); cache.fotosCfg = cfgFotosDemo(); fotosDemo(); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
+export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSEF); localStorage.removeItem(LSA); localStorage.removeItem(LSS); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; SEG = null; iniciarSeg(); await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); cache.fotosCfg = cfgFotosDemo(); fotosDemo(); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
@@ -229,6 +230,24 @@ export async function salvarAcao(id, dados) {
 export async function setAprov(docId, area, mes, itens) {
   const em = new Date().toISOString(); const a = (S[cur].aprov[docId] ||= {});
   for (const [k, x] of Object.entries(itens)) a[k] = { ...x, por: me.uid, nome: me.nome, em };
+  changed();
+}
+// Efetivo do dia (contas/efetivo-dia.js): na demonstração fica só neste navegador. Exemplo: ontem, a 1ª área do Pátio
+// enviou e espera o RH; anteontem, a 2ª foi validada.
+const LSEF = 'coqueria-demo-ef';
+const EF = (() => { try { const x = JSON.parse(localStorage.getItem(LSEF) || 'null'); if (x && x.patio) return x; } catch (e) { /* ignora */ } return null; })() || (() => {
+  const e = { patio: {}, bateria: {} }; const h = today(); const [a1, a2] = SETS.patio.areas; const iso = (d, hm) => `${d}T${hm}:00.000-03:00`;
+  const d1 = add(h, -1), d2 = add(h, -2);
+  e.patio[idEf(d1, a1)] = { area: a1, data: d1, mes: d1.slice(0, 7), st: 'enviado', por: 'demo', nome: 'Líder (exemplo)', mot: '', em: iso(d1, '08:10'), hist: [{ st: 'enviado', nome: 'Líder (exemplo)', em: iso(d1, '08:10') }] };
+  e.patio[idEf(d2, a2)] = { area: a2, data: d2, mes: d2.slice(0, 7), st: 'validado', por: 'demo', nome: 'RH (exemplo)', mot: '', em: iso(d2, '10:30'), hist: [{ st: 'enviado', nome: 'Líder (exemplo)', em: iso(d2, '08:05') }, { st: 'validado', nome: 'RH (exemplo)', em: iso(d2, '10:30') }] };
+  return e;
+})();
+export const efDia = (k, data, area) => EF[k][idEf(data, area)] || null;
+export const efDocs = k => EF[k];
+export async function efGravar(k, data, area, acao, mot = '') {
+  const id = idEf(data, area);
+  EF[k][id] = { ...novoEf(EF[k][id], data, area, acao, { uid: me.uid, nome: me.nome || me.login || '' }, new Date().toISOString(), mot), em: new Date().toISOString() };
+  try { localStorage.setItem(LSEF, JSON.stringify(EF)); } catch (e) { /* sem armazenamento */ }
   changed();
 }
 export async function setSit(key, code, k = cur) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (code) o[key] = code; else delete o[key]; changed(); }

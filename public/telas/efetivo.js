@@ -17,6 +17,9 @@ import { escala, comTurma, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sit
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile, trocarTela } from '../ui/shell.js';
 import { ocorrOpc, salvarJus, textoHE, horarioHE } from './horas-justificativas.js';
+import { estadoEf, podeEf, travadoEf, ultimaEf, horaEf } from '../contas/efetivo-dia.js';
+import { editaAdm } from '../contas/acessos.js';
+import { etiqueta, botaoAcao } from '../ui/padrao.js';
 
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 export function cardAusencias(area) {
@@ -98,6 +101,7 @@ const CODS_EF = CODIGOS_LANC;
 export function lancarEfetivo(key) {
   fecharSitPop();
   const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
+  if (!editaDia(c.area, dt)) { toast('Este dia já foi validado pelo RH. Para mudar, o administrador reabre o dia.'); return; }
   const sx = sitDia(c, dt); const info = DB.sitInfo(key); const cobre = cobrindo(id, dt);
   const prev = escala().previsto(regimeDe(c, dt), turmaDe(c, dt), dt);
   const linha = prev ? (prev.trab ? `Pela escala: trabalha${turmaDe(c, dt) ? ` (turma ${esc(turmaDe(c, dt))})` : ''}` : `Pela escala: folga (${esc(prev.motivo)})`) : 'Sem turma: a escala não marca folga sozinha';
@@ -272,7 +276,7 @@ export function equipeCheckin(k = SK) {
   return out;
 }
 function cardCheckin() {
-  const gs = equipeCheckin(); if (!gs.length) return '';
+  const gs = equipeCheckin().filter(g => !travadoEf(DB.efDia(SK, TODAY, g.a))); if (!gs.length) return '';
   const tom = v => (v === 'FT' ? 'bad' : PARCIAL.has(v) ? 'warn' : AUSENCIA.has(v) ? 'neu' : 'ok');
   return `<div class="card checkin"><header><h2>Check-in do turno</h2><p>${ddmm(TODAY)} · confirme quem está na equipe: presente, falta ou atraso</p></header><div class="body stackcol">${gs.map(g => {
     const [por, nome, hora, conta] = g.ck.split('|');
@@ -318,7 +322,7 @@ export function vEsDia() {
   // rodapé: presentes / escalados de cada dia (a mesma conta do topo e dos grupos; férias e folga lançada saem do total)
   const ctDia = contarDia(cs, dia);
   const celula = c => {
-    const dt = dia, k = kDia; const x = sitDia(c, dt); const v = x.v; const ed = canEditSit(c.area);
+    const dt = dia, k = kDia; const x = sitDia(c, dt); const v = x.v; const ed = editaDia(c.area, dt);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
     const per = ['P', 'ATR', 'SA', 'HE'].includes(v) ? periodoDe(c, dt) : '';
     const jus = !x.auto && JUS_CODS.includes(v) ? inf.jus : null; const semJus = !x.auto && JUS_CODS.includes(v) && !(jus && jus.cod === v) && dt <= TODAY;
@@ -348,15 +352,71 @@ export function vEsDia() {
   const faixaEf = miniEscala(area).replace('<div class="hojeturma">', '<div class="hojeturma scrollx">').replace('<div class="mini">', '<div class="mini compacta">');
   // Escolha do dia: os 7 dias da semana do topo, um toque por dia (hoje marcado)
   const diasNav = `<div class="body pt0 efdias" role="group" aria-label="Dia mostrado">${DAYS.map((d, k) => { const dt = add(UI.ini, k); return `<button type="button" class="efdia${dt === dia ? ' on' : ''}${dt === TODAY ? ' hoje' : ''}" data-act="efDia" data-d="${dt}" aria-pressed="${dt === dia}" aria-label="${DIA_NOME[k]} ${ddmm(dt)}${dt === TODAY ? ' (hoje)' : ''}"><span>${d.slice(0, 3)}</span><b>${dt.slice(8)}</b></button>`; }).join('')}</div>`;
-  return faixaEf + (ehHoje ? cardCheckin() : '') + `<div class="card efcard"><header><h2>Presença · ${DIA_NOME[kDia]}, ${ddmm(dia)}${ehHoje ? ' (hoje)' : ''}</h2><p>${canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque na situação para mudar · ✓ = presente' : 'Somente leitura'}</p></header>
-  ${diasNav}
+  return faixaEf + (ehHoje ? cardCheckin() : '') + `<div class="card efcard"><header><h2>Presença · ${DIA_NOME[kDia]}, ${ddmm(dia)}${ehHoje ? ' (hoje)' : ''}</h2><p>${area !== 'TODAS' && travadoEf(DB.efDia(SK, dia, area)) ? 'Dia validado pelo RH: somente leitura' : canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque na situação para mudar · ✓ = presente' : 'Somente leitura'}</p></header>
+  ${diasNav}${linhaEf(area, dia)}
   <div class="body lbar efbar efbar1">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida" style="margin-left:auto">${I.dl} Exportar semana</button>` : ''}</div>
   ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
   <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
   <div class="tw"><table class="efd efdia1"><thead><tr><th>Colaborador</th>${mob ? '' : '<th>Função</th>'}<th>Situação</th></tr></thead><tbody>
   ${cs.length ? linhas : `<tr><td colspan="${nCol}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
-  </tbody>${cs.length ? `<tfoot><tr><th colspan="${nCol - 1}">Presentes</th><td class="num"><b class="${ctDia.presentes < ctDia.escalados ? 'menos' : ctDia.escalados ? 'cheio' : ''}">${ctDia.presentes}</b><span class="muted">/${ctDia.escalados}</span></td></tr></tfoot>` : ''}</table></div></div>`;
+  </tbody>${cs.length ? `<tfoot><tr><th colspan="${nCol - 1}">Presentes</th><td class="num"><b class="${ctDia.presentes < ctDia.escalados ? 'menos' : ctDia.escalados ? 'cheio' : ''}">${ctDia.presentes}</b><span class="muted">/${ctDia.escalados}</span></td></tr></tfoot>` : ''}</table></div></div>${cardEf(area, dia)}`;
 }
+/* ---------------- EFETIVO DO DIA (envio ao RH) ---------------- */
+// O líder ou supervisor preenche a Presença e envia o efetivo de cada área; o RH · Administrativo valida ou devolve na
+// Frequência. O dia abre sozinho (qualquer dia até hoje). Validado, o dia fica travado aqui até o administrador reabrir.
+// Status e regras em contas/efetivo-dia.js; documento efetivoDia/{data}_{área}.
+const quemEf = area => ({ lanca: canEditSit(area), valida: editaAdm(ME), admin: isAdmin() });
+// Pode mudar a presença dessa área nesse dia: quem lança e o dia não está validado.
+export const editaDia = (area, dia) => canEditSit(area) && !travadoEf(DB.efDia(SK, dia, area));
+// Áreas com gente na Presença (a escolhida no topo, ou todas), na ordem do conjunto e as gerais no fim.
+function areasEf(area) {
+  if (area !== 'TODAS') return [area];
+  const tem = new Set(colabsDa('TODAS').map(c => c.area));
+  return [...SETS[SK].areas, ...(SETS[SK].gerais || [])].filter(a => tem.has(a));
+}
+// Linha curta abaixo dos dias: o status do envio (uma área) ou quantas áreas já foram enviadas.
+function linhaEf(area, dia) {
+  if (dia > TODAY) return '';
+  const as = areasEf(area); if (!as.length) return '';
+  if (as.length === 1) { const e = estadoEf(DB.efDia(SK, dia, as[0]), dia, TODAY); return `<div class="body pt0 pb0 efst">Efetivo do dia: ${etiqueta(e.nome, e.tom)}</div>`; }
+  const n = as.filter(a => { const d = DB.efDia(SK, dia, a); return d && ['enviado', 'validado'].includes(d.st); }).length;
+  return `<div class="body pt0 pb0 efst">Efetivo do dia: ${etiqueta(`${n} de ${as.length} áreas enviadas`, n === as.length ? 'ok' : 'atencao')}</div>`;
+}
+// Uma área: o botão laranja (ação principal da tela); várias áreas: um botão comum por área.
+const rotEnv = doc => (doc && ['devolvido', 'aberto'].includes(doc.st) ? 'Enviar de novo' : 'Enviar efetivo');
+function cardEf(area, dia) {
+  if (dia > TODAY) return '';
+  const as = areasEf(area); if (!as.length) return '';
+  const linhas = as.map(a => {
+    const doc = DB.efDia(SK, dia, a); const e = estadoEf(doc, dia, TODAY); const q = quemEf(a);
+    const ct = contarDia(colabsDa(a), dia);
+    const env = ultimaEf(doc, 'enviado'), val = ultimaEf(doc, 'validado');
+    const det = doc && doc.st === 'devolvido' ? `Devolvido por ${esc(doc.nome)}: <b>${esc(doc.mot)}</b>. Corrija e envie de novo.`
+      : doc && doc.st === 'validado' ? `Validado por ${esc(val ? val.nome : doc.nome)}${val ? ' em ' + horaEf(val.em) : ''}. Para mudar, o administrador reabre o dia.`
+      : doc && doc.st === 'aberto' ? `Reaberto por ${esc(doc.nome)}. Ajuste e envie de novo.`
+      : env ? `Enviado por ${esc(env.nome)} em ${horaEf(env.em)}. Ainda dá para corrigir e reenviar até o RH validar.` : q.lanca ? 'Confira a presença acima e envie para o RH.' : 'Ainda não enviado pelo líder da área.';
+    const bts = [podeEf('enviado', doc, q) ? (doc && doc.st === 'enviado' ? `<button type="button" class="btn sm" data-act="efEnviar" data-ef="${esc(a)}">Reenviar</button>` : (as.length === 1 ? botaoAcao(rotEnv(doc), `data-act="efEnviar" data-ef="${esc(a)}"`) : `<button type="button" class="btn sm pri" data-act="efEnviar" data-ef="${esc(a)}">${rotEnv(doc)}</button>`)) : '',
+      podeEf('aberto', doc, q) ? `<button type="button" class="btn sm" data-act="efReabrir" data-ef="${esc(a)}">Reabrir o dia</button>` : ''].join('');
+    return `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(AREA_S[a] || a)}</b>${etiqueta(e.nome, e.tom)}${ct ? `<span class="muted small">${ct.presentes} de ${ct.escalados} presentes</span>` : ''}</div><div class="muted small">${det}</div></div>${bts ? `<div class="row-gap">${bts}</div>` : ''}</div>`;
+  }).join('');
+  return `<div class="card efenvcard"><header><h2>Efetivo do dia · ${ddmm(dia)}</h2><p>Envie ao RH quando a presença estiver conferida. Validado, o dia fica travado.</p></header><div class="body stackcol">${linhas}</div></div>`;
+}
+function efAcao(a, acao, msg, ok) {
+  const dia = diaEf(); const doc = DB.efDia(SK, dia, a);
+  if (!podeEf(acao, doc, quemEf(a))) return toast('Não é possível fazer isso neste dia.');
+  DB.efGravar(SK, dia, a, acao); DB.log(`Efetivo do dia: ${msg} ${AREA_S[a] || a} de ${ddmm(dia)} (${SETS[SK].curto})`, 'operacao'); toast(ok); render();
+}
+acoes.efEnviar = (t, d) => {
+  const a = d.ef; const dia = diaEf(); const ct = contarDia(colabsDa(a), dia);
+  const semJus = colabsDa(a).filter(c => { const x = sitDia(c, dia); return !x.auto && JUS_CODS.includes(x.v) && !((DB.sitInfo(c.id + '|' + dia).jus || {}).cod === x.v); }).length;
+  formSheet(`Enviar efetivo · ${AREA_S[a] || a}`, `${DIA_NOME[DAYS.findIndex((_, k) => add(UI.ini, k) === dia)] || ''} ${ddmm(dia)}`,
+    `<p class="m0">${ct ? `<b>${ct.presentes} de ${ct.escalados}</b> presentes.` : ''} O RH confere e valida. Depois de validado, a presença deste dia só muda se o administrador reabrir.</p>${semJus ? `<p class="m0 small" style="color:var(--atencao)">${semJus} falta${semJus === 1 ? '' : 's'} ou atraso${semJus === 1 ? '' : 's'} sem justificativa. Dá para enviar assim e justificar depois.</p>` : ''}`,
+    'Enviar', async () => { efAcao(a, 'enviado', 'enviou', 'Efetivo enviado ao RH'); });
+};
+acoes.efReabrir = (t, d) => {
+  const a = d.ef; const dia = diaEf();
+  formSheet(`Reabrir o dia · ${AREA_S[a] || a}`, ddmm(dia), '<p class="m0">O líder volta a poder mudar a presença deste dia e precisa enviar de novo para o RH validar.</p>', 'Reabrir', async () => { efAcao(a, 'aberto', 'reabriu', 'Dia reaberto'); });
+};
 // Efetivo diário da semana (área escolhida no topo, todas as rotas) para o Excel: o mesmo código que aparece na tela.
 function exportEsdia() {
   const area = areaScope(); const dias = DAYS.map((_, k) => add(UI.ini, k));
