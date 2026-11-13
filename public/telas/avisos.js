@@ -53,7 +53,8 @@ export function criarAvisos(X) {
         ${ativo ? `<button class="btn ghost sm" data-md-av="testar">Testar neste aparelho</button><button class="btn sm" data-md-av="desligar" ${ST.ocupado ? 'disabled' : ''}>Desligar</button>` : `<button class="btn pri sm" data-md-av="ligar" ${ST.ocupado || !ST.suportado ? 'disabled' : ''}>${ST.ocupado ? 'Ligando…' : 'Ligar avisos'}</button>`}</div>
       <div class="mchips">${opcoes.map(([k, t]) => `<label class="mchip"><input type="checkbox" data-md-pref="${k}" ${prefs[k] ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>
       ${ST.erro ? `<p class="err m0">${esc(ST.erro)}</p>` : ''}`;
-    if (cfg.vapid && ehAdm()) corpo += horarios(HE) + estadoRotina();
+    // Horários: o administrador vê sempre (mesmo antes de colar a chave); o estado da rotina, só com a chave.
+    if (ehAdm()) corpo += horarios(HE) + (cfg.vapid ? estadoRotina() : '');
     return `<div class="card avisos-card"><header><h2>Neste aparelho</h2></header><div class="body stackcol" style="gap:12px">${corpo}</div></div>`;
   }
 
