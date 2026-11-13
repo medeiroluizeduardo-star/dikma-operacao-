@@ -66,11 +66,10 @@ export const VIEWS = [
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
-  // ---- RH: cadastro dos colaboradores (colaboradores.js), frequência e férias (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
+  // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
   { id: 'rcolab', nome: 'Colaboradores', ic: 'users', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'CO' },
-  { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência e férias', mod: 'rh', req: temRH },
-  { id: 'aferias', nome: 'Férias', ic: 'ferias', grp: 'Frequência e férias', mod: 'rh', req: temRH },
-  { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência e férias', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
+  { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência', mod: 'rh', req: temRH },
+  { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
   { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'rh', req: temRH },
   { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'rh', req: temRH, fora: true, pai: 'fpainel' },
   // ---- Administração: ajustes de todos os módulos. 'Completa' vê tudo; 'Dos módulos', só os dos módulos em que é Gestor ----
@@ -109,9 +108,8 @@ export const SUB_G = {
   gtipos: 'Tipos, texto padrão e o que vai para a Folha 1'
 };
 export const SUB_A = {
-  rcolab: 'Cadastro único: dados, matrículas Dikma e Arcelor, área, rota e liderança',
+  rcolab: 'Cadastro único: dados, matrículas Dikma e Arcelor, área, rota, liderança e férias',
   afreq: 'Folha de frequência de 16 a 15, por grupo',
-  aferias: 'Planejamento, quem está de férias e data limite',
   aimport: 'Planilhas de frequência e de férias'
 };
 export const SUB_S = {
@@ -162,13 +160,14 @@ export function abaMarcada(id) {
   return id;
 }
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab' };
+const VIEW_NOVA = { sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab', aferias: 'rcolab' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
   if (v0 === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
   if (v0 === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
   if (v0 === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
+  if (v0 === 'aferias' && UI.co) { UI.co.mat = null; UI.co.f = 'ferAgora'; }
 }
 // Em que módulo fica a aba (null = Avisos no celular, que existe em todos).
 export function moduloDaView(id) {
@@ -197,7 +196,7 @@ const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['prog', 'gcolab', 'gpainel', 'causas', 'eaval'],
   seguranca: () => ['sganom', 'sginter', 'sgtrein', 'sgpainel'],
-  rh: () => ['rcolab', 'afreq', 'aferias', 'fpainel'],
+  rh: () => ['rcolab', 'afreq', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {

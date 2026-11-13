@@ -124,8 +124,8 @@ function vCfConf() {
   if (fichas.length) {
     const fn = new Set(fichas.map(f => nk(f.nome)));
     const semFicha = todos.filter(c => !fn.has(nk(c.nome)));
-    if (semFicha.length) item('warn', 'Nas Atividades sem ficha no RH', 'O nome não bate com nenhuma ficha (apelido, abreviação ou ainda não cadastrado). Corrija em Gestão › Colaboradores.', semFicha.map(c => title(c.nome)), null);
-    if (DB.areaDaFicha) { const ger = fichas.filter(f => DB.areaDaFicha(f.mat) === 'GERAL'); if (ger.length) item('warn', 'Fichas na área GERAL', 'Não foi possível saber a área de atuação. Só quem vê todas as áreas enxerga essas fichas. Corrija em Gestão › Colaboradores.', ger.map(f => title(f.nome)), null); }
+    if (semFicha.length) item('warn', 'Nas Atividades sem ficha no RH', 'O nome não bate com nenhuma ficha (apelido, abreviação ou ainda não cadastrado). Corrija em RH › Colaboradores.', semFicha.map(c => title(c.nome)), null);
+    if (DB.areaDaFicha) { const ger = fichas.filter(f => DB.areaDaFicha(f.mat) === 'GERAL'); if (ger.length) item('warn', 'Fichas na área GERAL', 'Não foi possível saber a área de atuação. Só quem vê todas as áreas enxerga essas fichas. Corrija em RH › Colaboradores.', ger.map(f => title(f.nome)), null); }
   }
   // 4) usuários
   const us = DB.cache.usuarios || [];

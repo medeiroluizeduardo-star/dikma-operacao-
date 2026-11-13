@@ -1,17 +1,20 @@
 // Dikma Gestão — RH › Colaboradores: o cadastro único das pessoas (gcolab), com a ficha individual em abas.
-// Lista (busca, área, situação) e ficha: Dados (nome, matrículas Dikma e Arcelor, admissão, função…) e Lotação (área de
-// atuação, rota, regime, líder imediato e supervisor imediato, este calculado pelo líder do líder, como na Frequência).
+// Lista (busca, área, situação e férias) e ficha: Dados (nome, matrículas Dikma e Arcelor, admissão, função…), Lotação (área
+// de atuação, rota, regime, líder imediato e supervisor imediato, este calculado pelo líder do líder, como na Frequência) e
+// Férias (períodos, data limite e próximas; o formulário é o da Frequência, administrativo.js, carregado sob demanda).
+// A importação da planilha de férias continua em RH › Importar planilhas.
 // A ficha de acompanhamento (ocorrências e assinaturas) continua na Gestão; um botão leva de uma para a outra.
 // Quem edita: o RH · Administrativo e o administrador. O RH grava os dados do cadastro (DB.rhSalvarFicha); área de
 // atuação, rota e função mudam também Atividades e Equipamentos, então ficam no formulário completo (gestao.js), que
 // abre para o administrador. A Matrícula de sempre (chave de tudo) é a da Dikma; a da Arcelor é o campo matArc.
-import { DB, esc, title, TODAY } from '../nucleo/base.js';
+import { DB, esc, title, TODAY, framed } from '../nucleo/base.js';
 import { UI, ME, meEm, admDe, temFichas, modsDe } from '../nucleo/estado.js';
 import { PES, carregarModulo } from '../nucleo/modulos.js';
 import { editaAdm } from '../contas/acessos.js';
 import { AREA_GERAL, ehAreaAtiv } from '../contas/pessoas.js';
 import { lideresDasFichas, nomeLider } from '../contas/lideres.js';
 import { criarLiderancaDaFicha } from '../contas/folha-ficha.js';
+import { indiceFeriasPessoa, situacaoPeriodo, resumoFeriasPessoa, deFeriasHoje, feriasEmBreve, limiteProximo, feriasSemCadastro } from '../contas/ferias.js';
 import { campoBusca } from '../ui/busca.js';
 import { abas, dados, etiqueta, tabela, vazio, carregando, botaoAcao } from '../ui/padrao.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -39,9 +42,36 @@ function tempoCasa(adm) {
   const a = Math.floor(m / 12), r = m % 12;
   return [a ? `${a} ano${a > 1 ? 's' : ''}` : '', r || !a ? `${r} ${r === 1 ? 'mês' : 'meses'}` : ''].filter(Boolean).join(' e ');
 }
-const situacao = c => (!ativo(c) ? etiqueta('Desligado', 'neutro') : emExp(c) ? etiqueta('Em experiência', 'info') : etiqueta('Ativo', 'ok'));
 
-const FILTROS = [['ativos', 'Ativos', ativo], ['exp', 'Em experiência', emExp], ['semArc', 'Sem matrícula Arcelor', c => ativo(c) && !c.matArc], ['desl', 'Desligados', c => !ativo(c)], ['todos', 'Todos', () => true]];
+// Férias (ferias/{id}, lidas pelo RH): índice refeito só quando a lista ou o cadastro mudam.
+const ferLista = () => (DB.cache.adm && DB.cache.adm.ferias) || [];
+const ferPronto = () => !!(DB.cache.adm && DB.cache.adm.fLoaded);
+let FX = null, FXl = null, FXc = null;
+const feriasDe = c => { const l = ferLista(), L = lista(); if (FXl !== l || FXc !== L) { FX = indiceFeriasPessoa(l, L); FXl = l; FXc = L; } return FX(c); };
+const editaFerias = () => editaAdm(meEm('rh'));
+const comFerias = fn => carregarModulo('AD').then(m => { if (m) fn(m); });
+const ddmm = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
+// Etiqueta curta das férias na lista: de férias agora, começa em breve ou data limite chegando.
+function etqFerias(c) {
+  const r = resumoFeriasPessoa(feriasDe(c), TODAY);
+  if (r.atual) return etiqueta(`De férias até ${ddmm(r.atual.termino)}`, 'atencao');
+  if (r.proxima && feriasEmBreve(feriasDe(c), TODAY)) return etiqueta(`Férias em ${ddmm(r.proxima.inicio)}`, 'info');
+  if (r.limite && limiteProximo(feriasDe(c), TODAY)) return etiqueta(`${r.limite < TODAY ? 'Limite vencido' : 'Limite'} ${dBR(r.limite)}`, 'critico');
+  return '';
+}
+const situacao = c => (!ativo(c) ? etiqueta('Desligado', 'neutro') : (etqFerias(c) || (emExp(c) ? etiqueta('Em experiência', 'info') : etiqueta('Ativo', 'ok'))));
+
+const FILTROS = [['ativos', 'Ativos', ativo], ['exp', 'Em experiência', emExp], ['semArc', 'Sem matrícula Arcelor', c => ativo(c) && !c.matArc],
+  ['ferAgora', 'De férias agora', c => ativo(c) && deFeriasHoje(feriasDe(c), TODAY)],
+  ['ferProx', 'Férias nos próximos 60 dias', c => ativo(c) && feriasEmBreve(feriasDe(c), TODAY)],
+  ['ferLim', 'Data limite em 60 dias, sem férias marcadas', c => ativo(c) && limiteProximo(feriasDe(c), TODAY)],
+  ['desl', 'Desligados', c => !ativo(c)], ['todos', 'Todos', () => true]];
+// Coluna de férias da lista (quando o filtro é de férias).
+function txtFerias(c) {
+  const r = resumoFeriasPessoa(feriasDe(c), TODAY); const f = r.atual || r.proxima;
+  if (f) return `${dBR(f.inicio)} a ${dBR(f.termino)}${f.retorno ? ` <span class="muted small">· volta ${dBR(f.retorno)}</span>` : ''}`;
+  return r.limite ? `Limite ${dBR(r.limite)}, sem férias marcadas` : '';
+}
 
 function vLista() {
   const L = lista(); const lot = PES.lotacoes(L);
@@ -58,16 +88,23 @@ function vLista() {
     <label class="p-campo"><span>Área de atuação</span><select id="coFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${C.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
     <label class="p-campo"><span>Mostrar</span><select id="coF">${FILTROS.map(([k, t, fn]) => `<option value="${k}" ${f[0] === k ? 'selected' : ''}>${t} (${n(fn)})</option>`).join('')}</select></label>
   </div>`;
-  const botoes = podeEditar() || completo() ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}</div>` : '';
+  const ferF = f[0].startsWith('fer');
+  const exp = !framed && ferPronto() && ferLista().length ? `<button class="btn" data-act="coExpFerias">${I.dl} Exportar férias</button>` : '';
+  const botoes = podeEditar() || completo() || exp ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}${exp}</div>` : '';
   let h = `<div class="card"><div class="body stackcol">${filtros}${botoes}</div></div>`;
+  if (ferF && !ferPronto()) return h + carregando();
+  if (ferF) { // férias que não acham ninguém no cadastro: aparecem aqui para não sumirem
+    const sem = feriasSemCadastro(ferLista().filter(x => x.inicio ? (x.termino || '') >= TODAY : true), L);
+    if (sem.length) h += `<p class="muted small m0">${sem.length} ${sem.length === 1 ? 'período de férias' : 'períodos de férias'} de agora em diante sem ninguém com a mesma matrícula ou nome no cadastro: ${sem.slice(0, 8).map(x => esc(title(x.nome))).join(', ')}${sem.length > 8 ? '…' : ''}.</p>`;
+  }
   if (!l.length) return h + vazio('Ninguém com esse filtro', 'Troque a busca, a área ou o que mostrar.');
   const lim = Math.min(UI.more || 200, l.length);
   const nome = c => `<button type="button" class="btn ghost link co-nome" data-act="coFicha" data-mat="${esc(c.mat)}">${esc(title(c.nome))}</button>${c.funcao ? `<div class="muted small">${esc(title(c.funcao))}</div>` : ''}`;
   const cel = isMobile();
-  const colunas = cel ? [{ t: 'Colaborador' }, { t: 'Situação' }] : [{ t: 'Colaborador' }, { t: 'Matrícula Dikma' }, { t: 'Matrícula Arcelor' }, { t: 'Área de atuação' }, { t: 'Líder imediato' }, { t: 'Admissão' }, { t: 'Situação' }];
+  const colunas = cel ? [{ t: 'Colaborador' }, { t: 'Situação' }] : [{ t: 'Colaborador' }, { t: 'Matrícula Dikma' }, { t: 'Matrícula Arcelor' }, { t: 'Área de atuação' }, { t: 'Líder imediato' }, { t: ferF ? 'Férias' : 'Admissão' }, { t: 'Situação' }];
   const linhas = l.slice(0, lim).map(c => (cel
-    ? [`${nome(c)}<div class="muted small mono">${esc(c.mat)}${c.matArc ? ' · Arcelor ' + esc(c.matArc) : ''}</div>`, situacao(c)]
-    : [nome(c), `<span class="mono">${esc(c.mat)}</span>`, c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : '<span class="p-falta">—</span>', esc((lot.get(String(c.mat)) || {}).txt || PES.areaNome(c.area)), c.lider ? esc(title(c.lider)) : '<span class="p-falta">—</span>', dBR(c.adm) || '—', situacao(c)]));
+    ? [`${nome(c)}<div class="muted small mono">${esc(c.mat)}${c.matArc ? ' · Arcelor ' + esc(c.matArc) : ''}</div>${ferF ? `<div class="small">${txtFerias(c)}</div>` : ''}`, situacao(c)]
+    : [nome(c), `<span class="mono">${esc(c.mat)}</span>`, c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : '<span class="p-falta">—</span>', esc((lot.get(String(c.mat)) || {}).txt || PES.areaNome(c.area)), c.lider ? esc(title(c.lider)) : '<span class="p-falta">—</span>', ferF ? txtFerias(c) || '—' : dBR(c.adm) || '—', situacao(c)]));
   h += `<p class="muted small co-total">${l.length} ${l.length === 1 ? 'pessoa' : 'pessoas'}</p>${tabela(colunas, linhas, { rotulo: 'Colaboradores' })}`;
   if (l.length > lim) h += `<div class="row-gap"><button class="btn center" data-act="more" data-n="${lim + 200}">Mostrar mais ${Math.min(200, l.length - lim)} (faltam ${l.length - lim})</button></div>`;
   return h;
@@ -76,8 +113,8 @@ function vLista() {
 function vFicha(c) {
   const L = lista(); const lot = PES.lotacao(c); const ld = criarLiderancaDaFicha(L)(c);
   const at = lot.ativ ? lot.ativ.x : null, op = lot.op;
-  const aba = ['dados', 'lot'].includes(C.aba) ? C.aba : 'dados';
-  const corpo = aba === 'dados'
+  const aba = ['dados', 'lot', 'fer'].includes(C.aba) ? C.aba : 'dados';
+  const corpo = aba === 'fer' ? vFeriasFicha(c) : aba === 'dados'
     ? dados([
       ['Nome completo', esc(c.nome)], ['Matrícula Dikma', `<span class="mono">${esc(c.mat)}</span>`], ['Matrícula Arcelor', c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : ''],
       ['Admissão', c.adm ? `${dBR(c.adm)} <span class="muted small">· ${tempoCasa(c.adm)} de casa</span>` : ''], ['Demissão', dBR(c.dem)],
@@ -97,10 +134,30 @@ function vFicha(c) {
       <p class="muted m0">Matrícula Dikma <b class="mono">${esc(c.mat)}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}</p>
       <div class="row-gap co-etq">${situacao(c)}${c.adm && emExp(c) ? etiqueta(`${dias(c.adm, TODAY)} dias de casa`, 'info') : ''}</div></div>
       ${botoes ? `<div class="row-gap">${botoes}</div>` : ''}</div>
-    ${abas([['dados', 'Dados'], ['lot', 'Lotação e liderança']], aba, 'co-aba', 'Ficha do colaborador')}
+    ${abas([['dados', 'Dados'], ['lot', 'Lotação e liderança'], ['fer', 'Férias']], aba, 'co-aba', 'Ficha do colaborador')}
     ${corpo}
     ${aba === 'lot' ? '<p class="muted small m0">O supervisor imediato é o líder da ficha do líder (o mesmo que agrupa a Frequência). Área de atuação e rota vêm das Atividades e dos Equipamentos.</p>' : ''}
   </div></div>`;
+}
+
+// Aba Férias da ficha: resumo (agora, próximas, data limite) e todos os períodos; tocar num período abre para editar.
+function vFeriasFicha(c) {
+  if (!ferPronto()) return carregando();
+  const per = feriasDe(c); const r = resumoFeriasPessoa(per, TODAY);
+  const novo = editaFerias() && ativo(c) ? botaoAcao('Novas férias', `data-act="coFerNova" data-mat="${esc(c.mat)}"`, I.plus) : '';
+  const resumo = dados([
+    ['Agora', r.atual ? `${etiqueta('De férias', 'atencao')} ${dBR(r.atual.inicio)} a ${dBR(r.atual.termino)} <span class="muted small">· volta ${dBR(r.atual.retorno)}</span>` : 'Trabalhando'],
+    ['Próximas férias', r.proxima ? `${dBR(r.proxima.inicio)} a ${dBR(r.proxima.termino)} <span class="muted small">· ${r.proxima.dias || ''} dias</span>` : ''],
+    ['Data limite', r.limite ? `${dBR(r.limite)}${r.limite < TODAY ? ` ${etiqueta('Vencida', 'critico')}` : limiteProximo(per, TODAY) ? ` ${etiqueta('Em 60 dias', 'critico')}` : ''}` : r.marcada ? '<span class="muted">Férias já marcadas</span>' : '']]);
+  if (!per.length) return `${resumo}${vazio('Nenhum período de férias', 'Lance as férias aqui ou importe a planilha em Frequência › Importar planilhas.', novo)}`;
+  const cel = isMobile();
+  const per1 = f => `<button type="button" class="btn ghost link" data-act="coFer" data-id="${esc(f.id)}">${f.inicio ? `${dBR(f.inicio)} a ${dBR(f.termino)}` : `Planejada${f.mesPlanejado ? ' para ' + f.mesPlanejado.slice(5) + '/' + f.mesPlanejado.slice(0, 4) : ''}`}</button>${f.substituto ? `<div class="muted small">${esc(f.substituto)}</div>` : ''}`;
+  const etq = f => { const s = situacaoPeriodo(f, TODAY); return etiqueta(s.t, s.s); };
+  const colunas = cel ? [{ t: 'Período' }, { t: 'Situação' }] : [{ t: 'Período' }, { t: 'Dias', n: true }, { t: 'Retorno' }, { t: 'Data limite' }, { t: 'Situação' }];
+  const linhas = per.map(f => (cel
+    ? [`${per1(f)}<div class="muted small">${f.inicio ? `${f.dias || ''} dias · volta ${dBR(f.retorno)}` : ''}${f.limite ? ` · limite ${dBR(f.limite)}` : ''}</div>`, etq(f)]
+    : [per1(f), f.inicio ? String(f.dias || '') : '', dBR(f.retorno) || '—', dBR(f.limite) || '—', etq(f)]));
+  return `${resumo}${novo ? `<div class="row-gap">${novo}</div>` : ''}${tabela(colunas, linhas, { rotulo: 'Férias de ' + title(c.nome) })}`;
 }
 
 export function vColaboradores() {
@@ -152,6 +209,9 @@ acoes.coVoltar = () => { C.mat = null; render(); };
 acoes.coEditar = (t, d) => (completo() ? comGestao(m => m.editarColab(d.mat)) : formRH(d.mat));
 acoes.coNovo = () => (completo() ? comGestao(m => m.editarColab(null)) : formRH(null));
 acoes.coLideres = () => { if (completo()) comGestao(m => m.lideres()); };
+acoes.coFer = (t, d) => comFerias(m => m.formFerias(d.id));
+acoes.coFerNova = (t, d) => { const c = lista().find(x => String(x.mat) === String(d.mat)); if (c) comFerias(m => m.formFerias(null, { nome: c.nome, mat: c.mat, setor: c.setor || '' })); };
+acoes.coExpFerias = () => comFerias(m => m.exportarFerias());
 document.addEventListener('click', e => { const t = e.target.closest('[data-co-aba]'); if (!t || UI.view !== 'rcolab') return; C.aba = t.dataset.coAba; render(); });
 document.addEventListener('input', e => {
   if (e.target.id !== 'coQ') return;
