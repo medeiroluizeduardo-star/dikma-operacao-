@@ -64,6 +64,7 @@ export const VIEWS = [
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  { id: 'sgcartao', nome: 'Cartão Amarelo', ic: 'cartao', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Indicadores', mod: 'seguranca', sup: true, tela: 'SG' },
   // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
@@ -116,6 +117,7 @@ export const SUB_S = {
   sgtrein: 'NRs, ASO e outros treinamentos: quem está vencido, quem vence em 30 dias e importação por planilha',
   sginter: 'Registros de interação: riscos e desvios vistos em campo',
   sganom: 'Fila das anomalias: situação, responsável e prazo',
+  sgcartao: 'Direito ao Trabalho Seguro: cartões dados em campo e a validação do líder ou da segurança',
   sgpainel: 'Interações, desvios e anomalias do mês',
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
@@ -132,7 +134,7 @@ export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nom
 export const MODS = {
   operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos, Efetivo e Indicadores', key: 'operacao', inicio: 'apontar' },
   gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas de acompanhamento e indicadores', key: 'gestao', inicio: 'prog' },
-  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, treinamentos e indicadores', key: 'seguranca', inicio: 'sganom' },
+  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, Cartão Amarelo, treinamentos e indicadores', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Colaboradores, frequência e férias', key: 'rh', inicio: 'afreq' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
@@ -195,7 +197,7 @@ export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: 
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['prog', 'gcolab', 'gpainel', 'causas', 'eaval'],
-  seguranca: () => ['sganom', 'sginter', 'sgtrein', 'sgpainel'],
+  seguranca: () => ['sganom', 'sginter', 'sgcartao', 'sgtrein', 'sgpainel'],
   rh: () => ['rcolab', 'afreq', 'fpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };

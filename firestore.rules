@@ -14,7 +14,7 @@ rules_version = '2';
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
 //   - Usuários, config/permissoes = Administração completa (administrador).
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
-//     administrador; Segurança (seginter, seganom, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
+//     administrador; Segurança (seginter, seganom, segcartao, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
 //     o supervisor para cima e o administrador apagam um a um (veja o bloco de equipamentos).
 //   - Fotos das atividades (evidencias, evidenciasArquivo e b_): cria quem aponta na área, em nome próprio; lê quem lê
 //     as semanas; o autor só ajusta refs (24 h); exportação/lixeira/remoção e apagar = administrador; config/fotos =
@@ -679,6 +679,32 @@ service cloud.firestore {
         || (autorNoPrazo() && resource.data.status == 'aberta' && corrige('seganom') && anomOk(request.resource.data));
       allow delete: if admin();
     }
+    // Cartão Amarelo (Direito ao Trabalho Seguro): registra quem registra na Segurança (nasce pendente, sem validação);
+    // lê como os outros registros; valida quem trata as anomalias (trata, gestor, administrador = Seg. do Trabalho)
+    // e o supervisor da área (Líder imediato), só nos campos da validação. O autor corrige por 24 h enquanto pendente.
+    function cartaoOk(d) {
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && d.conj is string
+        && d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'faltou', 'motivo', 'comoSeguro', 'comunic', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'status', 'valid', 'atualizadoEm', 'atualizadoPor'])
+        && d.get('faltou', []) is list && d.get('faltou', []).size() <= 3
+        && txtOk(d, 'motivo', 1, 3000) && txtOk(d, 'comoSeguro', 1, 3000) && txtOk(d, 'comunic', 1, 120) && txtOk(d, 'mat', 1, 30)
+        && d.get('fotos', []) is list && d.get('minis', []) is list && d.get('fotos', []).size() <= 6 && d.get('minis', []).size() <= 6
+        && d.por is string && txtOk(d, 'porNome', 0, 120) && d.status in ['pendente', 'validado'];
+    }
+    function validOk(d) {
+      let v = d.get('valid', {});
+      return d.status in ['pendente', 'validado'] && v is map && v.keys().hasOnly(['tipo', 'nome', 'mat', 'uid', 'em'])
+        && (d.status == 'pendente' || (v.get('tipo', '') in ['lider', 'seg'] && txtOk(v, 'nome', 1, 120) && txtOk(v, 'mat', 1, 30)))
+        && v.get('uid', '') is string && v.get('em', '') is string;
+    }
+    match /segcartao/{id} {
+      allow read: if segLe(resource.data);
+      allow create: if segRegistra() && cartaoOk(request.resource.data) && request.resource.data.por == request.auth.uid
+        && request.resource.data.em == request.time && request.resource.data.status == 'pendente' && !('valid' in request.resource.data);
+      allow update: if ((segTrata() || supSeg(resource.data.conj)) && soAltera(['status', 'valid', 'atualizadoEm', 'atualizadoPor']) && validOk(request.resource.data))
+        || (autorNoPrazo() && resource.data.status == 'pendente'
+            && soAltera(['data', 'mes', 'area', 'conj', 'faltou', 'motivo', 'comoSeguro', 'comunic', 'mat', 'atualizadoEm']) && cartaoOk(request.resource.data));
+      allow delete: if admin();
+    }
     // DDS antigos (diálogo diário de segurança): a função saiu do site em 2026-11. Os registros ficam guardados no banco:
     // lê quem lê a Segurança, ninguém grava mais e só o administrador apaga.
     match /segdds/{id} {
@@ -694,7 +720,7 @@ service cloud.firestore {
     }
     match /segfotos/{id} {
       allow read: if segTudo() || (resource.data.autor == request.auth.uid && segRegistra()) || supSeg(resource.data.conj);
-      allow create: if request.resource.data.por == request.auth.uid && request.resource.data.col in ['seginter', 'seganom']
+      allow create: if request.resource.data.por == request.auth.uid && request.resource.data.col in ['seginter', 'seganom', 'segcartao']
         && request.resource.data.reg is string && request.resource.data.dados is string && request.resource.data.dados.size() < 700000
         && request.resource.data.mini is string && request.resource.data.mini.size() < 80000 && request.resource.data.conj is string
         && ((request.resource.data.tipo == 'antes' && segRegistra() && request.resource.data.autor == request.auth.uid)

@@ -1055,6 +1055,7 @@ test('bloqueado com acesso por módulo guardado: não lê nem grava nada', async
 const SEG_BASE = { data: '2026-11-02', mes: '2026-11', local: 'CORREIA C1', mat: '123', fotos: [], minis: [], porNome: 'X' };
 const INTER_X = { tipoAtiv: 'ROTINA', risco: '', desvios: ['EPI'], desvioOutro: '', desc: 'd', acao: 'a', resp: 'Fulano' };
 const ANOM_X = { hora: '08:30', regime: 'ADM', desc: 'd', conseq: 'c', acao: 'a', causas: 'c', sugest: 's', comunic: 'Fulano', status: 'aberta' };
+const CARTAO_X = { data: '2026-11-02', mes: '2026-11', faltou: ['O AMBIENTE ESTÁ SEGURO?'], motivo: 'm', comoSeguro: 'c', comunic: 'FULANO', mat: '123', fotos: [], minis: [], porNome: 'X', status: 'pendente' };
 const PAT = { area: 'PÁTIO DE CARVÃO', conj: 'patio' }, BAT = { area: 'BATERIA', conj: 'bateria' };
 async function semearSeguranca(d) {
   const agora = Timestamp.now(), velho = Timestamp.fromMillis(Date.now() - 2 * 864e5);
@@ -1065,6 +1066,9 @@ async function semearSeguranca(d) {
   await setDoc(doc(d, 'seganom', 'a2'), { ...SEG_BASE, ...ANOM_X, ...BAT, por: 'segReg2', em: agora });
   await setDoc(doc(d, 'seganom', 'a3'), { ...SEG_BASE, ...ANOM_X, ...PAT, por: 'segReg', em: velho });
   await setDoc(doc(d, 'seganom', 'a4'), { ...SEG_BASE, ...ANOM_X, ...PAT, por: 'segReg', em: agora, status: 'tratamento', trat: { resp: 'Fulano', respUid: '', prazo: '2026-11-10', coment: '', fotoDepois: '', miniDepois: '', hist: [] }, conclEm: '' });
+  await setDoc(doc(d, 'segcartao', 'c1'), { ...CARTAO_X, ...PAT, por: 'segReg', em: agora });
+  await setDoc(doc(d, 'segcartao', 'c2'), { ...CARTAO_X, ...BAT, por: 'segReg2', em: agora });
+  await setDoc(doc(d, 'segcartao', 'c3'), { ...CARTAO_X, ...PAT, por: 'segReg', em: velho });
   await setDoc(doc(d, 'segfotos', 'f1'), { reg: 'a1', col: 'seganom', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
   await setDoc(doc(d, 'segfotos', 'f2'), { reg: 'a2', col: 'seganom', tipo: 'antes', autor: 'segReg2', por: 'segReg2', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
 }
@@ -1182,6 +1186,47 @@ test('Segurança: o autor corrige o próprio registro por 24 h e a anomalia só 
   await assertFails(updateDoc(doc(db('segReg2'), 'seganom', 'a1'), { desc: 'não é meu' }));
   await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a1'), { por: 'segReg2' }), 'autor não muda');
   await assertFails(updateDoc(doc(db('segReg'), 'seganom', 'a1'), { status: 'concluida' }), 'quem registra não trata');
+});
+test('Segurança · Cartão Amarelo: registra quem registra; valida o líder (supervisor da área) ou a segurança; o autor corrige enquanto pendente', async () => {
+  const novo = (por, extra = {}) => ({ ...CARTAO_X, ...PAT, por, em: serverTimestamp(), ...extra });
+  const validar = (uid, tipo = 'seg', extra = {}) => ({ status: 'validado', valid: { tipo, nome: 'VALIDADOR', mat: '999', uid, em: '2026-11-03T10:00:00.000Z' }, atualizadoEm: serverTimestamp(), atualizadoPor: uid, ...extra });
+  await assertSucceeds(setDoc(doc(db('segReg'), 'segcartao', 'nc1'), novo('segReg')));
+  await assertSucceeds(setDoc(doc(db('segReg'), 'segcartao', 'nc1b'), novo('segReg', { faltou: [], fotos: [] })), 'sem marcar pergunta e sem foto');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc2'), novo('segReg2')), 'não registra em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('segLeitor'), 'segcartao', 'nc3'), novo('segLeitor')), 'somente leitura não registra');
+  await assertFails(setDoc(doc(db('liderRec'), 'segcartao', 'nc4'), novo('liderRec')), 'sem a Segurança');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc5'), novo('segReg', { motivo: '' })), 'motivo obrigatório');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc6'), novo('segReg', { comoSeguro: '' })), 'como fazer com segurança obrigatório');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc7'), novo('segReg', { status: 'validado' })), 'nasce pendente');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc8'), novo('segReg', { valid: { tipo: 'seg' } })), 'quem registra não valida junto');
+  await assertFails(setDoc(doc(db('segReg'), 'segcartao', 'nc9'), novo('segReg', { extra: 1 })), 'só os campos do cartão');
+  // leitura: autor, quem vê tudo e o supervisor da área
+  await assertSucceeds(getDoc(doc(db('segReg'), 'segcartao', 'c1')));
+  await assertFails(getDoc(doc(db('segReg'), 'segcartao', 'c2')), 'cartão de outra pessoa');
+  await assertSucceeds(getDocs(query(collection(db('segReg'), 'segcartao'), where('status', '==', 'pendente'), where('por', '==', 'segReg'))));
+  await assertSucceeds(getDocs(query(collection(db('segLeitor'), 'segcartao'), where('status', '==', 'pendente'))));
+  await assertSucceeds(getDoc(doc(db('supPatio'), 'segcartao', 'c1')));
+  await assertFails(getDoc(doc(db('supPatio'), 'segcartao', 'c2')), 'Bateria não é a área dele');
+  // validação
+  await assertSucceeds(updateDoc(doc(db('supPatio'), 'segcartao', 'c1'), validar('supPatio', 'lider')), 'líder imediato valida o da área');
+  await assertFails(updateDoc(doc(db('supPatio'), 'segcartao', 'c2'), validar('supPatio', 'lider')), 'não valida o de outra área');
+  await assertSucceeds(updateDoc(doc(db('segTrata'), 'segcartao', 'c2'), validar('segTrata')), 'segurança do trabalho valida');
+  await assertFails(updateDoc(doc(db('segTrata'), 'segcartao', 'c3'), validar('segTrata', 'seg', { motivo: 'mudou' })), 'não muda o que foi registrado');
+  await assertFails(updateDoc(doc(db('segTrata'), 'segcartao', 'c3'), validar('segTrata', 'seg', { valid: { tipo: 'seg', nome: '', mat: '1', uid: 'segTrata', em: '' } })), 'validação pede o nome');
+  await assertFails(updateDoc(doc(db('segTrata'), 'segcartao', 'c3'), validar('segTrata', 'chefe')), 'tipo de validação inválido');
+  for (const u of ['segReg', 'segLeitor', 'liderRec']) await assertFails(updateDoc(doc(db(u), 'segcartao', 'c3'), validar(u)), u);
+  // correção do autor: 24 h e só pendente
+  await assertSucceeds(updateDoc(doc(db('segReg'), 'segcartao', 'nc1'), { motivo: 'corrigido', atualizadoEm: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db('segReg'), 'segcartao', 'c3'), { motivo: 'tarde demais' }), 'passou de 24 horas');
+  await assertFails(updateDoc(doc(db('segReg'), 'segcartao', 'c1'), { motivo: 'já validado' }), 'depois de validado não corrige');
+  await assertFails(updateDoc(doc(db('segReg'), 'segcartao', 'nc1'), { status: 'validado' }), 'o autor não valida o próprio');
+  // fotos e exclusão
+  const dR = db('segReg'); const b = writeBatch(dR);
+  b.set(doc(dR, 'segcartao', 'ncf'), novo('segReg', { fotos: ['fc1'], minis: ['m'] }));
+  b.set(doc(dR, 'segfotos', 'fc1'), { reg: 'ncf', col: 'segcartao', tipo: 'antes', autor: 'segReg', por: 'segReg', conj: 'patio', area: 'PÁTIO DE CARVÃO', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0, em: serverTimestamp() });
+  await assertSucceeds(b.commit());
+  await assertFails(deleteDoc(doc(db('segTrata'), 'segcartao', 'c3')), 'só o administrador apaga');
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'segcartao', 'c3')));
 });
 test('Segurança: listas dos formulários — todos os ativos leem; administrador e o gestor da Segurança (Dos módulos) alteram', async () => {
   for (const u of ['segReg', 'supPatio', 'liderRec']) await assertSucceeds(getDoc(doc(db(u), 'config', 'seguranca')), u);

@@ -1,5 +1,5 @@
 // Dikma Gestão — módulo SEGURANÇA: registros de interação e de anomalia (os mesmos formulários do Google, na mesma
-// ordem), fila das anomalias com o acompanhamento, painel do mês, Excel e as listas (Administração › Segurança).
+// ordem), o Cartão Amarelo (Direito ao Trabalho Seguro, igual ao cartão de papel, com a validação), fila das anomalias com o acompanhamento, painel do mês, Excel e as listas (Administração › Segurança).
 // Carregado sob demanda (nucleo/modulos.js). As abas ficam em navegacao.js; quem vê e quem trata, em segcalc.js;
 // o banco, em data.js (seginter, seganom, segfotos e config/seguranca).
 // Celular primeiro: o formulário ocupa a tela inteira, guarda o rascunho no aparelho enquanto a pessoa preenche e
@@ -8,7 +8,7 @@ import { MESES_L, SETS, add, addMonth, today } from '../contas/cal.js';
 import { campoBusca } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { ESQUELETO } from '../ui/movimento.js';
-import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg } from '../contas/segcalc.js';
+import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg, PERG_CARTAO, VALIDA_CARTAO, validaCartao, pendenteCartao } from '../contas/segcalc.js';
 import { DB, framed, esc, title, $ } from '../nucleo/base.js';
 import { ME, UI, isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -71,9 +71,21 @@ const FORMS = {
       { k: 'sugest', rot: 'SUGESTÕES', ajuda: 'O QUE PODE SER FEITO PARA MELHORAR?', t: 'area', obr: 1, max: 3000 },
       { k: 'comunic', rot: 'COMUNICADO POR?', t: 'text', obr: 1, max: 120, eu: 1 },
       P_MAT, P_FOTOS]
+  },
+  // Cartão Amarelo: os campos do cartão de papel. A validação (Líder imediato ou Seg. do Trabalho) vem depois, em abrirValidar.
+  cartao: {
+    col: 'segcartao', nome: 'Cartão Amarelo', curto: 'cartão amarelo',
+    campos: [P_DATA, P_AREA,
+      { k: 'faltou', rot: 'O QUE FALTOU?', ajuda: 'MARQUE A PERGUNTA QUE TEVE RESPOSTA NÃO', t: 'checks', ops: () => PERG_CARTAO },
+      { k: 'motivo', rot: 'MOTIVO DO CARTÃO AMARELO', t: 'area', obr: 1, max: 3000 },
+      { k: 'comoSeguro', rot: 'COMO PODERIA FAZER COM SEGURANÇA?', t: 'area', obr: 1, max: 3000 },
+      { k: 'comunic', rot: 'COMUNICADO POR (NOME)', ajuda: 'Quem deu o cartão. Busque no cadastro de colaboradores ou escreva o nome', t: 'text', obr: 1, max: 120, eu: 1, pessoas: 1 },
+      { ...P_MAT, ajuda: 'Preenchida sozinha pelo cadastro (a da Arcelor, quando houver)' },
+      { ...P_FOTOS, obr: 0, rot: 'FOTOS (SE QUISER)' }]
   }
 };
 const MAX_FOTOS = 5;
+const tipoDaCol = col => (col === 'seginter' ? 'inter' : col === 'segcartao' ? 'cartao' : 'anom');
 
 export function criarSeguranca() {
   const U = UI.sg;
@@ -90,6 +102,7 @@ export function criarSeguranca() {
   const curtoNome = s => { const p = nomeP(s).split(/\s+/).filter(Boolean); return p.length > 2 ? `${p[0]} ${p[p.length - 1]}` : p.join(' '); };
   const umDia = ms => { const d = new Date(+ms); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); };
   const pillSit = a => (vencidaSeg(a, hoje()) ? '<span class="pill bad">Prazo vencido</span>' : a.status === 'concluida' ? '<span class="pill ok">Concluída</span>' : a.status === 'tratamento' ? '<span class="pill warn">Em tratamento</span>' : '<span class="pill neu">Aberta</span>');
+  const pillCartao = c => (c.status === 'validado' ? `<span class="pill ok">Validado${c.valid && VALIDA_CARTAO[c.valid.tipo] ? ' · ' + (c.valid.tipo === 'lider' ? 'Líder' : 'Seg. do Trabalho') : ''}</span>` : '<span class="pill warn">Falta validar</span>');
   const minis = (r, n = 3) => (r.fotos || []).slice(0, n).map((id, i) => ((r.minis || [])[i] ? `<button type="button" class="sgmini" data-act="sgFoto" data-id="${esc(id)}" data-i="${i}" data-reg="${esc(r.id)}" aria-label="Ver a foto ${i + 1}"><img src="${(r.minis || [])[i]}" alt=""></button>` : '')).join('') + ((r.fotos || []).length > n ? `<span class="muted small">+${r.fotos.length - n}</span>` : '');
   const vazio = (t, s, bt = '') => `<div class="empty"><b>${t}</b><span>${s}</span>${bt}</div>`;
   const casaQ = (r, campos) => { const q = normNomeSeg(U.q); if (!q) return true; const t = normNomeSeg(campos.map(k => [].concat(r[k] || []).join(' ')).join(' ')); return q.split(' ').every(p => t.includes(p)); };
@@ -114,6 +127,15 @@ export function criarSeguranca() {
     const fichas = [...((DB.cache.g && DB.cache.g.colabs) || []), ...((DB.cache.adm && DB.cache.adm.rh) || [])];
     const f = fichas.find(c => c && c.mat && normNomeSeg(c.nome) === n);
     return f ? String(f.mat) : '';
+  }
+  // Colaboradores cadastrados (fichas), para o Cartão Amarelo: nome e matrícula (a da Arcelor quando houver; senão, a Dikma).
+  function fichasColab() {
+    const m = new Map();
+    for (const c of [...((DB.cache.adm && DB.cache.adm.rh) || []), ...((DB.cache.g && DB.cache.g.colabs) || [])]) {
+      if (!c || !c.nome || c.dem) continue; const k = normNomeSeg(c.nome); if (m.has(k)) continue;
+      m.set(k, { nome: nomeP(c.nome), mat: String(c.matArc || c.mat || '') });
+    }
+    return [...m.values()].sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
   // ---------- fotos: reduzidas no aparelho (JPEG ~1280 px e miniatura ~320 px) ----------
@@ -152,10 +174,10 @@ export function criarSeguranca() {
     const id = 'sgf_' + c.k; const L0 = cfg;
     let ctl = '';
     if (c.t === 'date' || c.t === 'time') ctl = `<input class="in" type="${c.t}" id="${id}" value="${esc(v || '')}" ${c.t === 'date' ? `max="${add(hoje(), 1)}"` : ''}>`;
-    else if (c.t === 'text') ctl = `<input class="in" id="${id}" value="${esc(v || '')}" maxlength="${c.max || 200}" autocomplete="off" ${c.num ? 'inputmode="numeric"' : ''} ${c.sug ? `list="sgl_${c.k}"` : ''}>${c.sug ? `<datalist id="sgl_${c.k}"></datalist>` : ''}`;
+    else if (c.t === 'text') ctl = `<input class="in" id="${id}" value="${esc(v || '')}" maxlength="${c.max || 200}" autocomplete="off" ${c.num ? 'inputmode="numeric"' : ''} ${c.sug || c.pessoas ? `list="sgl_${c.k}"` : ''}>${c.sug ? `<datalist id="sgl_${c.k}"></datalist>` : c.pessoas ? `<datalist id="sgl_${c.k}">${fichasColab().map(f => `<option value="${esc(f.nome)}">${esc(f.mat)}</option>`).join('')}</datalist>` : ''}`;
     else if (c.t === 'area') ctl = `<textarea class="in" id="${id}" rows="3" maxlength="${c.max || 3000}">${esc(v || '')}</textarea>`;
     else if (c.t === 'radio') ctl = `<div class="sgops" role="radiogroup" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="radio" name="${id}" value="${esc(o)}" ${o === v ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
-    else if (c.t === 'checks') { const sel = new Set(v || []); ctl = `<div class="sgops chk" role="group" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="checkbox" name="${id}" value="${esc(o)}" ${sel.has(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div><label class="sel sgoutro" id="sgOutroW" ${sel.has('OUTROS') ? '' : 'hidden'}><span>Qual outro desvio?</span><input class="in" id="sgf_desvioOutro" maxlength="200" value="${esc((F && F.outro) || '')}"></label>`; }
+    else if (c.t === 'checks') { const sel = new Set(v || []); ctl = `<div class="sgops chk" role="group" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="checkbox" name="${id}" value="${esc(o)}" ${sel.has(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>${c.k !== 'desvios' ? '' : `<label class="sel sgoutro" id="sgOutroW" ${sel.has('OUTROS') ? '' : 'hidden'}><span>Qual outro desvio?</span><input class="in" id="sgf_desvioOutro" maxlength="200" value="${esc((F && F.outro) || '')}"></label>`}`; }
     else if (c.t === 'fotos') ctl = F.reg ? `<div class="sgfotos">${minis(F.reg, 9)}</div><p class="muted small m0">As fotos já enviadas não mudam na correção.</p>` : `<div class="sgfotos" id="sgFotosL"></div><div class="row-gap"><label class="btn" for="sgf_fotos_in">${I.cam} Tirar ou escolher foto</label><span class="muted small">Até ${MAX_FOTOS} fotos · reduzidas no aparelho</span></div><input type="file" id="sgf_fotos_in" accept="image/*" multiple hidden>`;
     if (c.sn) {
       const sim = Array.isArray(v) ? v.length > 0 : !!v;
@@ -198,7 +220,7 @@ export function criarSeguranca() {
     F = { tipo, reg: reg || null, fotos: reg ? [] : ((rasc && rasc.fotos) || []), outro: v.desvioOutro || '' };
     const cfg = L();
     const aviso = rasc ? `<div class="sgrasc" role="status">${I.ok}<span>Rascunho recuperado de ${umDia(rasc.em)}${rasc.semFotos ? ` · as ${rasc.semFotos} foto(s) não couberam no aparelho, escolha de novo` : ''}.</span><button type="button" class="btn sm ghost" data-sgf="descartar">Descartar rascunho</button></div>` : '';
-    const corpo = `${aviso}${reg ? `<p class="muted small m0">Correção do seu registro: vale por ${PRAZO_EDICAO_H} horas depois de enviado${tipo === 'anom' ? ' e enquanto a anomalia estiver aberta' : ''}.</p>` : '<p class="muted small m0">* obrigatória · o rascunho fica guardado neste aparelho enquanto você preenche.</p>'}
+    const corpo = `${aviso}${reg ? `<p class="muted small m0">Correção do seu registro: vale por ${PRAZO_EDICAO_H} horas depois de enviado${tipo === 'anom' ? ' e enquanto a anomalia estiver aberta' : tipo === 'cartao' ? ' e enquanto o cartão não for validado' : ''}.</p>` : '<p class="muted small m0">* obrigatória · o rascunho fica guardado neste aparelho enquanto você preenche.</p>'}
       ${def.campos.map((c, i) => campoHtml(c, i, v[c.k], cfg)).join('')}`;
     const rodape = `<p class="err" id="sgErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri big" type="submit">${reg ? 'Salvar correção' : 'Enviar registro'}</button><button class="btn" type="button" data-sgclose>${reg ? 'Cancelar' : 'Fechar e guardar rascunho'}</button></div>`;
     const fo = folha({ titulo: reg ? `Corrigir ${def.curto}` : def.nome, sub: reg ? `${dBR(reg.data)} · ${esc(reg.local || '')}` : 'Segurança', corpo, rodape, form: true, aoFechar: () => { if (F && !F.enviado && !F.reg && F.mexeu) toast('Rascunho guardado neste aparelho'); F = null; } });
@@ -215,6 +237,7 @@ export function criarSeguranca() {
         pintarFotos(); limparErro($('sgFotosL')); F.mexeu = true; gravarRasc(tipo, lerValores(def), F.fotos); return;
       }
       if (t.name === 'sgf_area') atualizarSugestoes();
+      if (t.id === 'sgf_comunic') { const f = fichasColab().find(x => normNomeSeg(x.nome) === normNomeSeg(t.value)); if (f && f.mat && $('sgf_mat')) { $('sgf_mat').value = f.mat; limparErro($('sgf_mat')); } }
       if (t.name && t.name.startsWith('sgsn_')) {
         const w = $('sgsnc_' + t.name.slice(5)); if (w) w.hidden = t.value !== 'Sim';
         const x = w && !w.hidden && w.querySelector('input.in,textarea'); if (x && !x.closest('[hidden]')) x.focus({ preventScroll: true });
@@ -264,7 +287,9 @@ export function criarSeguranca() {
     const t = (x, n) => String(x || '').trim().slice(0, n);
     const dados = {};
     for (const c of def.campos) if (c.t !== 'fotos') dados[c.k] = Array.isArray(v[c.k]) ? v[c.k] : t(v[c.k], c.max || 120);
-    dados.local = dados.local.toUpperCase(); dados.mes = dados.data.slice(0, 7); dados.conj = conjDaArea(S().cfg, dados.area);
+    if (dados.local != null) dados.local = dados.local.toUpperCase();
+    if (def === FORMS.cartao) dados.comunic = dados.comunic.toUpperCase();
+    dados.mes = dados.data.slice(0, 7); dados.conj = conjDaArea(S().cfg, dados.area);
     if (def === FORMS.inter) dados.desvioOutro = dados.desvios.includes('OUTROS') ? t(v.desvioOutro, 200) : '';
     try { localStorage.setItem('dikma-seg-mat|' + ME.uid, dados.mat); } catch (e) { /* ignora */ }
     const offline = !navigator.onLine;
@@ -272,9 +297,9 @@ export function criarSeguranca() {
       DB.segEditar(def.col, F.reg.id, dados);
       toast(`Correção salva${offline ? ' · sobe quando o sinal voltar' : ''}`);
     } else {
-      DB.segNovo(def.col, def === FORMS.anom ? { ...dados, status: 'aberta' } : dados, F.fotos);
+      DB.segNovo(def.col, def === FORMS.anom ? { ...dados, status: 'aberta' } : def === FORMS.cartao ? { ...dados, status: 'pendente' } : dados, F.fotos);
       apagarRasc(F.tipo);
-      toast(`${def === FORMS.anom ? 'Anomalia registrada' : 'Interação registrada'}${offline ? ' · guardada no aparelho, sobe quando o sinal voltar' : ''}`);
+      toast(`${def === FORMS.anom ? 'Anomalia registrada' : def === FORMS.cartao ? 'Cartão Amarelo registrado · falta a validação' : 'Interação registrada'}${offline ? ' · guardada no aparelho, sobe quando o sinal voltar' : ''}`);
       if (dados.mes !== U.mes) { U.mes = dados.mes; DB.segWatch([U.mes]); }
     }
     F.enviado = true; fo.fechar(); render();
@@ -282,12 +307,12 @@ export function criarSeguranca() {
 
   // ---------- detalhe do registro ----------
   const linhaDet = (rot, v) => `<div><dt>${esc(rot)}</dt><dd>${v || '<span class="muted">—</span>'}</dd></div>`;
-  const acharReg = (col, id) => (col === 'seginter' ? S().inter : S().anom).find(r => r.id === id);
+  const acharReg = (col, id) => S()[tipoDaCol(col)].find(r => r.id === id);
   function abrirDetalhe(col, id) {
     const r = acharReg(col, id); if (!r) { toast('Registro não encontrado'); return; }
-    const tipo = col === 'seginter' ? 'inter' : 'anom'; const def = FORMS[tipo];
+    const tipo = tipoDaCol(col); const def = FORMS[tipo];
     const txt = s => esc(s || '').replace(/\n/g, '<br>');
-    let corpo = `<dl class="sgdet">${def.campos.map(c => linhaDet(c.rot, c.t === 'fotos' ? `<div class="sgfotos">${minis(r, 9)}</div>` : c.t === 'date' ? dBR(r[c.k]) : c.t === 'checks' ? ((r.desvios || []).length ? (r.desvios || []).map(d => `<span class="pill neu">${esc(d === 'OUTROS' && r.desvioOutro ? 'OUTROS: ' + r.desvioOutro : d)}</span>`).join(' ') : 'Não') : txt(r[c.k]))).join('')}</dl>
+    let corpo = `<dl class="sgdet">${def.campos.map(c => linhaDet(c.rot, c.t === 'fotos' ? `<div class="sgfotos">${minis(r, 9)}</div>` : c.t === 'date' ? dBR(r[c.k]) : c.t === 'checks' && c.k === 'faltou' ? ((r.faltou || []).length ? r.faltou.map(d => `<span class="pill warn">${esc(d)}</span>`).join(' ') : '<span class="muted">—</span>') : c.t === 'checks' ? ((r.desvios || []).length ? (r.desvios || []).map(d => `<span class="pill neu">${esc(d === 'OUTROS' && r.desvioOutro ? 'OUTROS: ' + r.desvioOutro : d)}</span>`).join(' ') : 'Não') : txt(r[c.k]))).join('')}</dl>
       <p class="muted small m0">Registrado por ${esc(nomeP(r.porNome))}${r.em ? ' em ' + umDia(r.em) : ''}.</p>`;
     let botoes = '';
     if (tipo === 'anom') {
@@ -296,23 +321,28 @@ export function criarSeguranca() {
         ${(tr.hist || []).length ? `<details class="sghist"><summary>Histórico (${tr.hist.length})</summary><ol>${tr.hist.slice().reverse().map(h => `<li><time>${umDia(Date.parse(h.em))}</time> <b>${esc(curtoNome(h.nome))}</b> · ${esc(h.t)}</li>`).join('')}</ol></details>` : ''}</div>`;
       if (trataAnom(ME, r)) botoes += `<button type="button" class="btn pri" data-sgf="tratar">${r.status === 'concluida' ? 'Reabrir ou ajustar' : 'Acompanhar'}</button>`;
     }
-    if (editaProprio(ME, r, Date.now(), tipo === 'anom')) botoes += `<button type="button" class="btn" data-sgf="editar">Corrigir</button>`;
+    if (tipo === 'cartao') {
+      const v = r.valid || {};
+      corpo += `<div class="sgtrat"><h4>Validação</h4><dl class="sgdet">${linhaDet('Situação', pillCartao(r))}${r.status === 'validado' ? linhaDet('Validado por', `${esc(VALIDA_CARTAO[v.tipo] || '')}`) + linhaDet('Nome', esc(nomeP(v.nome))) + linhaDet('Matrícula', esc(v.mat)) + linhaDet('Quando', v.em ? umDia(Date.parse(v.em)) : '') : ''}</dl></div>`;
+      if (validaCartao(ME, r)) botoes += `<button type="button" class="btn pri" data-sgf="validar">${r.status === 'validado' ? 'Ajustar validação' : 'Validar'}</button>`;
+    }
+    if (editaProprio(ME, r, Date.now(), tipo === 'anom') && (tipo !== 'cartao' || pendenteCartao(r))) botoes += `<button type="button" class="btn" data-sgf="editar">Corrigir</button>`;
     // Apagar: só o administrador (as regras também conferem). Leva as fotos do registro junto.
     if (isAdmin()) botoes += `<button type="button" class="btn danger" data-sgf="excluir">Excluir</button>`;
-    const fo = folha({ titulo: tipo === 'anom' ? 'Anomalia' : 'Interação', sub: `${dBR(r.data)}${r.hora ? ' às ' + esc(r.hora) : ''} · ${esc(r.area)} · ${esc(r.local)}`, corpo, rodape: `<div class="row-gap">${botoes}<button type="button" class="btn" data-sgclose>Fechar</button></div>` });
-    folhaAcao = b => { if (b.dataset.sgf === 'tratar') { fo.fechar(); abrirTratar(r.id); } if (b.dataset.sgf === 'editar') { fo.fechar(); abrirForm(tipo, r); } if (b.dataset.sgf === 'excluir') { fo.fechar(); confirmarExclusao(col, r); } };
+    const fo = folha({ titulo: def.nome.replace('Registro de ', '').replace(/^./, x => x.toUpperCase()), sub: `${dBR(r.data)}${r.hora ? ' às ' + esc(r.hora) : ''} · ${esc(r.area)}${r.local ? ' · ' + esc(r.local) : ''}`, corpo, rodape: `<div class="row-gap">${botoes}<button type="button" class="btn" data-sgclose>Fechar</button></div>` });
+    folhaAcao = b => { if (b.dataset.sgf === 'tratar') { fo.fechar(); abrirTratar(r.id); } if (b.dataset.sgf === 'validar') { fo.fechar(); abrirValidar(r.id); } if (b.dataset.sgf === 'editar') { fo.fechar(); abrirForm(tipo, r); } if (b.dataset.sgf === 'excluir') { fo.fechar(); confirmarExclusao(col, r); } };
   }
   // Confirmação clara antes de apagar o registro e as fotos dele (não dá para desfazer).
   function confirmarExclusao(col, r) {
     if (!isAdmin()) return;
-    const anom = col === 'seganom'; const n = fotosDoReg(r).length; const nome = anom ? 'esta anomalia' : 'esta interação';
+    const anom = col === 'seganom', cart = col === 'segcartao'; const n = fotosDoReg(r).length; const nome = anom ? 'esta anomalia' : cart ? 'este Cartão Amarelo' : 'esta interação';
     const fotos = n ? ` e ${n === 1 ? 'a foto' : `as ${n} fotos`}` : '';
-    formSheet(anom ? 'Excluir anomalia' : 'Excluir interação', `${dBR(r.data)} · ${esc(r.area)} · ${esc(r.local)}`,
+    formSheet(anom ? 'Excluir anomalia' : cart ? 'Excluir Cartão Amarelo' : 'Excluir interação', `${dBR(r.data)} · ${esc(r.area)}${r.local ? ' · ' + esc(r.local) : ''}`,
       `<p class="m0"><b>Excluir ${nome}${fotos}?</b> Não dá para desfazer.</p>${anom && abertaSeg(r) ? '<p class="muted small m0">Ela ainda está em aberto: some da fila e dos indicadores.</p>' : ''}`,
       'Excluir', async () => {
         await DB.segExcluir(col, r);
-        DB.log(`Segurança: excluiu ${anom ? 'uma anomalia' : 'uma interação'} de ${dBR(r.data)}${n ? ` (${n} foto${n > 1 ? 's' : ''})` : ''}`, 'seguranca');
-        toast(`${anom ? 'Anomalia excluída' : 'Interação excluída'}${n ? ` com ${n === 1 ? 'a foto' : `as ${n} fotos`}` : ''}`); render();
+        DB.log(`Segurança: excluiu ${anom ? 'uma anomalia' : cart ? 'um Cartão Amarelo' : 'uma interação'} de ${dBR(r.data)}${n ? ` (${n} foto${n > 1 ? 's' : ''})` : ''}`, 'seguranca');
+        toast(`${anom ? 'Anomalia excluída' : cart ? 'Cartão Amarelo excluído' : 'Interação excluída'}${n ? ` com ${n === 1 ? 'a foto' : `as ${n} fotos`}` : ''}`); render();
       });
     const b = document.querySelector('#fSheet [type=submit]'); if (b) { b.classList.remove('pri'); b.classList.add('perigo'); }
   }
@@ -376,6 +406,31 @@ export function criarSeguranca() {
     };
   }
 
+  // ---------- validação do Cartão Amarelo (Líder imediato = supervisor da área; Seg. do Trabalho = trata/gestor) ----------
+  function abrirValidar(id) {
+    const c = S().cartao.find(x => x.id === id); if (!c || !validaCartao(ME, c)) return;
+    const v = c.valid || {};
+    const tipo0 = v.tipo || (supConjs(ME).includes(c.conj) && !trataTudoSeg(ME) ? 'lider' : 'seg');
+    const corpo = `<div class="sgresumo"><div><b>${esc(nomeP(c.comunic))}</b> · ${esc(c.area)} · ${dBR(c.data)}</div><p class="m0">${esc(c.motivo)}</p></div>
+      <div class="sgq" id="q_vtipo"><div class="sgq-rot"><span class="minw"><b>Validação</b><span class="obr" title="Obrigatória"> *</span></span></div><div class="sgops" role="radiogroup" aria-label="Validação">${Object.entries(VALIDA_CARTAO).map(([k, n]) => `<label class="sgop"><input type="radio" name="sgv_tipo" value="${k}" ${tipo0 === k ? 'checked' : ''}><span>${n}</span></label>`).join('')}</div></div>
+      <label class="sel"><span>Nome *</span><input class="in" id="sgv_nome" maxlength="120" autocomplete="off" value="${esc(nomeP(v.nome || (ME && (ME.nome || ME.login)) || ''))}"></label>
+      <label class="sel"><span>Matrícula *</span><input class="in" id="sgv_mat" maxlength="30" inputmode="numeric" autocomplete="off" value="${esc(v.mat || minhaMat())}"></label>`;
+    const fo = folha({ titulo: 'Validar Cartão Amarelo', sub: 'Líder imediato ou Seg. do Trabalho', corpo, form: true, larga: false,
+      rodape: `<p class="err" id="sgErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri big" type="submit">Validar</button>${c.status === 'validado' ? '<button class="btn" type="button" data-sgf="desfazer">Tirar a validação</button>' : ''}<button class="btn" type="button" data-sgclose>Cancelar</button></div>` });
+    const el = fo.el;
+    folhaAcao = b => { if (b.dataset.sgf === 'desfazer') { DB.segValidar(c, { status: 'pendente', valid: {} }); toast('Validação retirada'); fo.fechar(); render(); } };
+    el.onsubmit = e => {
+      e.preventDefault();
+      const t = (el.querySelector('input[name="sgv_tipo"]:checked') || {}).value;
+      const nome = $('sgv_nome').value.replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 120), mat = $('sgv_mat').value.trim().slice(0, 30);
+      const er = $('sgErr');
+      if (!t || !nome || !mat) { er.textContent = 'Escolha quem valida e preencha o nome e a matrícula.'; er.hidden = false; return; }
+      try { localStorage.setItem('dikma-seg-mat|' + ME.uid, mat); } catch (x) { /* ignora */ }
+      DB.segValidar(c, { status: 'validado', valid: { tipo: t, nome, mat, uid: ME.uid, em: new Date().toISOString() } });
+      toast(`Cartão Amarelo validado${navigator.onLine ? '' : ' · sobe quando o sinal voltar'}`); fo.fechar(); render();
+    };
+  }
+
   // ---------- telas ----------
   const selMes = (id, v) => `<label class="sel"><span>Mês</span><select class="in" id="${id}">${opcoesMes().map(m => `<option value="${m}" ${m === v ? 'selected' : ''}>${mesNome(m)}</option>`).join('')}</select></label>`;
   const selArea = () => `<label class="sel"><span>Área</span><select class="in" id="sgArea"><option value="">Todas</option>${L().areas.map(a => `<option ${a.nome === U.area ? 'selected' : ''}>${esc(a.nome)}</option>`).join('')}</select></label>`;
@@ -403,6 +458,39 @@ export function criarSeguranca() {
         <td class="tc-full" data-l="Desvios">${(r.desvios || []).length ? (r.desvios || []).map(d => `<span class="pill ${d === 'OUTROS' ? 'neu' : 'warn'}">${esc(d === 'OUTROS' && r.desvioOutro ? 'OUTROS: ' + r.desvioOutro : d)}</span>`).join(' ') : '<span class="muted small">Sem desvio</span>'}</td>
         <td data-l="Responsável">${esc(curtoNome(r.resp))}</td><td data-l="Fotos"><div class="sgfotos">${minis(r)}</div></td>
         <td class="tc-acao r"><button class="btn sm" data-act="sgVer" data-col="seginter" data-id="${esc(r.id)}">Abrir</button></td></tr>`).join('')}
+      </tbody></table></div></div>`;
+    return h;
+  }
+
+  // Cartão Amarelo: a fila dos que faltam validar e os do mês.
+  const CSITS = [['pendentes', 'Falta validar'], ['validados', 'Validados'], ['todos', 'Todos do mês']];
+  const filtroCartao = c => (U.csit === 'pendentes' ? pendenteCartao(c) : U.csit === 'validados' ? c.status === 'validado' && c.mes === U.mes : c.mes === U.mes);
+  function vCartao() {
+    DB.segWatch([U.mes]);
+    if (!CSITS.some(x => x[0] === U.csit)) U.csit = 'pendentes';
+    const base = S().cartao.filter(c => !U.area || c.area === U.area);
+    const l = base.filter(c => filtroCartao(c) && casaQ(c, ['area', 'motivo', 'comoSeguro', 'comunic', 'mat', 'faltou'])).sort(porData);
+    const pend = base.filter(pendenteCartao), doMes = base.filter(c => c.mes === U.mes);
+    const falta = new Map(); for (const c of doMes) for (const p of c.faltou || []) falta.set(p, (falta.get(p) || 0) + 1);
+    const top = [...falta].sort((a, b) => b[1] - a[1])[0];
+    let h = `<div class="sgcab"><span class="sgcab-ic" aria-hidden="true">${I.cartao}</span><div class="minw"><b>Falta de segurança? Dê Cartão Amarelo!</b><span>Os recursos estão suficientes e adequados? Me sinto em condições para a tarefa? O ambiente está seguro?</span></div></div>`;
+    h += `<div class="filters"><div class="sgsit" role="tablist" aria-label="Situação">${CSITS.map(([k, n]) => `<button type="button" role="tab" data-act="sgCSit" data-sgsit="${k}" aria-selected="${U.csit === k}">${n}${k === 'pendentes' && pend.length ? ` <span class="badge num">${pend.length}</span>` : ''}</button>`).join('')}</div>
+      ${U.csit !== 'pendentes' ? selMes('sgMes', U.mes) : ''}${selArea()}${busca('Nome, motivo…')}
+      ${podeExportar() ? `<button class="btn" data-act="expSegCartao" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}
+      ${podeRegistrar() ? `<button class="btn pri" data-act="sgNova" data-tipo="cartao" style="align-self:flex-end">${I.plus} Novo cartão</button>` : ''}</div>`;
+    h += rascBanner('cartao');
+    h += `<div class="kpis">
+      <div class="kpi hero"><span class="lbl">Cartões no mês</span><span class="v num">${doMes.length}</span><span class="s">${mesNome(U.mes)} · ${quemVe()}</span></div>
+      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Falta validar</span><span class="v num">${pend.length}</span><span class="s">${pend.length ? 'esperam o líder ou a segurança' : 'todos validados'}</span></div>
+      <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-real)"></i>Validados</span><span class="v num">${doMes.filter(c => c.status === 'validado').length}</span><span class="s">em ${mesNome(U.mes)}</span></div>
+      <div class="kpi"><span class="lbl">O que mais faltou</span><span class="v vsm">${top ? esc(title(top[0].replace('?', ''))) : '—'}</span><span class="s">${top ? `${top[1]} vez${top[1] > 1 ? 'es' : ''} no mês` : 'nada marcado no mês'}</span></div></div>`;
+    if (!l.length) return h + `<div class="card">${vazio(U.csit === 'pendentes' ? 'Nenhum cartão esperando validação' : `Nenhum Cartão Amarelo em ${mesNome(U.mes)}`, U.q || U.area ? 'Mude a área ou a busca.' : podeRegistrar() ? 'Registre pelo botão Novo cartão.' : 'Os cartões aparecem aqui assim que forem registrados.')}</div>`;
+    h += `<div class="card"><div class="tw"><table class="tcard sgtab"><thead><tr><th>Data</th><th>Comunicado por</th><th>Motivo</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${l.map(c => `<tr><td data-l="Data" class="nowrap">${dm(c.data)}</td>
+        <td class="tc-t"><b>${esc(curtoNome(c.comunic))}</b><small class="muted"> · ${esc(c.area)}</small></td>
+        <td class="tc-full" data-l="Motivo"><div class="sgdesc">${esc(c.motivo)}</div>${(c.faltou || []).length ? `<div class="sgfalta">${c.faltou.map(p => `<span class="pill warn">${esc(title(p.replace('?', '')))}</span>`).join(' ')}</div>` : ''}</td>
+        <td data-l="Situação">${pillCartao(c)}</td>
+        <td class="tc-acao r nowrap">${pendenteCartao(c) && validaCartao(ME, c) ? `<button class="btn sm pri" data-act="sgValidar" data-id="${esc(c.id)}">Validar</button> ` : ''}<button class="btn sm" data-act="sgVer" data-col="segcartao" data-id="${esc(c.id)}">Abrir</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
     return h;
   }
@@ -514,6 +602,8 @@ export function criarSeguranca() {
   // ---------- Exportar para o Excel (mesmas colunas dos formulários) ----------
   const COL_INTER = ['DATA', 'ÁREA', 'LOCAL', 'TIPO DE ATIVIDADE', 'HÁ RISCOS DE SO-PSIF ASSOCIADO? SE SIM, QUAL RISCO?', 'HOUVE DESVIOS? SE SIM, QUAL DESVIO?', 'DESCRIÇÃO', 'AÇÃO IMEDIATA', 'RESPONSÁVEL', 'MATRÍCULA', 'REGISTRO FOTOGRÁFICO', 'REGISTRADO POR', 'REGISTRADO EM'];
   const COL_ANOM = ['DATA', 'HORA', 'ÁREA', 'LOCAL', 'REGIME DE TRABALHO', 'DESCRIÇÃO', 'CONSEQUÊNCIA', 'AÇÃO IMEDIATA', 'POSSÍVEIS CAUSAS', 'SUGESTÕES', 'COMUNICADO POR?', 'MATRÍCULA', 'REGISTRO FOTOGRÁFICO', 'SITUAÇÃO', 'RESPONSÁVEL PELO TRATAMENTO', 'PRAZO', 'COMENTÁRIO DO TRATAMENTO', 'CONCLUÍDA EM', 'REGISTRADO POR', 'REGISTRADO EM'];
+  const COL_CARTAO = ['DATA', 'ÁREA', 'COMUNICADO POR', 'MATRÍCULA', 'O QUE FALTOU?', 'MOTIVO DO CARTÃO AMARELO', 'COMO PODERIA FAZER COM SEGURANÇA?', 'SITUAÇÃO', 'VALIDAÇÃO', 'NOME (VALIDAÇÃO)', 'MATRÍCULA (VALIDAÇÃO)', 'VALIDADO EM', 'REGISTRADO POR', 'REGISTRADO EM'];
+  const linhaCartao = c => { const v = c.valid || {}; const ok = c.status === 'validado'; return [dBR(c.data), c.area, c.comunic, c.mat, (c.faltou || []).join(' · '), c.motivo, c.comoSeguro, ok ? 'VALIDADO' : 'FALTA VALIDAR', ok ? VALIDA_CARTAO[v.tipo] || '' : '', ok ? v.nome || '' : '', ok ? v.mat || '' : '', ok && v.em ? umDia(Date.parse(v.em)) : '', nomeP(c.porNome), umDia(c.em)]; };
   const nFotos = r => `${(r.fotos || []).length} foto${(r.fotos || []).length === 1 ? '' : 's'}`;
   const linhaInter = r => [dBR(r.data), r.area, r.local, r.tipoAtiv, r.risco || '', (r.desvios || []).map(d => (d === 'OUTROS' && r.desvioOutro ? `OUTROS: ${r.desvioOutro}` : d)).join(', '), r.desc || '', r.acao || '', r.resp, r.mat, nFotos(r), nomeP(r.porNome), umDia(r.em)];
   const linhaAnom = a => { const t = a.trat || {}; return [dBR(a.data), a.hora, a.area, a.local, a.regime, a.desc, a.conseq, a.acao, a.causas, a.sugest, a.comunic, a.mat, nFotos(a), vencidaSeg(a, hoje()) ? 'PRAZO VENCIDO' : (STATUS_SEG[a.status] || a.status).toUpperCase(), t.resp || '', dBR(t.prazo), t.coment || '', a.conclEm ? umDia(Date.parse(a.conclEm)) : '', nomeP(a.porNome), umDia(a.em)]; };
@@ -521,6 +611,7 @@ export function criarSeguranca() {
     const abas = [];
     if (o.inter) abas.push({ nome: 'Interações', linhas: [COL_INTER, ...o.inter.slice().sort(porData).reverse().map(linhaInter)] });
     if (o.anom) abas.push({ nome: 'Anomalias', linhas: [COL_ANOM, ...o.anom.slice().sort(porData).reverse().map(linhaAnom)] });
+    if (o.cartao) abas.push({ nome: 'Cartão Amarelo', linhas: [COL_CARTAO, ...o.cartao.slice().sort(porData).reverse().map(linhaCartao)] });
     try { await baixarExcel(o.arquivo, abas); toast('Planilha baixada'); } catch (e) { toast('Não foi possível gerar a planilha agora'); }
   }
 
@@ -530,10 +621,13 @@ export function criarSeguranca() {
   acoes.sgTratar = (t, d) => abrirTratar(d.id);
   acoes.sgAssumir = (t, d) => assumir(d.id);
   acoes.sgSit = (t, d) => { U.sit = d.sgsit; render(); };
+  acoes.sgCSit = (t, d) => { U.csit = d.sgsit; render(); };
+  acoes.sgValidar = (t, d) => abrirValidar(d.id);
+  acoes.expSegCartao = () => exportar({ arquivo: `Cartão Amarelo ${U.csit === 'pendentes' ? 'falta validar' : U.mes}`, cartao: S().cartao.filter(c => (!U.area || c.area === U.area) && filtroCartao(c)) });
   acoes.sgFoto = (t, d) => verFoto(d.id, (t.querySelector('img') || {}).src);
   acoes.expSegInter = () => exportar({ arquivo: `Interações ${U.mes}`, inter: S().inter.filter(r => r.mes === U.mes && (!U.area || r.area === U.area)) });
   acoes.expSegAnom = () => exportar({ arquivo: `Anomalias ${U.sit === 'abertas' ? 'em aberto' : U.mes}`, anom: S().anom.filter(a => (!U.area || a.area === U.area) && filtroSit(a)) });
-  acoes.expSegTudo = () => exportar({ arquivo: `Segurança ${U.pMes}`, inter: S().inter.filter(r => r.mes === U.pMes), anom: S().anom.filter(a => a.mes === U.pMes) });
+  acoes.expSegTudo = () => exportar({ arquivo: `Segurança ${U.pMes}`, inter: S().inter.filter(r => r.mes === U.pMes), anom: S().anom.filter(a => a.mes === U.pMes), cartao: S().cartao.filter(c => c.mes === U.pMes) });
   acoes.sgCfgArea = () => { lerCfgDaTela(); CFG.areas.push({ nome: '', conj: '' }); render(); };
   acoes.sgCfgTirar = (t, d) => { lerCfgDaTela(); if (CFG.areas.length <= 1) { toast('Deixe pelo menos uma área'); return; } CFG.areas.splice(+d.i, 1); render(); };
   acoes.sgCfgPadrao = () => { CFG = { areas: SEG_PADRAO.areas.map(a => ({ ...a })), tipos: SEG_PADRAO.tipos.join('\n'), regimes: SEG_PADRAO.regimes.join('\n'), desvios: SEG_PADRAO.desvios.join('\n') }; render(); toast('Valores padrão na tela · salve para valer'); };
@@ -559,6 +653,7 @@ export function criarSeguranca() {
     if (!S().on || !S().loaded) { if (!S().on && v !== 'sgconfig') return vazio('Sem acesso à Segurança', 'Fale com o administrador do sistema.'); if (!S().loaded && v !== 'sgconfig') return ESQUELETO; }
     if (v === 'sginter') return vInter();
     if (v === 'sganom') return vAnom();
+    if (v === 'sgcartao') return vCartao();
     if (v === 'sgpainel') return vPainel();
     if (v === 'sgconfig') return vConfig();
     return vAnom();

@@ -81,6 +81,7 @@ Object.assign(I, {
   turno: svg('<path d="M11 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4M3 9h16M7 2v4M15 2v4"/><circle cx="17" cy="17" r="4.5"/><path d="M17 15v2l1.5 1"/>'),
   queda: svg('<path d="M3 20h18"/><path d="M5 20l4-6 3 3 3-5 4 8"/><path d="M12 3v5M9.5 5.5L12 8l2.5-2.5"/>'),
   rota: svg('<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H16a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h7.5"/>'),
+  cartao: svg('<rect x="6" y="2.5" width="12" height="19" rx="2"/><path d="M12 7.5v6M12 16.6v.4"/>'),
   capacete: svg('<path d="M2 18.5h20"/><path d="M4.5 18.5V16a7.5 7.5 0 0 1 15 0v2.5"/><path d="M9.5 9.2V6.5h5v2.7M12 6.5v5"/>'),
   arquivo: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9M10 13h4"/>'),
   etiqueta: svg('<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>'),
