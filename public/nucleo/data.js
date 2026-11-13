@@ -642,6 +642,8 @@ export async function desativarAvisos() {
 export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid), { prefs, atualizadoEm: serverTimestamp() }, { merge: true }));
 export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+// Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
+export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));
 export const salvarChaveAvisos = vapid => track(setDoc(doc(db, 'config', 'avisos'), { vapid: String(vapid || '').trim() }, { merge: true }));
 
 export const setUsuario = (uid, patch) => track(updateDoc(doc(db, 'usuarios', uid), patch.nome ? { ...patch, nomeUp: String(patch.nome).toUpperCase() } : patch));

@@ -17,6 +17,16 @@ export const EF_ST = {
   validado: { nome: 'Validado pelo RH', tom: 'ok' }
 };
 
+// Horários dos avisos no celular (rotina de hora em hora, das 6h às 22h). O administrador muda em Avisos no celular
+// (config/avisos.horas). efLider = cobra do líder o efetivo não enviado; efRH = avisa o RH do que espera validação.
+export const HORAS_EF_PADRAO = { efLider: 9, efRH: 11 };
+export const HORAS_AVISO = Array.from({ length: 17 }, (_, i) => i + 6);
+export function horasEf(cfg) {
+  const h = { ...HORAS_EF_PADRAO };
+  for (const k of Object.keys(h)) { const v = Number(cfg && cfg.horas && cfg.horas[k]); if (HORAS_AVISO.includes(v)) h[k] = v; }
+  return h;
+}
+
 export const idEf = (data, area) => `${data}_${area}`;
 
 // Status mostrado: o do documento; sem documento, pendente (ou antigo, antes de EF_DESDE). Dia futuro: null.

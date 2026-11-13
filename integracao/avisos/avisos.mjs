@@ -134,7 +134,8 @@ const segAnom = [];
 for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where('status', '==', st).get()).forEach(x => { const a = x.data(); segAnom.push({ ...a, id: x.id, em: a.em && a.em.toMillis ? a.em.toMillis() : +a.em || 0 }); });
 // RH: treinamentos, NRs e ASO (só as datas e o tipo entram na conta; o aviso leva só números).
 const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() }));
-const { msgs, marcar } = planejar({ usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, agora: new Date() });
+const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

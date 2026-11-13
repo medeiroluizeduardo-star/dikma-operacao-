@@ -199,7 +199,7 @@ document.addEventListener('change', e => {
     if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
     if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? comTurma(c, t.value) : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`, 'operacao'); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
   const t = e.target;
-  if (t.dataset.mdPref) { AV.onChange(t); return; }
+  if (t.dataset.mdPref || t.dataset.mdHora) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
   if (t.dataset.rfarea) { UI.rfArea = t.value; render(); return; }
   if (t.dataset.permperfil !== undefined) { UI.permPerfil = t.value; render(); return; }

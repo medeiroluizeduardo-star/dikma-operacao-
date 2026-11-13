@@ -7,13 +7,11 @@ import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 import { JUS_CODS, CODIGOS, contagemDia } from './lib/situacao.mjs';
 import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
-import { EF_DESDE, idEf, aguardandoEf } from './lib/efetivo-dia.mjs';
+import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, efetivo: true, efetivoRH: true };
-// Efetivo do dia (contas/efetivo-dia.js): a partir de que hora cobra o envio do líder e avisa o RH do que espera validação.
-export const EF_HORA_LIDER = 9, EF_HORA_RH = 11;
 // Painel Coqueria (repositório Gest-o-Eduardo): endereço e processos diários (não contam como "entrega de amanhã").
 export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 const PAINEL_DIARIOS = new Set(['P04', 'P05', 'P07', 'P08']);
@@ -37,7 +35,7 @@ function areasEfDe(u, k, S) {
 const trabalhaNoDia = (S, area, dt) => contagemDia((S.colabs || []).filter(c => c.area === area), dt, { sitDe: (c, d) => ({ v: (S.sitDe ? S.sitDe(c, d) : (S.sit || {})[c.id + '|' + d]) || 'P' }) }).escalados > 0;
 
 // d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date,
-//       sets[k].ef = { id: doc do efetivoDia } (mês atual e anterior),
+//       sets[k].ef = { id: doc do efetivoDia } (mês atual e anterior), avisosCfg = config/avisos (horas do efetivo),
 //       seg: { anom[] } (anomalias da Segurança em aberto, com em em milissegundos), treinos[] (RH: treinamentos, NRs e ASO) }
 export function planejar(d) {
   const agora = d.agora || new Date(); const hoje = d.hoje || today(); const hora = agora.getHours();
@@ -124,10 +122,11 @@ export function planejar(d) {
     }
   }
   // 11) Efetivo do dia (contas/efetivo-dia.js). Só contagens e áreas, nunca nomes (o motivo da devolução fica na tela).
-  //     a) líder e supervisor: área que trabalha hoje e ainda não enviou (às 9h, uma vez por dia);
+  //     a) líder e supervisor: área que trabalha hoje e ainda não enviou (às 9h ou o horário configurado, uma vez por dia);
   //     b) líder e supervisor: o RH devolveu o efetivo de um dia (na rodada seguinte, uma vez por devolução, até 10 dias);
-  //     c) RH · Administrativo (e administrador): efetivos enviados esperando validação (às 11h, uma vez por dia).
+  //     c) RH · Administrativo (e administrador): efetivos enviados esperando validação (às 11h ou o configurado, uma vez por dia).
   if (hoje >= EF_DESDE) {
+    const HE = horasEf(d.avisosCfg); // padrão 9h e 11h; o administrador muda em Avisos no celular
     const devJa = new Set();
     for (const x of alvo) {
       if (!x.prefs.efetivo) continue;
@@ -146,7 +145,7 @@ export function planejar(d) {
           devs.push({ ...doc, ch }); devJa.add(ch); mod = mod || SETS[k].mod;
         }
       }
-      if (hora >= EF_HORA_LIDER && !d.enviados[chave]) {
+      if (hora >= HE.efLider && !d.enviados[chave]) {
         if (pend.length) msgs.push({ uid: x.uid, titulo: pend.length === 1 ? `Efetivo de hoje não enviado: ${AREA_S[pend[0]] || pend[0]}` : `${pend.length} áreas sem enviar o efetivo de hoje`, corpo: (pend.length > 1 ? pend.map(a => AREA_S[a] || a).join(' · ') + '\n' : '') + 'Confira a Presença e envie ao RH.', tag: 'efetivo', url: `/?m=${mod}&v=esdia` });
         marcar.add(chave);
       }
@@ -156,7 +155,7 @@ export function planejar(d) {
       }
     }
     devJa.forEach(ch => marcar.add(ch));
-    if (hora >= EF_HORA_RH) {
+    if (hora >= HE.efRH) {
       const por = SET_KEYS.map(k => [k, d.sets[k] ? aguardandoEf(d.sets[k].ef).length : 0]).filter(([, n]) => n);
       const total = por.reduce((n, [, v]) => n + v, 0);
       for (const x of alvo) {

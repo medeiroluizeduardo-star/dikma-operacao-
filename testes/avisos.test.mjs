@@ -311,4 +311,11 @@ test('Efetivo do dia: líder às 9h (área que trabalha e não enviou), devoluç
   const desl = planejar({ usuarios: us, avisos: { ...av, lider: { tokens: ['t'], prefs: { efetivo: false } } }, paradas: [], ocorr: [], sets: { patio: S }, enviados: {}, agora: new Date(`${D}T09:05:00`), hoje: D });
   assert.equal(desl.msgs.filter(m => m.uid === 'lider').length, 0, 'aviso desligado nas preferências');
   assert.equal(run(9).msgs.filter(m => m.uid === 'lider' && m.tag === 'efetivo').length, 2, 'devolução e envio pendente na mesma rodada');
+  // horários configurados pelo administrador (config/avisos.horas): líder às 14h e RH às 8h
+  const cfg = { horas: { efLider: 14, efRH: 8 } };
+  const h = (hr) => planejar({ avisosCfg: cfg, usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: { [chDev]: D }, agora: new Date(`${D}T${String(hr).padStart(2, '0')}:05:00`), hoje: D });
+  assert.equal(h(13).msgs.filter(m => m.uid === 'lider').length, 0, 'antes do horário configurado não cobra');
+  assert.equal(h(14).msgs.filter(m => m.uid === 'lider').length, 1);
+  assert.equal(h(8).msgs.filter(m => m.uid === 'rh').length, 1, 'RH no horário configurado');
+  assert.equal(planejar({ avisosCfg: { horas: { efLider: 3 } }, usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: { [chDev]: D }, agora: new Date(`${D}T08:05:00`), hoje: D }).msgs.filter(m => m.uid === 'lider').length, 0, 'horário fora da rotina volta ao padrão (9h)');
 });
