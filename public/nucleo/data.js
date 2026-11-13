@@ -106,7 +106,7 @@ export const temBateria = u => temSet(u, 'bateria');
 export const temGestao = u => marcasDe(u).includes('gestao');
 
 let fbApp = null;
-let gestaoOn = false, eqOn = false; const eMonthSubs = new Map();
+let gestaoOn = false, eqOn = false, chaveAcesso = ''; const eMonthSubs = new Map();
 let cfg, auth, db, me = null, cb = {}, userSub = null, dataSubs = [], monthSubs = new Map(), pending = 0, aux = null;
 
 export const pendingWrites = () => pending;
@@ -187,7 +187,12 @@ export async function start(callbacks) {
       if (me.trocarSenha) { stopData(); cb.onAuth({ status: 'mustChange', user: me }); return; }
       // Sem nenhum módulo (nem perfil em algum módulo) não entra.
       if (!temAlgumModulo(me)) { stopData(); cb.onAuth({ status: 'semAcesso', user: me }); return; }
-      if (!dataSubs.length) startData(); else { if (temGestao(me) && !gestaoOn) startGestao(); if (temEquip(me) && !eqOn) startEquip(); if (temSeg(me) && !segOn) startSeg(); }
+      // O que é carregado depende do acesso (módulos, Pátio/Bateria, áreas). Se o administrador muda o acesso com o
+      // sistema aberto, recomeça a leitura: antes ficava sem os dados do conjunto novo e mostrava "Primeiro acesso".
+      const chave = JSON.stringify([me.acesso, me.escopos, me.modulos, me.papel, me.area, me.area2, me.areas]);
+      if (dataSubs.length && chave !== chaveAcesso) stopData();
+      chaveAcesso = chave;
+      if (!dataSubs.length) startData();
       cb.onAuth({ status: 'ready', user: me });
     }, e => cb.onAuth({ status: 'error', msg: e.message }));
   });
