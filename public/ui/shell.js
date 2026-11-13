@@ -131,6 +131,7 @@ function renderTela() {
   if (v === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo())) return tela(modulo('RE').vResumoOutro());
   // Atividades (Pátio ou Bateria): Operação, Gestão e as configurações de rotas, plano e gerador.
   if (!DB.cache.configLoaded) { pintarTopo('Carregando…', ''); pintar('view', M.ESQUELETO); renderNav(); return; }
+  if (!DB.cache.config && DB.cache.configErro) { renderNav(); pintarTopo('Não foi possível carregar', ''); pintar('view', `<div class="card"><div class="empty">Não foi possível ler os dados de ${esc(SETS[SK].nome)} no servidor (${esc(DB.cache.configErro)}). Feche e abra o app. Se continuar, avise o administrador com esta mensagem.</div></div>`); return; }
   if (!DB.cache.config) { renderNav(); pintarTopo('Primeiro acesso', 'Importar os dados da planilha'); pintar('view', comModulo('CF', m => m.vImportar())); return; }
   ensurePeriod();
   renderNav(); renderTop();
