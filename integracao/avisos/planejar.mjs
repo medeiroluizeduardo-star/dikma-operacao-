@@ -6,7 +6,7 @@ import { veTodasFichas, areasFichaDe } from './lib/pessoas.mjs';
 import { estadoAprov, aprovaPapel } from './lib/aprovacao.mjs';
 import { JUS_CODS, CODIGOS } from './lib/situacao.mjs';
 import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
-import { usuarioEm } from './lib/acessos.mjs';
+import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
@@ -21,7 +21,7 @@ const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'tecni
 function areasDe(u, k) {
   if (!mods(u).includes(SETS[k].mod)) return [];
   if (todas(u, SETS[k].mod)) return SETS[k].areas;
-  return [...new Set([u.area, u.papel === 'supervisor' ? u.area2 : null].filter(a => a && SETS[k].areas.includes(a)))];
+  return areasDoCadastro(u, u.papel === 'supervisor').filter(a => SETS[k].areas.includes(a));
 }
 
 // d = { usuarios: {uid: perfil}, avisos: {uid: {tokens, prefs}}, paradas[], ocorr[], sets: {k: dadosDoConjunto}, enviados: {chave: true}, agora: Date,

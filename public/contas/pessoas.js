@@ -5,7 +5,7 @@
 // na falta dela, pelo nome.
 import { SETS, SET_KEYS, AREAS_ATIV, AREAS_GERAIS, ehAreaGeral, areasDoSet, setDaArea, AREA_S, today } from './cal.js';
 import { anotarTroca, letra } from './escala.js';
-import { perfilDe, temFichasU, escoposDe } from './acessos.js';
+import { perfilDe, temFichasU, escoposDe, areasDoCadastro } from './acessos.js';
 
 export const AREA_GERAL = 'COQUERIA';
 export const AREA_OP = 'OPERAÇÃO DE EQUIPAMENTOS';
@@ -22,10 +22,10 @@ export const chaveFicha = a => (AREAS_ATIV.includes(a) || a === AREA_OP ? a : FI
 // Fichas são da Gestão: vale o perfil da Gestão (com as Fichas de acompanhamento).
 // Administrador, gestor, coordenador, administrativo e somente leitura veem as fichas de todas as áreas.
 export const veTodasFichas = u => !!u && temFichasU(u) && ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor'].includes(perfilDe(u, 'gestao'));
-// Supervisor: as 2 áreas dele · líder: a área dele · quem tem o escopo Equipamentos: também os operadores.
+// Supervisor: as áreas dele · líder: a área dele · quem tem o escopo Equipamentos: também os operadores.
 export const areasFichaDe = u => {
   if (!u || !temFichasU(u)) return [];
-  const l = [u.area, perfilDe(u, 'gestao') === 'supervisor' ? u.area2 : null].filter(a => a && AREAS_ATIV.includes(a));
+  const l = areasDoCadastro(u, perfilDe(u, 'gestao') === 'supervisor').filter(a => AREAS_ATIV.includes(a));
   if (escoposDe(u).includes('equipamentos')) l.push(AREA_OP);
   return [...new Set(l)];
 };

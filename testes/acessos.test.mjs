@@ -2,9 +2,10 @@
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico } from '../public/contas/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
 import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg } from '../public/contas/segcalc.js';
+import { areasFichaDe } from '../public/contas/pessoas.js';
 
 const ord = l => [...l].sort();
 // Ida e volta: o que as telas e as regras de hoje enxergam (papel e módulos efetivos) não muda.
@@ -80,13 +81,27 @@ test('legadoDoAcesso: papel = perfil mais alto e módulos tirados dos escopos', 
   assert.deepEqual(l.modulos, ['operacao', 'gestao']);
   assert.deepEqual(legadoDoAcesso({ operacao: 'gestor' }, ['patio'], { area: 'RECEBIMENTO' }).area, null, 'gestor vê todas as áreas');
 });
+test('legadoDoAcesso e areasDoCadastro: supervisor com várias áreas; líder fica com uma', () => {
+  const v = legadoDoAcesso({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria'], { areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2'] });
+  assert.deepEqual(v.areas, ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2']);
+  assert.equal(v.area, 'RECEBIMENTO'); assert.equal(v.area2, 'PREPARAÇÃO', 'area e area2 = as duas primeiras (cadastro antigo)');
+  const l = legadoDoAcesso({ operacao: 'lider' }, ['patio'], { areas: ['RECEBIMENTO', 'PREPARAÇÃO'] });
+  assert.deepEqual(l.areas, ['RECEBIMENTO']); assert.equal(l.area2, null);
+  assert.deepEqual(legadoDoAcesso({ operacao: 'gestor' }, ['patio'], { areas: ['RECEBIMENTO'] }).areas, [], 'gestor vê todas');
+  assert.deepEqual(areasDoCadastro({ area: 'RECEBIMENTO', area2: 'BATERIA 1' }, true), ['RECEBIMENTO', 'BATERIA 1'], 'cadastro antigo (sem a lista)');
+  assert.deepEqual(areasDoCadastro({ area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'CDQ'] }, true), ['RECEBIMENTO', 'PREPARAÇÃO', 'CDQ']);
+  assert.deepEqual(areasDoCadastro({ area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'CDQ'] }, false), ['RECEBIMENTO'], 'líder: só a area');
+  const sup = { area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'BATERIA 1'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio', 'bateria'], modulos: ['operacao', 'bateria', 'gestao'], papel: 'supervisor' };
+  assert.deepEqual(supConjs(sup), ['patio', 'bateria']);
+  assert.deepEqual(areasFichaDe(sup), ['RECEBIMENTO', 'BATERIA 1']);
+});
 test('legadoDoAcesso: Gestão sem Fichas não marca o módulo das fichas', () => {
   assert.deepEqual(legadoDoAcesso({ operacao: 'supervisor', gestao: 'supervisor' }, ['bateria'], { fichas: false }).modulos, ['bateria']);
 });
 test('legadoDoAcesso: Administração e RH', () => {
   assert.equal(legadoDoAcesso({ administracao: 'admin' }, []).papel, 'admin');
   assert.equal(legadoDoAcesso({ operacao: 'lider', administracao: 'modulo' }, ['patio']).papel, 'gestor');
-  assert.deepEqual(legadoDoAcesso({ rh: 'leitor' }, []), { papel: 'leitor', modulos: ['frequencia'], acessos: ['operacao'], area: null, area2: null });
+  assert.deepEqual(legadoDoAcesso({ rh: 'leitor' }, []), { papel: 'leitor', modulos: ['frequencia'], acessos: ['operacao'], area: null, area2: null, areas: [] });
   assert.equal(legadoDoAcesso({ operacao: 'lider', rh: 'administrativo' }, ['patio']).papel, 'lider');
 });
 test('legadoDoAcesso: só Segurança não abre nenhum módulo de hoje', () => {

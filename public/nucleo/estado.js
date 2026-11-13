@@ -2,7 +2,7 @@
 // versão dos dados (DATAV), a memória da tela (UI) e o que a pessoa pode ver e fazer (módulos, áreas, itens).
 // As variáveis são lidas pelos outros arquivos; só este arquivo as troca (definirAuth, rebuild, aplicarSet, mudouDados).
 import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../contas/cal.js';
-import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm } from '../contas/acessos.js';
+import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm, areasDoCadastro } from '../contas/acessos.js';
 import { podeItemU } from '../contas/permissoes.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg } from '../contas/segcalc.js';
@@ -95,7 +95,7 @@ export const admDe = alvo => gerencia(alvo);
 export const admMod = () => admDe(['elanc', 'eequipe', 'einsp', 'eaval', 'eanal', 'econfig', 'epainel'].includes(UI.view) ? 'equip' : ['gcolab', 'gimpr', 'gpainel', 'gtipos'].includes(UI.view) ? 'fichas' : 'ativ');
 // Áreas: gestor e coordenador (do módulo) veem todas; supervisor até 2; líder 1. Valem no módulo pedido (padrão: o da tela).
 export const todasAreas = (mod = modAqui()) => isAdmin() || ['gestor', 'coordenador'].includes(perfil(mod)) || (mod === 'administracao' && perfil(mod) === 'modulo');
-export const myAreas = (mod = modAqui()) => { const p = perfil(mod); return ME && (p === 'lider' || p === 'supervisor') ? [...new Set([ME.area, p === 'supervisor' ? ME.area2 : null].filter(a => a && AREAS.includes(a)))] : []; };
+export const myAreas = (mod = modAqui()) => { const p = perfil(mod); return ME && (p === 'lider' || p === 'supervisor') ? areasDoCadastro(ME, p === 'supervisor').filter(a => AREAS.includes(a)) : []; };
 export const myArea = () => { const l = myAreas(); return l.length ? (l.includes(UI.area) ? UI.area : l[0]) : null; };
 export const areaScope = () => myArea() || UI.area;
 const EDITA = ['gestor', 'coordenador', 'supervisor', 'lider'];

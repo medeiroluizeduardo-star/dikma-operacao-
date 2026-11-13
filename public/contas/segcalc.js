@@ -10,7 +10,7 @@
 // Supervisor da área (Operação · Supervisor com a área dele dentro do Pátio ou da Bateria): vê e trata as anomalias
 // e vê as interações da área, mesmo sem perfil na Segurança.
 import { SETS, SET_KEYS } from './cal.js';
-import { perfilDe, escoposDe } from './acessos.js';
+import { perfilDe, escoposDe, areasDoCadastro } from './acessos.js';
 
 // Valores padrão das listas (os mesmos dos formulários do Google). Editáveis em Administração › Segurança.
 export const DESVIOS_PADRAO = ['ADESIVO DE QUALIFICAÇÃO', 'ANÁLISE DE RISCO', 'CELULAR', 'EPI', 'FERRAMENTAS MANUAIS', 'IÇAMENTO DE CARGA', 'INSPEÇÃO DE PRÉ-USO', 'SEGURANÇA EM TRILHOS', 'VEÍCULOS E DIREÇÃO', 'ADORNOS', 'ARRUMAÇÃO E LIMPEZA', 'EMERGÊNCIA', 'ESPAÇO CONFINADO', 'GÁS', 'IMPEDIMENTO/BLOQUEIO', 'ISOLAMENTO DE ÁREA', 'TRABALHO EM ALTURA', 'OUTROS'];
@@ -36,11 +36,11 @@ export const conjDaArea = (cfg, area) => (listasSeg(cfg).areas.find(a => a.nome 
 // ---- Perfis ----
 export const perfilSeg = u => perfilDe(u, 'seguranca');
 // Conjuntos (patio, bateria) em que a pessoa é supervisora da área: Operação · Supervisor, com o escopo e a área
-// (area ou area2) dentro do conjunto. As regras conferem do mesmo jeito.
+// (uma das áreas dele) dentro do conjunto. As regras conferem do mesmo jeito.
 export function supConjs(u) {
   if (!u || perfilDe(u, 'operacao') !== 'supervisor') return [];
   const esc = escoposDe(u);
-  return SET_KEYS.filter(k => esc.includes(k) && [u.area, u.area2].some(a => a && SETS[k].areas.includes(a)));
+  return SET_KEYS.filter(k => esc.includes(k) && areasDoCadastro(u, true).some(a => SETS[k].areas.includes(a)));
 }
 export const registraSeg = u => ['admin', 'registra', 'trata', 'gestor'].includes(perfilSeg(u));
 export const veTudoSeg = u => ['admin', 'trata', 'gestor', 'leitor'].includes(perfilSeg(u));

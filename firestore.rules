@@ -25,7 +25,7 @@ rules_version = '2';
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // Só vale o acesso por módulo: cadastro sem o campo acesso não tem acesso a nenhum módulo. Do cadastro antigo ficam
 // só papel (qualquer perfil = ativo; 'bloqueado' = sem acesso nenhum) e 'gestao' em modulos (= com as Fichas).
-// Áreas: area (líder e supervisor) e area2 (só supervisor), conforme o perfil do módulo.
+// Áreas: area (líder e supervisor); area2 e a lista areas (só supervisor, quantas áreas precisar), conforme o perfil do módulo.
 // A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -42,8 +42,9 @@ service cloud.firestore {
     function pEm(m) { return pmU(perfil(), m); }
     function esc(e) { return escU(perfil(), e); }
     function admin() { return hasProfile() && adminU(perfil()); }
-    // Área no perfil de um módulo: líder 1 área; supervisor também a 2ª; gestor e coordenador todas.
-    function areaEm(p, area) { return p in ['gestor', 'coordenador'] || (p in ['supervisor', 'lider'] && (perfil().get('area', '') == area || (p == 'supervisor' && perfil().get('area2', '') == area))); }
+    // Área no perfil de um módulo: líder 1 área; supervisor também a 2ª e as da lista areas; gestor e coordenador todas.
+    function supAreaU(u, area) { return u.get('area2', '') == area || area in u.get('areas', []); }
+    function areaEm(p, area) { return p in ['gestor', 'coordenador'] || (p in ['supervisor', 'lider'] && (perfil().get('area', '') == area || (p == 'supervisor' && supAreaU(perfil(), area)))); }
     // Administração dos módulos: administrador; ou 'Dos módulos' sendo Gestor (Gestão) no escopo — Equipamentos aceita
     // também o Gestor da Operação; as Fichas pedem a Gestão com as Fichas.
     function admModNovo(m) {
@@ -92,7 +93,7 @@ service cloud.firestore {
       && (adminU(u) || (pmU(u, 'gestao') != '' && fichasU(u))); }
     function geEditaU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo']; }
     function todasFichasU(u) { return geU(u) && pgU(u) in ['admin', 'gestor', 'coordenador', 'administrativo', 'leitor']; }
-    function minhaAreaU(u, area) { return u.get('area', '') == area || (pgU(u) == 'supervisor' && u.get('area2', '') == area); }
+    function minhaAreaU(u, area) { return u.get('area', '') == area || (pgU(u) == 'supervisor' && supAreaU(u, area)); }
     function minhaFichaU(u, area) { return geU(u) && (minhaAreaU(u, area) || (area == 'OPERAÇÃO DE EQUIPAMENTOS' && escU(u, 'equipamentos'))); }
     function admGestaoU(u) { return adminU(u) || (pmU(u, 'administracao') == 'modulo' && pmU(u, 'gestao') == 'gestor' && fichasU(u)); }
     function veOcorrU(u, o) { return todasFichasU(u) || (geU(u) && (minhaFichaU(u, o.area) || o.criadoPor == request.auth.uid || o.recolhe == u.get('nomeUp', '#'))); }
@@ -585,7 +586,7 @@ service cloud.firestore {
     // ---------- Módulo Segurança: registros de interação e de anomalia ----------
     // Só registra quem o administrador autorizou (Segurança · registra, trata ou gestor). Quem só registra lê só o que
     // registrou; trata, gestor, somente leitura e o administrador leem tudo. O supervisor da área (Operação · Supervisor
-    // com a área dele, area ou area2, dentro do conjunto da anomalia: conj = patio | bateria) lê e trata as anomalias e
+    // com uma das áreas dele dentro do conjunto da anomalia: conj = patio | bateria) lê e trata as anomalias e
     // lê as interações da área. O acompanhamento (status, trat, conclEm) é de quem trata e do supervisor da área; o autor
     // corrige o próprio registro por 24 h (a anomalia, só enquanto aberta). Apagar = administrador. As fotos (segfotos)
     // levam o autor e o conjunto do registro e seguem as mesmas regras de leitura.
@@ -597,7 +598,8 @@ service cloud.firestore {
     function supSeg(conj) {
       return conj in ['patio', 'bateria'] && ativo()
         && pEm('operacao') == 'supervisor' && esc(conj)
-        && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj));
+        && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj)
+            || perfil().get('areas', []).hasAny(areasDoConj(conj)));
     }
     function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj); }
     function txtOk(d, k, min, max) { return d.get(k, '') is string && d.get(k, '').size() >= min && d.get(k, '').size() <= max; }

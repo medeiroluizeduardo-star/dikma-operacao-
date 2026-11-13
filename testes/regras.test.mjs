@@ -65,6 +65,9 @@ const USUARIOS = {
   supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
   tecPatio: { papel: 'leitor', modulos: ['operacao'], acesso: { operacao: 'tecnico' }, escopos: ['patio'] },
   tecBat: { papel: 'leitor', modulos: ['bateria'], acesso: { operacao: 'tecnico' }, escopos: ['bateria'] },
+  // Supervisor com várias áreas (lista areas; area e area2 guardam as duas primeiras, como a tela grava).
+  supVarias: { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1'], modulos: ['operacao', 'bateria', 'gestao'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio', 'bateria'] },
+  liderComLista: { papel: 'lider', area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'PREPARAÇÃO'], modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'] },
   supSemArea: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['operacao'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
   admModSeg: { papel: 'gestor', modulos: ['seguranca'], acesso: { seguranca: 'gestor', administracao: 'modulo' }, escopos: [] },
   bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] },
@@ -1151,6 +1154,15 @@ test('Segurança: o supervisor da área lê e trata as anomalias da área dele; 
   b.set(doc(dbB, 'segfotos', 'fd1'), { reg: 'a2', col: 'seganom', tipo: 'depois', autor: 'segReg2', por: 'supBat', conj: 'bateria', area: 'BATERIA', mes: '2026-11', mini: 'm', dados: 'd', ordem: 0 });
   b.update(doc(dbB, 'seganom', 'a2'), acomp('supBat', 'concluida', { fotoDepois: 'fd1', miniDepois: 'm' }));
   await assertSucceeds(b.commit());
+});
+test('Várias áreas: o supervisor vale em todas as da lista (3ª área inclusive); o líder só na area', async () => {
+  const fp = (pid, k) => ({ [`fp.${pid}|${k}`]: { por: 'x', nome: 'X', em: '2026-10-21' } });
+  await assertSucceeds(updateDoc(doc(db('supVarias'), 'b_semanas', SEM_B1), { 's.B1-003': 'P______', ...fp('B1-003', 0) }), '3ª área (Bateria 1)');
+  await assertSucceeds(updateDoc(doc(db('supVarias'), 'semanas', SEM_PREP), { 's.PRE-003': 'P______', ...fp('PRE-003', 0) }));
+  await assertSucceeds(getDoc(doc(db('supVarias'), 'gcolab', 'BATERIA 1')), 'fichas da 3ª área');
+  await assertFails(getDoc(doc(db('supVarias'), 'gcolab', 'OPERAÇÃO DE EQUIPAMENTOS')));
+  await assertSucceeds(getDoc(doc(db('supVarias'), 'seganom', 'a2')), 'anomalia da Bateria pela 3ª área');
+  await assertFails(getDoc(doc(db('liderComLista'), 'gcolab', 'PREPARAÇÃO')), 'líder: a lista não vale');
 });
 test('Segurança: acompanhamento só por quem trata, só nos campos do tratamento e concluir pede a foto do depois', async () => {
   await assertSucceeds(updateDoc(doc(db('segTrata'), 'seganom', 'a4'), acomp('segTrata', 'tratamento')));
