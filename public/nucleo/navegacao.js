@@ -1,7 +1,7 @@
-// Navegação: abas (VIEWS), os 5 módulos (MODS), barra de baixo do celular e troca de módulo.
+// Navegação: abas (VIEWS), os 6 módulos (MODS), barra de baixo do celular e troca de módulo.
 // Para mudar o menu, comece por aqui: VIEWS diz em que módulo e grupo cada aba aparece e quem a vê.
 import { podeVer } from '../contas/permissoes.js';
-import { editaAdm, veHistorico } from '../contas/acessos.js';
+import { editaAdm, veHistorico, conjsInd, eqInd } from '../contas/acessos.js';
 import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './estado.js';
 import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
@@ -10,7 +10,7 @@ import { veTreinos } from '../contas/treinos.js';
 import { acoes } from './acoes.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
-// mod: all (Avisos no celular, em todos os módulos; abre pelo Mais e pelo menu lateral) · operacao · gestao · seguranca · rh · administracao
+// mod: all (Avisos no celular, em todos os módulos; abre pelo Mais e pelo menu lateral) · operacao · gestao · seguranca · rh · indicadores · administracao
 // req(): condição pelo usuário logado · reqU(u): condição pelo usuário · ord: ordem na Administração.
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
 // livre: todo mundo que tem o módulo vê (não entra em Perfis e permissões).
@@ -28,6 +28,10 @@ const geSets = () => setsDe(ME, 'gestao').length > 0;
 const opEq = () => temEquipEm(ME, 'operacao');
 const geEq = () => temEquipEm(ME, 'gestao');
 const temRH = () => !!perfil('rh');
+// Indicadores: conjuntos (Pátio, Bateria) e Equipamentos do escopo de quem tem o módulo.
+const indSets = () => setsDe(ME, 'indicadores').length > 0;
+const indEq = () => temEquipEm(ME, 'indicadores');
+const indConj = () => conjsInd(ME).length > 0;
 export const VIEWS = [
   { id: 'avisos', nome: 'Avisos no celular', ic: 'celular', grp: 'Conta', mod: 'all', fora: true, livre: true, sup: true },
   // Histórico de alterações do gestor de cada módulo (só o do módulo dele); o administrador usa o da Administração (cfhist).
@@ -43,11 +47,6 @@ export const VIEWS = [
   { id: 'esdia', nome: 'Escala do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true },
   { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
   { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
-  // Indicadores da operação: um lugar só no menu; Atividades | Equipamentos no topo da tela; Resumos abre pelo botão.
-  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Indicadores', mod: 'operacao', req: opSets, junto: 'ind', filtros: 'msa', conj: true },
-  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'painel', grp: 'Indicadores', mod: 'operacao', req: opEq, junto: 'ind', tela: 'EQ' },
-  { id: 'qpainel', nome: 'Indicadores da queda zero', ic: 'queda', grp: 'Indicadores', mod: 'operacao', req: opSets, junto: 'ind', filtros: 'ma', conj: true },
-  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Indicadores', mod: 'operacao', req: () => opSets() || opEq(), filtros: 'msa', fora: true, pai: 'painel' },
   // ---- Gestão: planejar, acompanhar e analisar ----
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
@@ -58,21 +57,29 @@ export const VIEWS = [
   { id: 'gcolab', nome: 'Fichas de acompanhamento', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
   { id: 'eaval', nome: 'Avaliação mensal', ic: 'estrela', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
-  { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Equipamentos', mod: 'gestao', req: geEq, tela: 'EQ', junto: 'geeq' },
-  // Indicadores das fichas (os da operação ficam na Operação › Indicadores).
-  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'painel', grp: 'Acompanhamento', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   // ---- Segurança: registros de interação e de anomalia (telas/seguranca.js) ----
-  { id: 'sgpainel', nome: 'Painel da Segurança', ic: 'pizza', grp: 'Visão geral', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgcartao', nome: 'Cartão Amarelo', ic: 'cartao', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
-  // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência; Resumo, pelos Indicadores ----
+  // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência ----
   { id: 'rcolab', nome: 'Colaboradores', ic: 'users', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'CO' },
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência', mod: 'rh', req: temRH },
   { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
-  { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'rh', req: temRH },
-  { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'rh', req: temRH, fora: true, pai: 'fpainel' },
+  // ---- Indicadores: os painéis de todos os módulos, só para ver (acesso.indicadores, escolhido por pessoa em Usuários) ----
+  // Cada aba usa os dados do escopo da pessoa (Pátio, Bateria, Equipamentos); o "Vê" com área no cadastro vê só a dele.
+  // As telas são as mesmas de antes (vinham da Operação, Gestão, Segurança e RH): os ids não mudaram, então links
+  // antigos e o que ficou salvo no aparelho caem aqui (ensureModulo leva para o módulo da aba).
+  { id: 'painel', nome: 'Indicadores de atividades', ic: 'painel', grp: 'Indicadores', mod: 'indicadores', req: indSets, filtros: 'msa', conj: true },
+  { id: 'resumo', nome: 'Resumos para imprimir', ic: 'print', grp: 'Indicadores', mod: 'indicadores', req: () => indSets() || indEq(), filtros: 'msa', fora: true, pai: 'painel' },
+  { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'equip', grp: 'Indicadores', mod: 'indicadores', req: indEq, junto: 'ieq', tela: 'EQ' },
+  { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Indicadores', mod: 'indicadores', req: indEq, tela: 'EQ', junto: 'ieq' },
+  { id: 'qpainel', nome: 'Indicadores da queda zero', ic: 'queda', grp: 'Indicadores', mod: 'indicadores', req: indSets, filtros: 'ma', conj: true },
+  { id: 'sgpainel', nome: 'Indicadores da Segurança', ic: 'escudo', grp: 'Indicadores', mod: 'indicadores', req: indConj, tela: 'SG' },
+  // Pessoas: frequência (dados do RH) e, para quem já tem as Fichas de acompanhamento na Gestão, os indicadores das fichas.
+  { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'indicadores', req: indConj, junto: 'ipes' },
+  { id: 'gpainel', nome: 'Indicadores das fichas', ic: 'ficha', grp: 'Indicadores', mod: 'indicadores', req: () => temFichas(ME), tela: 'GE', junto: 'ipes' },
+  { id: 'fresumo', nome: 'Resumo da frequência', ic: 'texto', grp: 'Indicadores', mod: 'indicadores', req: indConj, fora: true, pai: 'fpainel' },
   // ---- Administração: ajustes de todos os módulos. 'Completa' vê tudo; 'Dos módulos', só os dos módulos em que é Gestor ----
   // Conferência, Uso do plano, Erros e Limpeza abrem por botões no topo da Visão geral; Gerador de meses, no topo do Plano padrão.
   // Fotos (regras e arquivo), Fichas (tipos e importar) e Acessos (usuários e perfis) ocupam um lugar só no menu, com seletor no topo.
@@ -116,26 +123,28 @@ export const SUB_A = {
 export const SUB_S = {
   sgtrein: 'NRs, ASO e outros treinamentos: quem está vencido, quem vence em 30 dias e importação por planilha',
   sginter: 'Registros de interação: riscos e desvios vistos em campo',
-  sganom: 'Fila das anomalias: situação, responsável e prazo',
+  sganom: 'O que pede atenção agora e a fila das anomalias: situação, responsável e prazo',
   sgcartao: 'Direito ao Trabalho Seguro: cartões dados em campo e a validação do líder ou da segurança',
-  sgpainel: 'O que pede atenção agora, os números do mês, as áreas e os treinamentos',
+  sgpainel: 'Os números do mês, a evolução, as áreas e os treinamentos',
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Painel', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Indicadores', painel: 'Indicadores', epainel: 'Indicadores', qpainel: 'Indicadores', gpainel: 'Indicadores' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas' };
 // Nome no seletor do topo das abas juntas (junto).
-export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', painel: 'Atividades', epainel: 'Equipamentos', qpainel: 'Queda zero', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
+export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
-export const ROTULO_JUNTO = { ind: 'Indicadores de', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
+export const ROTULO_JUNTO = { ieq: 'Equipamentos', ipes: 'Pessoas', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
 // Nome no menu das abas juntas: o mesmo, qualquer que seja a primeira que a pessoa vê.
-const MENU_JUNTO = { ind: 'Indicadores', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
+const MENU_JUNTO = { ieq: 'Equipamentos', ipes: 'Pessoas', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
 export const nomeCurto = v => (v && (MENU_JUNTO[v.junto] || CURTO[v.id] || v.nome)) || '';
-// Os 5 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
+// Os 6 módulos (seletor de módulo). key = mod das abas; inicio = aba que abre ao entrar no módulo.
 export const MODS = {
-  operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos, Efetivo e Indicadores', key: 'operacao', inicio: 'apontar' },
-  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo, Fichas de acompanhamento e indicadores', key: 'gestao', inicio: 'prog' },
-  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, Cartão Amarelo, treinamentos e indicadores', key: 'seguranca', inicio: 'sgpainel' },
+  operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos e Efetivo', key: 'operacao', inicio: 'apontar' },
+  gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo e Fichas de acompanhamento', key: 'gestao', inicio: 'prog' },
+  // A Segurança abre em Anomalias (com o que pede atenção no topo); o painel foi para Indicadores.
+  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, Cartão Amarelo e treinamentos', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Colaboradores, frequência e férias', key: 'rh', inicio: 'afreq' },
+  indicadores: { nome: 'Indicadores', curto: 'Indicadores', sub: 'Atividades, equipamentos, queda zero, segurança e pessoas', key: 'indicadores', inicio: 'painel' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
 // Itens do seletor de módulos: os módulos que a pessoa tem.
@@ -193,12 +202,12 @@ export const aba = id => VIEWS.find(v => v.id === id) || {};
 // Filtros da aba: { mes, semana, area } (true = aparece no topo).
 export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: f.includes('m'), semana: f.includes('s'), area: f.includes('a') }; };
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais, na ordem de uso. Nome e ícone são os do menu lateral.
-// Na Gestão, Colaboradores (que tem aviso de pendência) vem antes de Indicadores.
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
-  gestao: () => ['prog', 'gcolab', 'gpainel', 'causas', 'eaval'],
-  seguranca: () => ['sgpainel', 'sganom', 'sginter', 'sgcartao', 'sgtrein'],
-  rh: () => ['rcolab', 'afreq', 'fpainel'],
+  gestao: () => ['prog', 'gcolab', 'causas', 'esdim', 'eaval'],
+  seguranca: () => ['sganom', 'sginter', 'sgcartao', 'sgtrein'],
+  rh: () => ['rcolab', 'afreq'],
+  indicadores: () => ['painel', 'epainel', 'qpainel', 'sgpainel', 'fpainel', 'gpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };
 export function barraDe() {

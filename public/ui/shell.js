@@ -21,6 +21,7 @@ import { aguardandoEf } from '../contas/efetivo-dia.js';
 // Resumos (relatorios.js) e configurações (config.js) chegam só quando abertos (modulos.js: RE, CF).
 const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
 const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
+const conjsRes = () => { const m = modulo('RE'); return m ? m.conjsRes() : []; };
 const comCF = fn => () => comModulo('CF', fn);
 
 // Telas da Segurança (telas/seguranca.js, carregado sob demanda); sgconfig fica na Administração.
@@ -124,7 +125,10 @@ function renderTela() {
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
-  if (UI.modulo === 'rh') return tela(v === 'fpainel' ? comModulo('AD', m => m.painel()) : v === 'fresumo' ? modulo('RE').vResumoOutro() : comModulo('AD', m => m.render(v)));
+  // Indicadores › Pessoas: o painel e o resumo da frequência usam a mesma tela do RH (administrativo.js).
+  if (v === 'fpainel') return tela(comModulo('AD', m => m.painel()));
+  if (v === 'fresumo') return tela(modulo('RE').vResumoOutro());
+  if (UI.modulo === 'rh') return tela(comModulo('AD', m => m.render(v)));
   if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
   if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));
   if (arq === 'CF') return tela(comModulo('CF', m => m.vConfigModulo(v)));
@@ -323,8 +327,8 @@ function renderTop() {
   if (v.id === 'avisos') { pintarTopo(v.nome, 'Escolha o que receber neste aparelho, mesmo com o sistema fechado'); return; }
   if (v.id === 'historico') { pintarTopo(v.nome, 'Quem mudou o quê e quando, nos módulos em que você é gestor'); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
-  if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
-  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
+  if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', seletorJuntas(v) + (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
+  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && conjsRes().length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${conjsRes().map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Quem está em cada rota, presença e movimentações do dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
@@ -344,13 +348,13 @@ function seletorJuntas(v) {
 }
 // Abas fora do menu abrem por botões no topo da aba pai; nelas, um botão volta para a aba pai.
 // Programação: Folha do líder e Etiquetas QR. Colaboradores: Impressão das fichas. Indicadores: Resumos para imprimir.
-// RH: Folha de frequência → Importar planilhas; Indicadores da frequência → Resumo da frequência.
+// RH: Folha de frequência → Importar planilhas. Indicadores › Pessoas: Indicadores da frequência → Resumo da frequência.
 // Administração: Visão geral → Conferência, Uso do plano, Erros, Histórico e Limpeza; Plano padrão → Gerador de meses.
 const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']],
   painel: [['resumo', 'Imprimir resumo', 'print']], epainel: [['resumo', 'Imprimir resumo', 'print']],
   afreq: [['aimport', 'Importar planilhas', 'planilha']], fpainel: [['fresumo', 'Imprimir resumo', 'print']],
   cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular'], ['cfhist', 'Histórico', 'relogio'], ['cflimpa', 'Limpeza de dados', 'lixo']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
-const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Indicadores', 'painel'], afreq: ['Frequência', 'freq'], fpainel: ['Indicadores', 'percent'] };
+const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Atividades', 'painel'], afreq: ['Frequência', 'freq'], fpainel: ['Pessoas', 'percent'] };
 function atalhosDe(v) {
   const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);
   // Volta: para a aba pai ou, se a pessoa não a vê (Resumos de quem só tem Equipamentos), para o item marcado no menu.

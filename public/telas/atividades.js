@@ -3,7 +3,7 @@ import { SETS, AREA_S, DAYS, DL, MOTIVOS, pd, add, ddmm, weeksOfMonth, weekOf, w
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import * as M from '../ui/movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, fmtAt, n0, $ } from '../nucleo/base.js';
-import { ME, PL, COLABS, SK, AREAS, UI, tipos, isAdmin, podeItem, todasAreas, myAreas, myArea, areaScope, canEdit, selMinhaArea } from '../nucleo/estado.js';
+import { ME, PL, COLABS, SK, AREAS, UI, tipos, isAdmin, podeItem, todasAreas, myAreas, myArea, areaScope, canEdit, selMinhaArea, modsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { docsFor, diasDe, st, stats, rotasDa, atrasadasAll, localChange, aprovador, acompanha, areasAprov, areasVerAprov, aprovDe, listaAprov, gravarApont, aprovar, devolver, CHIP, ST_NOME } from '../calc/atividades.js';
@@ -71,7 +71,7 @@ export function vPainel() {
   ${(todasRotas ? rs : rs.slice(0, 8)).map(({ r, x }) => { const e = pct(x.Rhoje, x.progHoje); return `<tr class="clicavel" data-progrota="${esc(r.area + '|' + r.rota)}" title="Abrir a Programação desta rota"><td><b>${esc(r.rota)}</b></td><td class="muted">${AREA_S[r.area]}</td><td class="r num">${x.prog}</td><td class="r num">${x.R}</td><td class="r num">${x.N}</td><td class="r num">${x.A ? `<span class="pill warn">${x.A}</span>` : '0'}</td><td><span class="ef"><i style="width:${e}%"></i></span><span class="num">${e}%</span></td></tr>`; }).join('')}
   </tbody></table></div></div>`;
   { const { por, total } = contarCausas(docs); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5); const mx = cs.length ? cs[0][1] : 1;
-    h += `<div class="grid2"><div class="card"><header><h2>Por que não foi feito</h2><p>Principais causas no período</p><span class="r"><button class="btn sm" data-go="causas">Causas e ações</button></span></header><div class="body">${cs.length ? `<div class="bars">${cs.map(([c, n]) => `<div class="barrow"><span class="n">${esc(c)}<small>${pct(n, total)}% das não realizadas</small></span><div class="stack"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma não realizada no período.</div>'}</div></div>
+    h += `<div class="grid2"><div class="card"><header><h2>Por que não foi feito</h2><p>Principais causas no período</p>${modsDe(ME).includes('gestao') ? '<span class="r"><button class="btn sm" data-go="causas">Causas e ações</button></span>' : ''}</header><div class="body">${cs.length ? `<div class="bars">${cs.map(([c, n]) => `<div class="barrow"><span class="n">${esc(c)}<small>${pct(n, total)}% das não realizadas</small></span><div class="stack"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma não realizada no período.</div>'}</div></div>
     ${veLog() ? `<div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div>` : ''}</div>`; }
   return h;
 }

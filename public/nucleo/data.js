@@ -78,7 +78,7 @@ import {
 import { CHAVE_SITE } from './appcheck.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
-import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST } from '../contas/acessos.js';
+import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
 import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
@@ -98,9 +98,12 @@ const C = (n, k = cur) => SETS[k].pre + n;
 export const cache = { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
 function novoE() { return { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }; }
-// Que dados carregar: tirado do acesso por módulo (escopos com Operação ou Gestão, Fichas, RH).
-export const temEquip = u => marcasDe(u).includes('equipamentos');
-export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod);
+// Que dados carregar: tirado do acesso por módulo (escopos com Operação ou Gestão, Fichas, RH) e, para quem tem os
+// Indicadores, os conjuntos do escopo (só leitura; as regras liberam a leitura do que está por trás dos painéis).
+export const temEquip = u => marcasDe(u).includes('equipamentos') || eqInd(u);
+export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod) || conjsInd(u).includes(k);
+// Frequência (RH) de cada conjunto: o RH lê os dois; os Indicadores, os do escopo.
+const freqDe = (u, k) => temFreq(u) || conjsInd(u).includes(k);
 export const temOperacao = u => temSet(u, 'patio');
 export const temBateria = u => temSet(u, 'bateria');
 export const temGestao = u => marcasDe(u).includes('gestao');
@@ -281,7 +284,7 @@ function startData() {
   on(doc(db, 'adm', 'desligados'), s => { cache.desligados = (s.exists() && s.data().itens) || []; changed(); });
   if (ehAdminU(me)) on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
   // RH (Frequência e férias): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
-  if (temFreq(me)) startAdm(on);
+  if (temFreq(me) || conjsInd(me).length) startAdm(on);
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo (iniciarAdministracao).
   for (const k of SET_KEYS) {
     const st = S[k];
@@ -306,9 +309,9 @@ function startData() {
   });
   if (temGestao(me)) startGestao();
   if (temEquip(me)) startEquip();
-  if (temSeg(me)) startSeg();
-  // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js).
-  if (veTreinos(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
+  if (temSeg(me) || conjsInd(me).length) startSeg();
+  // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js) e os Indicadores (números do painel).
+  if (veTreinos(me) || temIndU(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
@@ -352,7 +355,7 @@ export async function apagarErros(ids) {
   for (let i = 0; i < ids.length; i += 400) { const b = writeBatch(db); ids.slice(i, i + 400).forEach(id => b.delete(doc(db, 'erros', id))); await track(b.commit()); }
 }
 // Alguma coisa para abrir: perfil em algum módulo.
-const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao));
+const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || (temIndU(u) && (conjsInd(u).length > 0 || eqInd(u))) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao));
 function stopData() {
   dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false; admSisOn = false;
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
@@ -755,7 +758,7 @@ function startAdm(on) {
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
   on(collection(db, 'gcolab'), qs => { fichasRH = Object.fromEntries(qs.docs.map(d => [d.id, d.data().itens || []])); cache.adm.rh = Object.values(fichasRH).flat(); cache.adm.rhLoaded = true; changed(); });
-  for (const k of SET_KEYS) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
+  for (const k of SET_KEYS) if (freqDe(me, k)) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
 }
 let admOn = false;
@@ -774,7 +777,7 @@ export function rhSalvarFicha(n) {
 }
 // Liga uma competência (folha) e os meses de presença que ela cobre.
 export function admWatch(conj, comp) {
-  if (!db || !me || !admOn) return;
+  if (!db || !me || !admOn || !freqDe(me, conj)) return;
   const id = conj + '|' + comp;
   if (!admSubs.has(id)) admSubs.set(id, onSnapshot(doc(db, 'freqcomp', id), s => { cache.adm.comps[id] = s.exists() ? s.data() : null; changed(); }, e => cb.onError && cb.onError(e)));
   const [a, m] = comp.split('-').map(Number); const ant = `${m === 1 ? a - 1 : a}-${String(m === 1 ? 12 : m - 1).padStart(2, '0')}`;
@@ -1101,11 +1104,12 @@ function segOuvir(key, q) {
   segSubs.set(key, onSnapshot(q, qs => { segRes.set(key, qs.docs.map(segDoc)); segJuntar(); }, e => { segRes.set(key, []); segJuntar(); if (e.code !== 'permission-denied') cb.onError && cb.onError(e); }));
 }
 // Filtros que as regras pedem para esta pessoa: [] = sem filtro (vê tudo).
+// Indicadores: os registros dos conjuntos do escopo (Pátio, Bateria), como o supervisor da área.
 function filtrosSeg() {
   if (veTudoSeg(me)) return [[]];
   const l = [];
   if (registraSeg(me)) l.push([where('por', '==', me.uid)]);
-  for (const k of supConjs(me)) l.push([where('conj', '==', k)]);
+  for (const k of new Set([...supConjs(me), ...conjsInd(me)])) l.push([where('conj', '==', k)]);
   return l;
 }
 function startSeg() {

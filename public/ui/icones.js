@@ -53,6 +53,8 @@ MOD_IC.rh = ACESSO_IC.administrativo;
 MOD_IC.administracao = MOD_IC.config;
 MOD_IC.paineis = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M7 16v-4M11 16V8M15 16v-6M19 16"/></svg>';
 MOD_IC.gestao = MOD_IC.paineis;
+// Indicadores: gráfico de linha subindo.
+MOD_IC.indicadores = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M4 16l5-5 4 3 7-8"/><path d="M15 6h5v5"/></svg>';
 I.escudo = MOD_IC.seguranca;
 I.lixo = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>';
 // Ícones próprios de cada aba do menu (um por aba, para reconhecer pela figura).

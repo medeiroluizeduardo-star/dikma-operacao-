@@ -2,7 +2,7 @@
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro } from '../public/contas/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro, conjsInd, eqInd, areasInd, temIndU, perfilNome } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
 import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg, painelSeg, noPrazoSeg } from '../public/contas/segcalc.js';
 import { areasFichaDe } from '../public/contas/pessoas.js';
@@ -270,4 +270,25 @@ test('Histórico de alterações: o administrador vê todos os módulos; o gesto
   for (const a of [{ operacao: 'lider' }, { operacao: 'coordenador', gestao: 'supervisor' }, { rh: 'leitor' }, { seguranca: 'trata' }, {}]) assert.equal(veHistorico(u(a)), false, JSON.stringify(a));
   assert.equal(veHistorico(u({ operacao: 'gestor' }, { papel: 'bloqueado' })), false, 'bloqueado');
   assert.equal(veHistorico(null), false);
+});
+
+test('Indicadores: escolhido por pessoa (Vê ou Gestor); vê os conjuntos do escopo; o Vê com área fica com as dele', () => {
+  const u = (acesso, escopos, extra = {}) => ({ papel: 'leitor', acesso, escopos, ...extra });
+  assert.equal(temIndU(u({ operacao: 'gestor' }, ['patio'])), false, 'ter a Operação não dá os Indicadores');
+  assert.deepEqual(conjsInd(u({ operacao: 'gestor' }, ['patio'])), []);
+  assert.deepEqual(conjsInd(u({ indicadores: 've' }, ['patio', 'equipamentos'])), ['patio']);
+  assert.equal(eqInd(u({ indicadores: 've' }, ['patio', 'equipamentos'])), true);
+  assert.equal(eqInd(u({ indicadores: 've' }, ['bateria'])), false);
+  assert.deepEqual(conjsInd(u({ administracao: 'admin' }, [], { papel: 'admin' })), ['patio', 'bateria'], 'administrador: os dois');
+  assert.deepEqual(conjsInd(u({ indicadores: 'gestor' }, ['patio'], { papel: 'bloqueado' })), [], 'bloqueado não vê');
+  // áreas: o Vê com área de líder/supervisor fica com as dele; o Gestor vê todas
+  assert.deepEqual(areasInd(u({ operacao: 'lider', indicadores: 've' }, ['patio'], { area: 'RECEBIMENTO' })), ['RECEBIMENTO']);
+  assert.deepEqual(areasInd(u({ operacao: 'supervisor', indicadores: 've' }, ['patio'], { area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'PREPARAÇÃO'] })), ['RECEBIMENTO', 'PREPARAÇÃO']);
+  assert.deepEqual(areasInd(u({ operacao: 'lider', indicadores: 'gestor' }, ['patio'], { area: 'RECEBIMENTO' })), []);
+  assert.deepEqual(areasInd(u({ indicadores: 've' }, ['patio'])), [], 'sem área no cadastro: todas');
+  assert.ok(MODULOS_ACESSO.some(m => m.k === 'indicadores' && m.perfis.join() === 've,gestor'));
+  assert.equal(perfilNome('indicadores', 've'), 'Vê');
+  // só Indicadores: os campos antigos não ganham Operação nem Gestão
+  const v = legadoDoAcesso({ indicadores: 've' }, ['patio'], {});
+  assert.deepEqual(v.modulos, ['seguranca']); assert.equal(v.papel, 'leitor');
 });

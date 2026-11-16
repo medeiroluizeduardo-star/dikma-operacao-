@@ -70,6 +70,10 @@ const USUARIOS = {
   liderComLista: { papel: 'lider', area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'PREPARAÇÃO'], modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'] },
   supSemArea: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['operacao'], acesso: { operacao: 'supervisor' }, escopos: ['patio'] },
   admModSeg: { papel: 'gestor', modulos: ['seguranca'], acesso: { seguranca: 'gestor', administracao: 'modulo' }, escopos: [] },
+  // Indicadores (6º módulo): só leitura dos conjuntos do escopo, sem Operação, Gestão, Segurança ou RH.
+  indPatio: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 've' }, escopos: ['patio'] },
+  indEq: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 'gestor' }, escopos: ['equipamentos'] },
+  indSemEscopo: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 'gestor' }, escopos: [] },
   bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] },
   // Cadastro só no modelo antigo (sem o campo acesso): não vale mais nada. Os demais usuários escritos acima no
   // modelo antigo ganham o acesso por módulo como a conversão gravou nos cadastros reais (testes/legado.mjs).
@@ -1398,4 +1402,38 @@ test('Mover de rota no dia: o líder pede na área dele; o supervisor da área a
   await assertSucceeds(setDoc(doc(db('liderRec'), 'situacao', '2026-12'), { mov: { 'C1|2026-12-01': { ...ped('C1', R1, R2, 'liderRec'), dt: '2026-12-01' } }, movK: 'C1|2026-12-01' }, { merge: true }), 'mês novo');
   // Bateria: b_situacao com a mesma regra
   await assertSucceeds(setDoc(doc(db('supBat'), 'b_situacao', '2026-11'), { mov: { [k('B1')]: ped('B1', 'BATERIA 1|BT1', 'BATERIA 1|BT2', 'supBat', 'aprovado', { ok: 'supBat' }) }, movK: k('B1') }, { merge: true }), 'Bateria');
+});
+
+test('Indicadores: lê (só lê) os dados por trás dos painéis nos conjuntos do escopo; nada de outro conjunto', async () => {
+  await prepAdm();
+  const u = 'indPatio';
+  for (const [c, id] of [['config', 'sistema'], ['semanas', SEM], ['colaboradores', 'RECEBIMENTO'], ['situacao', '2026-10'], ['freqcomp', 'patio|2026-10'], ['gcolab', 'RECEBIMENTO'], ['seganom', 'a1'], ['seginter', 'i1']]) await assertSucceeds(getDoc(doc(db(u), c, id)), 'lê ' + c);
+  await assertSucceeds(getDocs(collection(db(u), 'ferias')), 'férias');
+  await assertSucceeds(getDocs(collection(db(u), 'treinos')), 'treinamentos');
+  await assertSucceeds(getDocs(query(collection(db(u), 'semanas'), where('mes', '==', '2026-10'))), 'semanas do mês');
+  await assertSucceeds(qSeg(u, 'seganom', where('conj', '==', 'patio')), 'anomalias do Pátio');
+  // outro conjunto, Equipamentos (fora do escopo) e o que não é indicador
+  await assertFails(getDoc(doc(db(u), 'b_semanas', SEM_B1)), 'Bateria fora do escopo');
+  await assertFails(getDoc(doc(db(u), 'b_situacao', '2026-10')), 'presença da Bateria');
+  await assertFails(getDoc(doc(db(u), 'freqcomp', 'bateria|2026-10')), 'folha da Bateria');
+  await assertFails(getDoc(doc(db(u), 'seganom', 'a2')), 'anomalia da Bateria');
+  await assertFails(qSeg(u, 'seganom', where('conj', '==', 'bateria')));
+  await assertFails(getDoc(doc(db(u), 'eq', 'cadastro')), 'Equipamentos fora do escopo');
+  await assertFails(getDoc(doc(db(u), 'gocorr', 'rec1')), 'ocorrências das fichas não');
+  await assertFails(getDoc(doc(db(u), 'usuarios', 'admin')), 'usuários não');
+  // nada de gravar
+  await assertFails(setDoc(doc(db(u), 'situacao', '2026-10'), { v: { 'C001|2026-10-02': 'FT' } }, { merge: true }), 'não lança presença');
+  await assertFails(updateDoc(doc(db(u), 'semanas', SEM), { s: { x: 1 } }), 'não aponta');
+  await assertFails(updateDoc(doc(db(u), 'freqcomp', 'patio|2026-10'), { grupos: [] }), 'não mexe na folha');
+  await assertFails(setDoc(doc(db(u), 'seganom', 'n9'), novaAnom(u)), 'não registra anomalia');
+  await assertFails(setDoc(doc(db(u), 'treinos', 't9'), { tipo: 'NR 35', nome: 'X' }), 'não grava treinamento');
+  await assertFails(setDoc(doc(db(u), 'ferias', 'f9'), { nome: 'X' }), 'não grava férias');
+  // Equipamentos no escopo: lê os lançamentos e o cadastro; não lança
+  await assertSucceeds(getDoc(doc(db('indEq'), 'eq', 'cadastro')));
+  await assertSucceeds(getDoc(doc(db('indEq'), 'eqlanc', 'l1')));
+  await assertFails(setDoc(doc(db('indEq'), 'eqlanc', 'n9'), LANC('indEq')), 'não lança equipamento');
+  await assertFails(getDoc(doc(db('indEq'), 'semanas', SEM)), 'Pátio fora do escopo');
+  // sem escopo: nenhum conjunto
+  for (const [c, id] of [['config', 'sistema'], ['semanas', SEM], ['freqcomp', 'patio|2026-10'], ['seganom', 'a1'], ['eq', 'cadastro']]) await assertFails(getDoc(doc(db('indSemEscopo'), c, id)), 'sem escopo não lê ' + c);
+  await assertFails(getDocs(collection(db('indSemEscopo'), 'ferias')), 'sem escopo não lê as férias');
 });

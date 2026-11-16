@@ -7,6 +7,7 @@ import * as M from '../ui/movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, n0 } from '../nucleo/base.js';
 import { competenciaDe, diasDaCompetencia } from '../contas/planilhas-adm.js';
 import { ME, PL, COLABS, SK, AREAS, UI, areaScope, myAreas, modsReais, setsDe, temEquipEm } from '../nucleo/estado.js';
+import { conjsInd, areasInd } from '../contas/acessos.js';
 import { I } from '../ui/icones.js';
 import { docsFor, stats, listaAprov, rotasDa } from '../calc/atividades.js';
 import { desligadoNoDia, cobDoDia, nomeDe, regimeNome, turmaDe } from '../calc/presenca.js';
@@ -17,12 +18,14 @@ import { modulo } from '../nucleo/modulos.js';
 
 /* ---------------- RESUMO DA SEMANA ---------------- */
 // Três resumos separados: Atividades, Operação (equipamentos) e Frequência — cada pessoa vê os dos módulos dela.
-// Resumos ficam na Gestão: atividades e horas extras com Pátio/Bateria, Equipamentos com o escopo; a Frequência só
-// para quem também tem o RH (os dados da folha vêm de lá).
-const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'operacao').length > 0], ['he', 'Horas extras', u => setsDe(u, 'operacao').length > 0], ['escala', 'Escala das áreas', u => setsDe(u, 'operacao').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'operacao')], ['freq', 'Frequência', u => modsReais(u).includes('frequencia')]];
-const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (UI.modulo === 'rh' ? t[0] === 'freq' : true));
+// Resumos ficam no módulo Indicadores: atividades e horas extras com Pátio/Bateria, Equipamentos com o escopo;
+// a Frequência é o Resumo da frequência (aberto pelos Indicadores da frequência).
+const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'indicadores').length > 0], ['he', 'Horas extras', u => setsDe(u, 'indicadores').length > 0], ['escala', 'Escala das áreas', u => setsDe(u, 'indicadores').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'indicadores')], ['freq', 'Frequência', u => conjsInd(u).length > 0 || modsReais(u).includes('frequencia')]];
+const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (UI.view === 'fresumo' ? t[0] === 'freq' : true));
+// Conjuntos do resumo: os do escopo nos Indicadores.
+export const conjsRes = () => (UI.modulo === 'indicadores' ? conjsInd(ME) : setsDe(ME));
 export const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
-export const rConj = () => { const ss = setsDe(ME); return ss.length === 1 ? ss[0] : UI.rConj || SK || 'patio'; };
+export const rConj = () => { const ss = conjsRes(); return ss.length === 1 ? ss[0] : ss.includes(UI.rConj) ? UI.rConj : ss.includes(SK) ? SK : ss[0] || 'patio'; };
 const abasResumo = () => { const l = tiposRes(); return l.length > 1 ? `<div class="seg resabas noprint" role="tablist" aria-label="Tipo de resumo">${l.map(([k, n]) => `<button type="button" role="tab" data-rtipo="${k}" aria-selected="${resTipo() === k}">${n}</button>`).join('')}</div>` : ''; };
 // Resumo do dia ou da semana (vale para os três tipos).
 if (UI.rPer == null) { try { UI.rPer = localStorage.getItem('dikma-rper') || 'sem'; } catch (e) { UI.rPer = 'sem'; } }
@@ -35,8 +38,11 @@ const periodoComp = c => { const d = diasDaCompetencia(c); const i = d[0], f = d
 // Mesmas pessoas da aba Frequência: a folha e quem está na Escala do dia fora dela.
 const metaFreq = (conj, area) => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Escala do dia</span>${area !== 'TODAS' ? `<span><b>Área:</b> ${esc(AREA_S[area] || title(area))}</span>` : ''}`;
 // Frequência por área (pela área de cada pessoa na Escala do dia); "Todas" = o conjunto inteiro.
-const freqArea = conj => { const l = areasDoSet(conj); return l.includes(UI.rfArea) ? UI.rfArea : 'TODAS'; };
-const filtroArea = (conj, sel) => `<div class="row-gap noprint escfiltro"><label for="rfArea"><b>Área</b></label><select id="rfArea" data-rfarea="1" aria-label="Área da frequência"><option value="TODAS">Todas as áreas</option>${areasDoSet(conj).map(a => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(AREA_S[a] || title(a))}</option>`).join('')}</select><span class="muted small">${sel === 'TODAS' ? 'Escolha uma área para ver os nomes dos presentes, das ausências e da hora extra no resumo do dia.' : rDia() ? 'Com os nomes dos presentes, das ausências e da hora extra.' : 'Só as pessoas desta área; os nomes do dia aparecem em “Do dia”.'}</span></div>`;
+// Nos Indicadores, o "Vê" com área no cadastro escolhe só entre as áreas dele.
+const areasFreq = conj => { const l = areasDoSet(conj); const lim = UI.modulo === 'indicadores' ? areasInd(ME).filter(a => l.includes(a)) : []; return lim.length ? lim : l; };
+const soAsMinhas = conj => areasFreq(conj).length < areasDoSet(conj).length;
+const freqArea = conj => { const l = areasFreq(conj); return l.includes(UI.rfArea) ? UI.rfArea : soAsMinhas(conj) ? l[0] : 'TODAS'; };
+const filtroArea = (conj, sel) => `<div class="row-gap noprint escfiltro"><label for="rfArea"><b>Área</b></label><select id="rfArea" data-rfarea="1" aria-label="Área da frequência">${soAsMinhas(conj) ? '' : '<option value="TODAS">Todas as áreas</option>'}${areasFreq(conj).map(a => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(AREA_S[a] || title(a))}</option>`).join('')}</select><span class="muted small">${sel === 'TODAS' ? 'Escolha uma área para ver os nomes dos presentes, das ausências e da hora extra no resumo do dia.' : rDia() ? 'Com os nomes dos presentes, das ausências e da hora extra.' : 'Só as pessoas desta área; os nomes do dia aparecem em “Do dia”.'}</span></div>`;
 const dataLonga = d => { const x = pd(d); return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][x.getDay()]}, ${ddmm(d)}/${d.slice(0, 4)}`; };
 export function vResumoOutro() {
   const tipo = resTipo();

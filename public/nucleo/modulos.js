@@ -9,6 +9,7 @@ import { DB, framed, esc, title } from './base.js';
 import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './estado.js';
 import { I } from '../ui/icones.js';
 import { temSeg } from '../contas/segcalc.js';
+import { conjsInd, eqInd, areasInd } from '../contas/acessos.js';
 import { escala, turmaFicha, desligadoDe, limparPresenca } from '../calc/presenca.js';
 import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
@@ -36,8 +37,11 @@ export function criarModulos() {
 const CARGA = {
   // Cada tela recebe a pessoa vista no módulo em que está (o papel vira o perfil daquele módulo): Equipamentos na
   // Operação (lançar) ou na Gestão (Avaliação mensal e Análises), Frequência no RH e fichas na Gestão.
-  EQ: () => import('../telas/equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(UI.modulo === 'gestao' ? 'gestao' : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
-  AD: () => import('../telas/administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
+  // Nos Indicadores (Indicadores e Análises de equipamentos) a pessoa é vista pelo perfil dos Indicadores (só ver).
+  EQ: () => import('../telas/equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(['gestao', 'indicadores'].includes(UI.modulo) ? UI.modulo : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
+  // Indicadores › Pessoas (painel e resumo da frequência): só os conjuntos do escopo e, para o "Vê" com área, só as dele.
+  AD: () => import('../telas/administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); },
+    conjs: () => (UI.modulo === 'indicadores' ? conjsInd(ME) : ['patio', 'bateria']), areas: () => (UI.modulo === 'indicadores' ? areasInd(ME) : []), DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
   SG: () => import('../telas/seguranca.js').then(m => { SG = m.criarSeguranca(); }),
   CF: () => import('../telas/config.js').then(m => { CF = m; }),
   RE: () => import('../telas/relatorios.js').then(m => { RE = m; }),
@@ -69,10 +73,10 @@ export const comModulo = (k, fn) => { const m = modulo(k); return m ? fn(m) : M.
 // Logo depois do login: baixa em segundo plano as telas dos módulos da pessoa (abrem na hora quando ela tocar).
 export function precarregarModulos(u) {
   const ms = modsReais(u); const ks = [];
-  if (ms.includes('equipamentos')) ks.push('EQ');
+  if (ms.includes('equipamentos') || eqInd(u)) ks.push('EQ');
   if (ms.includes('gestao')) ks.push('GE');
-  if (ms.includes('frequencia')) ks.push('AD');
-  if (temSeg(u)) ks.push('SG');
+  if (ms.includes('frequencia') || conjsInd(u).length) ks.push('AD');
+  if (temSeg(u) || conjsInd(u).length) ks.push('SG');
   if (!ks.length) return;
   const ir = () => ks.forEach(k => carregarModulo(k));
   if ('requestIdleCallback' in window) requestIdleCallback(ir, { timeout: 1500 }); else setTimeout(ir, 300);

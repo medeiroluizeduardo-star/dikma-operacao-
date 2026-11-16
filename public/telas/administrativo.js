@@ -132,9 +132,14 @@ export function criarAdministrativo(X) {
   const gruposDe = (conj, comp, doc) => (folhaPelaFicha(comp) ? gruposDaFicha(conj, comp, doc) : [...((doc && doc.grupos) || []), ...foraDaFolha(conj, doc, diasDaCompetencia(comp))]);
 
   /* ---------- topo: Pátio | Bateria e competência ---------- */
+  // Conjuntos que a pessoa vê aqui (nos Indicadores, só os do escopo) e áreas (o "Vê" com área: só as dele).
+  const conjsOk = () => (X.conjs ? X.conjs() : ['patio', 'bateria']);
+  const areasOk = () => (X.areas ? X.areas() : []);
+  const conjOk = () => { const l = conjsOk(); if (l.length && !l.includes(U.conj)) { U.conj = l[0]; U.fArea = U.fRota = ''; } return U.conj; };
   function topo(view) {
     if (view !== 'afreq' && view !== 'fpainel') return '';
-    return `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>
+    conjOk(); const cs = view === 'fpainel' ? conjsOk() : ['patio', 'bateria'];
+    return `${cs.length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${cs.map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}
       <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${periodoComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
   }
 
@@ -514,9 +519,10 @@ export function criarAdministrativo(X) {
     return { carregando, pessoas: [...pessoas.values()], naFolha };
   }
   // Só as pessoas de uma área (pela área delas na Escala do dia). Quem está só na folha, sem ligação, fica de fora.
+  // area: uma área, 'TODAS' ou uma lista de áreas (Indicadores: as do cadastro do "Vê").
   function daArea(lev, area) {
-    if (!area || area === 'TODAS') return lev;
-    const pessoas = lev.pessoas.filter(x => x.area === area); const naFolha = new Set();
+    if (!area || area === 'TODAS' || (Array.isArray(area) && !area.length)) return lev;
+    const pessoas = lev.pessoas.filter(x => (Array.isArray(area) ? area.includes(x.area) : x.area === area)); const naFolha = new Set();
     for (const x of pessoas) { if (x.mat) naFolha.add('m' + x.mat); naFolha.add('n' + normNome(x.nome)); }
     return { ...lev, pessoas, naFolha };
   }
@@ -543,8 +549,8 @@ export function criarAdministrativo(X) {
   const feriasProximas = lev => { const l = lev ? feriasDoConj(A().ferias, lev) : (A().ferias || []); const em30 = add(TODAY, 30), em7 = add(TODAY, 7);
     return { agora: l.filter(f => f.inicio && f.inicio <= TODAY && (f.termino || f.inicio) >= TODAY), saem: l.filter(f => f.inicio > TODAY && f.inicio <= em30).sort((a, b) => (a.inicio < b.inicio ? -1 : 1)), voltam: l.filter(f => f.retorno && f.retorno > TODAY && f.retorno <= em7) }; };
   function vPainelFreq() {
-    const conj = U.conj, comp = U.comp, datas = diasDaCompetencia(comp);
-    const lev = levantar(conj, datas);
+    const conj = conjOk(), comp = U.comp, datas = diasDaCompetencia(comp);
+    const lev = daArea(levantar(conj, datas), areasOk());
     if (lev.carregando && !lev.pessoas.length) return '<div class="card skel"><i></i><i></i><i></i></div>';
     if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em RH › Frequência.</div></div>`;
     const k = indicadores(lev, datas); const fe = feriasProximas(lev);
