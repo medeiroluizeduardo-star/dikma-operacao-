@@ -149,6 +149,38 @@ test('cópia de segurança e restauração: voltam os dados com os tipos certos,
   assert.throws(() => rodar('restaurar.mjs', { RESTAURAR_PASTA: pasta, RESTAURAR_COLECOES: 'historico' }), /Não estão nesta cópia/);
 });
 
+test('cópia de segurança: o Meu painel entra com as subcoleções e volta pela restauração', async () => {
+  await limpar();
+  // painel/u1 sem campos (só subcoleções), painel/u2 com campos e subcoleção dentro de subcoleção
+  await db.doc('painel/u1/tasks/t1').set({ titulo: 'Tarefa', feito: false });
+  await db.doc('painel/u1/tasks/t2').set({ titulo: 'Outra' });
+  await db.doc('painel/u1/config/geral').set({ metas: { abs: 3 } });
+  await db.doc('painel/u2').set({ nome: 'x' });
+  await db.doc('painel/u2/registros/r1').set({ v: 5 });
+  await db.doc('painel/u2/registros/r1/itens/i1').set({ w: 7 });
+  await db.doc('gocorr/a').set({ n: 1 });
+
+  const pasta = path.join(tmp, 'copia-painel');
+  const s = rodar('backup.mjs', { BACKUP_TIPO: 'diaria', BACKUP_PASTA: pasta });
+  const man = JSON.parse(fs.readFileSync(path.join(pasta, 'manifesto.json'), 'utf8'));
+  assert.equal(man.colecoes['painel/u1/tasks'].documentos, 2);
+  assert.equal(man.colecoes['painel/u1/config'].documentos, 1);
+  assert.equal(man.colecoes['painel/u2/registros'].documentos, 1);
+  assert.equal(man.colecoes['painel/u2/registros/r1/itens'].documentos, 1);
+  assert.equal(man.colecoes.painel.documentos, 1);
+  assert.ok(fs.existsSync(path.join(pasta, 'painel~u1~tasks.000.json.gz')));
+  assert.doesNotMatch(s, /subcoleções, que não entram/);
+  assert.match(s, /\| painel \| 6 \|/, 'no resumo, o painel soma tudo');
+
+  // estrago no painel e volta pedindo só "painel"
+  await db.doc('painel/u1/tasks/t1').delete();
+  await db.doc('painel/u2/registros/r1/itens/i1').update({ w: 0 });
+  rodar('restaurar.mjs', { RESTAURAR_PASTA: pasta, RESTAURAR_COLECOES: 'painel', RESTAURAR_APLICAR: '1' });
+  assert.equal((await db.doc('painel/u1/tasks/t1').get()).get('titulo'), 'Tarefa');
+  assert.equal((await db.doc('painel/u2/registros/r1/itens/i1').get()).get('w'), 7);
+  assert.equal((await db.doc('gocorr/a').get()).get('n'), 1);
+});
+
 test('divisão do Efetivo por área: cada ficha vai para a área onde a pessoa está, e ocorrências e assinaturas acompanham', async () => {
   await limpar();
   await db.doc('config/sistema').set({ rotas: [] });

@@ -1,13 +1,13 @@
 // Volta dados de uma cópia de segurança. Roda pelo GitHub: Actions › Restaurar cópia de segurança › Run workflow.
 //   RESTAURAR_PASTA       pasta com o pacote baixado da cópia (manifesto.json + <coleção>.NNN.json.gz)
-//   RESTAURAR_COLECOES    "todas" ou nomes separados por vírgula (ex.: gestao,gocorr)
+//   RESTAURAR_COLECOES    "todas" ou nomes separados por vírgula (ex.: gestao,gocorr; painel = todo o Meu painel)
 //   RESTAURAR_DOCUMENTOS  opcional: só estes documentos (ids separados por vírgula), para voltar um item só
 //   RESTAURAR_APAGAR      "1" apaga, nas coleções escolhidas, o que foi criado depois da cópia
 //   RESTAURAR_APLICAR     "1" grava de verdade; sem isso, só mostra o que mudaria (padrão)
 // Antes de gravar, guarda o estado atual dos documentos que vão mudar (pasta "antes"), para dar para desfazer.
 import fs from 'node:fs';
 import path from 'node:path';
-import { conectar, codificar, decodificar, gravarGz, lerGz, resumo } from './comum.mjs';
+import { conectar, codificar, decodificar, gravarGz, lerGz, resumo, arquivoDe } from './comum.mjs';
 
 const pasta = path.resolve(process.env.RESTAURAR_PASTA || 'copia');
 const aplicar = process.env.RESTAURAR_APLICAR === '1';
@@ -19,7 +19,8 @@ const manArq = path.join(pasta, 'manifesto.json');
 if (!fs.existsSync(manArq)) { console.error('::error::Pacote da cópia não encontrado (falta manifesto.json). Confira o número da execução.'); process.exit(1); }
 const man = JSON.parse(fs.readFileSync(manArq, 'utf8'));
 const naCopia = Object.keys(man.colecoes);
-const colecoes = pedidas.includes('todas') ? naCopia : pedidas;
+// Pedir "painel" traz também as subcoleções dele (painel/UID/tasks...); dá para pedir uma só pelo caminho.
+const colecoes = pedidas.includes('todas') ? naCopia : [...new Set(pedidas.flatMap(p => naCopia.filter(c => c === p || c.startsWith(p + '/')).concat(naCopia.some(c => c === p || c.startsWith(p + '/')) ? [] : [p])))];
 const faltam = colecoes.filter(c => !naCopia.includes(c));
 if (faltam.length) { console.error(`::error::Não estão nesta cópia: ${faltam.join(', ')}. Na cópia: ${naCopia.join(', ')}.`); process.exit(1); }
 if (soDocs.size && colecoes.length !== 1) { console.error('::error::Para escolher documentos, informe uma coleção só.'); process.exit(1); }
@@ -38,7 +39,7 @@ let totGravar = 0, totApagar = 0;
 
 for (const c of colecoes) {
   const copia = {};
-  for (const f of fs.readdirSync(pasta).filter(f => f.startsWith(c + '.') && f.endsWith('.json.gz')).sort()) Object.assign(copia, lerGz(path.join(pasta, f)));
+  for (const f of fs.readdirSync(pasta).filter(f => f.startsWith(arquivoDe(c) + '.') && f.endsWith('.json.gz')).sort()) Object.assign(copia, lerGz(path.join(pasta, f)));
   // estado atual (lê só os documentos pedidos, ou a coleção inteira)
   const atual = {};
   if (soDocs.size) {
@@ -60,7 +61,7 @@ for (const c of colecoes) {
   totGravar += gravar.length; totApagar += novos.length;
 
   if (!aplicar || (!gravar.length && !novos.length)) continue;
-  gravarGz(path.join(antesPasta, `${c}.000.json.gz`), Object.fromEntries([...gravar, ...novos].filter(id => id in atual).map(id => [id, atual[id]])));
+  gravarGz(path.join(antesPasta, `${arquivoDe(c)}.000.json.gz`), Object.fromEntries([...gravar, ...novos].filter(id => id in atual).map(id => [id, atual[id]])));
   manAntes.colecoes[c] = { documentos: [...gravar, ...novos].filter(id => id in atual).length, partes: 1 };
   const ops = [...gravar.map(id => ['set', id]), ...novos.map(id => ['del', id])];
   for (let i = 0; i < ops.length; i += 400) {
