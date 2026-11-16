@@ -2,7 +2,7 @@
 // Não precisa do emulador: node --test testes/acessos.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro, conjsInd, eqInd, areasInd, temIndU, perfilNome } from '../public/contas/acessos.js';
+import { legadoDoAcesso, acessoDe, selosAcesso, MODULOS_ACESSO, modsHistorico, veHistorico, areasDoCadastro, conjsInd, eqInd, areasInd, temIndU, perfilNome, ligarIndicadores } from '../public/contas/acessos.js';
 import { acessoDoLegado, modulosDe } from './legado.mjs';
 import { supConjs, temSeg, veRegSeg, trataAnom, editaProprio, registraSeg, listasSeg, indicadoresSeg, vencidaSeg, comigoSeg, painelSeg, noPrazoSeg } from '../public/contas/segcalc.js';
 import { areasFichaDe } from '../public/contas/pessoas.js';
@@ -291,4 +291,16 @@ test('Indicadores: escolhido por pessoa (Vê ou Gestor); vê os conjuntos do esc
   // só Indicadores: os campos antigos não ganham Operação nem Gestão
   const v = legadoDoAcesso({ indicadores: 've' }, ['patio'], {});
   assert.deepEqual(v.modulos, ['seguranca']); assert.equal(v.papel, 'leitor');
+});
+
+test('rotina Ligar Indicadores: quem já via os painéis ganha Vê; admin, bloqueado e quem já tem ficam como estão', () => {
+  const u = (acesso, escopos, extra = {}) => ({ papel: 'leitor', acesso, escopos, ...extra });
+  assert.deepEqual(ligarIndicadores(u({ operacao: 'lider', gestao: 'lider' }, ['patio'])), { acesso: { operacao: 'lider', gestao: 'lider', indicadores: 've' }, escopos: ['patio'] });
+  assert.deepEqual(ligarIndicadores(u({ rh: 'administrativo' }, [])).escopos, ['patio', 'bateria'], 'só RH: os dois conjuntos');
+  assert.deepEqual(ligarIndicadores(u({ seguranca: 'registra' }, [])).acesso, { seguranca: 'registra', indicadores: 've' });
+  assert.equal(ligarIndicadores(u({ administracao: 'admin' }, [], { papel: 'admin' })), null, 'administrador já vê tudo');
+  assert.equal(ligarIndicadores(u({ operacao: 'lider' }, ['patio'], { papel: 'bloqueado' })), null);
+  assert.equal(ligarIndicadores(u({ operacao: 'lider', indicadores: 'gestor' }, ['patio'])), null, 'já tem');
+  assert.equal(ligarIndicadores(u({ administracao: 'modulo' }, ['patio'])), null, 'só Administração dos módulos');
+  assert.equal(ligarIndicadores({ papel: 'gestor', modulos: ['operacao'] }), null, 'cadastro antigo sem acesso');
 });
