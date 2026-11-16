@@ -387,7 +387,7 @@ function watchSet(k, meses) {
       qs.docChanges().forEach(c => { if (c.type === 'removed') delete st.semanas[c.doc.id]; else st.semanas[c.doc.id] = toLocal(c.doc.id, c.doc.data()); });
       st.monthsLoaded.add(m); changed();
     }, e => cb.onError && cb.onError(e));
-    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, hed: (s.exists() && s.data().hed) || {}, jus: (s.exists() && s.data().jus) || {}, ck: (s.exists() && s.data().ck) || {} }; changed(); });
+    const b = onSnapshot(doc(db, C('situacao', k), m), s => { st.sitByMonth[m] = (s.exists() && s.data().v) || {}; st.sitExtra[m] = { cob: (s.exists() && s.data().cob) || {}, he: (s.exists() && s.data().he) || {}, hed: (s.exists() && s.data().hed) || {}, jus: (s.exists() && s.data().jus) || {}, ck: (s.exists() && s.data().ck) || {}, mov: (s.exists() && s.data().mov) || {} }; changed(); });
     // aprovação dos apontamentos pelo supervisor (aprov/{área|semana}: { area, mes, v: { 'pid|dia': { s, c, por, nome, em, mot } } })
     const c = onSnapshot(query(collection(db, C('aprov', k)), where('mes', '==', m)), qs => {
       qs.docChanges().forEach(x => { if (x.type === 'removed') delete st.aprov[x.doc.id]; else st.aprov[x.doc.id] = x.doc.data().v || {}; });
@@ -429,6 +429,13 @@ export function efGravar(k, data, area, acao, mot = '') {
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
 export const sitInfo = (key, k = cur) => { const m = key.split('|')[1].slice(0, 7); const x = ((S[k] || S[cur]).sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
 export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {}, hed: {}, jus: {} };
+// Mover de rota no dia (contas/mover-rota.js): mov = { 'id|data': { de, para, st, ... } }; movK diz qual chave mudou
+// (as regras do banco conferem só ela).
+export const movMes = (m, k = cur) => (((S[k] || S[cur]).sitExtra || {})[m] || {}).mov || {};
+export function setMov(key, val, k = cur) {
+  const m = key.split('|')[1].slice(0, 7); const x = (S[k].sitExtra[m] ||= { cob: {}, he: {}, hed: {}, jus: {}, ck: {}, mov: {} }); (x.mov ||= {})[key] = val; changed();
+  return track(setDoc(doc(db, C('situacao', k), m), { mov: { [key]: val }, movK: key, ...marca() }, { merge: true }));
+}
 
 
 // ---------- gravações ----------

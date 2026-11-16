@@ -381,7 +381,7 @@ export function criarGestao(X) {
       if (n.matArc) { const o = G().colabs.find(x => x.matArc && String(x.matArc) === n.matArc && String(x.mat) !== n.mat); if (o) throw new Error(`A matrícula Arcelor ${n.matArc} já é de ${title(o.nome)}.`); }
       if (n.dem && n.adm && n.dem < n.adm) throw new Error('A demissão não pode ser antes da admissão.');
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '', desde: ($('ncDesde') && $('ncDesde').value) || TODAY };
-      if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Presença do dia)
+      if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Escala do dia)
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
       if ((o.op || o.area === AREA_OP) && o.escala === '4x4' && !o.turma) throw new Error('Escolha a turma da escala 4x4.');
       const itens = G().colabs.slice();
@@ -399,7 +399,7 @@ export function criarGestao(X) {
     const atualizar = () => {
       const a = ar.value, pat = ehAreaAtiv(a), ger = ehAreaGeral(a);
       if (pat) $('ncRotaLbl').textContent = 'Rota (' + SETS[setDaArea(a)].nome + ')';
-      $('ncPatioBox').hidden = !pat && !ger; rt.closest('label').hidden = !pat; // área geral: só o regime (entra na Presença do dia)
+      $('ncPatioBox').hidden = !pat && !ger; rt.closest('label').hidden = !pat; // área geral: só o regime (entra na Escala do dia)
       if (pat) { const rs = PES.rotasDe(a); const cur = L.patio && L.patio.area === a ? L.patio.rota : rt.value; rt.innerHTML = rs.map(r => `<option ${r === cur ? 'selected' : ''}>${esc(r)}</option>`).join(''); }
       if (op) { if (a === AREA_OP) { op.checked = true; op.disabled = true; } else op.disabled = false; $('ncOpBox').hidden = !op.checked; }
       // trocou regime, escala ou turma: pergunta de quando vale (os dias anteriores ficam com a escala antiga)
@@ -410,7 +410,7 @@ export function criarGestao(X) {
   }
 
   /* ---------- líderes: trocar e renomear de uma vez (Gestão › Fichas › Líderes) ---------- */
-  // Um líder por grafia (sem acento e maiúsculas). A Presença do dia (Agrupar por: Líder) junta grafias parecidas;
+  // Um líder por grafia (sem acento e maiúsculas). A Escala do dia (Agrupar por: Líder) junta grafias parecidas;
   // aqui elas aparecem separadas para dar para corrigir. Muda as fichas; a Frequência (da folha de 16/10 a 15/11/2026 em diante) monta os grupos por elas.
   const lideres = () => lideresDasFichas(G().colabs, TODAY);
   const opcoesLider = () => lideres().map(l => ({ v: l.nome, t: title(l.nome), d: `${l.ativos} pessoa${l.ativos === 1 ? '' : 's'}` }));
@@ -422,7 +422,7 @@ export function criarGestao(X) {
     const close = () => { lay.innerHTML = ''; document.removeEventListener('keydown', kd); };
     const kd = e => { if (e.key === 'Escape') close(); };
     document.addEventListener('keydown', kd);
-    lay.innerHTML = `<div class="scrim" id="scrim"><div class="sheet wide" role="dialog" aria-modal="true" aria-label="Líderes"><h3>Líderes</h3><div class="sub">${L.length} líder${L.length === 1 ? '' : 'es'} nas fichas · é daqui que vem o "Agrupar por: Líder" da Presença do dia</div>
+    lay.innerHTML = `<div class="scrim" id="scrim"><div class="sheet wide" role="dialog" aria-modal="true" aria-label="Líderes"><h3>Líderes</h3><div class="sub">${L.length} líder${L.length === 1 ? '' : 'es'} nas fichas · é daqui que vem o "Agrupar por: Líder" da Escala do dia</div>
       ${L.length ? `<div class="plist" id="ldLista">${L.map((l, i) => { const j = junto(l); return `<div class="pitem"><div class="minw"><div class="t">${esc(title(l.nome))}</div><div class="l">${pessoasTxt(l.ativos)}${l.desligados ? ` · +${l.desligados} desligado${l.desligados === 1 ? '' : 's'}` : ''}${j.length ? ` · <span class="warn-t">na Presença fica junto com ${esc(j.join(', '))}</span>` : ''}</div>
         <details style="margin-top:2px"><summary class="small muted" style="cursor:pointer">Ver quem</summary><div class="small" style="padding:4px 0 2px">${l.pessoas.map(c => esc(title(c.nome)) + (c.dem && c.dem <= TODAY ? ' <span class="muted">(desligado)</span>' : '')).join(', ')}</div></details></div>
         <div class="row-gap"><button type="button" class="btn sm" data-ld="trocar" data-i="${i}">Trocar por…</button><button type="button" class="btn sm ghost" data-ld="renomear" data-i="${i}">Renomear</button></div></div>`; }).join('')}</div>` : '<div class="empty">Nenhuma ficha tem líder imediato. Preencha em Editar, na ficha de cada pessoa.</div>'}
@@ -464,7 +464,7 @@ export function criarGestao(X) {
     formSheet(modo === 'trocar' ? 'Confirmar a troca' : 'Confirmar o novo nome', `${esc(title(l.nome))} → ${esc(title(para))}`, `
       <p class="m0">${modo === 'trocar' ? `<b>${pessoasTxt(r.mudou.length)}</b> passam de <b>${esc(title(l.nome))}</b> para <b>${esc(title(para))}</b>${destino ? ` (que já tem ${pessoasTxt(destino.ativos)})` : ' (líder novo)'}:` : `O líder de <b>${pessoasTxt(r.mudou.length)}</b> passa a ser escrito <b>${esc(para)}</b>${destino ? ` e se junta às ${pessoasTxt(destino.ativos)} que já estão com esse nome` : ''}:`}</p>
       <div class="small" style="max-height:220px;overflow:auto;border:1px solid var(--line-2);border-radius:8px;padding:8px 10px">${nomes.map(esc).join('<br>')}</div>
-      <p class="m0 small muted">Muda nas fichas e, com isso, na Presença do dia (Agrupar por: Líder) e na sugestão de quem recolhe a assinatura.</p>`,
+      <p class="m0 small muted">Muda nas fichas e, com isso, na Escala do dia (Agrupar por: Líder) e na sugestão de quem recolhe a assinatura.</p>`,
     modo === 'trocar' ? `Trocar ${pessoasTxt(r.mudou.length)}` : 'Salvar o nome', async () => {
       const antes = new Map(r.mudou.map(m => [String(m.mat), m.antes]));
       const atual = trocarNasFichas(G().colabs, n => chaveLider(n) === l.chave, para); // conta de novo com a lista de agora

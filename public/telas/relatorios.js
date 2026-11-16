@@ -1,6 +1,6 @@
 // Painel › Resumos: Atividades, Horas extras, Operação e Frequência, do dia, da semana ou do mês, prontos para imprimir.
 // O de Atividades fica só com as atividades; presença, ausências e hora extra ficam no de Frequência (mesmas contas da
-// aba Frequência e da Presença do dia) e no de Horas extras.
+// aba Frequência e da Escala do dia) e no de Horas extras.
 import { SETS, AREA_S, areasDoSet, DAYS, pd, add, ddmm, weekLabel, monthLabel } from '../contas/cal.js';
 import { indicadoresSeg } from '../contas/segcalc.js';
 import * as M from '../ui/movimento.js';
@@ -32,9 +32,9 @@ const COM_MES = ['ativ', 'he', 'freq'];
 const rMes = () => UI.rPer === 'mes' && COM_MES.includes(resTipo());
 const perResumo = () => resTipo() === 'escala' ? '' : `<div class="seg resabas noprint" role="tablist" aria-label="Período do resumo"><button type="button" role="tab" data-rper="dia" aria-selected="${rDia()}">Do dia</button><button type="button" role="tab" data-rper="sem" aria-selected="${!rDia() && !rMes()}">Da semana</button>${COM_MES.includes(resTipo()) ? `<button type="button" role="tab" data-rper="mes" aria-selected="${rMes()}">Do mês</button>` : ''}</div>`;
 const periodoComp = c => { const d = diasDaCompetencia(c); const i = d[0], f = d[d.length - 1]; return `${ddmm(i)} a ${ddmm(f)}/${f.slice(0, 4)}`; };
-// Mesmas pessoas da aba Frequência: a folha e quem está na Presença do dia fora dela.
-const metaFreq = (conj, area) => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Presença do dia</span>${area !== 'TODAS' ? `<span><b>Área:</b> ${esc(AREA_S[area] || title(area))}</span>` : ''}`;
-// Frequência por área (pela área de cada pessoa na Presença do dia); "Todas" = o conjunto inteiro.
+// Mesmas pessoas da aba Frequência: a folha e quem está na Escala do dia fora dela.
+const metaFreq = (conj, area) => `<span><b>Frequência · ${SETS[conj].nome}</b> · folha e Escala do dia</span>${area !== 'TODAS' ? `<span><b>Área:</b> ${esc(AREA_S[area] || title(area))}</span>` : ''}`;
+// Frequência por área (pela área de cada pessoa na Escala do dia); "Todas" = o conjunto inteiro.
 const freqArea = conj => { const l = areasDoSet(conj); return l.includes(UI.rfArea) ? UI.rfArea : 'TODAS'; };
 const filtroArea = (conj, sel) => `<div class="row-gap noprint escfiltro"><label for="rfArea"><b>Área</b></label><select id="rfArea" data-rfarea="1" aria-label="Área da frequência"><option value="TODAS">Todas as áreas</option>${areasDoSet(conj).map(a => `<option value="${esc(a)}" ${a === sel ? 'selected' : ''}>${esc(AREA_S[a] || title(a))}</option>`).join('')}</select><span class="muted small">${sel === 'TODAS' ? 'Escolha uma área para ver os nomes dos presentes, das ausências e da hora extra no resumo do dia.' : rDia() ? 'Com os nomes dos presentes, das ausências e da hora extra.' : 'Só as pessoas desta área; os nomes do dia aparecem em “Do dia”.'}</span></div>`;
 const dataLonga = d => { const x = pd(d); return `${['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'][x.getDay()]}, ${ddmm(d)}/${d.slice(0, 4)}`; };

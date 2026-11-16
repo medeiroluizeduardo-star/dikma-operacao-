@@ -178,9 +178,40 @@ service cloud.firestore {
     // Presença do mês (situacao e b_situacao): v = código do dia; cob, he, hed, jus, ck = cobertura, horas extras,
     // justificativas e conferência. Cada um é um mapa 'PESSOA|AAAA-MM-DD' → valor (até 40 mil por mês).
     function sitOk(ch) { let d = request.resource.data;
-      return soCampos(ch, ['v', 'cob', 'he', 'hed', 'jus', 'ck', 'atualizadoPor', 'atualizadoEm'])
+      return soCampos(ch, ['v', 'cob', 'he', 'hed', 'jus', 'ck', 'mov', 'movK', 'atualizadoPor', 'atualizadoEm'])
         && fMapa(d, ch, 'v', 40000) && fMapa(d, ch, 'cob', 40000) && fMapa(d, ch, 'he', 40000) && fMapa(d, ch, 'hed', 40000)
-        && fMapa(d, ch, 'jus', 40000) && fMapa(d, ch, 'ck', 40000); }
+        && fMapa(d, ch, 'jus', 40000) && fMapa(d, ch, 'ck', 40000) && fMapa(d, ch, 'mov', 5000); }
+    // Mover de rota no dia (mov; contas/mover-rota.js). Cada gravação muda uma chave só, dita em movK ('PESSOA|DATA').
+    // Pedir (pendente): na mesma área, quem lança a presença da área; para outra área, do supervisor para cima da
+    // área de origem. Aprovar (ou já gravar aprovado) e recusar: na mesma área, supervisor, coordenador ou gestor
+    // da área; para outra área, só o administrador. Cancelar: quem pediu (pendente) ou quem aprova. Sem mudanças
+    // depois que o RH valida o dia (efetivoDia da área de origem ou de destino).
+    // Mesmas contas de apontaDa e admin, com o perfil já lido (u): fica dentro do limite de expressões do Firestore.
+    function movArea(u, area) { let p = pmU(u, 'operacao'); return p in ['gestor', 'coordenador'] || u.get('area', '') == area || (p == 'supervisor' && supAreaU(u, area)); }
+    function movAcima(u, area, e) { return escU(u, e) && pmU(u, 'operacao') in ['supervisor', 'coordenador', 'gestor'] && movArea(u, area); }
+    function movPede(u, v, e) { return adminU(u) || (v.ao == v.ap ? escU(u, e) && pmU(u, 'operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && movArea(u, v.ao) : movAcima(u, v.ao, e)); }
+    function movAprova(u, v, e) { return adminU(u) || (v.ao == v.ap && movAcima(u, v.ap, e)); }
+    function movValidado(c, id) { return exists(/databases/$(database)/documents/$(c)/$(id)) && get(/databases/$(database)/documents/$(c)/$(id)).data.get('st', '') == 'validado'; }
+    function movLivre(v, e) { let c = e == 'bateria' ? 'b_efetivoDia' : 'efetivoDia';
+      return !movValidado(c, v.dt + '_' + v.ao) && (v.ap == v.ao || !movValidado(c, v.dt + '_' + v.ap)); }
+    function movForma(v, k) {
+      return v is map && v.keys().hasOnly(['id', 'dt', 'de', 'para', 'ao', 'ap', 'st', 'por', 'nome', 'em', 'ok', 'okNome', 'okEm', 'mot'])
+        && v.id is string && v.dt is string && v.dt.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && k == v.id + '|' + v.dt
+        && v.de is string && v.para is string && v.de.size() <= 120 && v.para.size() <= 120 && v.de != v.para
+        && v.ao is string && v.ap is string && v.de.split('[|]')[0] == v.ao && v.para.split('[|]')[0] == v.ap
+        && v.st in ['pendente', 'aprovado', 'recusado', 'cancelado'] && v.por is string && v.nome is string && v.nome.size() <= 80
+        && v.get('mot', '') is string && v.get('mot', '').size() <= 200; }
+    function movIgual(a, v) { return a != null && a.st == 'pendente' && a.de == v.de && a.para == v.para && a.por == v.por; }
+    function movOk(e) { let d = request.resource.data; let k = d.get('movK', ''); let ant = resource == null ? {} : resource.data.get('mov', {});
+      let v = d.mov.get(k, null); let a = ant.get(k, null); let me = request.auth.uid; let u = perfil();
+      return d.mov.diff(ant).affectedKeys().hasOnly([k]) && movForma(v, k) && movRegra(u, e, v, a, me) && movLivre(v, e); }
+    function movRegra(u, e, v, a, me) {
+      return (v.st == 'pendente' && v.por == me && movPede(u, v, e) && (a == null || a.st != 'aprovado' || movAprova(u, a, e)))
+          || (v.st == 'aprovado' && v.get('ok', '') == me && movAprova(u, v, e) && (v.por == me || movIgual(a, v)))
+          || (v.st == 'recusado' && v.get('ok', '') == me && movAprova(u, v, e) && movIgual(a, v) && v.get('mot', '').size() > 0)
+          || (v.st == 'cancelado' && a != null && a.st in ['pendente', 'aprovado'] && v.get('ok', '') == me
+              && a.de == v.de && a.para == v.para && (movAprova(u, a, e) || (a.st == 'pendente' && a.por == me))); }
+    function movSit(ch, e) { return !('mov' in ch) || movOk(e); }
     match /colaboradores/{area} {
       allow read: if op() || acAdm();
       allow create: if (admMod('operacao') || admMod('gestao')) && marcaOk() && colabsOk(novos());
@@ -191,8 +222,8 @@ service cloud.firestore {
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
       allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
-      allow create: if lancaSit('patio') && marcaOk() && sitOk(novos());
-      allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados());
+      allow create: if lancaSit('patio') && marcaOk() && sitOk(novos()) && movSit(novos(), 'patio');
+      allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'patio');
       allow delete: if lancaSit('patio');
     }
 
@@ -391,8 +422,8 @@ service cloud.firestore {
     }
     match /b_situacao/{mes} {
       allow read: if ba() || acAdm() || eqm();
-      allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos());
-      allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados());
+      allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos()) && movSit(novos(), 'bateria');
+      allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'bateria');
       allow delete: if lancaSit('bateria');
     }
     match /b_semanas/{id} {

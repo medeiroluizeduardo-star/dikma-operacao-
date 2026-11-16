@@ -52,7 +52,7 @@ export function criarAdministrativo(X) {
   // per: turno do dia pela letra ('D' diurno, 'N' noturno; a noite conta no dia em que começa)
   // A conta é a mesma do Efetivo diário (situacao.js): lançado, depois desligamento (da folha ou da demissão na ficha),
   // férias, folga da escala (com feriados e turma pela ficha quando falta a letra) e presente.
-  // Quem foi ligado à Presença depois de a folha ter lançamentos próprios: vale a Presença do dia e, nos dias em que ela não
+  // Quem foi ligado à Presença depois de a folha ter lançamentos próprios: vale a Escala do dia e, nos dias em que ela não
   // tem nada, o que já estava na folha (nada do histórico se perde).
   const daFolha = (doc, p, dt) => (((doc && doc.d) || {})[p.k] || {})[dt];
   const lancadoDe = (conj, doc, p, dt) => (p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] || daFolha(doc, p, dt) : daFolha(doc, p, dt));
@@ -90,9 +90,9 @@ export function criarAdministrativo(X) {
     return doc;
   };
   // Frequência e Presença em sincronia:
-  // 1) quem está na folha sem ligação, mas tem o mesmo nome ou matrícula na Presença do dia, passa a usar a mesma presença
+  // 1) quem está na folha sem ligação, mas tem o mesmo nome ou matrícula na Escala do dia, passa a usar a mesma presença
   //    (fica gravado na folha na próxima vez que quem edita mexer nos grupos);
-  // 2) quem está na Presença do dia e não está na folha aparece no fim, num grupo por área (PRESENÇA · área), com a mesma
+  // 2) quem está na Escala do dia e não está na folha aparece no fim, num grupo por área (PRESENÇA · área), com a mesma
   //    presença. Esses grupos não são gravados na folha: tocar no nome inclui a pessoa num grupo da folha.
   const LIG = new WeakMap();
   function ligarPresenca(conj, doc) {
@@ -119,7 +119,7 @@ export function criarAdministrativo(X) {
     return [...por.entries()].sort((x, y) => (AREA_S[x[0]] || x[0]).localeCompare(AREA_S[y[0]] || y[0]))
       .map(([a, ps]) => ({ nome: 'PRESENÇA · ' + String(AREA_S[a] || a || 'sem área').toUpperCase(), turno: false, virt: true, pessoas: ps.sort((x, y) => x.nome.localeCompare(y.nome)) }));
   }
-  // Grupos da folha + os da Presença do dia que faltam na folha (mesma ordem de índice em toda a tela).
+  // Grupos da folha + os da Escala do dia que faltam na folha (mesma ordem de índice em toda a tela).
   // Da folha de 16/10 a 15/11/2026 em diante, os grupos vêm das fichas (Gestão › Colaboradores): ver contas/folha-ficha.js.
   const GF = new Map();
   function gruposDaFicha(conj, comp, doc) {
@@ -171,7 +171,7 @@ export function criarAdministrativo(X) {
     const q = normNome(U.q || ''); const ed = pode();
     const GR = gruposDe(conj, comp, doc);
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
-    // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Presença do dia.
+    // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Escala do dia.
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
     const filtra = !!(F.area || F.rota || F.turno); const procura = !!q || filtra;
     const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
@@ -197,7 +197,7 @@ export function criarAdministrativo(X) {
       if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
-        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Presença do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
+        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Escala do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
           const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const ju = !c.auto && JUS_CODS.includes(c.v) ? jusDe(conj, doc, p, dt) : null; const semJus = !c.auto && JUS_CODS.includes(c.v) && !(ju && ju.cod === c.v) && dt <= TODAY;
           const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : c.por === 'operacao' ? ` (${c.motivo})` : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
@@ -214,9 +214,9 @@ export function criarAdministrativo(X) {
         <div class="body lbar efbar efbar1">${caixaBusca('aQ', U.q || '', 'Buscar colaborador')}${q ? `<span class="muted small"><b>${resumo.pessoas}</b> encontrado${resumo.pessoas === 1 ? '' : 's'}</span><button class="btn sm ghost" data-a="limparQ">Limpar busca</button>` : `<label class="sel efrota"><span>Grupo</span><select class="in" id="aGrp"><option value="*" ${U.grp === '*' ? 'selected' : ''}>Todos os grupos (${nPes} pessoas)</option>${GR.map((g, gi) => `<option value="${gi}" ${String(U.grp) === String(gi) ? 'selected' : ''}>${esc(g.nome)}</option>`).join('')}</select></label>`}${!X.framed && !X.isMobile() ? `<button class="btn sm" data-a="exportar" style="margin-left:auto">${I.dl} Exportar Excel</button>` : ''}</div>
         ${filtrosFreq(conj, datas, F, resumo.pessoas)}
         ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
-        <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit P">${I.ok}<i class="peri D">D</i></span> Turno diurno</span><span><span class="sit P">${I.ok}<i class="peri N">N</i></span> Turno noturno (conta no dia em que começa)</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span><span class="muted">Quem está na Presença do dia tem a mesma presença aqui e lá.</span></div></details>
+        <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit P">${I.ok}<i class="peri D">D</i></span> Turno diurno</span><span><span class="sit P">${I.ok}<i class="peri N">N</i></span> Turno noturno (conta no dia em que começa)</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span><span class="muted">Quem está na Escala do dia tem a mesma presença aqui e lá.</span></div></details>
         ${pelaFicha ? `<p class="body pt0 pb0 m0 small muted">Os grupos vêm do líder imediato de cada ficha em RH › Colaboradores (supervisão = líder da ficha do líder). Para mudar líder, função ou área, edite a ficha.${nSem ? ` <b>${nSem} pessoa${nSem === 1 ? '' : 's'} sem ficha</b>: cadastre em Colaboradores com a mesma matrícula.` : ''}</p>` : ''}
-        ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Presença do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
+        ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Escala do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
         ${mob && !U.fDia ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
         <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${procura ? 'Ninguém encontrado com essa busca ou esses filtros.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;
   }
@@ -275,7 +275,7 @@ export function criarAdministrativo(X) {
     abrirLancamento({
       sheet, nome: title(p.nome), dt, ok: I.ok, codigos: CODS,
       atual: atual.auto ? { v: atual.v, auto: true, motivo: atual.por === 'ferias' ? 'férias' : atual.por === 'escala' ? 'pela escala' : '' } : { v: atual.v },
-      linhaInfo: (p.virt ? 'Na Presença do dia, fora da folha · mesma presença' : p.ativ ? 'Mesma presença da Presença do dia' : 'Só na folha (fora das Atividades)') + (jAt ? `<br>Justificativa: ${esc(textoJus(jAt))}` : ''),
+      linhaInfo: (p.virt ? 'Na Escala do dia, fora da folha · mesma presença' : p.ativ ? 'Mesma presença da Escala do dia' : 'Só na folha (fora das Atividades)') + (jAt ? `<br>Justificativa: ${esc(textoJus(jAt))}` : ''),
       extras: !atual.auto && JUS_CODS.includes(atual.v) ? [{ t: jAt ? 'Editar a justificativa' : `Justificar ${(NOMES_CODIGO[atual.v] || '').toLowerCase()}`, d: jAt ? textoJus(jAt) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: '<span class="opt-ic">✎</span>' }] : [],
       aoExtra: v => { if (v === 'jus') justificar(conj, comp, p, [dt], atual.v, jAt); },
       depois: datas.filter(x => x > dt), fim: { t: 'Até o fim da competência', v: datas[datas.length - 1] },
@@ -335,12 +335,12 @@ export function criarAdministrativo(X) {
     const { p } = achar(doc, gi, k); if (!p) return;
     const ed = pode();
     if (folhaPelaFicha(comp)) { // grupos pela ficha: líder, função e área se mudam na ficha (RH › Colaboradores)
-      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Mesma presença da Presença do dia' : 'Só na folha'} · ${p.semFicha ? 'sem ficha: cadastre em RH › Colaboradores com a mesma matrícula' : 'para mudar o líder ou a função, edite a ficha em RH › Colaboradores'}`,
+      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Mesma presença da Escala do dia' : 'Só na folha'} · ${p.semFicha ? 'sem ficha: cadastre em RH › Colaboradores com a mesma matrícula' : 'para mudar o líder ou a função, edite a ficha em RH › Colaboradores'}`,
         [{ t: 'Ver férias', v: 'fer' }], o => { if (o.v === 'fer') verFerias(p); });
       return;
     }
-    if (p.virt) { // da Presença do dia, ainda fora da folha: incluir num grupo da folha
-      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}Na Presença do dia (${esc(p.ativ)}), fora da folha · mesma presença`,
+    if (p.virt) { // da Escala do dia, ainda fora da folha: incluir num grupo da folha
+      sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}Na Escala do dia (${esc(p.ativ)}), fora da folha · mesma presença`,
         [...(ed ? doc.grupos.map((g, i) => ({ t: 'Incluir em ' + g.nome, v: 'in:' + i })) : []), { t: 'Ver férias', v: 'fer' }],
         async o => {
           if (o.v === 'fer') { verFerias(p); return; }
@@ -352,7 +352,7 @@ export function criarAdministrativo(X) {
         });
       return;
     }
-    sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Presença em comum com a Presença do dia (' + esc(p.ativ) + ')' : 'Só na folha'}${p.notas && p.notas.length ? ' · ' + esc(p.notas.join(' · ')) : ''}`,
+    sheet(title(p.nome), `${p.mat ? 'Matrícula ' + esc(p.mat) + ' · ' : ''}${p.ativ ? 'Presença em comum com a Escala do dia (' + esc(p.ativ) + ')' : 'Só na folha'}${p.notas && p.notas.length ? ' · ' + esc(p.notas.join(' · ')) : ''}`,
       [...(ed ? [...doc.grupos.map((g, i) => (i === +gi ? null : { t: 'Mover para ' + g.nome, v: 'mv:' + i })).filter(Boolean), { t: 'Tirar desta folha', d: 'Os lançamentos ficam guardados', v: 'rm' }] : []), { t: 'Ver férias', v: 'fer' }],
       async o => {
         if (o.v === 'fer') { verFerias(p); return; }
@@ -445,7 +445,7 @@ export function criarAdministrativo(X) {
     if (st && st.prep) {
       const r = st.prep.resumo;
       h += `<div class="card"><header><h2>Conferência</h2><p>${esc(st.origem || '')}</p></header><div class="body stackcol">
-        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Presença do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
+        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Escala do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
         ${r.ferias ? `<div><b>Férias</b>: ${r.ferias.total} períodos (${r.ferias.comData} com data marcada)</div><label class="mchip"><input type="checkbox" id="aImpSubst" ${st.subst ? 'checked' : ''}><span>Substituir as férias que já estão no sistema (${A().ferias.length})</span></label>` : ''}
         ${r.semRH.length ? `<details class="legdet"><summary>${r.semRH.length} nome(s) sem ficha no RH (entram na folha mesmo assim)</summary><p class="small m0">${r.semRH.map(x => esc(title(x.nome))).join(' · ')}</p></details>` : ''}
         <div class="row-gap"><button class="btn pri" data-a="impOk" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Gravando…' : 'Gravar no sistema'}</button><button class="btn" data-a="impCancel">Cancelar</button></div></div></div>`;
@@ -493,8 +493,8 @@ export function criarAdministrativo(X) {
   /* ---------- Painel de frequência e resumo da semana (módulo Painel) ---------- */
   // Códigos de cada pessoa em cada data, pela mesma regra da folha (escala, férias, desligamento e lançamentos).
   // Uma semana pode cruzar duas folhas (16 a 15): cada data usa a folha da sua competência.
-  // As mesmas pessoas da aba Frequência: a folha e quem está na Presença do dia fora dela (grupos PRESENÇA · área).
-  // Sem folha aberta na competência, entram só as pessoas da Presença do dia.
+  // As mesmas pessoas da aba Frequência: a folha e quem está na Escala do dia fora dela (grupos PRESENÇA · área).
+  // Sem folha aberta na competência, entram só as pessoas da Escala do dia.
   function levantar(conj, datas) {
     const cmap = colabPorId(conj); const pessoas = new Map(); let carregando = false;
     const naFolha = new Set(); // todos da folha deste conjunto (matrícula e nome), para filtrar as férias pelo conjunto
@@ -513,7 +513,7 @@ export function criarAdministrativo(X) {
     }
     return { carregando, pessoas: [...pessoas.values()], naFolha };
   }
-  // Só as pessoas de uma área (pela área delas na Presença do dia). Quem está só na folha, sem ligação, fica de fora.
+  // Só as pessoas de uma área (pela área delas na Escala do dia). Quem está só na folha, sem ligação, fica de fora.
   function daArea(lev, area) {
     if (!area || area === 'TODAS') return lev;
     const pessoas = lev.pessoas.filter(x => x.area === area); const naFolha = new Set();
@@ -624,7 +624,7 @@ export function criarAdministrativo(X) {
     const fut = dt > TODAY;
     const ferTxt = `<h4>Férias</h4>${sai.length || volta.length ? `<table><tbody>${sai.map(f => `<tr><td>${esc(title(f.nome))}</td><td>sai hoje</td></tr>`).join('')}${volta.map(f => `<tr><td>${esc(title(f.nome))}</td><td>volta hoje</td></tr>`).join('')}</tbody></table>` : `<p class="muted">${k.t.FE} pessoa(s) em férias · ninguém sai ou volta neste dia.</p>`}`;
     return {
-      kpis: [[fut || !k.Q ? '—' : pc(k.pres), 'Presença do dia'], [fut ? '—' : `${k.P}/${k.Q}`, 'Presentes / escalados'], [k.t.FT, 'Faltas'], [k.t.ATR + k.t.SA, 'Atrasos e saídas'], [k.t.AT, 'Atestados'], [k.t.HE, 'Hora extra']],
+      kpis: [[fut || !k.Q ? '—' : pc(k.pres), 'Escala do dia'], [fut ? '—' : `${k.P}/${k.Q}`, 'Presentes / escalados'], [k.t.FT, 'Faltas'], [k.t.ATR + k.t.SA, 'Atrasos e saídas'], [k.t.AT, 'Atestados'], [k.t.HE, 'Hora extra']],
       corpo: `${fut ? '<p class="muted">Dia ainda não chegou: aparecem só férias e lançamentos já feitos.</p>' : ''}<h4>Presença por grupo</h4><table><thead><tr><th>Grupo</th><th class="r">Pessoas</th><th class="r">Presentes / escalados</th><th class="r">Presença</th><th class="r">Faltas</th><th class="r">Atestados</th></tr></thead><tbody>${k.grupos.sort((a, b) => (a.q ? a.p / a.q : 1) - (b.q ? b.p / b.q : 1)).map(g => `<tr><td>${esc(title(g.nome))}</td><td class="r">${g.n}</td><td class="r">${g.q ? `${g.p}/${g.q}` : '—'}</td><td class="r"><b>${g.q ? pc(g.p / g.q) : '—'}</b></td><td class="r">${g.FT || ''}</td><td class="r">${g.AT || ''}</td></tr>`).join('')}</tbody></table>
         ${umaArea ? nomesDoDia(lev, dt, ferTxt) : `<div class="rcols"><div><h4>Ocorrências do dia</h4>${oc.length ? `<table><tbody>${oc.map(x => `<tr><td>${esc(title(x.nome))}<div class="muted small">${esc(title(x.grupo || ''))}</div></td><td>${esc(NOMES_CODIGO[cod(x)] || cod(x))}${(x.j || {})[dt] && x.j[dt].cod === cod(x) ? `<div class="muted small">${esc(textoJus(x.j[dt]))}</div>` : JUS_CODS.includes(cod(x)) ? '<div class="muted small">sem justificativa</div>' : ''}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Nenhuma falta, atraso, atestado ou afastamento.</p>'}</div>
         <div><h4>Hora extra</h4>${he.length ? `<table><tbody>${he.map(x => `<tr><td>${esc(title(x.nome))}</td><td class="muted small">${esc(title(x.grupo || ''))}</td></tr>`).join('')}</tbody></table>` : '<p class="muted">Ninguém em hora extra.</p>'}

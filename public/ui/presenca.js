@@ -31,7 +31,7 @@ export function pedirJus(o) {
     ${o.cod === 'SA' ? `<div class="g2eq"><label class="sel"><span>Saiu às</span><input class="in" type="time" id="jsSai" value="${escH(at.saida || '')}"></label><label class="sel"><span>Minutos antes do fim</span><input class="in" type="number" id="jsMin" min="1" max="720" inputmode="numeric" value="${at.min || ''}" placeholder="Ex.: 120"></label></div>` : ''}
     <label class="sel"><span>Observação ${o.cod === 'AT' ? '(quantos dias · não escreva o CID nem a doença)' : '(opcional)'}</span><textarea class="in" id="jsObs" rows="3" maxlength="300" placeholder="${o.cod === 'ATR' ? 'Ex.: ônibus da linha 12 quebrou' : o.cod === 'SA' ? 'Ex.: saiu para levar o filho ao médico' : 'Detalhe se precisar'}">${escH(at.obs || '')}</textarea></label>
     ${o.ocorr ? `<label class="switch"><input type="checkbox" id="jsOc"><span>Registrar também como ocorrência na ficha do colaborador</span></label><label class="sel" id="jsOcBox" hidden><span>Tipo de ocorrência</span><select class="in" id="jsOcTipo">${o.ocorr.tipos.map(t => `<option>${escH(t)}</option>`).join('')}</select></label>` : ''}
-    <p class="muted small m0">Fica junto do lançamento e aparece na Presença do dia, na Frequência e nos resumos.</p>`;
+    <p class="muted small m0">Fica junto do lançamento e aparece na Escala do dia, na Frequência e nos resumos.</p>`;
   let salvo = false;
   o.formSheet(`Justificativa · ${NOMES_CODIGO[o.cod] || o.cod}`, `${escH(o.nome)} · ${diaSem(o.dt)}, ${dBR(o.dt)}`, html, 'Salvar justificativa', async () => {
     const g = id => document.getElementById(id);

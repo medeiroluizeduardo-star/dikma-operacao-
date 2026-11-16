@@ -5,6 +5,7 @@ import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBR
 import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../contas/hoje.js';
 import { indiceFerias, indiceDesligados, areasDoCadastro } from '../contas/acessos.js';
 import { criarEscala, normRegime, letra, fatorRota, comoEra, anotarTroca } from '../contas/escala.js';
+import { aprovadasDoDia, movsDoDia, pessoasDaRota, pessoasDaArea } from '../contas/mover-rota.js';
 import { DB, title } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
 
@@ -99,14 +100,30 @@ function escalaRotaCalc(r, ini) {
   const out = [];
   for (let k = 0; k < 7; k++) {
     const dt = add(ini, k);
+    // quem está na rota no dia: o cadastro com as movimentações aprovadas (Mover de rota, Escala do dia)
+    const csd = colabsDaRotaNoDia(r.area, r.rota, dt, cs);
     // disponíveis × necessários com as coberturas: a mesma conta do Meu dia e do aviso das 17h (hoje.js)
-    const e = efetivoRota(r, { cs, prog: progK[k], sitDe: c => sitDia(c, dt), cob: cobDoDia(dt), subOk: x => todos.has(x) || subDeOutroConjunto(x), fator });
+    const e = efetivoRota(r, { cs: csd, prog: progK[k], sitDe: c => sitDia(c, dt), cob: cobDoDia(dt), subOk: x => todos.has(x) || subDeOutroConjunto(x), fator });
     const per = { D: 0, N: 0 };
-    for (const c of cs) { if (!indisponivel(c, dt) && !desligadoNoDia(c, dt)) { const p = periodoDe(c, dt); if (p) per[p]++; } } // quem está disponível de dia e de noite (turno pela letra)
+    for (const c of csd) { if (!indisponivel(c, dt) && !desligadoNoDia(c, dt)) { const p = periodoDe(c, dt); if (p) per[p]++; } } // quem está disponível de dia e de noite (turno pela letra)
     out.push({ disp: e.disp, nec: e.nec, prog: e.prog, aloc: e.aloc, mov: e.mov, dispD: per.D, dispN: per.N });
   }
   return { cs, days: out };
 }
+/* ---------------- MOVER DE ROTA NO DIA ---------------- */
+// Movimentações do dia (contas/mover-rota.js), do conjunto aberto. Só as aprovadas mudam a rota da pessoa no dia.
+let MVM = new Map(), MVv = -1;
+const movCache = () => { if (MVv !== DATAV) { MVM = new Map(); MVv = DATAV; } return MVM; };
+export function movAprovDia(dt) { const m = movCache(); const ch = 'a|' + dt; if (!m.has(ch)) m.set(ch, aprovadasDoDia(DB.movMes(dt.slice(0, 7)), dt)); return m.get(ch); }
+export const movDoDia = dt => movsDoDia(DB.movMes(dt.slice(0, 7)), dt);
+export const movDe = (id, dt) => DB.movMes(dt.slice(0, 7))[id + '|' + dt] || null;
+// Pessoas na rota no dia (sem movimentação aprovada no dia, as do cadastro).
+export function colabsDaRotaNoDia(area, rota, dt, base) {
+  const ap = movAprovDia(dt); if (!ap.size) return base || COLABS.filter(c => c.area === area && c.rota === rota);
+  return pessoasDaRota(COLABS, area, rota, ap);
+}
+// Pessoas da área no dia ('TODAS' = todas): quem foi para outra área sai, quem veio entra.
+export const colabsDaNoDia = (area, dt) => { const ap = movAprovDia(dt); return ap.size ? pessoasDaArea(COLABS, area, ap) : colabsDa(area); };
 let IDC = null, IDCv = null;
 const idsColabs = () => { if (IDCv !== COLABS) { IDC = new Set(COLABS.map(c => c.id)); IDCv = COLABS; } return IDC; };
 /* ---------------- NOMES DAS SITUAÇÕES ---------------- */

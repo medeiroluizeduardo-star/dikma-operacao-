@@ -1,7 +1,7 @@
 // Dikma Gestão — trocar e renomear líder (sem dependência de tela nem de banco).
 // Usado em Gestão › Fichas › Líderes e na rotina do GitHub integracao/admin/trocar-lider.mjs (mesma conta nos dois).
 // Onde o líder fica guardado:
-//   fichas      gcolab/{ÁREA}.itens[].lider            (é daqui que a Presença do dia tira o "Agrupar por: Líder")
+//   fichas      gcolab/{ÁREA}.itens[].lider            (é daqui que a Escala do dia tira o "Agrupar por: Líder")
 //   folha       freqcomp/{conjunto|competência}.grupos[].nome  "[PREFIXO -] LIDER <nome> - SUPERVISÃO <nome>"
 //   ocorrências gocorr.lider (responsável Dikma) e gocorr.recolhe (quem recolhe a assinatura)
 import { normNome, partesGrupo } from './planilhas-adm.js';

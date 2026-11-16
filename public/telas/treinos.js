@@ -208,7 +208,7 @@ function criarTreinos() {
       const novos = [], vistos = new Set(); let repetidos = 0, achouArea = 0;
       for (const t of r.itens) {
         if (!t.mat) { const b = busca(t.nome); if (b) { t.mat = String(b.item.mat || ''); t.nome = b.item.nome; } }
-        // Sem área na planilha: a área do cadastro das Atividades (Presença do dia), se a pessoa estiver lá.
+        // Sem área na planilha: a área do cadastro das Atividades (Escala do dia), se a pessoa estiver lá.
         if (!t.area) { const s = sis.get(normNome(t.nome)); if (s) { t.area = s.area; t.conj = s.conj; achouArea++; } }
         if (ehNA(t)) {
           // "Não se aplica": junta com o registro que a pessoa já tem (um só por pessoa).
@@ -231,7 +231,7 @@ function criarTreinos() {
       const av = (r.avisos || []).length ? `<br><br><b>Para conferir:</b><br>${r.avisos.slice(0, 6).map(esc).join('<br>')}` : '';
       const porArea = {}; for (const t of novos) if (conjDe(t)) { const a = areaDe(t); porArea[a] = (porArea[a] || 0) + 1; }
       const divisao = r.formato === 'matriz' ? `<br>${r.pessoas} ${pl(r.pessoas, 'colaborador', 'colaboradores')} (CPF e telefone não são gravados)${r.conj ? ` · ${esc(nomeConj(r.conj))}` : ''}.`
-        + (Object.keys(porArea).length ? `<br>Áreas: ${Object.keys(porArea).sort((a, b) => ordArea(a) - ordArea(b)).map(a => esc(tArea(a))).join(', ')}${achouArea ? ` (${achouArea} pela Presença do dia)` : ''}.` : '') : '';
+        + (Object.keys(porArea).length ? `<br>Áreas: ${Object.keys(porArea).sort((a, b) => ordArea(a) - ordArea(b)).map(a => esc(tArea(a))).join(', ')}${achouArea ? ` (${achouArea} pela Escala do dia)` : ''}.` : '') : '';
       const gravar = conj => async () => {
         const itens = novos.map(t => (conjDe(t) ? t : { ...t, conj }));
         try { await DB.treinosImportar(itens); DB.log(`Treinamentos: importou ${n} da planilha ${file.name}`, 'seguranca'); toast(`${n} ${pl(n, 'treinamento importado', 'treinamentos importados')}`); render(); }

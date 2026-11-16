@@ -1,5 +1,5 @@
 // Dikma Gestão — filtros da Frequência (RH › Frequência), sem tela: área, rota e turno de cada pessoa.
-// A área e a rota vêm da Presença do dia (quem só está na folha não tem área nem rota e sai quando filtra por elas).
+// A área e a rota vêm da Escala do dia (quem só está na folha não tem área nem rota e sai quando filtra por elas).
 // Turno: 'ADM' (administrativo), 'TURNO' (qualquer turma de turno) ou a letra da turma ('A', 'B', 'C', 'D').
 // f = { area, rota, turno } (vazio = todos) · info = { area, rota, regime, turma }
 
