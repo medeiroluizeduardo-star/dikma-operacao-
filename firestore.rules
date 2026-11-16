@@ -12,6 +12,9 @@ rules_version = '2';
 //   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas. O cadastro (gcolab) também é gravado pelo
 //     RH · Administrativo (RH › Colaboradores).
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
+//   - Indicadores (acesso.indicadores = 've' | 'gestor'): SÓ LEITURA do que está por trás dos painéis, nos conjuntos do
+//     escopo (Pátio, Bateria, Equipamentos): atividades, presença, equipamentos, frequência e férias, cadastro do RH,
+//     registros da Segurança do conjunto e treinamentos. Nenhuma gravação passa por este perfil. Veja indE.
 //   - Usuários, config/permissoes = Administração completa (administrador).
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
 //     administrador; Segurança (seginter, seganom, segcartao, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
@@ -62,6 +65,12 @@ service cloud.firestore {
     function lePB(e) { return ativo() && (admin() || ((pEm('operacao') != '' || pEm('gestao') != '') && esc(e))); }
     function op() { return lePB('patio'); }        // Atividades Pátio
     function ba() { return lePB('bateria'); }      // Atividades Bateria
+    // Indicadores: lê os dados do escopo e (e = patio | bateria | equipamentos). Só aparece em regras de leitura.
+    function indE(e) { return ativo() && pEm('indicadores') != '' && esc(e); }
+    function indAlgum() { return indE('patio') || indE('bateria'); }
+    function opI() { return op() || indE('patio'); }       // leitura do Pátio (Operação, Gestão ou Indicadores)
+    function baI() { return ba() || indE('bateria'); }     // leitura da Bateria
+    function eqmI() { return eqm() || indE('equipamentos'); }
     function ge() { return hasProfile() && geU(perfil()); }          // Fichas (Gestão)
     // Equipamentos: ler = escopo Equipamentos com Operação ou Gestão; gravar = Operação (líder a gestor).
     function eqm() { return ativo() && (admin() || ((pEm('operacao') != '' || pEm('gestao') != '') && esc('equipamentos'))); }
@@ -145,7 +154,7 @@ service cloud.firestore {
     }
 
     match /config/sistema {
-      allow read: if op();
+      allow read: if opI();
       allow write: if admMod('operacao');
     }
 
@@ -168,7 +177,7 @@ service cloud.firestore {
     }
 
     match /plano/{area} {
-      allow read: if op();
+      allow read: if opI();
       allow write: if admMod('operacao');
     }
 
@@ -213,7 +222,7 @@ service cloud.firestore {
               && a.de == v.de && a.para == v.para && (movAprova(u, a, e) || (a.st == 'pendente' && a.por == me))); }
     function movSit(ch, e) { return !('mov' in ch) || movOk(e); }
     match /colaboradores/{area} {
-      allow read: if op() || acAdm();
+      allow read: if opI() || acAdm();
       allow create: if (admMod('operacao') || admMod('gestao')) && marcaOk() && colabsOk(novos());
       allow update: if (admMod('operacao') || admMod('gestao')) && marcaOk() && colabsOk(mudados());
       allow delete: if admMod('operacao') || admMod('gestao');
@@ -221,7 +230,7 @@ service cloud.firestore {
 
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
-      allow read: if op() || acAdm() || eqm();   // Equipe e frota usa a mesma presença
+      allow read: if opI() || acAdm() || eqmI();   // Equipe e frota usa a mesma presença
       allow create: if lancaSit('patio') && marcaOk() && sitOk(novos()) && movSit(novos(), 'patio');
       allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'patio');
       allow delete: if lancaSit('patio');
@@ -244,12 +253,12 @@ service cloud.firestore {
         || (para in ['validado', 'devolvido'] && de == 'enviado' && admEdita())
         || (para == 'aberto' && de == 'validado' && admin()); }
     match /efetivoDia/{id} {
-      allow read: if op() || acAdm();
+      allow read: if opI() || acAdm();
       allow create, update: if efOk(id) && efPode('patio');
       allow delete: if admin();
     }
     match /b_efetivoDia/{id} {
-      allow read: if ba() || acAdm();
+      allow read: if baI() || acAdm();
       allow create, update: if efOk(id) && efPode('bateria');
       allow delete: if admin();
     }
@@ -261,7 +270,7 @@ service cloud.firestore {
     // ft = quantas fotos cada célula tem (sobe no mesmo lote que grava a foto; veja Fotos das atividades abaixo).
     // qz = queda zero (opcional, material recolhido) de cada célula: grava quem aponta na área (contas/queda-zero.js).
     match /semanas/{id} {
-      allow read: if op();
+      allow read: if opI();
       allow create: if admMod('operacao') && marcaOk();
       allow delete: if admin();
       allow update: if marcaOk() && (admMod('operacao') || (gestorDa(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
@@ -278,7 +287,7 @@ service cloud.firestore {
     function acompanha(area, e) { return admin() || (ativo() && esc(e) && ((pEm('operacao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('operacao'), area)) || (pEm('gestao') in ['gestor', 'coordenador', 'supervisor'] && areaEm(pEm('gestao'), area)))); }
     function acompanhaDa(area) { return acompanha(area, 'patio'); }
     match /aprov/{id} {
-      allow read: if op();
+      allow read: if opI();
       allow create, update: if aprovaDa(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
       allow delete: if admin();
     }
@@ -290,13 +299,13 @@ service cloud.firestore {
     // Quem alterou a ação: atualizadoPor = quem está logado, com atualizadoEm novo (o site grava a hora do aparelho em texto).
     function acaoMarca() { return request.resource.data.get('atualizadoPor', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['atualizadoEm']); }
     match /acoes/{id} {
-      allow read: if op();
+      allow read: if opI();
       allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'operacao');
       allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'operacao');
       allow delete: if admMod('operacao');
     }
     match /b_acoes/{id} {
-      allow read: if ba();
+      allow read: if baI();
       allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'bateria');
       allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'bateria');
       allow delete: if admMod('bateria');
@@ -407,27 +416,27 @@ service cloud.firestore {
 
     // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
     match /b_config/sistema {
-      allow read: if ba();
+      allow read: if baI();
       allow write: if admMod('bateria');
     }
     match /b_plano/{area} {
-      allow read: if ba();
+      allow read: if baI();
       allow write: if admMod('bateria');
     }
     match /b_colaboradores/{area} {
-      allow read: if ba() || acAdm();
+      allow read: if baI() || acAdm();
       allow create: if (admMod('bateria') || admMod('gestao')) && marcaOk() && colabsOk(novos());
       allow update: if (admMod('bateria') || admMod('gestao')) && marcaOk() && colabsOk(mudados());
       allow delete: if admMod('bateria') || admMod('gestao');
     }
     match /b_situacao/{mes} {
-      allow read: if ba() || acAdm() || eqm();
+      allow read: if baI() || acAdm() || eqmI();
       allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos()) && movSit(novos(), 'bateria');
       allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'bateria');
       allow delete: if lancaSit('bateria');
     }
     match /b_semanas/{id} {
-      allow read: if ba();
+      allow read: if baI();
       allow create: if admMod('bateria') && marcaOk();
       allow delete: if admin();
       allow update: if marcaOk() && (admMod('bateria') || (gestorDaB(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
@@ -437,7 +446,7 @@ service cloud.firestore {
     function aprovaDaB(area) { return aprova(area, 'bateria'); }
     function acompanhaDaB(area) { return acompanha(area, 'bateria'); }
     match /b_aprov/{id} {
-      allow read: if ba();
+      allow read: if baI();
       allow create, update: if aprovaDaB(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
       allow delete: if admin();
     }
@@ -458,7 +467,7 @@ service cloud.firestore {
     // eq/cadastro = { operadores[], frota[] }; eq/config = turnos, causas, metas, pesos, feriados (administração).
     function eqCadOk(ch) { let d = request.resource.data; return fLista(d, ch, 'operadores', 2000) && fLista(d, ch, 'frota', 1000); }
     match /eq/{docId} {
-      allow read: if eqm();
+      allow read: if eqmI();
       allow create: if (admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')))) && eqCadOk(novos());
       allow update: if (admMod('equipamentos') || (docId == 'cadastro' && (eqEdita() || admMod('gestao')))) && eqCadOk(mudados());
       allow delete: if admMod('equipamentos');
@@ -489,19 +498,19 @@ service cloud.firestore {
         && fTxt(d, ch, 'inspetor', 120) && fTxt(d, ch, 'obs', 500); }
     // Lançamentos: quem tem a Frequência também lê, porque a hora extra da Operação entra na folha.
     match /eqlanc/{id} {
-      allow read: if eqm() || acAdm();
+      allow read: if eqmI() || acAdm();
       allow create: if eqCria() && request.resource.data.get('eq', '') is string && request.resource.data.get('eq', '').size() > 0 && lancOk(novos());
       allow update: if eqAltera(['status', 'fim', 'trocaPara']) && lancOk(mudados());
       allow delete: if eqApaga();
     }
     match /eqpar/{id} {
-      allow read: if eqm();
+      allow read: if eqmI();
       allow create: if eqCria() && request.resource.data.get('eq', '') is string && request.resource.data.get('eq', '').size() > 0 && parOk(novos());
       allow update: if eqAltera(['fim', 'subst', 'lancSub']) && parOk(mudados());
       allow delete: if eqApaga();
     }
     match /eqinsp/{id} {
-      allow read: if eqm();
+      allow read: if eqmI();
       allow create: if eqCria() && inspOk(novos());
       allow update: if eqAltera([]) && inspOk(mudados());
       allow delete: if eqApaga();
@@ -509,7 +518,7 @@ service cloud.firestore {
     // Avaliação mensal: { itens: { OPERADOR: {proat, s5, seg, faltas, atrasos, atest, obs} } }.
     function avalOk(ch) { return soCampos(ch, ['itens']) && fMapa(request.resource.data, ch, 'itens', 2000); }
     match /eqaval/{mes} {
-      allow read: if eqm();
+      allow read: if eqmI();
       allow create: if eqAvalEdita() && mes.matches('[0-9]{4}-[0-9]{2}') && avalOk(novos());
       allow update: if eqAvalEdita() && avalOk(mudados());
       allow delete: if eqAvalEdita();
@@ -526,7 +535,7 @@ service cloud.firestore {
     function gcolabOk(ch) { return soCampos(ch, ['itens', 'atualizadoPor', 'atualizadoEm']) && fLista(request.resource.data, ch, 'itens', 3000); }
     // Gravam: quem administra as fichas e o RH · Administrativo (RH › Colaboradores, o cadastro único).
     match /gcolab/{area} {
-      allow read: if todasFichas() || minhaFicha(area) || acAdm();
+      allow read: if todasFichas() || minhaFicha(area) || acAdm() || indAlgum();   // Indicadores: grupos da frequência pela ficha
       allow create: if (admMod('gestao') || admEdita()) && marcaOk() && gcolabOk(novos());
       allow update: if (admMod('gestao') || admEdita()) && marcaOk() && gcolabOk(mudados());
       allow delete: if admMod('gestao');
@@ -594,7 +603,8 @@ service cloud.firestore {
       return fTxt(d, ch, 'conj', 10) && fTxt(d, ch, 'competencia', 7) && fDia(d, ch, 'ini') && fDia(d, ch, 'fim') && fLista(d, ch, 'grupos', 300)
         && fMapa(d, ch, 'd', 3000) && fMapa(d, ch, 'jus', 3000) && fTxt(d, ch, 'aba', 120) && d.keys().size() <= 30; }
     match /freqcomp/{id} {
-      allow read: if acAdm() || eqm();   // Equipe e frota (Operação) lê a folha para a situação dos operadores
+      // Equipe e frota (Operação) lê a folha para a situação dos operadores; os Indicadores, a do conjunto do escopo.
+      allow read: if acAdm() || eqmI() || (id.matches('patio[|].*') && indE('patio')) || (id.matches('bateria[|].*') && indE('bateria'));
       allow create: if admEdita() && request.resource.data.get('conj', '') in ['patio', 'bateria'] && request.resource.data.get('competencia', '') is string
         && id == request.resource.data.conj + '|' + request.resource.data.competencia && request.resource.data.competencia.matches('[0-9]{4}-[0-9]{2}')
         && compOk(request.resource.data, novos());
@@ -608,7 +618,7 @@ service cloud.firestore {
         && fNum(d, ch, 'dias', 0, 365) && fTxt(d, ch, 'substituto', 300) && fTxt(d, ch, 'obs', 500) && fTxt(d, ch, 'aba', 120)
         && fTxt(d, ch, 'mesPlanejado', 7) && d.keys().size() <= 30; }
     match /ferias/{id} {
-      allow read: if acAdm();
+      allow read: if acAdm() || indAlgum();
       allow create: if admEdita() && request.resource.data.get('nome', '') is string && request.resource.data.get('nome', '').size() > 0 && feriasOk(request.resource.data, novos());
       allow update: if admEdita() && feriasOk(request.resource.data, mudados());
       allow delete: if admEdita();
@@ -616,7 +626,7 @@ service cloud.firestore {
     // Treinamentos, NRs e ASO (Segurança › Treinamentos e ASO; saiu do RH em 2026-11-10): um documento por treinamento
     // feito. Quem tem a Segurança lê; os técnicos de segurança (registra, trata, gestor) e o administrador gravam, um a um
     // ou pela importação da planilha. Os "não se aplica" de cada pessoa ficam num documento só (naTipos).
-    function treinoLe() { return ativo() && (admin() || pEm('seguranca') != ''); }
+    function treinoLe() { return ativo() && (admin() || pEm('seguranca') != '' || pEm('indicadores') != ''); }
     function treinoEdita() { return ativo() && (admin() || pEm('seguranca') in ['registra', 'trata', 'gestor']); }
     function treinoOk(d, ch) {
       return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'tipo', 120)
@@ -659,7 +669,8 @@ service cloud.firestore {
         && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj)
             || perfil().get('areas', []).hasAny(areasDoConj(conj)));
     }
-    function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj); }
+    // Indicadores: os registros do conjunto do escopo (só leitura).
+    function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj) || (r.conj in ['patio', 'bateria'] && indE(r.conj)); }
     function txtOk(d, k, min, max) { return d.get(k, '') is string && d.get(k, '').size() >= min && d.get(k, '').size() <= max; }
     function dataOk(d) { return d.data is string && d.data.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && d.mes == d.data.split('-')[0] + '-' + d.data.split('-')[1]; }
     function regOk(d) {

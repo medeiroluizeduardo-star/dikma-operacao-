@@ -23,7 +23,7 @@ export function acessoDoLegado(u) {
   const vazio = { acesso: {}, escopos: [], fichas: false };
   if (!u || !u.papel || u.papel === 'bloqueado') return vazio;
   const papel = u.papel;
-  if (papel === 'admin') return { acesso: { operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ESCOPOS.map(e => e[0]), fichas: true };
+  if (papel === 'admin') return { acesso: { operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', indicadores: 'gestor', administracao: 'admin' }, escopos: ESCOPOS.map(e => e[0]), fichas: true };
   const m = modulosDe(u);
   const escopos = ESCOPOS.map(e => e[0]).filter(k => m.includes(ESC_MOD[k]));
   const ativ = escopos.includes('patio') || escopos.includes('bateria');

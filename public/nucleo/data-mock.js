@@ -1,7 +1,7 @@
 // Modo demonstração (abra com ?demo): mesma interface do data.js, sem Firebase.
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
-import { legadoDoAcesso, marcasDe, ehAdminU, modsHistorico, MODS_HIST } from '../contas/acessos.js';
+import { legadoDoAcesso, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
 import { prepararImportacao } from '../contas/planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
 import { aplicarCampos } from '../contas/limpeza.js';
@@ -20,8 +20,8 @@ export const setAtual = () => cur;
 export const dados = k => S[k];
 export const cache = { log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }, eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
-export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod);
-export const temEquip = u => marcasDe(u).includes('equipamentos');
+export const temSet = (u, k) => marcasDe(u).includes(SETS[k].mod) || conjsInd(u).includes(k);
+export const temEquip = u => marcasDe(u).includes('equipamentos') || eqInd(u);
 export const temGestao = u => marcasDe(u).includes('gestao');
 const LS = 'coqueria-demo-v2';
 // Demonstração: dados de exemplo com nomes e matrículas fictícios (pasta demo/). Os dados reais não ficam no site.
@@ -96,16 +96,18 @@ async function fresh() {
   const usados = new Set();
   const loginDe = n => { const p = slug(n); let l = p[0] + '.' + p[p.length - 1], i = 2; while (usados.has(l)) l = p[0] + '.' + p[p.length - 1] + i++; usados.add(l); return l; };
   cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], ...ac({ operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' }, ['patio', 'bateria', 'equipamentos']) },
-    { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'], ...ac({ operacao: 'supervisor' }, ['equipamentos']) },
+    { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'], ...ac({ operacao: 'supervisor', indicadores: 've' }, ['equipamentos']) },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'], ...ac({ gestao: 'supervisor' }, []) },
     ...lideres.map(c => liderGestao({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
-    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], ...ac({ operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'modulo' }, ['patio', 'bateria', 'equipamentos']) },
-    { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'coordenador', gestao: 'coordenador' }, ['patio', 'bateria']) },
+    { uid: 'gest', nome: 'Gestor (demonstração)', login: 'gestor', senha: '123456', papel: 'gestor', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], ...ac({ operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', indicadores: 'gestor', administracao: 'modulo' }, ['patio', 'bateria', 'equipamentos']) },
+    // Indicadores sem Operação nem RH: só vê os números do Pátio e dos Equipamentos.
+    { uid: 'ind', nome: 'Consulta dos Indicadores', login: 'indicadores', senha: '123456', papel: 'leitor', area: null, modulos: ['seguranca'], ...ac({ indicadores: 've' }, ['patio', 'equipamentos']) },
+    { uid: 'coord', nome: 'Coordenador (demonstração)', login: 'coordenador', senha: '123456', papel: 'coordenador', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'coordenador', gestao: 'coordenador', indicadores: 've' }, ['patio', 'bateria']) },
     { uid: 'tec', nome: 'Técnico de Processo (demonstração)', login: 'tecnico', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'bateria'], ...ac({ operacao: 'tecnico', gestao: 'leitor' }, ['patio', 'bateria']) },
-    { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'], ...ac({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria']) },
-    { uid: 'sup4', nome: 'Supervisor de várias áreas', login: 'supervisor4', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2'], modulos: ['operacao', 'bateria', 'gestao'], ...ac({ operacao: 'supervisor', gestao: 'supervisor' }, ['patio', 'bateria']) },
+    { uid: 'sup2', nome: 'Supervisor de duas áreas', login: 'supervisor2', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', modulos: ['operacao', 'bateria'], ...ac({ operacao: 'supervisor', gestao: 'supervisor', indicadores: 've' }, ['patio', 'bateria']) },
+    { uid: 'sup4', nome: 'Supervisor de várias áreas', login: 'supervisor4', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2'], modulos: ['operacao', 'bateria', 'gestao'], ...ac({ operacao: 'supervisor', gestao: 'supervisor', indicadores: 've' }, ['patio', 'bateria']) },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'leitor', rh: 'leitor' }, ['patio']) },
-    { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'], ...ac({ rh: 'administrativo' }, []) },
+    { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'], ...ac({ rh: 'administrativo', indicadores: 've' }, ['patio', 'bateria']) },
     { uid: 'admv', nome: 'Assistente Administrativo', login: 'administrativo', senha: '123456', papel: 'administrativo', area: null, modulos: ['operacao', 'gestao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'administrativo', rh: 'administrativo' }, ['patio']) },
     ...usuariosSeguranca(), ...usuariosMistos(),
     { uid: 'novo', nome: 'Novo usuário', login: 'novo', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao'], trocarSenha: true, ...ac({ operacao: 'leitor', gestao: 'leitor' }, ['patio']) },
@@ -130,7 +132,7 @@ function usuariosSeguranca() {
 function liderGestao(u) {
   const k = setDaArea(u.area) || 'patio';
   const p = u.papel === 'lider' ? 'lider' : 'supervisor';
-  return { ...u, acesso: { operacao: p, gestao: p }, escopos: [k] };
+  return { ...u, acesso: { operacao: p, gestao: p, indicadores: 've' }, escopos: [k] };
 }
 // Perfis diferentes por módulo: aponta na Operação como líder e só consulta a Gestão; e uma Administração
 // "Dos módulos" de quem é Gestor só na Gestão do Pátio.
@@ -176,7 +178,7 @@ export async function apagarErros(ids) { const t = new Set(ids); cache.erros = c
 function emitAuth() {
   if (!me) return cb.onAuth({ status: 'signedOut' });
   if (!ATIVOS.has(me.papel)) return cb.onAuth({ status: 'blocked', user: me });
-  if (!(ehAdminU(me) || marcasDe(me).length || (me.acesso && (me.acesso.seguranca || me.acesso.administracao)))) return cb.onAuth({ status: 'semAcesso', user: me });
+  if (!(ehAdminU(me) || marcasDe(me).length || temIndU(me) || (me.acesso && (me.acesso.seguranca || me.acesso.administracao)))) return cb.onAuth({ status: 'semAcesso', user: me });
   if (me.trocarSenha) return cb.onAuth({ status: 'mustChange', user: me });
   cb.onAuth({ status: 'ready', user: me });
 }
@@ -645,6 +647,8 @@ function cartoesExemplo() {
     return c;
   });
 }
+// O que a pessoa lê da Segurança: o que a Segurança dá a ela e, nos Indicadores, os registros dos conjuntos do escopo.
+const veSegMock = r => veRegSeg(me, r) || conjsInd(me).includes(r.conj);
 function iniciarSeg() {
   if (SEG) return;
   try { SEG = JSON.parse(localStorage.getItem(LSS) || 'null'); } catch (e) { SEG = null; }
@@ -656,7 +660,7 @@ Object.defineProperty(cache, 'seg', {
   get: () => {
     if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], meses: new Set(), v: 0 };
     const k = segVer + '|' + (me ? me.uid : '');
-    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(r => veRegSeg(me, r)), anom: SEG.anom.filter(r => veRegSeg(me, r)), cartao: SEG.cartao.filter(r => veRegSeg(me, r)), meses: new Set(), v: segVer } };
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(veSegMock), anom: SEG.anom.filter(veSegMock), cartao: SEG.cartao.filter(veSegMock), meses: new Set(), v: segVer } };
     return segMemo.v;
   },
   enumerable: false

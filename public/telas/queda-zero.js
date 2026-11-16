@@ -3,7 +3,7 @@
 // salvarQuedaZero (mapa qz da semana).
 import { AREA_S, DAYS, ddmm, add, pd, setDaArea, monthLabel } from '../contas/cal.js';
 import { DB, TODAY, esc, $ } from '../nucleo/base.js';
-import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, perfil } from '../nucleo/estado.js';
+import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, perfil, modsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
@@ -278,7 +278,7 @@ export function vQzPainel() {
   const area = areaScope();
   const r = resumoQZ(lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, area));
   const onde = area === 'TODAS' ? 'todas as áreas' : AREA_S[area];
-  let h = `<div class="row-between"><span class="muted">${monthLabel(UI.mes)} · ${esc(onde)}</span><button class="btn sm" data-go="quedazero">${I.queda || ''} Lançamentos da queda zero</button></div>`;
+  let h = `<div class="row-between"><span class="muted">${monthLabel(UI.mes)} · ${esc(onde)}</span>${modsDe(ME).includes('operacao') ? `<button class="btn sm" data-go="quedazero">${I.queda || ''} Lançamentos da queda zero</button>` : ''}</div>`;
   if (!r.n) return h + `<div class="card"><div class="empty">Nenhuma queda zero lançada em ${monthLabel(UI.mes)} (${esc(onde)}).</div></div>`;
   const kp = (lbl, v, s, cor) => `<div class="kpi"><span class="lbl">${cor ? `<i class="dot" style="background:${cor}"></i>` : ''}${lbl}</span><span class="v num">${v}</span><span class="s">${s}</span></div>`;
   h += `<div class="kpis qzpainel">

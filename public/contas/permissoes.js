@@ -14,6 +14,7 @@ export const GRUPOS_ABAS = [
   { t: 'Gestão', mod: 'gestao' },
   { t: 'Segurança', mod: 'seguranca' },
   { t: 'RH', mod: 'rh' },
+  { t: 'Indicadores', mod: 'indicadores' },
   { t: 'Administração', mod: 'administracao' }
 ];
 // Perfil antigo (chave do formato antigo) que vale para cada perfil de cada módulo.
@@ -89,7 +90,8 @@ export const ITENS = [
   { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   ...comunsDe('gestao', ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']),
   { id: 'i_freq', mod: 'rh', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['administrativo'] },
-  ...comunsDe('rh', ['administrativo', 'leitor'])
+  ...comunsDe('rh', ['administrativo', 'leitor']),
+  ...comunsDe('indicadores', ['ve', 'gestor'])
 ];
 export const itemDoPapel = (papel, it) => !!papel && (papel === 'admin' || it.quem.includes(papel));
 // O item no perfil do módulo (sem exceção da pessoa). Lê também a chave antiga do item (formato de antes).

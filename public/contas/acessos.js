@@ -8,7 +8,8 @@ import { normNome } from './planilhas-adm.js';
 
 // ---- Acesso por módulo ----
 // Modelo no cadastro usuarios/{uid}:
-//   acesso  = { operacao?: perfil, gestao?: perfil, seguranca?: perfil, rh?: perfil, administracao?: 'admin' | 'modulo' }
+//   acesso  = { operacao?: perfil, gestao?: perfil, seguranca?: perfil, rh?: perfil, indicadores?: 've' | 'gestor',
+//               administracao?: 'admin' | 'modulo' }
 //   escopos = parte de ['patio', 'bateria', 'equipamentos'] (conjuntos usados dentro da Operação e da Gestão)
 // Áreas: líder 1 (area); supervisor quantas precisar (lista areas; area e area2 guardam as duas primeiras, para quem
 // ainda lê os campos antigos); gestor e coordenador todas. As exceções ficam em abas.
@@ -20,12 +21,14 @@ export const MODULOS_ACESSO = [
   { k: 'gestao', nome: 'Gestão', sub: 'Programação, Fichas, Dimensionamento, Indicadores e Resumos', perfis: ['lider', 'supervisor', 'coordenador', 'gestor', 'administrativo', 'leitor'] },
   { k: 'seguranca', nome: 'Segurança', sub: 'Registros de interação e de anomalia, fila de anomalias e painel', perfis: ['registra', 'trata', 'gestor', 'leitor'] },
   { k: 'rh', nome: 'RH', sub: 'Frequência, Férias e Importar planilhas', perfis: ['administrativo', 'leitor'] },
+  // Indicadores: só leitura dos números do escopo (Pátio, Bateria, Equipamentos). O Gestor vai editar as metas.
+  { k: 'indicadores', nome: 'Indicadores', sub: 'Painéis de atividades, equipamentos, queda zero, segurança e pessoas', perfis: ['ve', 'gestor'] },
   { k: 'administracao', nome: 'Administração', sub: 'Configurações, Usuários e Perfis', perfis: ['admin', 'modulo'] }
 ];
 export const MODULO_ACESSO = Object.fromEntries(MODULOS_ACESSO.map(m => [m.k, m]));
 export const ESCOPOS = [['patio', 'Pátio'], ['bateria', 'Bateria'], ['equipamentos', 'Equipamentos']];
-export const PERFIL_NOME = { lider: 'Líder', supervisor: 'Supervisor', tecnico: 'Técnico de Processo', coordenador: 'Coordenador', gestor: 'Gestor', administrativo: 'Administrativo', leitor: 'Somente leitura', registra: 'Registra', trata: 'Trata', admin: 'Completa', modulo: 'Dos módulos' };
-export const perfilNome = (mod, p) => (mod === 'administracao' ? { admin: 'Completa (administrador)', modulo: 'Só dos módulos (gestor)' }[p] : PERFIL_NOME[p]) || p;
+export const PERFIL_NOME = { lider: 'Líder', supervisor: 'Supervisor', tecnico: 'Técnico de Processo', coordenador: 'Coordenador', gestor: 'Gestor', administrativo: 'Administrativo', leitor: 'Somente leitura', registra: 'Registra', trata: 'Trata', ve: 'Vê', admin: 'Completa', modulo: 'Dos módulos' };
+export const perfilNome = (mod, p) => (mod === 'administracao' ? { admin: 'Completa (administrador)', modulo: 'Só dos módulos (gestor)' }[p] : mod === 'indicadores' ? { ve: 'Vê', gestor: 'Gestor (metas)' }[p] : PERFIL_NOME[p]) || p;
 // Ordem usada para escolher o papel antigo (único) a partir dos perfis de cada módulo.
 export const ORDEM_PAPEL = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 
@@ -89,6 +92,26 @@ export function perfilDe(u, mod) {
 export const escoposDe = u => (!u || u.papel === 'bloqueado' ? [] : ehAdminU(u) ? ['patio', 'bateria', 'equipamentos'] : acessoMemo(u).escopos);
 // Gestão com as Fichas de acompanhamento.
 export const temFichasU = u => !!u && (ehAdminU(u) || (!!perfilDe(u, 'gestao') && acessoMemo(u).fichas));
+// Indicadores (6º módulo): quem tem o perfil vê os números dos conjuntos do escopo, mesmo sem Operação ou RH.
+// conjsInd = Pátio e Bateria do escopo (o administrador: os dois) · eqInd = escopo Equipamentos.
+// O Gestor e quem não tem área no cadastro veem todas as áreas; o "Vê" com área (líder, supervisor) vê só as dele.
+export const temIndU = u => !!perfilDe(u, 'indicadores');
+export const conjsInd = u => (temIndU(u) ? ['patio', 'bateria'].filter(k => escoposDe(u).includes(k)) : []);
+export const eqInd = u => temIndU(u) && escoposDe(u).includes('equipamentos');
+export const areasInd = u => (['admin', 'gestor'].includes(perfilDe(u, 'indicadores')) ? [] : areasDoCadastro(u, true));
+// Ligar os Indicadores para quem já via os painéis antes do módulo (rotina "Ligar Indicadores", uma vez só).
+// Quem tinha Operação, Gestão, Segurança ou RH (sem bloqueio, sem Indicadores e sem ser administrador) ganha
+// Indicadores · Vê. Quem não tem escopo (só Segurança ou só RH, que viam os dois conjuntos) ganha Pátio e Bateria,
+// sem mudar mais nada (o escopo só vale na Operação e na Gestão para quem tem esses módulos).
+// Devolve null (nada a fazer) ou { acesso, escopos } novos.
+export function ligarIndicadores(u) {
+  if (!u || u.papel === 'bloqueado' || !u.acesso || typeof u.acesso !== 'object') return null;
+  const a = u.acesso;
+  if (a.administracao === 'admin' || a.indicadores) return null;
+  if (!['operacao', 'gestao', 'seguranca', 'rh'].some(m => a[m])) return null;
+  const esc = Array.isArray(u.escopos) ? [...u.escopos] : [];
+  return { acesso: { ...a, indicadores: 've' }, escopos: esc.length ? esc : ['patio', 'bateria'] };
+}
 // Marcas no formato antigo, tiradas do acesso (operacao = Pátio, bateria, equipamentos, gestao = fichas,
 // frequencia = RH). Usadas para saber que dados carregar e nas contas que não dependem do perfil.
 export function marcasDe(u) {

@@ -2,7 +2,7 @@
 // versão dos dados (DATAV), a memória da tela (UI) e o que a pessoa pode ver e fazer (módulos, áreas, itens).
 // As variáveis são lidas pelos outros arquivos; só este arquivo as troca (definirAuth, rebuild, aplicarSet, mudouDados).
 import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../contas/cal.js';
-import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm, areasDoCadastro } from '../contas/acessos.js';
+import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm, areasDoCadastro, temIndU, areasInd } from '../contas/acessos.js';
 import { podeItemU } from '../contas/permissoes.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg } from '../contas/segcalc.js';
@@ -24,7 +24,7 @@ UI.modulo = 'operacao';
 // Módulos de antes da divisão em 5 (guardados no aparelho, em links e avisos) → módulo de agora e o conjunto.
 // A tela (view) manda mais: ensureModulo leva para o módulo onde a aba está agora.
 const MOD_ANTIGO = { paineis: ['gestao'], bateria: ['operacao', 'bateria'], equipamentos: ['operacao'], frequencia: ['rh'], adm: ['rh'], administrativo: ['rh'], config: ['administracao'], escala: ['operacao'], sistema: ['administracao'] };
-export const MODULOS = ['operacao', 'gestao', 'seguranca', 'rh', 'administracao'];
+export const MODULOS = ['operacao', 'gestao', 'seguranca', 'rh', 'indicadores', 'administracao'];
 // Converte o módulo recebido (antigo ou novo); antigo=true quando veio de antes da divisão (o antigo 'gestao' era
 // Pessoas no turno e o antigo 'operacao' era Atividades do Pátio). Devolve o módulo de agora.
 export function moduloNovo(m, antigo) {
@@ -94,8 +94,9 @@ export const admDe = alvo => gerencia(alvo);
 // Compatibilidade: "administra o que está nesta tela" (Pátio/Bateria, Equipamentos ou Fichas).
 export const admMod = () => admDe(['elanc', 'eequipe', 'einsp', 'eaval', 'eanal', 'econfig', 'epainel'].includes(UI.view) ? 'equip' : ['gcolab', 'gimpr', 'gpainel', 'gtipos'].includes(UI.view) ? 'fichas' : 'ativ');
 // Áreas: gestor e coordenador (do módulo) veem todas; supervisor até 2; líder 1. Valem no módulo pedido (padrão: o da tela).
-export const todasAreas = (mod = modAqui()) => isAdmin() || ['gestor', 'coordenador'].includes(perfil(mod)) || (mod === 'administracao' && perfil(mod) === 'modulo');
-export const myAreas = (mod = modAqui()) => { const p = perfil(mod); return ME && (p === 'lider' || p === 'supervisor') ? areasDoCadastro(ME, p === 'supervisor').filter(a => AREAS.includes(a)) : []; };
+// Indicadores: o Gestor e quem não tem área no cadastro veem todas; o "Vê" com área, só as dele (areasInd).
+export const todasAreas = (mod = modAqui()) => isAdmin() || ['gestor', 'coordenador'].includes(perfil(mod)) || (mod === 'administracao' && perfil(mod) === 'modulo') || (mod === 'indicadores' && !!perfil(mod) && !areasInd(ME).some(a => AREAS.includes(a)));
+export const myAreas = (mod = modAqui()) => { const p = perfil(mod); if (mod === 'indicadores') return ME && p ? areasInd(ME).filter(a => AREAS.includes(a)) : []; return ME && (p === 'lider' || p === 'supervisor') ? areasDoCadastro(ME, p === 'supervisor').filter(a => AREAS.includes(a)) : []; };
 export const myArea = () => { const l = myAreas(); return l.length ? (l.includes(UI.area) ? UI.area : l[0]) : null; };
 export const areaScope = () => myArea() || UI.area;
 const EDITA = ['gestor', 'coordenador', 'supervisor', 'lider'];
@@ -134,7 +135,7 @@ export const escopos = (u = ME) => escoposDe(u);
 // Conjuntos de atividades (Pátio, Bateria) da pessoa, no módulo pedido (sem módulo: em qualquer um dos dois).
 export const setsDe = (u, mod) => { if (!u) return []; const ok = mod ? !!perfilDe(u, mod) : !!(perfilDe(u, 'operacao') || perfilDe(u, 'gestao')); return ok ? ['patio', 'bateria'].filter(k => escoposDe(u).includes(k)) : []; };
 export const temEquipEm = (u, mod) => !!u && !!perfilDe(u, mod) && escoposDe(u).includes('equipamentos');
-// Módulos que aparecem no seletor, nesta ordem: Operação · Gestão · Segurança · RH · Administração.
+// Módulos que aparecem no seletor, nesta ordem: Operação · Gestão · Segurança · RH · Indicadores · Administração.
 export const modsDe = u => {
   if (!u || u.papel === 'bloqueado') return [];
   const l = [];
@@ -143,6 +144,8 @@ export const modsDe = u => {
   // Segurança: quem tem perfil no módulo e o supervisor da área (trata as anomalias da área dele).
   if (temSeg(u)) l.push('seguranca');
   if (perfilDe(u, 'rh')) l.push('rh');
+  // Indicadores: marcado por pessoa em Usuários (acesso.indicadores), com algum escopo para ver.
+  if (temIndU(u) && escoposDe(u).length) l.push('indicadores');
   if (ehAdminU(u) || (perfilDe(u, 'administracao') === 'modulo' && ['ativ', 'equip', 'fichas', 'escala', 'seg'].some(a => gerencia(a, u)))) l.push('administracao');
   return l;
 };
@@ -150,7 +153,7 @@ export const permCfg = () => DB.cache.permissoes || {};
 // Liga as telas de atividades ao conjunto do módulo aberto (Pátio ou Bateria).
 export function aplicarSet() {
   let k = SK;
-  if (UI.modulo === 'operacao' || UI.modulo === 'gestao') { const ss = setsDe(ME, UI.modulo); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); if (ss.length) UI.esSet = k; }
+  if (UI.modulo === 'operacao' || UI.modulo === 'gestao' || UI.modulo === 'indicadores') { const ss = setsDe(ME, UI.modulo); k = ss.includes(UI.esSet) ? UI.esSet : (ss[0] || 'patio'); if (ss.length) UI.esSet = k; }
   if (UI.modulo === 'administracao') { const ss = setsDe(ME); k = ss.includes(UI.cfSet) ? UI.cfSet : (ss[0] || 'patio'); UI.cfSet = k; }
   if (k !== SK) { SK = k; Object.assign(UI, { area: 'TODAS', rota: 'TODAS', aRota: null, eRota: null, iRota: 'TODAS', dia: null, mes: null, ini: null, confirm: null }); }
   DB.useSet(k); AREAS = SETS[k].areas;
