@@ -355,6 +355,8 @@ tr.acima td{background:color-mix(in srgb,var(--st-nreal) 7%,transparent)}
 .efenv{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s2) var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--line)}
 .efenv:last-child{border-bottom:0}
 .efenv>.minw{flex:1 1 240px}
+.efd .movnome{padding:0;min-height:0;text-align:left;white-space:normal;color:inherit;font-weight:inherit}
+.efd .fnome .p-etq{margin-left:var(--s1);vertical-align:middle}
 .efenv .row-gap{flex-wrap:wrap}
 .efst{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;font-size:13px;margin:var(--s1) 0}
 /* rodapé "Presentes" no celular: presentes em cima, total embaixo (antes os números encostavam uns nos outros) */
@@ -1750,7 +1752,7 @@ button.qzitem:hover{border-color:var(--st-real)}
 .escfiltro{margin:0 0 12px;align-items:center}.escfiltro select{max-width:100%}
 .escfolhas{display:grid;gap:16px}.escfolhas .escrota{break-inside:avoid}.escrota table{table-layout:fixed;width:100%}.escrota th.escn{width:34px}.escrota th.escm{width:90px}.escrota th.escf{width:28%}.escrota th.esce{width:22%}.escfolhas .escrota h4 .muted{text-transform:none;letter-spacing:0;font-weight:400}
 @media print{.escfolhas{display:block}.paper.escfolha{break-after:page}.paper.escfolha:last-child{break-after:auto}}
-/* Presença do dia: selo colorido de presentes em cada rota; nome da rota alinhado à esquerda no celular */
+/* Escala do dia: selo colorido de presentes em cada rota; nome da rota alinhado à esquerda no celular */
 table.efd tr.grp-row .gp{display:inline-block;min-width:34px;text-align:center;padding:1px 8px;margin-right:2px;border-radius:20px;font-weight:700;font-size:12px;background:var(--surface);color:var(--ink-2,var(--ink))}
 table.efd tr.grp-row .gp.ok{background:color-mix(in srgb,var(--st-real) 14%,transparent);color:var(--st-real)}
 table.efd tr.grp-row .gp.warn{background:color-mix(in srgb,var(--st-atr) 16%,transparent);color:var(--st-atr)}

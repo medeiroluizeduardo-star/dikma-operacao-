@@ -1352,3 +1352,50 @@ test('Efetivo do dia: o líder envia a área dele; o RH valida ou devolve; valid
   await assertFails(setDoc(ref('liderRec', 'BATERIA 1', 'b_efetivoDia'), ef('liderRec', 'BATERIA 1', 'enviado')), 'sem a Bateria');
   await assertSucceeds(setDoc(ref('supBat', 'BATERIA 1', 'b_efetivoDia'), ef('supBat', 'BATERIA 1', 'enviado')), 'Bateria');
 });
+
+test('Mover de rota no dia: o líder pede na área dele; o supervisor da área aprova; outra área só o administrador; trava com o dia validado', async () => {
+  const D = '2026-11-21';
+  const ref = u => doc(db(u), 'situacao', '2026-11');
+  const mv = (u, k, v, extra = {}) => setDoc(ref(u), { mov: { [k]: v }, movK: k, ...extra }, { merge: true });
+  const ped = (id, de, para, por, st = 'pendente', extra = {}) => ({ id, dt: D, de, para, ao: de.split('|')[0], ap: para.split('|')[0], st, por, nome: por, em: '2026-11-21T08:00:00.000Z', ...extra });
+  const R1 = 'RECEBIMENTO|R1', R2 = 'RECEBIMENTO|R2', P1 = 'PREPARAÇÃO|P1';
+  const k = id => id + '|' + D;
+  await assertSucceeds(mv('liderRec', k('C1'), ped('C1', R1, R2, 'liderRec')), 'líder pede na área dele');
+  await assertFails(mv('liderRec', k('C9'), ped('C9', R1, R2, 'liderRec', 'aprovado', { ok: 'liderRec' })), 'o líder não aprova');
+  await assertFails(mv('liderPrep', k('C8'), ped('C8', R1, R2, 'liderPrep')), 'líder de outra área');
+  await assertFails(mv('liderRec', k('C7'), ped('C7', R1, P1, 'liderRec')), 'para outra área o líder não pede');
+  await assertFails(mv('liderRec', k('C6'), ped('C6', R1, R2, 'liderPrep')), 'em nome de outra pessoa');
+  await assertFails(mv('liderRec', k('C6'), ped('C6', R1, R1, 'liderRec')), 'destino igual à origem');
+  await assertFails(mv('liderRec', k('C6'), ped('C6', R1, R2, 'liderRec', 'pendente', { senha: 'x' })), 'campo a mais');
+  await assertFails(mv('liderRec', 'C6|2026-11-22', ped('C6', R1, R2, 'liderRec')), 'chave diferente da pessoa e do dia');
+  await assertFails(setDoc(ref('liderRec'), { mov: { [k('C5')]: ped('C5', R1, R2, 'liderRec') } }, { merge: true }), 'sem dizer a chave (movK)');
+  await assertFails(setDoc(ref('liderRec'), { mov: { [k('C5')]: ped('C5', R1, R2, 'liderRec'), [k('C4')]: ped('C4', R1, R2, 'liderRec') }, movK: k('C5') }, { merge: true }), 'duas de uma vez');
+  const aprov = ped('C1', R1, R2, 'liderRec', 'aprovado', { ok: 'supVarias', okNome: 'Sup', okEm: '2026-11-21T09:00:00.000Z' });
+  await assertFails(mv('supPatio', k('C1'), { ...aprov, ok: 'supPatio' }), 'supervisor de outra área não aprova');
+  await assertFails(mv('supVarias', k('C1'), { ...aprov, para: 'RECEBIMENTO|R3' }), 'ao aprovar não muda o pedido');
+  await assertSucceeds(mv('supVarias', k('C1'), aprov), 'supervisor da área aprova');
+  await assertFails(mv('liderRec', k('C1'), { ...aprov, st: 'cancelado', ok: 'liderRec' }), 'aprovada: o líder não cancela');
+  await assertFails(mv('liderRec', k('C1'), ped('C1', R1, 'RECEBIMENTO|R3', 'liderRec')), 'aprovada: o líder não troca o destino');
+  await assertSucceeds(mv('supVarias', k('C1'), { ...aprov, st: 'cancelado', ok: 'supVarias' }), 'o supervisor desfaz');
+  await assertSucceeds(mv('supVarias', k('C2'), ped('C2', R1, R2, 'supVarias', 'aprovado', { ok: 'supVarias' })), 'o supervisor já move direto na área dele');
+  // outra área: o supervisor pede, só o administrador aprova
+  await assertSucceeds(mv('supVarias', k('C3'), ped('C3', R1, P1, 'supVarias')), 'supervisor pede para outra área');
+  await assertFails(mv('supVarias', k('C3'), ped('C3', R1, P1, 'supVarias', 'aprovado', { ok: 'supVarias' })), 'outra área: o supervisor não aprova');
+  await assertSucceeds(mv('admin', k('C3'), ped('C3', R1, P1, 'supVarias', 'aprovado', { ok: 'admin' })), 'o administrador aprova');
+  // recusar pede o motivo
+  await assertSucceeds(mv('liderRec', k('C4'), ped('C4', R1, R2, 'liderRec')));
+  await assertFails(mv('supVarias', k('C4'), ped('C4', R1, R2, 'liderRec', 'recusado', { ok: 'supVarias' })), 'recusar sem motivo');
+  await assertSucceeds(mv('supVarias', k('C4'), ped('C4', R1, R2, 'liderRec', 'recusado', { ok: 'supVarias', mot: 'Falta gente na R1' })));
+  await assertSucceeds(mv('liderRec', k('C5'), ped('C5', R1, R2, 'liderRec')));
+  await assertSucceeds(mv('liderRec', k('C5'), ped('C5', R1, R2, 'liderRec', 'cancelado', { ok: 'liderRec' })), 'quem pediu cancela o pendente');
+  // outros campos da presença continuam livres para quem lança
+  await assertSucceeds(setDoc(ref('liderRec'), { v: { [k('C1')]: 'FT' } }, { merge: true }));
+  // dia validado pelo RH: nada muda
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc0(doc(ctx.firestore(), 'efetivoDia', `${D}_RECEBIMENTO`), { area: 'RECEBIMENTO', data: D, mes: '2026-11', st: 'validado' }); });
+  await assertFails(mv('liderRec', k('C6'), ped('C6', R1, R2, 'liderRec')), 'dia validado');
+  await assertFails(mv('admin', k('C3'), ped('C3', R1, P1, 'supVarias', 'cancelado', { ok: 'admin' })), 'dia validado na origem, nem o administrador');
+  // mês ainda sem presença lançada: o documento nasce com o pedido
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'situacao', '2026-12'), { mov: { 'C1|2026-12-01': { ...ped('C1', R1, R2, 'liderRec'), dt: '2026-12-01' } }, movK: 'C1|2026-12-01' }, { merge: true }), 'mês novo');
+  // Bateria: b_situacao com a mesma regra
+  await assertSucceeds(setDoc(doc(db('supBat'), 'b_situacao', '2026-11'), { mov: { [k('B1')]: ped('B1', 'BATERIA 1|BT1', 'BATERIA 1|BT2', 'supBat', 'aprovado', { ok: 'supBat' }) }, movK: k('B1') }, { merge: true }), 'Bateria');
+});

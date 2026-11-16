@@ -10,7 +10,7 @@ export const SETS = {
 export const SET_KEYS = Object.keys(SETS);
 export const AREAS = SETS.patio.areas;
 export const AREAS_ATIV = SET_KEYS.flatMap(k => SETS[k].areas);
-// Áreas de atuação sem rota de atividades (coordenação, técnicos, apoio): a pessoa entra na Presença do dia do
+// Áreas de atuação sem rota de atividades (coordenação, técnicos, apoio): a pessoa entra na Escala do dia do
 // conjunto, mas a área não tem plano, apontamento nem indicador de atividades. Ficam em colaboradores/{ÁREA} como as outras.
 export const AREAS_GERAIS = SET_KEYS.flatMap(k => SETS[k].gerais);
 export const ehAreaGeral = a => AREAS_GERAIS.includes(a);

@@ -2,7 +2,7 @@
 // A ficha é a base única: o grupo de cada pessoa é "LIDER <líder imediato da ficha> - SUPERVISÃO <líder imediato
 // da ficha desse líder>". Trocou o líder na ficha, a pessoa muda de grupo na Frequência na hora.
 // Quem entra na folha do conjunto (Pátio ou Bateria):
-//   1) todos da Presença do dia do conjunto (Atividades), com a mesma presença de lá;
+//   1) todos da Escala do dia do conjunto (Atividades), com a mesma presença de lá;
 //   2) quem está na folha (vindo da planilha) e não está na Presença de nenhum conjunto (gestão, apoio…).
 // A ligação entre folha, ficha e Presença é pela matrícula; só quando um dos lados não tem matrícula vale o nome
 // idêntico (sem acento e maiúsculas). Nada de nome "parecido".
@@ -51,7 +51,7 @@ export function criarGrupoDaFicha(fichas) {
   };
 }
 
-// fichas: gcolab (Gestão › Colaboradores) · colabs: Presença do dia deste conjunto · outros: dos demais conjuntos
+// fichas: gcolab (Gestão › Colaboradores) · colabs: Escala do dia deste conjunto · outros: dos demais conjuntos
 // folha: grupos gravados da folha (planilha) · ini: 1º dia da folha · desligadoEm(p): data de desligamento ('' se ativo)
 // Volta [{ nome, turno, auto: true, pessoas: [...] }] na ordem do nome, com "sem líder" e "sem ficha" no fim.
 // Cada pessoa: { k, nome, mat, turma, obs, notas, ativ, desligado, turno, semFicha }. k é a chave dos lançamentos

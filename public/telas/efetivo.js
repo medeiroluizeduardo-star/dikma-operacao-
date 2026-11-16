@@ -1,5 +1,5 @@
-// Telas do Efetivo (escala e presença): cartões de ausências e balanço, Efetivo diário, check-in do turno,
-// lançamento da situação do dia com substituto, Dimensionamento e Balanço.
+// Telas do Efetivo (escala e presença): cartões de ausências e balanço, Escala do dia (antiga Escala do dia), check-in
+// do turno, lançamento da situação do dia com substituto, Mover de rota no dia, Dimensionamento e Balanço.
 import { SETS, AREA_S, ehAreaGeral, DAYS, DL, SITS, AUSENTE, AUSENCIA, pd, add, ddmm, weekLabel } from '../contas/cal.js';
 import { canonLideres, criarBusca as buscaNomes } from '../contas/planilhas-adm.js';
 import { abrirLancamento, JUS_CODS, pedirJus, textoJus, CODIGOS_LANC } from '../ui/presenca.js';
@@ -13,7 +13,8 @@ import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEdi
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
-import { escala, comTurma, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet } from '../calc/presenca.js';
+import { escala, comTurma, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet, movAprovDia, movDoDia, movDe, colabsDaNoDia } from '../calc/presenca.js';
+import { pedirMov, decidirMov, podePedir, podeAprovar, partesRota, rotaK } from '../contas/mover-rota.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile, trocarTela } from '../ui/shell.js';
 import { ocorrOpc, salvarJus, textoHE, horarioHE } from './horas-justificativas.js';
@@ -42,7 +43,7 @@ export function cardBalanco(area, ini) {
   const cs = colabsDa(area); const rs = rotasDa(area); const tk = DAYS.map((_, k) => add(ini, k) === TODAY);
   const esc7 = rs.map(r => escalaRota(r, ini));
   const dias = DAYS.map((_, k) => {
-    const dt = add(ini, k); const quadro = cs.filter(c => !desligadoNoDia(c, dt));
+    const dt = add(ini, k); const quadro = colabsDaNoDia(area, dt).filter(c => !desligadoNoDia(c, dt));
     const ct = contarDia(quadro, dt); const fe = ct.folga, fer = ct.ferias, aus = ct.ausentes;
     const mot = {}; for (const m of AUSENCIA) if (ct.porCodigo[m]) mot[m] = ct.porCodigo[m];
     const nec = esc7.reduce((n, e) => n + e.days[k].nec, 0);
@@ -212,9 +213,9 @@ export function turmaSheet(id) {
     DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`, 'operacao'); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
   });
 }
-// Abre Pessoas no turno (Presença do dia) no conjunto atual, já na rota (area|rota) quando vier de um link.
+// Abre Pessoas no turno (Escala do dia) no conjunto atual, já na rota (area|rota) quando vier de um link.
 export function irEscala(rota) {
-  // A Presença do dia fica na Operação (vem do Dimensionamento e do Balanço, na Gestão, no mesmo conjunto).
+  // A Escala do dia fica na Operação (vem do Dimensionamento e do Balanço, na Gestão, no mesmo conjunto).
   if (!setsDe(ME, 'operacao').includes(SK)) return;
   UI.esSet = SK; UI.modulo = 'operacao'; UI.modOpen = false; aplicarSet(); UI.view = 'esdia'; UI.eRota = rota || '*'; UI.eQ = ''; UI.confirm = null;
   salvarUI(); trocarTela(UI.view);
@@ -278,11 +279,11 @@ export function equipeCheckin(k = SK) {
 function cardCheckin() {
   const gs = equipeCheckin().filter(g => !travadoEf(DB.efDia(SK, TODAY, g.a))); if (!gs.length) return '';
   const tom = v => (v === 'FT' ? 'bad' : PARCIAL.has(v) ? 'warn' : AUSENCIA.has(v) ? 'neu' : 'ok');
-  return `<div class="card checkin"><header><h2>Check-in do turno</h2><p>${ddmm(TODAY)} · confirme quem está na equipe: presente, falta ou atraso</p></header><div class="body stackcol">${gs.map(g => {
+  return `<div class="card checkin"><header><h2>Quem falta confirmar</h2><p>${ddmm(TODAY)} · marque falta ou atraso de quem não veio e confirme os presentes</p></header><div class="body stackcol">${gs.map(g => {
     const [por, nome, hora, conta] = g.ck.split('|');
-    if (g.ck) return `<div class="ckok"><span class="pill ok">✓</span> <b>${PER_NOME[g.per]}</b> · ${AREA_S[g.a]} · check-in às ${esc(hora || '')} por ${esc(nome || '')}${conta ? ` · ${esc(conta)} presentes` : ''} <button class="btn ghost link" data-ckre="${esc(g.a)}|${g.per}">refazer</button></div>`;
+    if (g.ck) return `<div class="ckok"><span class="pill ok">✓</span> <b>${PER_NOME[g.per]}</b> · ${AREA_S[g.a]} · confirmado às ${esc(hora || '')} por ${esc(nome || '')}${conta ? ` · ${esc(conta)} presentes` : ''} <button class="btn ghost link" data-ckre="${esc(g.a)}|${g.per}">refazer</button></div>`;
     const pres = g.ps.filter(x => !AUSENCIA.has(x.v) && !PARCIAL.has(x.v)).length;
-    return `<div class="ckg"><div class="row-between"><b>${PER_NOME[g.per]} · ${AREA_S[g.a]}</b><span class="row-gap"><span class="muted small">${pres} de ${g.ps.length} presentes</span><button class="btn sm pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar</button></span></div><div class="plist">${g.ps.map(x => `<div class="pitem"><div class="minw"><div class="t">${esc(title(x.c.nome))}</div><div class="l">${esc(x.c.rota)}${turmaDe(x.c) ? ' · turma ' + esc(turmaDe(x.c)) : ''}</div></div><div class="bt ckbt"><button class="btn sm ${x.v === 'P' || x.v === 'HE' ? 'on ok' : ''}" data-ck="${esc(x.c.id)}|P" aria-pressed="${x.v === 'P' || x.v === 'HE'}">Presente</button><button class="btn sm ${x.v === 'ATR' ? 'on warn' : ''}" data-ck="${esc(x.c.id)}|ATR" aria-pressed="${x.v === 'ATR'}">Atraso</button><button class="btn sm ${x.v === 'FT' ? 'on bad' : ''}" data-ck="${esc(x.c.id)}|FT" aria-pressed="${x.v === 'FT'}">Falta</button>${!['P', 'HE', 'ATR', 'FT'].includes(x.v) ? `<span class="pill ${tom(x.v)}">${SIT_NOME[x.v] || x.v}</span>` : ''}</div></div>`).join('')}</div><button class="btn pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar check-in · ${pres} de ${g.ps.length} presentes</button></div>`;
+    return `<div class="ckg"><div class="row-between"><b>${PER_NOME[g.per]} · ${AREA_S[g.a]}</b><span class="row-gap"><span class="muted small">${pres} de ${g.ps.length} presentes</span><button class="btn sm pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar todos os presentes</button></span></div><div class="plist">${g.ps.map(x => `<div class="pitem"><div class="minw"><div class="t">${esc(title(x.c.nome))}</div><div class="l">${esc(x.c.rota)}${turmaDe(x.c) ? ' · turma ' + esc(turmaDe(x.c)) : ''}</div></div><div class="bt ckbt"><button class="btn sm ${x.v === 'P' || x.v === 'HE' ? 'on ok' : ''}" data-ck="${esc(x.c.id)}|P" aria-pressed="${x.v === 'P' || x.v === 'HE'}">Presente</button><button class="btn sm ${x.v === 'ATR' ? 'on warn' : ''}" data-ck="${esc(x.c.id)}|ATR" aria-pressed="${x.v === 'ATR'}">Atraso</button><button class="btn sm ${x.v === 'FT' ? 'on bad' : ''}" data-ck="${esc(x.c.id)}|FT" aria-pressed="${x.v === 'FT'}">Falta</button>${!['P', 'HE', 'ATR', 'FT'].includes(x.v) ? `<span class="pill ${tom(x.v)}">${SIT_NOME[x.v] || x.v}</span>` : ''}</div></div>`).join('')}</div><button class="btn pri" data-ckok="${esc(g.a)}|${g.per}">Confirmar todos os presentes · ${pres} de ${g.ps.length}</button></div>`;
   }).join('')}</div></div>`;
 }
 // Dia mostrado na Presença: o escolhido nos botões dos dias (dentro da semana do topo); se não houver, hoje (ou a segunda da semana).
@@ -316,11 +317,23 @@ export function vEsDia() {
   const porRota = !q.trim() && !porGrupo && !porGestao;
   let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' || porGrupo || porGestao ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
   if (porGestao && !q.trim()) cs = cs.filter(c => nivelG(c)); else if (porRota) cs = cs.filter(c => !nivelG(c));
+  // Mover de rota no dia: quem saiu fica na rota de origem com "foi para"; quem veio aparece também no destino ("veio da").
+  // Pendente: a pessoa segue na origem, marcada. Só no agrupar por rota a pessoa aparece nas duas rotas.
+  const movs = new Map(movDoDia(dia).map(v => [v.id, v]));
+  const ap = movAprovDia(dia);
+  cs = cs.map(c => { const v = movs.get(c.id); if (!v || v.de !== c.area + '|' + c.rota) return c; return v.st === 'aprovado' ? { ...c, _foi: v } : v.st === 'pendente' ? { ...c, _pend: v } : c; });
+  const comVeio = porRota;
+  if (comVeio) for (const v of ap.values()) {
+    const o = COLABS.find(x => x.id === v.id); const p = partesRota(v.para); if (!o || o.area + '|' + o.rota !== v.de || nivelG(o)) continue;
+    if (area !== 'TODAS' && p.area !== area) continue; if (UI.eRota !== '*' && UI.eRota !== v.para) continue;
+    cs.push({ ...o, area: p.area, rota: p.rota, _veio: v });
+  }
+  const conta = l => (comVeio ? l.filter(x => !x._foi) : l);
   const gk = c => (porPer ? grpPer(c) : porLider ? 'L|' + (lid(c) || '~') : porGestao && nivelG(c) ? 'G|' + nivelG(c) : c.area + '|' + c.rota);
   const NOME_G = { 1: 'COORDENAÇÃO', 2: 'SUPERVISÃO', 3: 'LIDERANÇA', 4: 'SEGURANÇA DO TRABALHO' };
   cs = cs.slice().sort((x, y) => porGestao ? (!nivelG(x) - !nivelG(y)) || (nivelG(x) && nivelG(y) ? nivelG(x) - nivelG(y) : (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999)) || x.nome.localeCompare(y.nome) : porGrupo ? gk(x).localeCompare(gk(y)) || x.nome.localeCompare(y.nome) : (ordem.get(x.area + '|' + x.rota) ?? 999) - (ordem.get(y.area + '|' + y.rota) ?? 999) || x.nome.localeCompare(y.nome));
   // rodapé: presentes / escalados de cada dia (a mesma conta do topo e dos grupos; férias e folga lançada saem do total)
-  const ctDia = contarDia(cs, dia);
+  const ctDia = contarDia(conta(cs), dia);
   const celula = c => {
     const dt = dia, k = kDia; const x = sitDia(c, dt); const v = x.v; const ed = editaDia(c.area, dt);
     const inf = DB.sitInfo(c.id + '|' + dt); const cob = !x.auto && AUS_COBRIVEL.has(v) ? inf.cob : ''; const cobre = cobrindo(c.id, dt);
@@ -340,19 +353,21 @@ export function vEsDia() {
     if (todas && !q.trim() && g !== ant) {
       ant = g; const doG = cs.filter(x => gk(x) === g);
       const rot = porPer ? `${g.slice(2)}${['1', '2'].includes(g[0]) ? ` · turma ${[...new Set(doG.map(x => turmaDe(x)).filter(Boolean))].sort().join(', ')}` : ''}` : porLider ? (g === 'L|~' ? 'Sem líder na ficha' : 'LÍDER ' + g.slice(2)) : g.startsWith('G|') ? NOME_G[g.slice(2)] : c.rota;
-      const ctG = contarDia(doG, dia);
+      const ctG = contarDia(conta(doG), dia);
       const ph = ctG ? ctG.presentes : null;
       const eh = ctG ? ctG.escalados : null; // folga e férias não contam como escalado
-      cab = `<tr class="grp-row"><th colspan="${nCol}">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porGrupo && !g.startsWith('G|') && !ehAreaGeral(c.area) ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porGrupo || porGestao ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' && !ehAreaGeral(c.area) ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${porPer && g[0] >= '4' ? `${doG.length} pessoa${doG.length === 1 ? '' : 's'}` : ph != null ? `<b class="gp ${!eh ? 'neu' : ph >= eh ? 'ok' : ph ? 'warn' : 'bad'}">${ph}/${eh}</b> presentes${ehHoje ? ' hoje' : ''}${(() => { if (porPer) return ''; const pp = ctG.periodo; return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${doG.length > eh ? ` · ${doG.length - eh} de folga` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
+      cab = `<tr class="grp-row"><th colspan="${nCol}">${recolhe ? `<button type="button" class="efg${fechado ? '' : ' on'}" data-efg="${esc(g)}" aria-expanded="${!fechado}"><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg><b>${esc(rot)}</b>${area === 'TODAS' && !porGrupo && !g.startsWith('G|') && !ehAreaGeral(c.area) ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}</button>` : porGrupo || porGestao ? `<b>${esc(rot)}</b>` : `<button class="btn ghost link" data-erota="${esc(g)}">${esc(c.rota)}</button>${area === 'TODAS' && !ehAreaGeral(c.area) ? ` <span class="muted">· ${AREA_S[c.area]}</span>` : ''}`}<span class="gcount">${porPer && g[0] >= '4' ? `${doG.length} pessoa${doG.length === 1 ? '' : 's'}` : ph != null ? `<b class="gp ${!eh ? 'neu' : ph >= eh ? 'ok' : ph ? 'warn' : 'bad'}">${ph}/${eh}</b> presentes${ehHoje ? ' hoje' : ''}${(() => { if (porPer) return ''; const pp = ctG.periodo; return pp.D + pp.N ? ` (${pp.D} dia · ${pp.N} noite)` : ''; })()}${conta(doG).length > eh ? ` · ${conta(doG).length - eh} de folga` : ''}${doG.length > conta(doG).length ? ` · ${doG.length - conta(doG).length} em outra rota` : ''}` : `${doG.length} pessoa${doG.length > 1 ? 's' : ''}`}</span></th></tr>`;
     }
     if (fechado) return cab;
-    return cab + `<tr><td class="fnome"><b>${esc(title(c.nome))}</b><div class="muted small">${q.trim() || porGrupo || (porGestao && nivelG(c)) ? `${esc(c.rota)}${area === 'TODAS' && !ehAreaGeral(c.area) ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${celula(c)}</tr>`;
+    const nm = podeMoverP(c, dia) ? `<button type="button" class="btn ghost link movnome" data-act="movPessoa" data-id="${esc(c.id)}" title="Mover de rota neste dia"><b>${esc(title(c.nome))}</b></button>` : `<b>${esc(title(c.nome))}</b>`;
+    return cab + `<tr><td class="fnome">${nm}${seloMov(c)}<div class="muted small">${q.trim() || porGrupo || (porGestao && nivelG(c)) ? `${esc(c.rota)}${area === 'TODAS' && !ehAreaGeral(c.area) ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${celula(c)}</tr>`;
   }).join('');
   // No celular a faixa do Efetivo fica compacta (4 à vista) e os turnos de hoje numa linha que desliza, para a lista subir.
   const faixaEf = miniEscala(area).replace('<div class="hojeturma">', '<div class="hojeturma scrollx">').replace('<div class="mini">', '<div class="mini compacta">');
   // Escolha do dia: os 7 dias da semana do topo, um toque por dia (hoje marcado)
   const diasNav = `<div class="body pt0 efdias" role="group" aria-label="Dia mostrado">${DAYS.map((d, k) => { const dt = add(UI.ini, k); return `<button type="button" class="efdia${dt === dia ? ' on' : ''}${dt === TODAY ? ' hoje' : ''}" data-act="efDia" data-d="${dt}" aria-pressed="${dt === dia}" aria-label="${DIA_NOME[k]} ${ddmm(dt)}${dt === TODAY ? ' (hoje)' : ''}"><span>${d.slice(0, 3)}</span><b>${dt.slice(8)}</b></button>`; }).join('')}</div>`;
-  return faixaEf + (ehHoje ? cardCheckin() : '') + `<div class="card efcard"><header><h2>Presença · ${DIA_NOME[kDia]}, ${ddmm(dia)}${ehHoje ? ' (hoje)' : ''}</h2><p>${area !== 'TODAS' && travadoEf(DB.efDia(SK, dia, area)) ? 'Dia validado pelo RH: somente leitura' : canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque na situação para mudar · ✓ = presente' : 'Somente leitura'}</p></header>
+  // Celular primeiro: quem falta confirmar, as rotas com falta de gente, os pedidos de movimentação; depois a lista e o envio.
+  return faixaEf + (ehHoje ? cardCheckin() : '') + cardFalta(area, dia, kDia) + cardMovs(area) + `<div class="card efcard"><header><h2>Escala do dia · ${DIA_NOME[kDia]}, ${ddmm(dia)}${ehHoje ? ' (hoje)' : ''}</h2><p>${area !== 'TODAS' && travadoEf(DB.efDia(SK, dia, area)) ? 'Dia validado pelo RH: somente leitura' : canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque na situação para mudar · ✓ = presente · toque no nome para mover de rota neste dia' : 'Somente leitura'}</p></header>
   ${diasNav}${linhaEf(area, dia)}
   <div class="body lbar efbar efbar1">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida" style="margin-left:auto">${I.dl} Exportar semana</button>` : ''}</div>
   ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
@@ -361,6 +376,75 @@ export function vEsDia() {
   ${cs.length ? linhas : `<tr><td colspan="${nCol}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
   </tbody>${cs.length ? `<tfoot><tr><th colspan="${nCol - 1}">Presentes</th><td class="num"><b class="${ctDia.presentes < ctDia.escalados ? 'menos' : ctDia.escalados ? 'cheio' : ''}">${ctDia.presentes}</b><span class="muted">/${ctDia.escalados}</span></td></tr></tfoot>` : ''}</table></div></div>${cardEf(area, dia)}`;
 }
+/* ---------------- MOVER DE ROTA NO DIA ---------------- */
+// Vale só naquele dia e não muda o cadastro (contas/mover-rota.js; campo mov da presença do mês). O líder pede para
+// uma rota da área dele e o supervisor da área aprova; para outra área, o supervisor pede e o administrador aprova.
+// Até aprovar, a pessoa segue na rota de origem. Trava quando o RH valida o dia (da área de origem ou de destino).
+const quemMov = () => ({ uid: ME.uid, nome: title(ME.nome || ME.login || ''), perfil: perfil('operacao'), areas: areasSitDe(SK), admin: isAdmin() });
+const livreMov = (a, dia) => !travadoEf(DB.efDia(SK, dia, a));
+const podeMoverP = (c, dia) => !!ME && livreMov(c.area, dia) && (podePedir(quemMov(), c.area, c.area) || !!movDe(c.id, dia));
+const nomeRota = (k, comArea) => { const p = partesRota(k); return comArea ? `${p.rota} · ${AREA_S[p.area] || p.area}` : p.rota; };
+function seloMov(c) {
+  if (c._veio) return ` ${etiqueta('veio da ' + nomeRota(c._veio.de, c._veio.ao !== c._veio.ap), 'info')}`;
+  if (c._foi) return ` ${etiqueta('foi para ' + nomeRota(c._foi.para, c._foi.ao !== c._foi.ap), 'atencao')}`;
+  if (c._pend) return ` ${etiqueta('movimentação pendente · ' + nomeRota(c._pend.para, c._pend.ao !== c._pend.ap), 'atencao')}`;
+  return '';
+}
+// Rotas com falta de gente no dia: necessário × disponível do Dimensionamento (já com as movimentações aprovadas).
+function cardFalta(area, dia, k) {
+  if (k < 0) return '';
+  const fal = rotasDa(area).filter(r => r.rota !== 'GESTÃO').map(r => ({ r, d: escalaRota(r, UI.ini).days[k] })).filter(x => x.d.prog > 0 && x.d.disp < x.d.nec).sort((a, b) => (a.d.disp - a.d.nec) - (b.d.disp - b.d.nec));
+  if (!fal.length) return `<div class="card efalta"><div class="body row-gap">${etiqueta('Todas as rotas com gente suficiente', 'ok')}<span class="muted small">${ddmm(dia)} · necessário × disponível do Dimensionamento</span></div></div>`;
+  return `<div class="card efalta"><header><h2>Rotas com falta de gente</h2><p>${ddmm(dia)} · disponível / necessário · toque para ver a rota e mover alguém</p></header><div class="body stackcol">${fal.map(({ r, d }) => `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(r.rota)}</b>${area === 'TODAS' ? `<span class="muted small">${esc(AREA_S[r.area] || r.area)}</span>` : ''}${etiqueta(`faltam ${d.nec - d.disp}`, 'critico')}</div><div class="muted small">${d.disp} disponíve${d.disp === 1 ? 'l' : 'is'} de ${d.nec} necessário${d.nec === 1 ? '' : 's'} · ${d.prog} atividade${d.prog === 1 ? '' : 's'}</div></div><button type="button" class="btn sm" data-erota="${esc(r.area + '|' + r.rota)}">Ver a rota</button></div>`).join('')}</div></div>`;
+}
+// Pedidos pendentes da semana: quem aprova vê Aprovar e Recusar; quem pediu vê os seus.
+function cardMovs(area) {
+  if (!ME) return '';
+  const q = quemMov(); const dias = DAYS.map((_, k) => add(UI.ini, k));
+  const ps = dias.flatMap(d => movDoDia(d)).filter(v => v.st === 'pendente' && (area === 'TODAS' || v.ao === area || v.ap === area) && (podeAprovar(q, v.ao, v.ap) || v.por === ME.uid));
+  if (!ps.length) return '';
+  const lin = v => { const c = COLABS.find(x => x.id === v.id); const ok = podeAprovar(q, v.ao, v.ap) && livreMov(v.ao, v.dt) && livreMov(v.ap, v.dt); const k = v.id + '|' + v.dt;
+    return `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(c ? title(c.nome) : v.id)}</b>${etiqueta(ddmm(v.dt), 'neutro')}</div><div class="muted small">${esc(nomeRota(v.de, v.ao !== v.ap))} → <b>${esc(nomeRota(v.para, v.ao !== v.ap))}</b> · pedido por ${esc(curto(v.nome))}${v.ao !== v.ap ? ' · outra área: o administrador aprova' : ''}</div></div><div class="row-gap">${ok ? `<button type="button" class="btn sm pri" data-act="movAprovar" data-k="${esc(k)}">Aprovar</button><button type="button" class="btn sm" data-act="movRecusar" data-k="${esc(k)}">Recusar</button>` : v.por === ME.uid ? `<button type="button" class="btn sm ghost" data-act="movCancelar" data-k="${esc(k)}">Cancelar pedido</button>` : ''}</div></div>`; };
+  return `<div class="card efmov"><header><h2>Movimentações pendentes</h2><p>Até aprovar, a pessoa segue na rota de origem</p></header><div class="body stackcol">${ps.map(lin).join('')}</div></div>`;
+}
+function gravarMov(v, msg, ok) {
+  const c = COLABS.find(x => x.id === v.id);
+  DB.setMov(v.id + '|' + v.dt, v); DB.log(`${c ? title(c.nome) : v.id} · ${ddmm(v.dt)} · ${msg}: ${nomeRota(v.de, true)} → ${nomeRota(v.para, true)}`, 'operacao'); toast(ok); render();
+}
+function tentarMov(f) { try { f(); } catch (e) { toast(e.message); } }
+const agoraISO = () => new Date().toISOString();
+acoes.movPessoa = (t, d) => {
+  const c = COLABS.find(x => x.id === d.id); if (!c) return; const dia = diaEf(); const k = DAYS.findIndex((_, j) => add(UI.ini, j) === dia);
+  if (!livreMov(c.area, dia)) return toast('Este dia já foi validado pelo RH. Para mudar, o administrador reabre o dia.');
+  const q = quemMov(); const atual = movDe(c.id, dia); const ativo = atual && ['pendente', 'aprovado'].includes(atual.st) ? atual : null;
+  const opts = [];
+  if (ativo && ativo.st === 'pendente' && podeAprovar(q, ativo.ao, ativo.ap)) opts.push({ t: 'Aprovar a movimentação', d: `Para ${nomeRota(ativo.para, ativo.ao !== ativo.ap)} · pedido por ${curto(ativo.nome)}`, v: 'aprovar' }, { t: 'Recusar a movimentação', v: 'recusar' });
+  if (ativo && (podeAprovar(q, ativo.ao, ativo.ap) || (ativo.st === 'pendente' && ativo.por === ME.uid))) opts.push({ t: ativo.st === 'aprovado' ? 'Voltar para a rota de origem' : 'Cancelar o pedido', d: ativo.st === 'aprovado' ? `Hoje em ${nomeRota(ativo.para, ativo.ao !== ativo.ap)} · volta para ${nomeRota(ativo.de)}` : `Pendente para ${nomeRota(ativo.para, ativo.ao !== ativo.ap)}`, v: 'cancelar' });
+  const rota = r => { const x = k >= 0 ? escalaRota(r, UI.ini).days[k] : null; const falta = x && x.prog > 0 && x.disp < x.nec;
+    return { t: r.rota + (r.area !== c.area ? ` · ${AREA_S[r.area] || r.area}` : ''), d: x ? `${x.disp} disponíve${x.disp === 1 ? 'l' : 'is'} de ${x.nec} necessário${x.nec === 1 ? '' : 's'}${falta ? ' · falta gente' : ''}` : '', v: 'r:' + rotaK(r.area, r.rota), cur: ativo && ativo.para === rotaK(r.area, r.rota) }; };
+  const mesma = podePedir(q, c.area, c.area) ? rotasDa(c.area).filter(r => r.rota !== c.rota && r.rota !== 'GESTÃO') : [];
+  const outras = SETS[SK].areas.filter(a => a !== c.area && podePedir(q, c.area, a) && livreMov(a, dia)).flatMap(a => rotasDa(a).filter(r => r.rota !== 'GESTÃO'));
+  mesma.forEach((r, i) => opts.push({ ...rota(r), sec: i ? '' : `Rotas de ${AREA_S[c.area] || c.area}` }));
+  outras.forEach((r, i) => opts.push({ ...rota(r), sec: i ? '' : 'Outras áreas (o administrador aprova)' }));
+  if (!opts.length) return toast('Você não tem rotas para onde mover esta pessoa.');
+  const aprova = podeAprovar(q, c.area, c.area);
+  sheet(`Mover ${curto(title(c.nome))} · ${ddmm(dia)}`, `Hoje na rota ${esc(c.rota)}. Vale só neste dia e não muda o cadastro.${aprova ? '' : ' O supervisor da área aprova.'}`, opts, o => tentarMov(() => {
+    if (o.v === 'aprovar') return gravarMov(decidirMov(ativo, 'aprovado', { quem: q, em: agoraISO() }), 'movimentação aprovada', 'Movimentação aprovada');
+    if (o.v === 'recusar') return acoes.movRecusar(null, { k: c.id + '|' + dia });
+    if (o.v === 'cancelar') return gravarMov(decidirMov(ativo, 'cancelado', { quem: q, em: agoraISO() }), ativo.st === 'aprovado' ? 'voltou para a rota de origem' : 'pedido cancelado', ativo.st === 'aprovado' ? 'Voltou para a rota de origem' : 'Pedido cancelado');
+    const v = pedirMov(atual, { c, dt: dia, para: o.v.slice(2), quem: q, em: agoraISO() });
+    gravarMov(v, v.st === 'aprovado' ? 'movida' : 'pediu movimentação', v.st === 'aprovado' ? `${curto(title(c.nome))} vai para ${nomeRota(v.para)} neste dia` : 'Pedido enviado: o supervisor aprova');
+  }));
+};
+const movDaChave = key => { const i = key.lastIndexOf('|'); return movDe(key.slice(0, i), key.slice(i + 1)); };
+acoes.movAprovar = (t, d) => tentarMov(() => gravarMov(decidirMov(movDaChave(d.k), 'aprovado', { quem: quemMov(), em: agoraISO() }), 'movimentação aprovada', 'Movimentação aprovada'));
+acoes.movCancelar = (t, d) => tentarMov(() => gravarMov(decidirMov(movDaChave(d.k), 'cancelado', { quem: quemMov(), em: agoraISO() }), 'pedido cancelado', 'Pedido cancelado'));
+acoes.movRecusar = (t, d) => {
+  const v = movDaChave(d.k); if (!v) return;
+  formSheet('Recusar a movimentação', `${esc(nomeRota(v.de, v.ao !== v.ap))} → ${esc(nomeRota(v.para, v.ao !== v.ap))} · ${ddmm(v.dt)}`, '<label class="sel"><span>Motivo</span><input class="in" id="movMot" maxlength="200" placeholder="Ex.: a rota de origem também está sem gente"></label>', 'Recusar', async () => {
+    gravarMov(decidirMov(v, 'recusado', { quem: quemMov(), em: agoraISO(), mot: $('movMot').value }), 'movimentação recusada', 'Movimentação recusada');
+  });
+};
 /* ---------------- EFETIVO DO DIA (envio ao RH) ---------------- */
 // O líder ou supervisor preenche a Presença e envia o efetivo de cada área; o RH · Administrativo valida ou devolve na
 // Frequência. O dia abre sozinho (qualquer dia até hoje). Validado, o dia fica travado aqui até o administrador reabrir.

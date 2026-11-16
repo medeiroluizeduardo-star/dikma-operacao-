@@ -1,11 +1,12 @@
 // Tela Apontar: o líder marca o que foi feito no dia (e a justificativa do que não foi).
 import { AREA_S, DAYS, MOTIVOS, pd, add, ddmm } from '../contas/cal.js';
 import { DB, TODAY, esc, title, $ } from '../nucleo/base.js';
-import { PL, AREAS, UI, admDe, myAreas, myArea, areaScope, canEdit, podeForaProg } from '../nucleo/estado.js';
+import { PL, COLABS, AREAS, UI, admDe, myAreas, myArea, areaScope, canEdit, podeForaProg } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { st, feriadoDe, rotasDa, localChange, setSt, incluirFora, tirarFora, escolherFora, areasAprov, aprovDe, estAprov, gravarApont, CHIP, ST_NOME } from '../calc/atividades.js';
-import { curto } from '../calc/presenca.js';
+import { curto, movDoDia } from '../calc/presenca.js';
+import { partesRota } from '../contas/mover-rota.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, desenharLogo } from '../ui/shell.js';
 import { precisaFotos, passoFotos, passoFotosCel, montarFotos, seloFotos, verFotosCel, cfgF } from './fotos.js';
@@ -57,6 +58,10 @@ export function vApontar() {
   // extras que o supervisor devolveu (saíram da lista): o líder vê o motivo e registra de novo se for o caso
   const exDev = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && x.p.rota === UI.aRota && doc.d[x.i][k] === '_' && estAprov(doc, x.i, k) === 'dev');
   if (exDev.length) h += `<p class="aviso">${exDev.map(x => { const a = aprovDe(doc, x.p.id, k) || {}; return `Extra devolvida: <b>${esc(x.p.ativ)}</b> — ${esc(a.mot || '')}${a.nome ? ` (${esc(title(curto(a.nome)))})` : ''}`; }).join('<br>')}</p>`;
+  // Mover de rota no dia (Escala do dia): quem veio para esta rota e quem saiu dela neste dia (só as aprovadas).
+  { const dt = add(UI.ini, k), rk = area + '|' + UI.aRota; const nm = v => { const c = COLABS.find(x => x.id === v.id); return c ? title(curto(c.nome)) : v.id; };
+    const mv = movDoDia(dt).filter(v => v.st === 'aprovado' && (v.para === rk || v.de === rk));
+    if (mv.length) h += `<p class="aviso">${mv.map(v => v.para === rk ? `<b>${esc(nm(v))}</b> veio da ${esc(partesRota(v.de).rota)} neste dia` : `<b>${esc(nm(v))}</b> foi para a ${esc(partesRota(v.para).rota)} neste dia`).join('<br>')}</p>`; }
   h += '<div class="mlist">';
   for (const { i, p } of items) {
     const c = st(doc, i, k); const raw = doc.d[i][k]; const m = doc.m[p.id + '|' + k];

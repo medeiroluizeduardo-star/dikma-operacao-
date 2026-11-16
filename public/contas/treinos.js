@@ -82,7 +82,7 @@ export function resumoTreinos(lista, hoje) {
   return r;
 }
 
-// ---- Divisão por Pátio e Bateria e pelas áreas (as mesmas da Presença do dia, contas/cal.js) ----
+// ---- Divisão por Pátio e Bateria e pelas áreas (as mesmas da Escala do dia, contas/cal.js) ----
 const chaveArea = s => chaveTipo(String(s ?? '').replace(/\b(DO|DA|DE|DOS|DAS)\b/gi, ' '));
 const TODAS_AREAS = SET_KEYS.flatMap(k => areasDoSet(k));
 // Nome da área na planilha ('FINAL PATIO ', 'Preparação') → área do sistema ('FINAL DO PÁTIO'); sem par, o texto limpo.
