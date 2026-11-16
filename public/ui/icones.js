@@ -63,6 +63,7 @@ Object.assign(I, {
   presenca: svg('<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.3-5.8 6.5-5.8 1.5 0 2.8.4 3.9 1.2"/><path d="M15 18l2 2 4-4.5"/>'),
   nota: svg('<path d="M12 21H6V3h8l4 4v3"/><path d="M14 3v4h4"/><path d="M14 21l.8-3.2 4.7-4.7 2.4 2.4-4.7 4.7z"/>'),
   organograma: svg('<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>'),
+  contrato: svg('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M8.5 13l2.5 2.5 4.5-5"/>'),
   balanca: svg('<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7l-3 6h6zM19 7l-3 6h6z"/>'),
   ficha: svg('<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="2"/><path d="M5.5 16c.5-1.6 1.6-2.4 3-2.4s2.5.8 3 2.4M14 10h4M14 14h4"/>'),
   estrela: svg('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/>'),

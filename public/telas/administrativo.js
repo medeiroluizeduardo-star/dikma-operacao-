@@ -158,7 +158,7 @@ export function criarAdministrativo(X) {
     if (doc === undefined) return '<div class="card skel"><i></i><i></i><i></i></div>';
     if (!doc) {
       const ant = compDoc(conj, compMais(comp, -1));
-      return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri" data-a="abrirComp">Abrir a folha com os grupos de ${periodoComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
+      return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>${ant && pode() ? `<button class="btn pri quebra" data-a="abrirComp">Abrir a folha com os grupos de ${periodoComp(compMais(comp, -1))}</button>` : ant === null ? 'Sem folha anterior. O administrador importa as planilhas em Importar planilhas.' : ''}</div></div>`;
     }
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj); const fRH = funcaoRH();
     // No celular a folha mostra uma semana por vez (os 30 dias não cabem): ‹ › troca a semana dentro da competência.
