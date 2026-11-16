@@ -55,6 +55,8 @@ export function decodificar(v, F, db) {
   return o;
 }
 
+// Nome do arquivo de uma coleção no pacote da cópia: subcoleção painel/UID/tasks vira painel~UID~tasks.
+export const arquivoDe = c => c.replaceAll('/', '~');
 export const gravarGz = (arq, obj) => fs.writeFileSync(arq, zlib.gzipSync(JSON.stringify(obj)));
 export const lerGz = arq => JSON.parse(zlib.gunzipSync(fs.readFileSync(arq)).toString('utf8'));
 export const tamanho = b => (b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
