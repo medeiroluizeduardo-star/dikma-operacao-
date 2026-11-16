@@ -13,6 +13,7 @@ import { vApontar } from '../telas/apontar.js';
 import { vQuedaZero, vQzPainel } from '../telas/queda-zero.js';
 import { fecharSitPop, vEsDim, vEsBal, vEsDia } from '../telas/efetivo.js';
 import { vEsJus, vEsHe } from '../telas/horas-justificativas.js';
+import { vMedicao } from '../telas/medicao.js';
 import { problemaSenha } from '../contas/senha.js';
 import { AV, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
 import { vHistorico } from '../telas/historico.js';
@@ -137,7 +138,7 @@ function renderTela() {
   renderNav(); renderTop();
   const needWeeks = filtrosDe(v).mes || !!aba(v).mesDados;
   if (needWeeks && !DB.cache.monthsLoaded.has(UI.mes)) { pintar('view', M.ESQUELETO); return; }
-  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: () => modulo('RE').vResumo(), etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: comCF(m => m.vPlano()), gerador: comCF(m => m.vGerador()), config: comCF(m => m.vConfig()), esdia: vEsDia, esdim: vEsDim, esbal: vEsBal, quedazero: vQuedaZero, qpainel: vQzPainel }[v];
+  const fn = { painel: vPainel, prog: vProg, apontar: vApontar, aprovar: vAprovar, pend: vPend, imprimir: vImprimir, causas: vCausas, resumo: () => modulo('RE').vResumo(), etiquetas: vEtiquetas, eshe: vEsHe, esjus: vEsJus, plano: comCF(m => m.vPlano()), gerador: comCF(m => m.vGerador()), config: comCF(m => m.vConfig()), esdia: vEsDia, esdim: vEsDim, esbal: vEsBal, quedazero: vQuedaZero, qpainel: vQzPainel, medicao: vMedicao }[v];
   pintar('view', fn ? fn() : '');
   afterRender();
 }
@@ -327,7 +328,7 @@ function renderTop() {
   if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && setsDe(ME).length !== 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
-  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
+  const sub = { medicao: `Real × contratado por função, horas extras e faltas do mês · ${SETS[SK].nome}`, esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Presença de cada pessoa, dia a dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
   const comFiltro = !!v.filtros && !(v.id === 'resumo' && resTipo() === 'escala'); // a Escala das áreas tem o filtro de área dela // filtros declarados na aba (VIEWS, navegacao.js)
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
