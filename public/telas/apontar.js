@@ -103,7 +103,7 @@ export function cellMenu(doc, i, k) {
     : [{ t: 'Realizado', v: 'R', ic: chipIc('R'), cur: raw === 'R' }, { t: 'Não realizado', d: 'Pede a justificativa', v: 'N', ic: chipIc('N'), cur: raw === 'N' }, { t: 'Programado', d: c === 'A' ? 'Continua atrasado' : 'Sem apontamento', v: 'P', ic: chipIc(c === 'A' ? 'A' : 'P'), cur: raw === 'P' },
       ...(fp && raw === 'P' && pf ? [{ t: 'Tirar da programação', d: 'Foi incluída fora da programação', v: 'rmFP', ic: chipIc('X') }] : [])];
   const nf = fotosDaCel(doc, p.id, k);
-  if (nf || ('RNE'.includes(raw) && exigeFoto({ ...cfgF(), obrig: true }, raw, !!fp))) o.push({ t: nf ? `Ver as fotos (${nf})` : 'Adicionar foto', d: nf ? 'Miniaturas; toque para ver grande' : 'Esta atividade está sem foto', v: 'FOTOS', ic: `<span class="chip P fotoic">${I.cam}</span>`, larga: true });
+  if (nf || 'RNE'.includes(raw)) o.push({ t: nf ? `Ver as fotos (${nf})` : 'Adicionar foto', d: nf ? 'Miniaturas; toque para ver grande' : exigeFoto(cfgF(), raw, !!fp) ? 'Esta atividade está sem foto' : 'Opcional: se quiser, comprove com foto', v: 'FOTOS', ic: `<span class="chip P fotoic">${I.cam}</span>`, larga: true });
   sheet(p.ativ, fp ? sub + '<br>Incluída fora da programação' : sub, o, x => (x.v === 'rmFP' ? tirarFora(doc, i, k) : x.v === 'FOTOS' ? verFotosCel(doc, i, k) : apply(doc, i, k, x.v)));
 }
 // Justificativa de por que a atividade não foi feita: um motivo da lista ou escrito pela pessoa (obrigatória).
