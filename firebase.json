@@ -12,12 +12,12 @@
     "redirects": [
       {
         "source": "/painel",
-        "destination": "https://gestao-eduardo.web.app/",
+        "destination": "/",
         "type": 301
       },
       {
         "source": "/painel/**",
-        "destination": "https://gestao-eduardo.web.app/",
+        "destination": "/",
         "type": 301
       }
     ],
