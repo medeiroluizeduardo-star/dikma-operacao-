@@ -1608,6 +1608,11 @@ test('Administração › Documentos e OMs (documentos/{id}): administrador, Ges
   await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { validade: '01/12/2026' })), 'data fora do formato');
   await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { outra: 1 })), 'campo fora da lista');
   await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { obs: 'a'.repeat(501) })), 'observação longa demais');
+  await assertSucceeds(setDoc0(ref('admin', 'dc5'), ok('admin', { tipo: 'OM', rev: '', area: 'BATERIA 2', local: 'Correia TC-03', emitente: 'Operação', prio: 'alta', period: null, aviso: 60 })), 'OM com os campos novos');
+  await assertSucceeds(setDoc0(ref('admin', 'dc6'), ok('admin', { tipo: 'ASO', colab: 'Pessoa', mat: '123', period: 12, aviso: 30 })), 'ASO com colaborador e periodicidade');
+  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { prio: 'urgentissima' })), 'prioridade fora da lista');
+  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { period: 7 })), 'periodicidade fora da lista');
+  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { aviso: 45 })), 'aviso fora da lista');
   await assertFails(setDoc0(ref('admin', 'dc4'), { ...ok('admin'), atualizadoPor: 'geCoord' }), 'sem a própria marca');
   await assertFails(deleteDoc(ref('supPatio')), 'supervisor não apaga');
   await assertSucceeds(deleteDoc(ref('geGestorSo')), 'Gestor da Gestão apaga');
