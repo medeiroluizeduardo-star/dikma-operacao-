@@ -78,6 +78,7 @@ import {
   getMessaging, getToken, deleteToken, mensagensSuportadas, initializeAppCheck, ReCaptchaEnterpriseProvider
 } from '../vendor/firebase.js';
 import { CHAVE_SITE } from './appcheck.js';
+import { ouvirIncremental as ouvirInc } from './incremental.js';
 import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaArea, today, addMonth, add, weekOf, monthOfWeek } from '../contas/cal.js';
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
@@ -174,7 +175,8 @@ export async function start(callbacks) {
     try { initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(CHAVE_SITE), isTokenAutoRefreshEnabled: true }); } catch (e) { console.warn('App Check não ligou', e); }
   }
   auth = getAuth(app);
-  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  // Cópia do aparelho de até 200 MB (o padrão, 40 MB, podia descartar Treinamentos e Férias, que vêm só do que mudou).
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager(), cacheSizeBytes: 200 * 1024 * 1024 }) });
   getRedirectResult(auth).catch(e => cb.onError && cb.onError(e));
   onAuthStateChanged(auth, u => {
     stopAll();
@@ -278,6 +280,11 @@ export async function alterarSenha(atual, nova) {
   await updatePassword(u, nova);
 }
 
+// Coleções grandes que quase não mudam (Treinamentos e Férias): só o que mudou vem do servidor (nucleo/incremental.js).
+const ouvirIncremental = (col, fn, onErr) => ouvirInc({ onSnapshot, collection, query, where }, db, col, `dikma-inc|${cfg && cfg.projectId}|${me && me.uid}|${col}`, fn, onErr);
+// Marca como apagado (os outros aparelhos ficam sabendo pelo atualizadoEm).
+const marcaApagado = () => ({ apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
+
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   // Todos: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
@@ -316,7 +323,7 @@ function startData() {
   // Indicadores do contrato (Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses (contas/contrato.js).
   cache.ind = { cfg: {}, loaded: false };
   if (temIndU(me)) on(doc(db, 'config', 'indicadores'), s => { cache.ind = { cfg: s.exists() ? s.data() : {}, loaded: true }; changed(); });
-  if (veTreinos(me) || temIndU(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
+  if (veTreinos(me) || temIndU(me)) dataSubs.push(ouvirIncremental('treinos', (l, ok) => { cache.treinos = l; cache.tLoaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
@@ -343,7 +350,7 @@ export function iniciarAdministracao() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   if (!admOn) {
     cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
-    on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; changed(); });
+    dataSubs.push(ouvirIncremental('ferias', (l, ok) => { cache.adm.ferias = l; cache.adm.fLoaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
   }
   const comp = competenciaDe(today());
   for (const k of SET_KEYS) on(doc(db, 'freqcomp', k + '|' + comp), s => { cache.adm.comps[k + '|' + comp] = s.exists() ? s.data() : null; changed(); });
@@ -833,7 +840,7 @@ function startAdm(on) {
   cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], rhLoaded: false };
   fichasRH = {};
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
-  on(collection(db, 'ferias'), qs => { cache.adm.ferias = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.adm.fLoaded = true; cache.adm.loaded = true; changed(); });
+  dataSubs.push(ouvirIncremental('ferias', (l, ok) => { cache.adm.ferias = l; cache.adm.fLoaded = ok; cache.adm.loaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
   on(collection(db, 'gcolab'), qs => { fichasRH = Object.fromEntries(qs.docs.map(d => [d.id, d.data().itens || []])); cache.adm.rh = Object.values(fichasRH).flat(); cache.adm.rhLoaded = true; changed(); });
   for (const k of SET_KEYS) if (freqDe(me, k)) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
@@ -887,7 +894,7 @@ export async function feriasSalvar(id, dados) {
   track(setDoc(ref, x, { merge: true })); gravarResumoFerias();
   return ref.id;
 }
-export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); const b = writeBatch(db); b.delete(doc(db, 'ferias', id)); track(b.commit()); gravarResumoFerias(); }
+export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); track(setDoc(doc(db, 'ferias', id), marcaApagado(), { merge: true })); gravarResumoFerias(); }
 // Treinamentos, NRs e ASO (RH): um documento por treinamento feito. A conta da situação fica em contas/treinos.js.
 export function treinoSalvar(id, dados) {
   const ref = id ? doc(db, 'treinos', id) : doc(collection(db, 'treinos'));
@@ -896,7 +903,7 @@ export function treinoSalvar(id, dados) {
   track(setDoc(ref, { ...dados, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
   return ref.id;
 }
-export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); const b = writeBatch(db); b.delete(doc(db, 'treinos', id)); track(b.commit()); }
+export function treinoExcluir(id) { cache.treinos = cache.treinos.filter(t => t.id !== id); track(setDoc(doc(db, 'treinos', id), marcaApagado(), { merge: true })); }
 // Importar treinamentos de uma planilha: lotes de até 400; espera o servidor confirmar cada lote.
 // Item com id: atualiza o registro que já existe (o "não se aplica" da pessoa, que é um registro só).
 export async function treinosImportar(itens) {
@@ -924,11 +931,11 @@ export async function admImportar({ comps, presenca, ferias, substituirFerias })
     }
   }
   if (ferias) {
-    if (substituirFerias) for (let i = 0; i < cache.adm.ferias.length; i += 400) { const b = writeBatch(db); cache.adm.ferias.slice(i, i + 400).forEach(f => b.delete(doc(db, 'ferias', f.id))); await track(b.commit()); }
+    if (substituirFerias) for (let i = 0; i < cache.adm.ferias.length; i += 400) { const b = writeBatch(db); cache.adm.ferias.slice(i, i + 400).forEach(f => b.set(doc(db, 'ferias', f.id), marcaApagado(), { merge: true })); await track(b.commit()); }
     const novas = [];
     for (let i = 0; i < ferias.length; i += 400) {
       const b = writeBatch(db);
-      for (const f of ferias.slice(i, i + 400)) { const r = doc(collection(db, 'ferias')); b.set(r, { ...f, importadoEm: serverTimestamp() }); novas.push({ id: r.id, ...f }); }
+      for (const f of ferias.slice(i, i + 400)) { const r = doc(collection(db, 'ferias')); b.set(r, { ...f, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp() }); novas.push({ id: r.id, ...f }); }
       await track(b.commit());
     }
     cache.adm.ferias = substituirFerias ? novas : [...cache.adm.ferias, ...novas];

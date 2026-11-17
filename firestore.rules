@@ -719,7 +719,7 @@ service cloud.firestore {
       return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'setor', 80) && fTxt(d, ch, 'funcao', 120) && fTxt(d, ch, 'horario', 40)
         && fDia(d, ch, 'inicio') && fDia(d, ch, 'termino') && fDia(d, ch, 'retorno') && fDia(d, ch, 'limite') && fDia(d, ch, 'admissao')
         && fNum(d, ch, 'dias', 0, 365) && fTxt(d, ch, 'substituto', 300) && fTxt(d, ch, 'obs', 500) && fTxt(d, ch, 'aba', 120)
-        && fTxt(d, ch, 'mesPlanejado', 7) && d.keys().size() <= 30; }
+        && fTxt(d, ch, 'mesPlanejado', 7) && fSim(d, ch, 'apagado') && d.keys().size() <= 30; }
     match /ferias/{id} {
       allow read: if acAdm() || indAlgum();
       allow create: if admEdita() && request.resource.data.get('nome', '') is string && request.resource.data.get('nome', '').size() > 0 && feriasOk(request.resource.data, novos());
@@ -735,7 +735,7 @@ service cloud.firestore {
       return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'tipo', 120)
         && fTxt(d, ch, 'setor', 80) && fTxt(d, ch, 'area', 80) && fTxt(d, ch, 'conj', 10) && fTxt(d, ch, 'supervisor', 150) && fTxt(d, ch, 'turno', 40)
         && fTxt(d, ch, 'funcao', 120) && fDia(d, ch, 'admissao') && fDia(d, ch, 'realizado') && fDia(d, ch, 'validade') && fTxt(d, ch, 'obs', 500)
-        && fSim(d, ch, 'na') && fLista(d, ch, 'naTipos', 200) && d.keys().size() <= 30; }
+        && fSim(d, ch, 'na') && fSim(d, ch, 'apagado') && fLista(d, ch, 'naTipos', 200) && d.keys().size() <= 30; }
     match /treinos/{id} {
       allow read: if treinoLe();
       allow create: if treinoEdita() && request.resource.data.tipo is string && request.resource.data.nome is string

@@ -71,9 +71,17 @@ for (const p of arquivos) {
   const n = nomesNoTexto(fs.readFileSync(p, 'utf8'));
   if (n) problemas.push(`${rel}: tem ${n} nome(s) real(is) de colaborador`);
 }
+// A lista de arquivos guardados pelo service worker (SHELL em public/sw.js): um arquivo que não existe faz a instalação
+// da versão nova falhar inteira, e os aparelhos ficam presos na versão antiga (aconteceu de 10/11 a 17/11/2026).
+{
+  const m = fs.readFileSync(path.join(pub, 'sw.js'), 'utf8').match(/const SHELL = (\[[^\]]*\])/);
+  const shell = m ? JSON.parse(m[1].replace(/'/g, '"')) : null;
+  if (!shell) problemas.push('sw.js: não achei a lista SHELL');
+  else for (const f of shell) if (!fs.existsSync(path.join(pub, f))) problemas.push(`sw.js: "${f}" está no SHELL mas não existe (a versão nova não instalaria nos aparelhos)`);
+}
 if (problemas.length) {
   for (const x of problemas) console.error('::error::' + x);
-  console.error('O site não pode ser publicado com dados pessoais na pasta public/.');
+  console.error('O site não pode ser publicado assim (dados pessoais na pasta public/ ou arquivo faltando no SHELL).');
   process.exit(1);
 }
 console.log(`OK: ${arquivos.length} arquivos do site conferidos contra ${resumos.size} nomes; nenhum dado pessoal.`);
