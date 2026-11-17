@@ -1857,3 +1857,21 @@ button.tr-it:hover{border-color:var(--marca)}
 .tr-enc.feita{grid-template-columns:1fr auto;font-size:13px}
 .tr-txt{white-space:pre-wrap;font:inherit;font-size:13px;margin:0}
 @media (max-width:640px){.tr-it{flex-wrap:wrap}.tr-it-s{min-width:0}.tr-it-t{flex-basis:100%;order:2}.tr-w5{order:1;margin-left:auto}.tr-enc{grid-template-columns:1fr 1fr}.tr-enc input:first-child{grid-column:1/-1}.tr-planos{grid-template-columns:1fr}.tr-barra .sel{min-width:0;flex:1 1 45%}}
+/* Administração › Processos e rotina (telas/processos.js) */
+.pr-it{cursor:default}
+.pr-chk{flex:0 0 28px;width:28px;height:28px;border-radius:8px;border:2px solid var(--line);background:var(--surface);color:#fff;display:grid;place-items:center;cursor:pointer;padding:0}
+.pr-chk.on{background:var(--ok,#1f8a4c);border-color:var(--ok,#1f8a4c)}
+.pr-chk svg{width:16px;height:16px}
+.pr-bts{display:flex;gap:var(--s2);flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end}
+.pr-todas{margin-bottom:var(--s3)}
+.pr-procs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--s3)}
+.pr-proc.fechada{opacity:.7}
+.pr-proc header{display:block}
+.pr-proc header .row-gap{margin-bottom:4px}
+.pr-passos{margin:0 0 var(--s3);padding-left:20px;display:flex;flex-direction:column;gap:4px;font-size:13.5px}
+.pr-resp{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:var(--s2);margin-bottom:var(--s3);font-size:13px}
+.pr-resp .eyebrow{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.pr-resp b{overflow-wrap:anywhere}
+.pr-chks{display:flex;flex-direction:column;gap:6px}
+.pr-dono{display:flex;flex-direction:column;gap:var(--s2);align-items:flex-start}
+@media (max-width:640px){.pr-procs{grid-template-columns:1fr}.pr-it .tr-it-t{order:0;flex-basis:calc(100% - 44px)}.pr-it .tr-it-s{order:1}.pr-bts{order:2;margin-left:auto}}

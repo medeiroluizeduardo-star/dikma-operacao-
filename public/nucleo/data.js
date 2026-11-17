@@ -700,6 +700,29 @@ export function tratSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'tratativas', id), x, { merge: true }));
 }
 export function tratApagar(id) { delete cache.trat.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'tratativas', id)); return track(b.commit()); }
+// Administração › Processos e rotina (contas/processos.js): processos/config (os processos e desde quando a rotina conta) e
+// rotina/{pid}_{data} (o que foi marcado). Só o administrador lê e grava; lidos quando a tela abre.
+let procSub = null, rotSub = null; cache.proc = { cfg: null, docs: {}, loaded: false, rotLoaded: false };
+export function procWatch(desde) {
+  if (procSub) return;
+  procSub = onSnapshot(doc(db, 'processos', 'config'), s => { cache.proc = { ...cache.proc, cfg: s.exists() ? s.data() : null, loaded: true }; changed(); },
+    e => { cache.proc = { ...cache.proc, loaded: true, erro: e.code || e.message || 'erro' }; procSub = null; changed(); });
+  rotSub = onSnapshot(query(collection(db, 'rotina'), where('data', '>=', desde)), qs => { const d = {}; qs.forEach(x => { d[x.id] = x.data(); }); cache.proc = { ...cache.proc, docs: d, rotLoaded: true }; changed(); },
+    e => { cache.proc = { ...cache.proc, rotLoaded: true, erro: e.code || e.message || 'erro' }; rotSub = null; changed(); });
+}
+// patch: { itens: { P01: {...} }, desde, dono, donoNome } (itens[id] = null apaga um processo novo).
+export function procSalvarCfg(patch) {
+  const c = cache.proc.cfg || {}; const itens = { ...(c.itens || {}) };
+  const x = { ...marca() };
+  for (const [k, v] of Object.entries(patch)) if (k !== 'itens') x[k] = v;
+  if (patch.itens) { x.itens = {}; for (const [id, v] of Object.entries(patch.itens)) { if (v == null) { delete itens[id]; x.itens[id] = deleteField(); } else { itens[id] = v; x.itens[id] = v; } } }
+  cache.proc = { ...cache.proc, cfg: { ...c, ...x, itens } }; changed();
+  return track(setDoc(doc(db, 'processos', 'config'), x, { merge: true }));
+}
+export function rotinaMarcar(id, dados) {
+  cache.proc.docs = { ...cache.proc.docs, [id]: { ...(cache.proc.docs[id] || {}), ...dados } }; changed();
+  return track(setDoc(doc(db, 'rotina', id), { ...dados, ...marca() }));
+}
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

@@ -1485,6 +1485,27 @@ test('Gestão › Tratativas (tratativas/{id}): quem tem a Gestão lê; Gestor, 
   await assertSucceeds(deleteDoc(ref('geGestorSo')), 'quem criou apaga');
 });
 
+test('Administração › Processos e rotina (processos/config, rotina/{id}): só o administrador lê e grava', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const cfg = u => doc(db(u), 'processos', 'config');
+  const rot = (u, id = 'P07_2026-11-17') => doc(db(u), 'rotina', id);
+  const marcaT = (u, x = {}) => ({ pid: 'P07', data: '2026-11-17', status: 'feita', passos: [true, true, false], obs: 'ok', feitaEm: '2026-11-17T15:00:00Z', ...mk(u), ...x });
+  await assertSucceeds(setDoc0(cfg('admin'), { desde: '2026-11-17', dono: 'admin', donoNome: 'Admin', itens: { P07: { dikma: 'Coordenação' } }, ...mk('admin') }, { merge: true }), 'administrador grava os processos');
+  await assertSucceeds(getDoc(cfg('admin')), 'administrador lê');
+  await assertSucceeds(setDoc0(rot('admin'), marcaT('admin')), 'administrador marca a rotina');
+  await assertSucceeds(getDoc(rot('admin')), 'administrador lê a rotina');
+  for (const u of ['geGestorSo', 'opGestorSo', 'rhSo']) {
+    await assertFails(getDoc(cfg(u)), `${u} não lê os processos`);
+    await assertFails(getDoc(rot(u)), `${u} não lê a rotina`);
+    await assertFails(setDoc0(rot(u, 'P08_2026-11-17'), marcaT(u, { pid: 'P08' })), `${u} não marca a rotina`);
+  }
+  await assertFails(setDoc0(rot('admin', 'P07_2026-11-18'), marcaT('admin')), 'id diferente do processo e do dia');
+  await assertFails(setDoc0(rot('admin'), marcaT('admin', { status: 'talvez' })), 'situação fora da lista');
+  await assertFails(setDoc0(rot('admin'), marcaT('admin', { outra: 1 })), 'campo fora da lista');
+  await assertFails(setDoc0(rot('admin'), { ...marcaT('admin'), atualizadoPor: 'geGestorSo' }), 'sem a própria marca');
+  await assertFails(setDoc0(cfg('admin'), { outra: 1, ...mk('admin') }, { merge: true }), 'campo fora da lista nos processos');
+});
+
 test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {
   const ref = u => doc(db(u), 'config', 'indicadores');
   const ok = { metas: { abs: 3, he: 200 }, valores: { '2026-10': { iccc: 96.5, iccp: null } }, hist: { 'patio|2026-10': { esc: 400, aus: 9, em: '2026-11-01' } }, atualizadoEm: serverTimestamp(), por: 'Gestor' };

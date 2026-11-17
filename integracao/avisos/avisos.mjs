@@ -11,12 +11,13 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
 const { situacaoDoDia, criarTurmaFicha, feriadosOperacao } = await import('./lib/situacao.mjs');
-const { indiceFerias, indiceDesligados, resumoFerias, resumoDesligados } = await import('./lib/acessos.mjs');
+const { indiceFerias, indiceDesligados, resumoFerias, resumoDesligados, ehAdminU } = await import('./lib/acessos.mjs');
+const { tarefasParaAviso } = await import('./lib/processos.mjs');
 
 const soTestar = process.env.AVISOS_SO_TESTAR === '1' || process.argv.includes('--testar');
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -117,16 +118,19 @@ const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: 
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};
-// Painel Coqueria: só nas horas dos avisos dele (7h e 16h) e só as tarefas em aberto e os lançamentos do mês.
+// Processos e rotina (Administração): só nas horas dos avisos (7h e 16h), em dia útil, para quem cuida da rotina
+// (processos/config.dono) ou, sem dono, para os administradores. Lê os processos e o que foi marcado nos últimos 31 dias.
 const painel = {};
 {
   const h = new Date().getHours(), dow = new Date().getDay();
-  if (dow > 0 && dow < 6 && h >= 7) for (const uid of comToken) {
-    const precisaM = !enviados[`pnl-m|${uid}|${hoje}`], precisaT = h >= 16 && !enviados[`pnl-t|${uid}|${hoje}`];
-    if (!precisaM && !precisaT) continue;
-    const tasks = (await db.collection(`painel/${uid}/tasks`).where('status', 'in', ['todo', 'doing', 'review']).get()).docs.map(x => x.data());
-    const regs = precisaT ? (await db.collection(`painel/${uid}/registros`).where('data', '>=', mes + '-01').get()).docs.map(x => x.data()) : [];
-    if (tasks.length || regs.length) painel[uid] = { tasks, regs };
+  const quem = comToken.filter(uid => ehAdminU(usuarios[uid]) && (!enviados[`pnl-m|${uid}|${hoje}`] || (h >= 16 && !enviados[`pnl-t|${uid}|${hoje}`])));
+  if (dow > 0 && dow < 6 && h >= 7 && quem.length) {
+    const cfg = (await db.doc('processos/config').get()).data() || null;
+    if (cfg && cfg.desde) {
+      const docs = {}; (await db.collection('rotina').where('data', '>=', add(hoje, -31)).get()).forEach(x => { docs[x.id] = x.data(); });
+      const tasks = tarefasParaAviso(cfg, docs, hoje);
+      for (const uid of quem) if (!cfg.dono || cfg.dono === uid) painel[uid] = { tasks };
+    }
   }
 }
 // Segurança: anomalias em aberto (aberta ou em tratamento), para a anomalia nova e os prazos do tratamento.

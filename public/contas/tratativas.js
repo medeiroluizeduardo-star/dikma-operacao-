@@ -6,7 +6,7 @@
 
 export const ORIGENS = {
   atividades: 'Atividades', equipamentos: 'Equipamentos', efetivo: 'Efetivo', queda: 'Queda zero',
-  seguranca: 'Segurança', reuniao: 'Reunião', cliente: 'Cliente', outra: 'Outra'
+  seguranca: 'Segurança', reuniao: 'Reunião', processos: 'Processos', cliente: 'Cliente', outra: 'Outra'
 };
 export const STATUS = { aberta: 'A fazer', andamento: 'Em andamento', feita: 'Concluída', cancelada: 'Cancelada' };
 export const CONJ = { coq: 'Coqueria', patio: 'Pátio', bateria: 'Bateria', equip: 'Equipamentos' };

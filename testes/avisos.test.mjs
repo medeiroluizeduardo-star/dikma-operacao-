@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -124,40 +124,31 @@ test('aprovação: líder recebe o que foi devolvido (uma vez); supervisor receb
   assert.equal(r2.msgs.filter(m => m.tag === 'aprovacao').length, 0, 'não repete');
 });
 
-test('Painel Coqueria: dia útil, 7h tarefas do dia e atrasadas; 16h abertas e Medição sem lançar; só quem usa; sem nomes', () => {
+test('Processos e rotina: dia útil, 7h tarefas do dia e atrasadas; 16h o que ficou em aberto; só quem cuida da rotina', () => {
   const painel = {
     admin: {
       tasks: [
-        { pid: 'P07', title: 'Gestão operacional · 14/10', due: HOJE, status: 'todo' },
-        { pid: 'P04', title: 'Planejamento · Pátio de Carvão · 13/10', due: '2026-10-13', status: 'doing' },
-        { pid: 'P02', title: 'Relatório fotográfico · Pátio de Carvão · 15/10', due: '2026-10-15', status: 'todo' },
-        { pid: 'P08', title: 'Gestão administrativa · 14/10', due: HOJE, status: 'todo', deleted: true }
-      ],
-      regs: [
-        { tipo: 'falta', data: HOJE, quem: 'FULANO DA SILVA', lancado: false },
-        { tipo: 'he', data: '2026-10-02', quem: 'CICLANO SOUZA', horas: 2, lancado: true },
-        { tipo: 'hp', data: '2026-10-03', quem: 'Pá carregadeira 03', horas: 1, lancado: false },
-        { tipo: 'ind', data: '2026-10-05', cat: 'ICCC', status: 'pendente' },
-        { tipo: 'falta', data: '2026-09-30', quem: 'MÊS PASSADO', lancado: false }
+        { pid: 'P07', title: 'Gestão operacional', due: HOJE, status: 'aberta', diaria: true },
+        { pid: 'P04', title: 'Planejamento · Pátio', due: '2026-10-13', status: 'andamento', diaria: true },
+        { pid: 'P06', title: 'Queda Zero', due: '2026-10-13', status: 'aberta', diaria: false },
+        { pid: 'P02', title: 'Relatório fotográfico · Pátio', due: '2026-10-15', status: 'aberta', diaria: false },
+        { pid: 'P08', title: 'Gestão administrativa', due: HOJE, status: 'feita', diaria: true }
       ]
     }
   };
   const manha = de(rodar(7, { painel }), 'admin', 'painel');
   assert.equal(manha.length, 1);
-  assert.equal(manha[0].titulo, 'Painel: 1 tarefa para hoje', 'tarefa apagada não conta');
+  assert.equal(manha[0].titulo, 'Rotina: 1 tarefa para hoje', 'a feita não conta');
   assert.match(manha[0].corpo, /Gestão operacional/);
-  assert.match(manha[0].corpo, /1 atrasada/);
-  assert.match(manha[0].corpo, /Amanhã: Relatório fotográfico · Pátio de Carvão/);
-  assert.equal(manha[0].url, 'https://gestao-eduardo.web.app/');
+  assert.match(manha[0].corpo, /1 atrasada/, 'a diária de ontem não é atrasada');
+  assert.match(manha[0].corpo, /Amanhã: Relatório fotográfico · Pátio/);
+  assert.equal(manha[0].url, '/?m=administracao&v=cfproc');
   assert.equal(de(rodar(7, { painel, enviados: { [`pnl-m|admin|${HOJE}`]: HOJE } }), 'admin', 'painel').length, 0, 'uma vez por dia');
   const tarde = de(rodar(16, { painel, enviados: { [`pnl-m|admin|${HOJE}`]: HOJE } }), 'admin', 'painel');
   assert.equal(tarde.length, 1);
-  assert.equal(tarde[0].titulo, 'Painel: 2 tarefas ainda em aberto');
-  assert.match(tarde[0].corpo, /Medição sem lançar: 1 falta, 1 hora perdida/);
-  assert.match(tarde[0].corpo, /1 correção ICCC\/ICCP pendente/);
-  for (const m of [...manha, ...tarde]) for (const n of ['FULANO', 'CICLANO', 'MÊS PASSADO', 'carregadeira']) assert.ok(!(m.titulo + m.corpo).includes(n), 'nome no aviso');
-  assert.equal(de(rodar(7, { painel }), 'liderRec', 'painel').length, 0, 'quem não usa o painel não recebe');
-  assert.equal(de(rodar(9, { painel, hoje: '2026-10-17', agora: new Date('2026-10-17T09:30:00') }), 'admin', 'painel').length, 0, 'sábado: sem aviso do painel');
+  assert.equal(tarde[0].titulo, 'Rotina: 2 tarefas ainda em aberto');
+  assert.equal(de(rodar(7, { painel }), 'liderRec', 'painel').length, 0, 'quem não cuida da rotina não recebe');
+  assert.equal(de(rodar(9, { painel, hoje: '2026-10-17', agora: new Date('2026-10-17T09:30:00') }), 'admin', 'painel').length, 0, 'sábado: sem aviso');
   assert.equal(de(rodar(7, { painel, avisos: { ...avisos, admin: { tokens: ['t'], prefs: { painel: false } } } }), 'admin', 'painel').length, 0, 'preferência desligada');
 });
 
