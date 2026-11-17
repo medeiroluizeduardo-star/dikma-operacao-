@@ -414,6 +414,19 @@ service cloud.firestore {
         && request.resource.data.get('motivos', []) is list && request.resource.data.get('motivos', []).size() <= 200;
     }
 
+    // Indicadores do contrato (Indicadores › Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses.
+    // Quem tem o módulo Indicadores lê; o Gestor dos Indicadores e o administrador gravam (só estes campos, mapas pequenos).
+    match /config/indicadores {
+      allow read: if admin() || (ativo() && pEm('indicadores') != '');
+      allow create, update: if (admin() || (ativo() && pEm('indicadores') == 'gestor'))
+        && request.resource.data.keys().hasOnly(['metas', 'valores', 'hist', 'atualizadoEm', 'por'])
+        && request.resource.data.get('metas', {}) is map && request.resource.data.get('metas', {}).keys().hasOnly(['abs', 'he', 'hp', 'iccc', 'iccp', 'efic', 'queda', 's5'])
+        && request.resource.data.get('valores', {}) is map && request.resource.data.get('valores', {}).size() <= 240
+        && request.resource.data.get('hist', {}) is map && request.resource.data.get('hist', {}).size() <= 480
+        && request.resource.data.get('por', '') is string && request.resource.data.get('por', '').size() <= 150;
+      allow delete: if admin();
+    }
+
     // ---------- Módulo Atividades Bateria (mesma estrutura do Pátio, prefixo b_) ----------
     match /b_config/sistema {
       allow read: if baI();

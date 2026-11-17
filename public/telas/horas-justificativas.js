@@ -71,7 +71,7 @@ export function salvarJus(c, dias, j) {
 // Detalhe da hora extra: início, fim, intervalo, motivo e observação (situacao.hed). Sem horário, a conta usa a estimativa por dia.
 export const MOTIVOS_HE = ['Cobertura de ausência', 'Demanda operacional', 'Parada ou emergência', 'Limpeza ou serviço programado', 'Treinamento', 'Outro'];
 const minDe = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
-const horasHE = d => { if (!d) return null; const a = minDe(d.ini), b = minDe(d.fim); if (a == null || b == null) return null; const t = ((b - a + 1440) % 1440 || 1440) - (+d.int || 0); return t > 0 ? Math.round(t / 6) / 10 : null; };
+export const horasHE = d => { if (!d) return null; const a = minDe(d.ini), b = minDe(d.fim); if (a == null || b == null) return null; const t = ((b - a + 1440) % 1440 || 1440) - (+d.int || 0); return t > 0 ? Math.round(t / 6) / 10 : null; };
 export const fmtH = h => (h == null ? '—' : `${Math.floor(h)}h${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
 export const textoHE = d => (d && d.ini && d.fim ? `${d.ini} às ${d.fim}${+d.int ? ` (−${d.int} min)` : ''} · ${fmtH(horasHE(d))}` : '');
 export function horarioHE(c, dias, fim, k) {

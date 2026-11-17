@@ -1437,3 +1437,18 @@ test('Indicadores: lê (só lê) os dados por trás dos painéis nos conjuntos d
   for (const [c, id] of [['config', 'sistema'], ['semanas', SEM], ['freqcomp', 'patio|2026-10'], ['seganom', 'a1'], ['eq', 'cadastro']]) await assertFails(getDoc(doc(db('indSemEscopo'), c, id)), 'sem escopo não lê ' + c);
   await assertFails(getDocs(collection(db('indSemEscopo'), 'ferias')), 'sem escopo não lê as férias');
 });
+
+test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {
+  const ref = u => doc(db(u), 'config', 'indicadores');
+  const ok = { metas: { abs: 3, he: 200 }, valores: { '2026-10': { iccc: 96.5, iccp: null } }, hist: { 'patio|2026-10': { esc: 400, aus: 9, em: '2026-11-01' } }, atualizadoEm: serverTimestamp(), por: 'Gestor' };
+  await assertSucceeds(setDoc0(ref('indEq'), ok, { merge: true }), 'Gestor dos Indicadores grava metas, valores e histórico');
+  await assertSucceeds(setDoc0(ref('admin'), { valores: { '2026-11': { iccc: 97, iccp: 95 } }, atualizadoEm: serverTimestamp(), por: 'Admin' }, { merge: true }), 'administrador grava');
+  await assertSucceeds(getDoc(ref('indPatio')), '"Vê" lê');
+  await assertSucceeds(getDoc(ref('indSemEscopo')), 'Gestor sem escopo lê');
+  await assertFails(setDoc0(ref('indPatio'), { metas: { abs: 5 } }, { merge: true }), '"Vê" não grava');
+  await assertFails(getDoc(ref('liderRec')), 'quem não tem Indicadores não lê');
+  await assertFails(setDoc0(ref('liderRec'), { metas: { abs: 5 } }, { merge: true }), 'quem não tem Indicadores não grava');
+  await assertFails(setDoc0(ref('indEq'), { outra: 1 }, { merge: true }), 'campo fora da lista');
+  await assertFails(setDoc0(ref('indEq'), { metas: { xyz: 1 } }, { merge: true }), 'meta que não existe');
+  await assertFails(deleteDoc(ref('indEq')), 'Gestor não apaga');
+});
