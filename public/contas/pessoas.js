@@ -84,6 +84,7 @@ export function criarPessoas(DB) {
     ativ().forEach(y => y.x.funcao && s.add(y.x.funcao));
     ((temOp() && DB.cache.e.config.funcoes) || []).forEach(f => s.add(f));
     efetivo().forEach(x => x.funcao && s.add(x.funcao));
+    ((DB.cache.funcoes && DB.cache.funcoes.lista) || []).forEach(f => s.add(f)); // lista oficial (Administração › Funções)
     return [...s].sort((a, b) => a.localeCompare(b));
   }
 

@@ -671,6 +671,12 @@ service cloud.firestore {
       allow write: if admin() || (ativo() && pEm('administracao') == 'modulo' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor'));
     }
 
+    // Lista oficial das funções (cargos), Administração › Funções. Só o administrador lê e grava.
+    match /config/funcoes {
+      allow read: if admin();
+      allow write: if admin() && request.resource.data.lista is list && request.resource.data.lista.size() <= 300;
+    }
+
     // Abas que cada perfil vê (tela Perfis e permissões). Todos leem; só o administrador muda.
     // A exceção por pessoa fica no campo abas de usuarios/{uid}, que só o administrador altera.
     match /config/permissoes {

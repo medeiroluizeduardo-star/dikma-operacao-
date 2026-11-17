@@ -337,6 +337,8 @@ cache.escalas = { regimes: { '3x3': { turmas: { I: '2026-10-01', J: '2026-10-04'
   { data: '2026-10-12', desc: 'Nossa Senhora Aparecida' }, { data: '2026-11-02', desc: 'Finados' }, { data: '2026-11-15', desc: 'Proclamação da República' },
   { data: '2026-11-20', desc: 'Dia da Consciência Negra' }, { data: '2026-12-25', desc: 'Natal' }, { data: '2027-01-01', desc: 'Confraternização Universal' }] };
 cache.escalasLoaded = true;
+cache.funcoes = { lista: ['EXECUTANTE', 'EXECUTANTE TURNO'], loaded: true };
+export async function funcoesSalvar(lista) { cache.funcoes = { lista: [...lista], loaded: true }; changed(); }
 function feriadosMock() { return mapaFeriados(cache.escalas, cache.e && cache.e.config); }
 export async function feriadosAtuais() { return { fer: feriadosMock(), completo: true }; }
 // A demonstração aplica a regra ao abrir (vale também para dados já guardados neste navegador).
