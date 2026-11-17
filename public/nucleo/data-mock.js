@@ -186,6 +186,15 @@ export async function mockSwitch(uid) { me = cache.usuarios.find(u => u.uid === 
 export async function mockReset() { try { localStorage.removeItem(LS); localStorage.removeItem(LSEF); localStorage.removeItem(LSA); localStorage.removeItem(LSS); } catch (e) { /* ignora */ } admPronto = false; EV.length = 0; SEG = null; iniciarSeg(); await fresh(); for (const k of SET_KEYS) S[k].config.meses.forEach(m => S[k].monthsLoaded.add(m)); cache.fotosCfg = cfgFotosDemo(); fotosDemo(); me = cache.usuarios[0]; await iniciarAdm(); emitAuth(); changed(); }
 export const pendingWrites = () => 0;
 export function watchMonths() { /* tudo já está em memória */ }
+export function watchMonthsDe() { /* tudo já está em memória */ }
+// Indicadores do contrato (config/indicadores): na demonstração, ICCC e ICCP já digitados nos últimos meses.
+{ const m = today().slice(0, 7); const ant = addMonth(m, -1), ant2 = addMonth(m, -2);
+  cache.ind = { cfg: { valores: { [ant2]: { iccc: 93.8, iccp: 96.1 }, [ant]: { iccc: 96.4, iccp: 94.7 }, [m]: { iccc: 97.2, iccp: 95.5 } } }, loaded: true }; }
+export function indSalvar(patch) {
+  const c = cache.ind.cfg || {}; const novo = { ...c };
+  for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;
+  cache.ind = { cfg: { ...novo, por: me ? me.nome : '' }, loaded: true }; changed(); return Promise.resolve();
+}
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 export const normLogin = s => String(s || '').trim().toLowerCase();
 export const loginValido = s => /^[a-z0-9][a-z0-9._-]{2,29}$/.test(s);

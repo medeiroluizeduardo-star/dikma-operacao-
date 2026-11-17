@@ -311,6 +311,9 @@ function startData() {
   if (temEquip(me)) startEquip();
   if (temSeg(me) || conjsInd(me).length) startSeg();
   // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js) e os Indicadores (números do painel).
+  // Indicadores do contrato (Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses (contas/contrato.js).
+  cache.ind = { cfg: {}, loaded: false };
+  if (temIndU(me)) on(doc(db, 'config', 'indicadores'), s => { cache.ind = { cfg: s.exists() ? s.data() : {}, loaded: true }; changed(); });
   if (veTreinos(me) || temIndU(me)) on(collection(db, 'treinos'), qs => { cache.treinos = qs.docs.map(d => ({ id: d.id, ...d.data() })); cache.tLoaded = true; changed(); });
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
@@ -379,6 +382,8 @@ const toLocal = (id, x) => ({ id, ...x, m: x.m || {}, ev: x.ev || {}, ft: x.ft |
 const mesesBase = () => { const m = today().slice(0, 7); const out = []; for (let x = monthOfWeek(weekOf(add(today(), -60))); x <= m; x = addMonth(x, 1)) out.push(x); return [...new Set([...out, addMonth(m, -1), m, addMonth(m, 1)])]; };
 const usoMes = new Map(); // "conjunto|mês" → último uso
 export function watchMonths(meses) { watchSet(cur, meses); }
+// Meses de um conjunto que não é o aberto (Indicadores › Visão geral soma Pátio e Bateria).
+export function watchMonthsDe(k, meses) { if (S[k]) watchSet(k, meses); }
 function watchSet(k, meses) {
   const st = S[k], key = m => k + '|' + m;
   if (me && !temSet(me, k)) return;
@@ -664,6 +669,8 @@ export async function desativarAvisos() {
 }
 export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid), { prefs, atualizadoEm: serverTimestamp() }, { merge: true }));
 export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+// Indicadores do contrato: metas, valores de ICCC/ICCP e o histórico (Gestor dos Indicadores e administrador; firestore.rules).
+export const indSalvar = patch => track(setDoc(doc(db, 'config', 'indicadores'), { ...patch, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

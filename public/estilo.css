@@ -1791,3 +1791,25 @@ table.efdia1 .efsitn{margin-left:8px;font-size:12.5px;color:var(--ink-2);vertica
 table.efdia1 .efsitn.bad{color:var(--st-nreal)}
 @media (max-width:860px){table.efdia1 td.efsit{white-space:normal}table.efdia1 .efsitn{font-size:11.5px;margin-left:4px}table.efdia1 td:first-child{width:58%}}
 .barrow.qzbar{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) 64px}.barrow.qzbar .n{font-weight:500;font-size:12.5px}.barrow.qzbar .p{font-size:15px}
+
+/* ---- Indicadores › Visão geral e Histórico (telas/contrato.js) ---- */
+.ic-placar{margin:0 0 var(--s3);font-size:14px;color:var(--ink-2)}
+.ic-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:var(--s3)}
+.ic-card{text-align:left;font:inherit;color:inherit;width:100%}
+button.ic-card{cursor:pointer}
+button.ic-card:hover{border-color:var(--marca)}
+button.ic-card:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
+.ic-topo{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s2)}
+.ic-det{font-size:12px;color:var(--ink-3);min-height:2.6em}
+.ic-graf{display:block;width:100%;height:auto;margin-top:var(--s1);overflow:visible}
+.ic-graf text{font-size:9px;fill:var(--ink-3)}
+.ic-graf .ic-meta{stroke:var(--ink-3);stroke-width:1;stroke-dasharray:4 3;vector-effect:non-scaling-stroke}
+.ic-graf .ic-linha{fill:none;stroke:var(--marca);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.ic-graf circle{stroke:var(--surface);stroke-width:2}
+.ic-graf circle.ok{fill:var(--ok)}.ic-graf circle.fora{fill:var(--critico)}
+.ic-nota{margin-top:var(--s4)}
+.ic-acoes{display:flex;flex-wrap:wrap;gap:var(--s2);margin-bottom:var(--s3)}
+.ic-hv{font-weight:600;font-variant-numeric:tabular-nums}
+.ic-hv.ok{color:var(--ok)}.ic-hv.fora{color:var(--critico)}
+.p-recolhe .ic-grade{padding:var(--s3)}
+.seg.setsw.ic-sw{grid-template-columns:repeat(3,auto)}

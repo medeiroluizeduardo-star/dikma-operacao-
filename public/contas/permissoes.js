@@ -91,6 +91,7 @@ export const ITENS = [
   ...comunsDe('gestao', ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']),
   { id: 'i_freq', mod: 'rh', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['administrativo'] },
   ...comunsDe('rh', ['administrativo', 'leitor']),
+  { id: 'i_metas', mod: 'indicadores', nome: 'Editar metas e valores do contrato', d: 'Metas dos 8 indicadores e os valores de ICCC e ICCP do mês (Visão geral)', quem: ['gestor'] },
   ...comunsDe('indicadores', ['ve', 'gestor'])
 ];
 export const itemDoPapel = (papel, it) => !!papel && (papel === 'admin' || it.quem.includes(papel));

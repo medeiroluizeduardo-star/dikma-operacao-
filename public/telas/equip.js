@@ -761,6 +761,26 @@ export function criarEquip(X) {
       return ({ epainel: vPainel, elanc: vLancPar, eequipe: vEquipe, einsp: vInsp, eaval: vAval, eanal: vAnal, econfig: vConfig }[view] || vPainel)();
     },
     resumoSemana, resumoDia, frotaArea: f => frotaArea(f), setDoEq: a => setDoEq(a),
+    // Indicadores › Visão geral: horas paradas e notas 5S do mês por conjunto (o do equipamento na frota).
+    // null enquanto o mês carrega (assistir = false: só usa o mês se já estiver carregado, sem ligar a leitura). Paradas com substituição não contam (o operador seguiu em outro equipamento).
+    contrato(ym, assistir = true) {
+      if (!E().loaded || !E().config) return null;
+      if (assistir) DB.eWatch([ym]);
+      if (!mesesCarregados().has(ym)) return null;
+      const C = calc(); const frota = new Map((E().cad.frota || []).map(f => [f.id, f]));
+      const conjDe = (eq, area) => { const f = frota.get(eq); return setDoEq((f && frotaArea(f).area) || area || ''); };
+      const out = { patio: { hp: 0, npar: 0, s5s: 0, s5n: 0 }, bateria: { hp: 0, npar: 0, s5s: 0, s5n: 0 } };
+      for (const p of E().par) {
+        if (!p.data || p.data.slice(0, 7) !== ym || p.data > TODAY || !p.ini || p.subst) continue;
+        const o = out[conjDe(p.eq, p.area)]; o.hp += C.duracao(p) || 0; o.npar++;
+      }
+      for (const x of E().insp) {
+        if (!x.data || x.data.slice(0, 7) !== ym || x.p5s == null || !Number.isFinite(+x.p5s)) continue;
+        const o = out[conjDe(x.eq, x.area)]; o.s5s += +x.p5s; o.s5n++;
+      }
+      for (const o of Object.values(out)) o.hp = Math.round(o.hp * 100) / 100;
+      return out;
+    },
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
 }
