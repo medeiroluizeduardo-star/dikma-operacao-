@@ -74,6 +74,9 @@ const USUARIOS = {
   indPatio: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 've' }, escopos: ['patio'] },
   indEq: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 'gestor' }, escopos: ['equipamentos'] },
   indSemEscopo: { papel: 'leitor', modulos: ['seguranca'], acesso: { indicadores: 'gestor' }, escopos: [] },
+  // Gestão › Medição: Coordenador e Administrativo da Gestão.
+  geCoord: { papel: 'coordenador', modulos: ['gestao'], acesso: { gestao: 'coordenador' }, escopos: ['patio'] },
+  geAdmv: { papel: 'administrativo', modulos: ['gestao'], acesso: { gestao: 'administrativo' }, escopos: ['patio'] },
   bloqNovo: { papel: 'bloqueado', modulos: ['operacao', 'gestao'], acesso: { operacao: 'gestor', gestao: 'gestor', rh: 'administrativo', administracao: 'admin' }, escopos: ['patio', 'bateria', 'equipamentos'] },
   // Cadastro só no modelo antigo (sem o campo acesso): não vale mais nada. Os demais usuários escritos acima no
   // modelo antigo ganham o acesso por módulo como a conversão gravou nos cadastros reais (testes/legado.mjs).
@@ -1436,6 +1439,26 @@ test('Indicadores: lê (só lê) os dados por trás dos painéis nos conjuntos d
   // sem escopo: nenhum conjunto
   for (const [c, id] of [['config', 'sistema'], ['semanas', SEM], ['freqcomp', 'patio|2026-10'], ['seganom', 'a1'], ['eq', 'cadastro']]) await assertFails(getDoc(doc(db('indSemEscopo'), c, id)), 'sem escopo não lê ' + c);
   await assertFails(getDocs(collection(db('indSemEscopo'), 'ferias')), 'sem escopo não lê as férias');
+});
+
+test('Gestão › Medição (medicao/{mês}): Gestor e Coordenador da Gestão gravam; Administrativo só lê; os outros não', async () => {
+  const ref = (u, m = '2026-11') => doc(db(u), 'medicao', m);
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const lanc = u => ({ l: { 'dk_patio_12_2026-11-03': { por: u, nome: 'Fulano', em: '2026-11-04T10:00' } }, ...mk(u) });
+  await assertSucceeds(setDoc0(ref('geGestorSo'), lanc('geGestorSo'), { merge: true }), 'Gestor da Gestão marca lançado');
+  await assertSucceeds(setDoc0(ref('geCoord'), { man: { m1: { tipo: 'ind', data: '2026-11-05', cat: 'ICCC', desc: 'Divergência', st: 'pendente' } }, ...mk('geCoord') }, { merge: true }), 'Coordenador digita uma correção');
+  await assertSucceeds(setDoc0(ref('geCoord'), { l: { 'dk_patio_12_2026-11-03': deleteField() }, ...mk('geCoord') }, { merge: true }), 'Coordenador desmarca');
+  await assertSucceeds(setDoc0(ref('admin'), { oc: { dk_par_9: { por: 'admin' } }, ...mk('admin') }, { merge: true }), 'administrador oculta');
+  await assertSucceeds(getDoc(ref('geAdmv')), 'Administrativo da Gestão lê');
+  await assertFails(setDoc0(ref('geAdmv'), lanc('geAdmv'), { merge: true }), 'Administrativo da Gestão não grava');
+  await assertFails(getDoc(ref('supPatio')), 'Supervisor da Gestão não lê');
+  await assertFails(getDoc(ref('rhSo')), 'RH sem a Gestão não lê');
+  await assertFails(getDoc(ref('indEq')), 'Indicadores não lê');
+  await assertFails(setDoc0(ref('geGestorSo'), { l: {} }, { merge: true }), 'sem a marca de quem gravou');
+  await assertFails(setDoc0(ref('geGestorSo'), { l: {}, ...mk('geCoord') }, { merge: true }), 'com a marca de outra pessoa');
+  await assertFails(setDoc0(ref('geGestorSo'), { outra: 1, ...mk('geGestorSo') }, { merge: true }), 'campo fora da lista');
+  await assertFails(setDoc0(ref('geGestorSo', 'nov-2026'), lanc('geGestorSo'), { merge: true }), 'id que não é mês');
+  await assertFails(deleteDoc(ref('geGestorSo')), 'Gestor não apaga o mês');
 });
 
 test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {

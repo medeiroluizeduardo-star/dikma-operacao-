@@ -781,6 +781,16 @@ export function criarEquip(X) {
       for (const o of Object.values(out)) o.hp = Math.round(o.hp * 100) / 100;
       return out;
     },
+    // Gestão › Medição: paradas do mês com o conjunto do equipamento e quem responde pela causa. null enquanto carrega.
+    paradasMes(ym, assistir = true) {
+      if (!E().loaded || !E().config) return null;
+      if (assistir) DB.eWatch([ym]);
+      if (!mesesCarregados().has(ym)) return null;
+      const frota = new Map((E().cad.frota || []).map(f => [f.id, f]));
+      const resp = new Map((E().config.causas || []).map(c => [c.causa, c.resp]));
+      const ps = E().par.filter(p => p.data && p.data.slice(0, 7) === ym).map(p => { const f = frota.get(p.eq); return { ...p, conj: setDoEq((f && frotaArea(f).area) || p.area || '') }; });
+      return { paradas: ps, respDe: c => resp.get(c) || '' };
+    },
     badge: () => (E().loaded && E().config ? E().par.filter(p => !p.fim).length : 0)
   };
 }

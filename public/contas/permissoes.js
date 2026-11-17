@@ -87,6 +87,7 @@ export const ITENS = [
   ...comunsDe('operacao', ['gestor', 'coordenador', 'supervisor', 'tecnico', 'lider', 'leitor']),
   { id: 'i_acoes', mod: 'gestao', nome: 'Criar e acompanhar ações das causas', d: 'Plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
   { id: 'i_fichas', mod: 'gestao', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
+  { id: 'i_medicao', mod: 'gestao', nome: 'Lançar na Medição', d: 'Marcar lançado, ocultar e digitar registros em Gestão › Medição', quem: ['gestor', 'coordenador'] },
   { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   ...comunsDe('gestao', ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']),
   { id: 'i_freq', mod: 'rh', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['administrativo'] },

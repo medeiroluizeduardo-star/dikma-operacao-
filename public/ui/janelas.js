@@ -19,13 +19,15 @@ export function sheet(titleTxt, sub, opts, onPick, cfg = {}) {
 export function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit, opts = {}) {
   const L = $('layer');
   L.innerHTML = `<div class="scrim" id="scrim"><form class="sheet" id="fSheet" role="dialog" aria-modal="true" aria-label="${esc(titleTxt)}" novalidate><h3>${esc(titleTxt)}</h3>${sub ? `<div class="sub">${sub}</div>` : ''}${fieldsHtml}<p class="err" id="shErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri" type="submit">${esc(submitTxt)}</button><button class="btn" type="button" data-close>Cancelar</button></div></form></div>`;
+  const form = $('fSheet');
   const kd = e => { if (e.key === 'Escape') cancelar(); };
-  const close = () => { L.innerHTML = ''; document.removeEventListener('keydown', kd); };
+  // Só limpa se este formulário ainda está na tela: o Salvar pode abrir outra janela (ex.: passo das fotos depois da justificativa).
+  const close = () => { if ($('fSheet') === form) L.innerHTML = ''; document.removeEventListener('keydown', kd); };
   const cancelar = () => { close(); if (opts.aoCancelar) opts.aoCancelar(); };
   if (opts.cancelarTxt) { const b = L.querySelector('#fSheet [data-close]'); if (b) b.textContent = opts.cancelarTxt; }
   document.addEventListener('keydown', kd);
   $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim' || e.target.closest('[data-close]')) cancelar(); const eye = e.target.closest('[data-eye]'); if (eye) toggleEye(eye); };
-  $('fSheet').onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); close(); } catch (err) { showErr('shErr', err); b.disabled = false; } };
+  form.onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); close(); } catch (err) { showErr('shErr', err); b.disabled = false; } };
   const f = L.querySelector('input'); if (f) f.focus();
 }
 export function showErr(id, err) { const el = $(id); if (!el) return toast(msgErro(err)); el.textContent = msgErro(err); el.hidden = false; }

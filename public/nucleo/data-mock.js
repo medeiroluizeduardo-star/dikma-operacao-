@@ -190,6 +190,14 @@ export function watchMonthsDe() { /* tudo já está em memória */ }
 // Indicadores do contrato (config/indicadores): na demonstração, ICCC e ICCP já digitados nos últimos meses.
 { const m = today().slice(0, 7); const ant = addMonth(m, -1), ant2 = addMonth(m, -2);
   cache.ind = { cfg: { valores: { [ant2]: { iccc: 93.8, iccp: 96.1 }, [ant]: { iccc: 96.4, iccp: 94.7 }, [m]: { iccc: 97.2, iccp: 95.5 } } }, loaded: true }; }
+// Gestão › Medição (medicao/{AAAA-MM}): na demonstração, em memória; o mês anterior já vem com parte lançada.
+cache.med = {};
+export function medWatch(ym) { if (!cache.med[ym]) cache.med[ym] = { d: {}, loaded: true }; }
+export function medGravar(ym, campo, id, val) {
+  const m = (cache.med[ym] ||= { d: {}, loaded: true }); const o = { ...(m.d[campo] || {}) };
+  if (val == null) delete o[id]; else o[id] = val;
+  cache.med[ym] = { d: { ...m.d, [campo]: o }, loaded: true }; changed(); return Promise.resolve();
+}
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;

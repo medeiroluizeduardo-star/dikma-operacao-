@@ -364,6 +364,7 @@ function stopData() {
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
+  for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -671,6 +672,17 @@ export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid)
 export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Indicadores do contrato: metas, valores de ICCC/ICCP e o histórico (Gestor dos Indicadores e administrador; firestore.rules).
 export const indSalvar = patch => track(setDoc(doc(db, 'config', 'indicadores'), { ...patch, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));
+// Gestão › Medição (medicao/{AAAA-MM}: lançado, ocultos e registros digitados; contas/medicao.js). O mês é lido quando a
+// tela abre; até 3 meses ficam ligados (os mais antigos saem). Grava quem edita a Medição (firestore.rules).
+const medSubs = new Map(); cache.med = {};
+export function medWatch(ym) {
+  if (medSubs.has(ym)) return;
+  if (medSubs.size >= 3) { const [k, f] = medSubs.entries().next().value; f(); medSubs.delete(k); delete cache.med[k]; }
+  medSubs.set(ym, onSnapshot(doc(db, 'medicao', ym), s => { cache.med[ym] = { d: s.exists() ? s.data() : {}, loaded: true }; changed(); },
+    e => { cache.med[ym] = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; changed(); }));
+}
+// campo: l (lançado) · oc (oculto) · man (digitado); val = null apaga.
+export const medGravar = (ym, campo, id, val) => track(setDoc(doc(db, 'medicao', ym), { [campo]: { [id]: val == null ? deleteField() : val }, ...marca() }, { merge: true }));
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));
