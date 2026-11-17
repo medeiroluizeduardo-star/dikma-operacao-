@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'documentos'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'documentos', 'oms'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -324,4 +324,19 @@ test('documentos e OMs: segunda às 7h, administrador e Gestor/Coordenador da Ge
   assert.equal(planejar({ ...base, agora: new Date('2026-10-20T07:10:00'), hoje: '2026-10-20' }).msgs.filter(x => x.tag === 'documentos').length, 0, 'só na segunda');
   assert.equal(planejar({ ...base, enviados: { [`docs|adm|${SEG}`]: SEG, [`docs|geG|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos').length, 0, 'uma vez');
   assert.equal(planejar({ ...base, avisos: { adm: { tokens: ['t'], prefs: { documentos: false } } }, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos').length, 0, 'desligado');
+});
+
+test('solicitações de OM: nova vai para o Técnico de Processo do conjunto; devolvida para quem abriu; uma vez', () => {
+  const us = conv({ lider: { papel: 'lider', nome: 'Líder', area: 'RECEBIMENTO', acesso: { operacao: 'lider' }, escopos: ['patio'] }, tec: { papel: 'leitor', nome: 'Técnico', acesso: { operacao: 'tecnico' }, escopos: ['patio'] }, tecB: { papel: 'leitor', nome: 'Técnico B', acesso: { operacao: 'tecnico' }, escopos: ['bateria'] } });
+  const av = { lider: tok, tec: tok, tecB: tok };
+  const oms = [{ id: 'o1', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Troca de rolete', equip: 'TC-03', status: 'solicitada', solPor: 'lider', hSol: '2026-10-19T07:40', hist: [{ s: 'solicitada', em: '2026-10-19T07:40' }] },
+    { id: 'o2', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Vazamento', local: 'Britador', status: 'devolvida', motivo: 'Falta o ponto', solPor: 'lider', hSol: '2026-10-19T06:00', hist: [{ s: 'devolvida', em: '2026-10-19T08:00' }] }];
+  const base = { usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: {}, oms };
+  const r = planejar({ ...base, agora: new Date('2026-10-19T08:10:00'), hoje: '2026-10-19' });
+  const m = r.msgs.filter(x => x.tag === 'oms');
+  assert.deepEqual(m.map(x => x.uid).sort(), ['lider', 'tec']);
+  assert.match(m.find(x => x.uid === 'tec').titulo, /OM para aprovar: Troca de rolete/);
+  assert.match(m.find(x => x.uid === 'lider').titulo, /OM devolvida/);
+  const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-10-19']));
+  assert.equal(planejar({ ...base, enviados, agora: new Date('2026-10-19T09:10:00'), hoje: '2026-10-19' }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez');
 });

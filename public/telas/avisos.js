@@ -9,7 +9,7 @@ import { temSeg, trataTudoSeg, supConjs } from '../contas/segcalc.js';
 import { editaAdm } from '../contas/acessos.js';
 import { horasEf, HORAS_AVISO } from '../contas/efetivo-dia.js';
 
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, documentos: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, documentos: true, oms: true, efetivo: true, efetivoRH: true };
 
 export function criarAvisos(X) {
   const { DB, esc, toast, render } = X;
@@ -42,6 +42,7 @@ export function criarAvisos(X) {
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
+      (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor', 'tecnico', 'coordenador', 'gestor'].includes(P('operacao')) && ['oms', ['tecnico', 'coordenador', 'gestor'].includes(P('operacao')) ? 'Solicitação de OM para aprovar e OM devolvida ou liberada (na hora)' : 'Sua solicitação de OM devolvida ou liberada (na hora)'],
       veDocsU(ME()) && ['documentos', 'Documentos e OMs vencidos ou vencendo (segunda, às 7h)'],
       ehAdm() && ['painel', 'Processos e rotina: tarefas do dia (7h) e o que ficou em aberto (16h)']
     ].filter(Boolean);

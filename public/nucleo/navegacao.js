@@ -2,12 +2,13 @@
 // Para mudar o menu, comece por aqui: VIEWS diz em que módulo e grupo cada aba aparece e quem a vê.
 import { podeVer } from '../contas/permissoes.js';
 import { editaAdm, veHistorico, conjsInd, eqInd } from '../contas/acessos.js';
-import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo } from './estado.js';
+import { ME, UI, salvarUI, isAdmin, perfil, admDe, temFichas, modsDe, setsDe, temEquipEm, permCfg, aplicarSet, MODULOS, moduloNovo, SK } from './estado.js';
 import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
 import { supConjs } from '../contas/segcalc.js';
 import { veTreinos } from '../contas/treinos.js';
 import { veDocsU } from '../contas/documentos.js';
+import { veOmsU } from '../contas/oms.js';
 import { acoes } from './acoes.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
@@ -41,6 +42,8 @@ export const VIEWS = [
   { id: 'apontar', nome: 'Apontar', ic: 'apontar', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'aprovar', nome: 'Aprovação', ic: 'carimbo', grp: 'Atividades', mod: 'operacao', req: () => opSets() && acompanha('operacao'), mesDados: true, conj: true },
   { id: 'pend', nome: 'Pendências', ic: 'pend', grp: 'Atividades', mod: 'operacao', req: opSets, conj: true },
+  // OMs (telas/oms.js): o líder abre a solicitação, o Técnico de Processo aprova e envia ao cliente; horas de solicitação, liberação e finalização.
+  { id: 'oms', nome: 'Solicitações de OM', ic: 'ficha', grp: 'Atividades', mod: 'operacao', req: () => opSets() && veOmsU(ME, SK), tela: 'OM', conj: true },
   { id: 'quedazero', nome: 'Queda zero', ic: 'queda', grp: 'Atividades', mod: 'operacao', req: opSets, filtros: 'ms', conj: true },
   { id: 'elanc', nome: 'Lançamentos e paradas', ic: 'lanc', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
   { id: 'eequipe', nome: 'Equipe e frota', ic: 'escala', grp: 'Equipamentos', mod: 'operacao', req: opEq, tela: 'EQ', junto: 'opeq' },
@@ -148,7 +151,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', cfdocs: 'Documentos' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', cfdocs: 'Documentos', oms: 'OMs' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.

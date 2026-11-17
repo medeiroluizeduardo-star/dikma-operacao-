@@ -10,9 +10,10 @@ import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
 import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 import { resumo as resumoDocs, veDocsU } from './lib/documentos.mjs';
+import { avisosOms } from './lib/oms.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, documentos: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, documentos: true, oms: true, efetivo: true, efetivoRH: true };
 // Administração › Processos e rotina (a rotina do analista, que antes vinha do Meu painel).
 export const ROTINA_URL = '/?m=administracao&v=cfproc';
 const up = s => String(s || '').toUpperCase();
@@ -310,6 +311,23 @@ export function planejar(d) {
       if (!r.alerta) continue;
       const partes = [r.vencido && `${r.vencido} vencido${r.vencido > 1 ? 's' : ''}`, r.vence && `${r.vence} vence${r.vence > 1 ? 'm' : ''} em breve`].filter(Boolean);
       msgs.push({ uid: x.uid, titulo: `Documentos e OMs: ${partes.join(', ')}`, corpo: 'Abra Administração › Documentos e OMs para renovar ou encerrar.', tag: 'documentos', url: '/?m=administracao&v=cfdocs' });
+    }
+  }
+  // 12) Operação › Solicitações de OM: solicitação nova → quem trata no conjunto (Técnico de Processo, coordenador, gestor,
+  //     administrador); devolvida e liberada → quem abriu. Na hora (rotina de hora em hora), uma vez por mudança.
+  if ((d.oms || []).length) {
+    const porPessoa = new Map();
+    for (const x of avisosOms(d.oms, d.usuarios, hoje)) {
+      if (d.enviados[x.chave]) continue; marcar.add(x.chave);
+      const a = alvo.find(y => y.uid === x.uid); if (!a || !a.prefs.oms) continue;
+      const k = x.uid + '|' + x.tipo; if (!porPessoa.has(k)) porPessoa.set(k, { uid: x.uid, tipo: x.tipo, l: [] }); porPessoa.get(k).l.push(x.om);
+    }
+    for (const { uid, tipo, l } of porPessoa.values()) {
+      const n = l.length, s = n > 1 ? 's' : '';
+      const titulo = tipo === 'nova' ? (n === 1 ? `OM para aprovar: ${l[0].titulo}` : `${n} solicitações de OM para aprovar`)
+        : tipo === 'devolvida' ? (n === 1 ? `OM devolvida: ${l[0].titulo}` : `${n} OMs devolvidas para corrigir`) : (n === 1 ? `OM liberada: ${l[0].titulo}` : `${n} OMs liberadas para executar`);
+      const corpo = l.slice(0, 3).map(o => [o.equip || o.local, tipo === 'devolvida' ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
+      msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms` });
     }
   }
   return { msgs, marcar: [...marcar] };

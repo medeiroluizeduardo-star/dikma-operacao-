@@ -1902,3 +1902,8 @@ button.tr-it:hover{border-color:var(--marca)}
 .dc-form .sel small{display:block;margin-top:2px;font-size:11.5px}
 .dc-form .in[readonly]{opacity:.75}
 @media (max-width:640px){.dc-form{grid-template-columns:1fr}}
+/* Operação › OMs (telas/oms.js) */
+.om-mot{display:block;color:var(--crit,#c0392b);font-size:12.5px;margin-top:2px}
+.om-dados{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
+.om-hist{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.om-acoes{padding-top:6px;border-top:1px solid var(--line)}
