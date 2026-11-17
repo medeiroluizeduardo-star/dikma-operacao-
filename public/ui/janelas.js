@@ -25,7 +25,9 @@ export function formSheet(titleTxt, sub, fieldsHtml, submitTxt, onSubmit, opts =
   if (opts.cancelarTxt) { const b = L.querySelector('#fSheet [data-close]'); if (b) b.textContent = opts.cancelarTxt; }
   document.addEventListener('keydown', kd);
   $('scrim').onclick = e => { e.stopPropagation(); if (e.target.id === 'scrim' || e.target.closest('[data-close]')) cancelar(); const eye = e.target.closest('[data-eye]'); if (eye) toggleEye(eye); };
-  $('fSheet').onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); close(); } catch (err) { showErr('shErr', err); b.disabled = false; } };
+  // se o onSubmit abriu outra janela (ex.: o passo de fotos), não fecha a janela nova
+  const form = $('fSheet');
+  form.onsubmit = async e => { e.preventDefault(); const b = e.submitter || e.target.querySelector('[type=submit]'); b.disabled = true; try { await onSubmit(); if (form.isConnected) close(); else document.removeEventListener('keydown', kd); } catch (err) { showErr('shErr', err); b.disabled = false; } };
   const f = L.querySelector('input'); if (f) f.focus();
 }
 export function showErr(id, err) { const el = $(id); if (!el) return toast(msgErro(err)); el.textContent = msgErro(err); el.hidden = false; }
