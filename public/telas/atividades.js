@@ -113,7 +113,7 @@ export function vAprovar() {
     const meusDia = d.rotas.filter(r => podeA(r.area)).reduce((s, r) => s + r.n, 0);
     const aberto = diasAbertos.includes(d.dt);
     const atraso = d.dt < limite ? Math.round((pd(TODAY) - pd(d.dt)) / 864e5) : 0;
-    h += `<div class="card aprov"><header><h2>${DAYS[(new Date(d.dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(d.dt)}</h2><p>${d.n} aguardando · ${d.rotas.length} rota${d.rotas.length > 1 ? 's' : ''}${atraso ? ` · <span class="pill bad">fora do prazo · há ${atraso} dia${atraso > 1 ? 's' : ''}</span>` : ''}</p><span class="r"><button class="btn sm" data-act="aprDia" data-k="${d.dt}" aria-expanded="${aberto}">${aberto ? 'Fechar' : 'Ver rotas'}</button>${meusDia ? `<button class="btn pri sm" data-act="aprvDia" data-k="${d.dt}">${I.ok} Aprovar o dia${meusDia < d.n ? ` (${meusDia})` : ''}</button>` : ''}</span></header>`;
+    h += `<div class="card aprov"><header><h2>${DAYS[(new Date(d.dt + 'T12:00:00').getDay() + 6) % 7]} ${ddmm(d.dt)}</h2><p>${d.n} aguardando · ${d.rotas.length} rota${d.rotas.length > 1 ? 's' : ''}${atraso ? ` · <span class="pill bad">fora do prazo · há ${atraso} dia${atraso > 1 ? 's' : ''}</span>` : ''}</p><span class="r"><button class="btn sm" data-act="aprDia" data-k="${d.dt}" aria-expanded="${aberto}">${aberto ? 'Fechar' : 'Ver rotas'}</button>${meusDia ? `<button class="btn sm" data-act="aprvDia" data-k="${d.dt}">${I.ok} Aprovar o dia${meusDia < d.n ? ` (${meusDia})` : ''}</button>` : ''}</span></header>`;
     if (!aberto) { h += '</div>'; continue; }
     h += '<div class="body"><div class="plist">';
     for (const r of d.rotas) {
