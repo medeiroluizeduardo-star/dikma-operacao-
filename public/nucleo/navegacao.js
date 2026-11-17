@@ -105,6 +105,8 @@ export const VIEWS = [
   { id: 'cfproc', nome: 'Processos e rotina', ic: 'prog', grp: 'Geral', mod: 'administracao', ord: 1.8, req: () => isAdmin(), tela: 'PR' },
   // Documentos e OMs (telas/documentos.js): validade dos POP, PT, OS, ASO e OMs (era Campo do Meu painel). O Gestor e o
   // Coordenador da Gestão também veem (soReq: só o req decide, fora de Perfis e permissões).
+  // Trazer do Meu painel: só o administrador, até o Meu painel ser desligado (telas/trazer-painel.js).
+  { id: 'cfpainel', nome: 'Trazer do Meu painel', ic: 'dl', grp: 'Geral', mod: 'administracao', ord: 1.9, req: () => isAdmin(), tela: 'MP' },
   { id: 'cfdocs', nome: 'Documentos e OMs', ic: 'arquivo', grp: 'Geral', mod: 'administracao', ord: 1.85, req: () => veDocsU(ME), soReq: true, tela: 'DC' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },

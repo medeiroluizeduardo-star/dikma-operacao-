@@ -1576,3 +1576,21 @@ test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; s�
   await assertFails(setDoc0(ref('indEq'), { metas: { xyz: 1 } }, { merge: true }), 'meta que não existe');
   await assertFails(deleteDoc(ref('indEq')), 'Gestor não apaga');
 });
+
+test('Trazer do Meu painel: tudo o que a migração grava (como nucleo/data.js › painelTrazer) passa nas regras', async () => {
+  const { planoDoPainel, faltaMed, faltaInd } = await import('../public/contas/trazer-painel.js');
+  const { PAINEL } = await import('./painel-exemplo.mjs');
+  const pl = planoDoPainel(PAINEL, { uid: 'admin', nome: 'Admin Teste' }, new Date('2026-11-17T12:00:00.000Z'));
+  const d = db('admin'); const marca = { atualizadoEm: serverTimestamp(), atualizadoPor: 'admin' };
+  const cria = x => ({ ...x.dados, criadoEm: x.dados.criadoEm || '2026-11-17T12:00:00.000Z', criadoPor: 'admin', criadoNome: 'Admin Teste', ...marca });
+  for (const x of pl.trat) await assertSucceeds(setDoc0(doc(d, 'tratativas', x.id), cria(x)), x.id);
+  for (const x of pl.docs) await assertSucceeds(setDoc0(doc(d, 'documentos', x.id), cria(x)), x.id);
+  for (const x of pl.insp) await assertSucceeds(setDoc0(doc(d, 'seginsp', x.id), { ...x.dados, por: 'admin', porNome: 'Admin Teste', em: serverTimestamp() }), x.id);
+  for (const x of pl.rotina) await assertSucceeds(setDoc0(doc(d, 'rotina', x.id), { ...x.dados, ...marca }), x.id);
+  for (const [ym, m] of Object.entries(pl.med)) await assertSucceeds(setDoc0(doc(d, 'medicao', ym), { ...faltaMed(m, {}), ...marca }, { merge: true }), ym);
+  const f = faltaInd(pl.ind, {});
+  await assertSucceeds(setDoc0(doc(d, 'config', 'indicadores'), { metas: f.metas, valores: f.valores, atualizadoEm: serverTimestamp(), por: 'Admin Teste' }, { merge: true }));
+  // O painel continua só do dono: outro administrador não lê o painel de ninguém.
+  await assertSucceeds(setDoc0(doc(d, 'painel', 'admin', 'tasks', 't1'), { title: 'x' }));
+  await assertFails(getDocs(collection(db('liderRec'), 'painel', 'admin', 'tasks')));
+});

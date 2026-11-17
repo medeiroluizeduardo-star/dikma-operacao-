@@ -127,6 +127,7 @@ function renderTela() {
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
   if (arq === 'DC') return tela(comModulo('DC', m => m.renderView(v)));
+  if (arq === 'MP') return tela(comModulo('MP', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
@@ -321,7 +322,7 @@ function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
-const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cfdocs: 'POP, PT, OS, ASO, treinamentos e OMs com validade: o que venceu e o que vence em 30 dias', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
+const SUB_ADM = { cfpainel: 'Traz para o Dikma as ações, planos, atas, inspeções, documentos e a Medição do seu Meu painel', cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cfdocs: 'POP, PT, OS, ASO, treinamentos e OMs com validade: o que venceu e o que vence em 30 dias', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {

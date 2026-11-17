@@ -243,6 +243,31 @@ export function docsWatch() { /* tudo já está em memória */ }
 export const docNovoId = () => 'dc' + Date.now().toString(36);
 export function docSalvar(id, dados, novo = false) { cache.docs.d = { ...cache.docs.d, [id]: { ...(cache.docs.d[id] || {}), id, ...dados, ...(novo ? { criadoNome: me.nome } : {}) } }; changed(); return Promise.resolve(); }
 export function docApagar(id) { delete cache.docs.d[id]; changed(); return Promise.resolve(); }
+// Administração › Trazer do Meu painel: na demonstração, um painel de exemplo (sem nomes reais) e a gravação em memória.
+export async function painelLer() {
+  const h = today(); const d = n => add(h, n); const ym = h.slice(0, 7);
+  return {
+    config: { equipe: { people: { p1: { n: 'Analista Exemplo' }, p2: { n: 'Supervisor Exemplo' } } }, main: { metas: { abs: 3, he: 180 }, indVal: { [ym]: { iccc: 96, iccp: 94 } } } },
+    planos: { pl1: { id: 'pl1', nome: 'Melhorar a limpeza das correias', objetivo: 'Zerar o acúmulo nas passarelas', area: 'pat', status: 'ativo', criadoEm: d(-20) + 'T10:00:00.000Z' } },
+    tasks: {
+      t1: { id: 't1', title: 'Revisar a escala de limpeza das correias', area: 'pat', prio: 'alta', due: d(3), inicio: d(-2), status: 'doing', resp: ['p2'], why: 'Acúmulo de material', plano: 'pl1', checklist: [{ t: 'Levantar pontos', ok: true }, { t: 'Ajustar escala', ok: false }], createdAt: d(-5) + 'T10:00:00.000Z' },
+      t2: { id: 't2', title: 'Conferir faltas da semana', area: 'ger', prio: 'media', due: d(-1), status: 'done', resp: ['p1'], ata: 'ata1', completedAt: d(-1) + 'T15:00:00.000Z', createdAt: d(-7) + 'T10:00:00.000Z' },
+      [`P01_${d(-1)}`]: { id: `P01_${d(-1)}`, pid: 'P01', due: d(-1), status: 'done', routine: true, checklist: [{ t: 'a', ok: true }, { t: 'b', ok: true }], completedAt: d(-1) + 'T17:00:00.000Z' }
+    },
+    atas: { ata1: { id: 'ata1', titulo: 'Reunião semanal da Coqueria', data: d(-7), local: 'Sala da coordenação', participantes: 'Coordenação e supervisão', pauta: 'Faltas e limpeza', decisoes: 'Conferir as faltas', acoes: [{ oque: 'Conferir faltas da semana', quem: 'p1', prazo: d(-1), task: 't2' }], plano: '' } },
+    inspecoes: { in1: { id: 'in1', tipo: 's5', data: d(-3), area: 'pat', local: 'Correia 3', itens: [{ t: 'Utilização: só o necessário no local', r: 'ok', obs: '' }, { t: 'Limpeza: área, equipamentos e drenos limpos', r: 'no', obs: 'Dreno sujo' }] } },
+    documentos: { dc1: { id: 'dc1', tipo: 'OM', numero: 'OM 999', titulo: 'Troca de rolete (exemplo)', area: 'bat', resp: 'p2', emissao: d(-10), validade: d(20), situacao: 'Em andamento', link: '', obs: '' } },
+    registros: { r1: { id: 'r1', tipo: 'he', data: d(-2), quem: 'Operador Exemplo', area: 'pat', horas: 2, desc: 'Cobertura de falta', lancado: true, ts: Date.now() } },
+    notas: { n1: { id: 'n1', texto: 'Anotação de exemplo', ts: Date.now() } }, quedas: {}, relatorios: {}
+  };
+}
+export async function painelTrazer(pl) {
+  for (const x of pl.trat) if (!cache.trat.d[x.id]) cache.trat.d[x.id] = { id: x.id, ...x.dados, criadoNome: me.nome };
+  for (const x of pl.docs) if (!cache.docs.d[x.id]) cache.docs.d[x.id] = { id: x.id, ...x.dados, criadoNome: me.nome };
+  changed();
+  const n = pl.trat.length + pl.docs.length + pl.insp.length + pl.rotina.length + Object.values(pl.med).reduce((a, m) => a + Object.keys(m.l).length + Object.keys(m.oc).length + Object.keys(m.man).length, 0) + Object.keys(pl.ind.metas).length + Object.keys(pl.ind.valores).length;
+  return { novos: n, ja: 0, falhas: [] };
+}
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;
