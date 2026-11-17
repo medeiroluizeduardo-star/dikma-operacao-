@@ -1,0 +1,71 @@
+name: Trocar função
+
+# Troca a função de muitas pessoas de uma vez (a mesma troca da tela Administração › Funções).
+# Só manual (Run workflow). Rode antes a Cópia de segurança.
+#   simular (padrão): só mostra quantas pessoas mudam (ADM e turno), sem nomes.
+#   gravar: faz uma cópia dos documentos que vão mudar (arquivo desta execução + coleção backups) e grava
+#           nas fichas (RH), nas Atividades, nos Equipamentos e na lista oficial de funções.
+on:
+  workflow_dispatch:
+    inputs:
+      de:
+        description: 'Função que sai (ex. AJUDANTE)'
+        type: string
+        required: true
+      adm:
+        description: 'Quem é ADM passa para (ex. EXECUTANTE)'
+        type: string
+        required: false
+      turno:
+        description: 'Quem é de turno passa para (ex. EXECUTANTE TURNO)'
+        type: string
+        required: false
+      todos:
+        description: 'Ou: todos passam para (deixe ADM e turno vazios)'
+        type: string
+        required: false
+      modo:
+        description: 'simular (só mostra) ou gravar'
+        type: choice
+        options: [simular, gravar]
+        default: simular
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  trocar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Trocar função (${{ inputs.modo }})
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_PASTA: copia-funcao
+          FUNCAO_DE: ${{ inputs.de }}
+          FUNCAO_ADM: ${{ inputs.adm }}
+          FUNCAO_TURNO: ${{ inputs.turno }}
+          FUNCAO_TODOS: ${{ inputs.todos }}
+          FUNCAO_MODO: ${{ inputs.modo }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/trocar-funcao.mjs
+
+      - name: Guardar a cópia dos documentos
+        if: inputs.modo == 'gravar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: antes-de-trocar-funcao-${{ github.run_id }}
+          path: copia-funcao/
+          retention-days: 90
+          if-no-files-found: ignore

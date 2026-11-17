@@ -290,3 +290,34 @@ test('trocar líder: simular lista todos os líderes e não grava; gravar faz a 
   assert.ok(fs.readdirSync(path.join(tmp, 'copia-lider')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
   assert.match(rodar('trocar-lider.mjs', { ...env, LIDER_DE: 'bento andrade', LIDER_PARA: 'kaue', LIDER_MODO: 'gravar' }), /Nada a mudar/, 'rodar de novo não muda nada');
 });
+
+// Nomes inventados. Ajudante vira Executante (ADM) e Executante turno (turno) nos três lugares.
+test('trocar função: simular só conta; gravar faz a cópia e troca fichas, Atividades, Equipamentos e a lista', async () => {
+  await limpar();
+  await db.doc('gcolab/RECEBIMENTO').set({ itens: [{ mat: '801', nome: 'ANA FUNCAO UM', funcao: 'AJUDANTE' }, { mat: '802', nome: 'BIA FUNCAO DOIS', funcao: 'AJUDANTE' }, { mat: '803', nome: 'CAIO FUNCAO TRES', funcao: 'LÍDER' }] });
+  await db.doc('gcolab/OPERAÇÃO DE EQUIPAMENTOS').set({ itens: [{ mat: '804', nome: 'DANI FUNCAO QUATRO', funcao: 'AJUDANTE' }] });
+  await db.doc('colaboradores/RECEBIMENTO').set({ itens: [{ id: 'C801', mat: '801', nome: 'ANA FUNCAO UM', funcao: 'AJUDANTE', regime: 'ADMINISTRATIVO' }, { id: 'C802', mat: '802', nome: 'BIA FUNCAO DOIS', funcao: 'AJUDANTE', regime: 'TURNO 4X4', turma: 'A' }] });
+  await db.doc('b_colaboradores/BATERIA 1').set({ itens: [{ id: 'B001', nome: 'OUTRO NOME', funcao: 'MOTORISTA', regime: 'ADMINISTRATIVO' }] });
+  await db.doc('eq/cadastro').set({ operadores: [{ mat: '804', nome: 'DANI FUNCAO QUATRO', funcao: 'AJUDANTE', escala: '4x4', turma: 'B' }] });
+  await db.doc('eq/config').set({ funcoes: ['AJUDANTE', 'OPERADOR'] });
+  const env = { FUNCAO_DE: 'ajudante', FUNCAO_ADM: 'executante', FUNCAO_TURNO: 'executante turno', BACKUP_PASTA: 'copia-funcao' };
+
+  const sim = rodar('trocar-funcao.mjs', env);
+  assert.match(sim, /só conferência/); assert.match(sim, /3 pessoa\(s\) mudariam: 1 ADM e 2 turno/);
+  assert.doesNotMatch(sim, /ANA FUNCAO/, 'sem nomes no resumo');
+  assert.equal((await db.doc('gcolab/RECEBIMENTO').get()).get('itens')[0].funcao, 'AJUDANTE', 'simular não grava');
+
+  const gr = rodar('trocar-funcao.mjs', { ...env, FUNCAO_MODO: 'gravar' });
+  assert.match(gr, /3 pessoa\(s\) mudaram/);
+  assert.deepEqual((await db.doc('gcolab/RECEBIMENTO').get()).get('itens').map(c => c.funcao), ['EXECUTANTE', 'EXECUTANTE TURNO', 'LÍDER']);
+  assert.equal((await db.doc('gcolab/OPERAÇÃO DE EQUIPAMENTOS').get()).get('itens')[0].funcao, 'EXECUTANTE TURNO');
+  assert.deepEqual((await db.doc('colaboradores/RECEBIMENTO').get()).get('itens').map(c => c.funcao), ['EXECUTANTE', 'EXECUTANTE TURNO']);
+  assert.equal((await db.doc('b_colaboradores/BATERIA 1').get()).get('atualizadoPor'), undefined, 'documento sem mudança não é regravado');
+  assert.equal((await db.doc('eq/cadastro').get()).get('operadores')[0].funcao, 'EXECUTANTE TURNO');
+  assert.deepEqual((await db.doc('eq/config').get()).get('funcoes'), ['EXECUTANTE TURNO', 'OPERADOR']);
+  assert.deepEqual((await db.doc('config/funcoes').get()).get('lista'), ['EXECUTANTE', 'EXECUTANTE TURNO']);
+  const bk = (await db.collection('backups').get()).docs.find(d => d.id.startsWith('antes-trocar-funcao-'));
+  assert.equal(JSON.parse(bk.get('json'))['gcolab/RECEBIMENTO'].itens[0].funcao, 'AJUDANTE', 'cópia de antes no banco');
+  assert.ok(fs.readdirSync(path.join(tmp, 'copia-funcao')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
+  assert.match(rodar('trocar-funcao.mjs', env), /0 pessoa\(s\) mudariam/, 'rodar de novo não muda ninguém');
+});
