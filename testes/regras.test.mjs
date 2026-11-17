@@ -592,6 +592,15 @@ test('escalas: todos os ativos leem; só administrador e gestor alteram', async 
   await assertSucceeds(setDoc(doc(db('gestorP'), 'config', 'escalas'), { x: 1 }));
 });
 
+test('funções: só o administrador lê e grava a lista oficial', async () => {
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'funcoes'), { lista: ['EXECUTANTE', 'EXECUTANTE TURNO'] }));
+  await assertSucceeds(getDoc(doc(db('admin'), 'config', 'funcoes')));
+  await assertFails(getDoc(doc(db('gestorG'), 'config', 'funcoes')));
+  await assertFails(setDoc(doc(db('gestorG'), 'config', 'funcoes'), { lista: [] }));
+  await assertFails(setDoc(doc(db('rhSo'), 'config', 'funcoes'), { lista: [] }));
+  await assertFails(setDoc(doc(db('admin'), 'config', 'funcoes'), { lista: 'EXECUTANTE' }));
+});
+
 // ---------------- Efetivo por área ----------------
 const ids = async (q) => (await getDocs(q)).docs.map(d => d.id).sort();
 test('fichas por área: líder lê só a lista da área dele; supervisor as duas; quem tem a Operação lê os operadores', async () => {

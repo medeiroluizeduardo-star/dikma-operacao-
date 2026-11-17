@@ -51,6 +51,7 @@
 //                             (até 900 mil caracteres; alvo ~200 mil). Lido só ao abrir a foto grande ou exportar.
 //   Gravação: semana (s, m, ft) + evidencias + evidenciasArquivo no MESMO writeBatch (apontarComFotos): sem sinal fica tudo
 //   na fila do aparelho e sobe junto — nunca fica apontamento sem foto nem foto sem apontamento.
+//   config/funcoes            { lista[] }   lista oficial das funções (cargos); Administração › Funções (contas/funcoes.js)
 //   config/seguranca          { areas[{nome, conj}], tipos[], regimes[], desvios[] }   listas dos formulários da Segurança
 //   segdds/{id}               DDS antigos (a função saiu do site em 2026-11; os dados ficam guardados no banco)
 //   seginter/{id}             registro de interação { data, mes, area, conj, local, tipoAtiv, risco, desvios[], desvioOutro,
@@ -327,6 +328,9 @@ function startData() {
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
+  // Lista oficial das funções (Administração › Funções): só o administrador lê e grava; os demais usam as funções em uso.
+  cache.funcoes = { lista: [], loaded: !ehAdminU(me) };
+  if (ehAdminU(me)) on(doc(db, 'config', 'funcoes'), s => { cache.funcoes = { lista: (s.exists() && s.data().lista) || [], loaded: true }; changed(); });
   // Abas por perfil (tela Perfis e permissões).
   on(doc(db, 'config', 'permissoes'), s => { cache.permissoes = s.exists() ? (s.data().abas || {}) : {}; changed(); });
   on(doc(db, 'config', 'avisos'), s => { cache.avisosCfg = s.exists() ? s.data() : {}; changed(); });
@@ -680,6 +684,7 @@ export async function desativarAvisos() {
   await setDoc(doc(db, 'avisos', me.uid), { tokens: atual.filter(x => x !== t), atualizadoEm: serverTimestamp() }, { merge: true });
 }
 export const salvarPrefsAvisos = prefs => track(setDoc(doc(db, 'avisos', me.uid), { prefs, atualizadoEm: serverTimestamp() }, { merge: true }));
+export const funcoesSalvar = lista => track(setDoc(doc(db, 'config', 'funcoes'), { lista, ...marca() }));
 export const salvarEscalas = cfg => track(setDoc(doc(db, 'config', 'escalas'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Indicadores do contrato: metas, valores de ICCC/ICCP e o histórico (Gestor dos Indicadores e administrador; firestore.rules).
 export const indSalvar = patch => track(setDoc(doc(db, 'config', 'indicadores'), { ...patch, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));

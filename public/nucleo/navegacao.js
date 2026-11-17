@@ -106,6 +106,7 @@ export const VIEWS = [
   // Documentos e OMs (telas/documentos.js): validade dos POP, PT, OS, ASO e OMs (era Campo do Meu painel). O Gestor e o
   // Coordenador da Gestão também veem (soReq: só o req decide, fora de Perfis e permissões).
   { id: 'cfdocs', nome: 'Documentos e OMs', ic: 'arquivo', grp: 'Geral', mod: 'administracao', ord: 1.85, req: () => veDocsU(ME), soReq: true, tela: 'DC' },
+  { id: 'cffun', nome: 'Funções', ic: 'etiqueta', grp: 'Geral', mod: 'administracao', ord: 1.9, req: () => isAdmin(), tela: 'FN' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Atividades', mod: 'administracao', ord: 4, req: () => admDe('ativ') },
