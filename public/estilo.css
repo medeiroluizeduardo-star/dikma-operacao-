@@ -425,7 +425,7 @@ table.perm tr.grp-row th{background:var(--surface-2);text-align:left;font-size:1
 .dbtn.hoje b::after{content:"";display:block;width:5px;height:5px;border-radius:50%;background:var(--accent);margin:2px auto 0}
 .rchips{display:flex;gap:6px;flex-wrap:wrap}
 .rchip{border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:6px 12px;font-size:12.5px;font-weight:500;display:flex;gap:6px;align-items:center}
-.rchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.rchip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)} /* guia visual: laranja só na ação principal */
 .rchip .c{font-size:11px;opacity:.7}
 .prog{display:flex;flex-direction:column;gap:6px}
 .prog .stack{height:10px}

@@ -176,8 +176,8 @@ export function ajustarFaixas(raiz) {
     const its = [...f.children].filter(x => !x.classList.contains('kmais'));
     const chave = its.length + '|' + its.slice(0, 3).map(x => ((x.querySelector('span,.lbl') || x).textContent || '').trim()).join('|');
     const aberta = faixasAbertas.has(chave);
-    // faixa "compacta" (Efetivo diário): no celular só 4 à vista, para a lista de pessoas subir
-    const max = f.classList.contains('compacta') && matchMedia('(max-width:860px)').matches ? 4 : MAX_FAIXA;
+    // faixa "compacta" (telas da Operação): só 4 à vista, o resto em "Ver mais"
+    const max = f.classList.contains('compacta') ? 4 : MAX_FAIXA; // guia visual: no máximo 4 números no topo (Operação)
     its.forEach((x, i) => x.classList.toggle('k-oculto', !aberta && i >= max));
     let b = f.querySelector(':scope > .kmais');
     if (its.length > max) {
