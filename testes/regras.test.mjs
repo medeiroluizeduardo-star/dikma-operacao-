@@ -1610,7 +1610,11 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', titulo: 'Outro título', ...mk('supPatio') }, { merge: true }), 'ao finalizar, só a hora e a observação');
   await assertSucceeds(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', obsFim: 'ok', ...mk('supPatio') }, { merge: true }), 'líder/supervisor da área finaliza');
   await assertFails(setDoc0(ref('opGestorSo'), { conj: 'bateria', ...mk('opGestorSo') }, { merge: true }), 'o conjunto não muda');
-  await assertFails(deleteDoc(ref('opGestorSo')), 'só o administrador apaga');
+  await assertSucceeds(setDoc0(ref('opGestorSo'), { cliente: 'Manutenção mecânica', contato: 'Ramal 1234', ...mk('opGestorSo') }, { merge: true }), 'quem trata informa o cliente');
+  await assertFails(setDoc0(ref('opGestorSo'), { cliente: 'x'.repeat(121), ...mk('opGestorSo') }, { merge: true }), 'cliente com limite de tamanho');
+  await assertFails(deleteDoc(ref('supPatio')), 'quem abriu não apaga');
+  await assertFails(deleteDoc(ref('tecBat')), 'técnico de outro conjunto não apaga');
+  await assertSucceeds(deleteDoc(ref('opGestorSo')), 'quem trata no conjunto apaga');
 });
 
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {

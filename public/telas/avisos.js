@@ -3,13 +3,12 @@
 // O administrador também cola aqui a chave pública Web Push e acompanha a rotina de avisos.
 // (Antes ficava no fim do "Meu dia", que foi retirado do sistema.)
 import { veTreinos } from '../contas/treinos.js';
-import { veDocsU } from '../contas/documentos.js';
 import { aprovaPapel } from '../contas/aprovacao.js';
 import { temSeg, trataTudoSeg, supConjs } from '../contas/segcalc.js';
 import { editaAdm } from '../contas/acessos.js';
 import { horasEf, HORAS_AVISO } from '../contas/efetivo-dia.js';
 
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, documentos: true, oms: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true };
 
 export function criarAvisos(X) {
   const { DB, esc, toast, render } = X;
@@ -43,7 +42,6 @@ export function criarAvisos(X) {
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
       (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor', 'tecnico', 'coordenador', 'gestor'].includes(P('operacao')) && ['oms', ['tecnico', 'coordenador', 'gestor'].includes(P('operacao')) ? 'Solicitação de OM para aprovar e OM devolvida ou liberada (na hora)' : 'Sua solicitação de OM devolvida ou liberada (na hora)'],
-      veDocsU(ME()) && ['documentos', 'Documentos e OMs vencidos ou vencendo (segunda, às 7h)'],
       ehAdm() && ['painel', 'Processos e rotina: tarefas do dia (7h) e o que ficou em aberto (16h)']
     ].filter(Boolean);
     let corpo;

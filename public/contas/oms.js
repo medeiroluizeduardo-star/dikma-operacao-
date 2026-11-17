@@ -13,7 +13,7 @@ export const COR = { solicitada: 'atencao', devolvida: 'critico', aprovada: 'inf
 export const ABERTAS = ['solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'];
 export const PRIORIDADES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', emergencia: 'Emergência' };
 export const TIPOS = { corretiva: 'Corretiva', preventiva: 'Preventiva', melhoria: 'Melhoria', seguranca: 'Segurança' };
-export const LIMITES = { titulo: 200, local: 120, equip: 80, desc: 1000, motivo: 400, numero: 40, obs: 600, hist: 60 };
+export const LIMITES = { titulo: 200, local: 120, equip: 80, desc: 1000, motivo: 400, numero: 40, obs: 600, hist: 60, cliente: 120, contato: 120 };
 
 /* ---------- quem faz o quê ---------- */
 // Quem abre: líder, supervisor, coordenador e gestor da Operação no conjunto (líder e supervisor só nas áreas deles).
@@ -44,6 +44,8 @@ export function acoesDe(om, u) {
   if (trata && om.status === 'enviada') a.push('liberar');
   if ((trata || daArea) && om.status === 'liberada') a.push('finalizar');
   if ((dono && ['solicitada', 'devolvida'].includes(om.status)) || (trata && ABERTAS.includes(om.status))) a.push('cancelar');
+  // Apagar de vez (aberta por engano, repetida): quem trata no conjunto e o administrador, em qualquer situação.
+  if (trata) a.push('apagar');
   return a;
 }
 
@@ -95,7 +97,10 @@ export function mudar(om, acao, quem, d = {}) {
     }
     case 'enviar': {
       const h = ehHora(d.hEnvio) ? d.hEnvio : ag;
-      return { status: 'enviada', hEnvio: h, numero: t(d.numero, LIMITES.numero), hist: comHist(om, passo('enviada', quem, d.numero ? 'OM ' + t(d.numero, LIMITES.numero) : '', h)) };
+      const cliente = t(d.cliente, LIMITES.cliente), contato = t(d.contato, LIMITES.contato), numero = t(d.numero, LIMITES.numero);
+      if (cliente.length < 2) erro('Informe para qual cliente (setor ou área) a OM foi enviada.', 'omCli');
+      const txt = [cliente, contato, numero ? 'OM ' + numero : ''].filter(Boolean).join(' · ');
+      return { status: 'enviada', hEnvio: h, numero, cliente, contato, hist: comHist(om, passo('enviada', quem, txt, h)) };
     }
     case 'liberar': {
       if (!ehHora(d.hLib)) erro('Informe a hora da liberação.', 'omHLib');
@@ -125,7 +130,7 @@ export function filtrar(l, f = {}) {
   return ordenar(l.filter(o => (!f.status || (f.status === 'abertas' ? ABERTAS.includes(o.status) : o.status === f.status))
     && (!f.area || o.area === f.area)
     && (!f.mes || ABERTAS.includes(o.status) || String(o.hFim || o.hSol || '').startsWith(f.mes))
-    && (!q || [o.numero, o.titulo, o.local, o.equip, o.desc, o.solNome, o.area, STATUS[o.status]].join(' ').toLowerCase().includes(q))));
+    && (!q || [o.numero, o.titulo, o.local, o.equip, o.desc, o.solNome, o.area, o.cliente, o.contato, STATUS[o.status]].join(' ').toLowerCase().includes(q))));
 }
 // Contagens dos cartões. mes = 'AAAA-MM' (finalizadas e tempo médio do mês).
 export function resumo(l, mes) {
@@ -142,9 +147,17 @@ export function resumo(l, mes) {
   r.esperaMedia = m(esp); r.execMedia = m(exe); r.comCliente = r.aprovada + r.enviada;
   return r;
 }
+// Clientes já usados no conjunto (sugestões no envio), do mais recente para o mais antigo.
+export function clientesUsados(l) {
+  const vistos = new Map();
+  for (const o of [...l].sort((a, b) => String(b.hEnvio || '').localeCompare(String(a.hEnvio || '')))) {
+    const c = String(o.cliente || '').trim(); if (c && !vistos.has(c.toLowerCase())) vistos.set(c.toLowerCase(), { cliente: c, contato: o.contato || '' });
+  }
+  return [...vistos.values()];
+}
 export function linhasExcel(l, areaNome = a => a) {
-  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Hora da solicitação', 'Aprovada em', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização'],
-    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', horaBR(o.hSol), horaBR(o.hAprov), horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '']; })];
+  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização'],
+    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', horaBR(o.hSol), horaBR(o.hAprov), o.cliente || '', o.contato || '', horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '']; })];
 }
 
 /* ---------- avisos no celular (rotina de hora em hora) ---------- */

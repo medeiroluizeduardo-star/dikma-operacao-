@@ -1,7 +1,7 @@
 // Operação › Solicitações de OM: contas sem tela (public/contas/oms.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal } from '../public/contas/oms.js';
+import { veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal, clientesUsados } from '../public/contas/oms.js';
 
 const U = {
   lider: { uid: 'lider', papel: 'lider', area: 'RECEBIMENTO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
@@ -25,12 +25,12 @@ test('quem vê, abre e trata', () => {
 
 test('botões conforme a situação e a pessoa', () => {
   assert.deepEqual(acoesDe(om(), U.lider), ['editar', 'cancelar']);
-  assert.deepEqual(acoesDe(om(), U.tec), ['editar', 'aprovar', 'devolver', 'cancelar']);
-  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['enviar', 'cancelar']);
-  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'cancelar']);
+  assert.deepEqual(acoesDe(om(), U.tec), ['editar', 'aprovar', 'devolver', 'cancelar', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['enviar', 'cancelar', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'cancelar', 'apagar']);
   assert.deepEqual(acoesDe(om({ status: 'liberada' }), U.lider), ['finalizar'], 'o líder da área finaliza');
   assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.lider), [], 'depois de aprovada, o líder só acompanha');
-  assert.deepEqual(acoesDe(om({ status: 'finalizada' }), U.tec), []);
+  assert.deepEqual(acoesDe(om({ status: 'finalizada' }), U.tec), ['apagar'], 'quem trata apaga mesmo finalizada');
   assert.deepEqual(acoesDe(om(), U.leitor), []);
 });
 
@@ -48,7 +48,7 @@ test('caminho completo: aprovar, enviar, liberar, finalizar, com horas e histór
   const q = { uid: 'tec', nome: 'Técnico' };
   let o = om();
   o = { ...o, ...mudar(o, 'aprovar', q) }; assert.equal(o.status, 'aprovada'); assert.equal(o.aprovNome, 'Técnico');
-  o = { ...o, ...mudar(o, 'enviar', q, { numero: ' 4500123 ', hEnvio: '2026-11-17T08:30' }) }; assert.equal(o.numero, '4500123'); assert.equal(o.hEnvio, '2026-11-17T08:30');
+  o = { ...o, ...mudar(o, 'enviar', q, { numero: ' 4500123 ', cliente: ' Manutenção mecânica ', contato: 'Ramal 1234', hEnvio: '2026-11-17T08:30' }) }; assert.equal(o.numero, '4500123'); assert.equal(o.cliente, 'Manutenção mecânica'); assert.equal(o.contato, 'Ramal 1234'); assert.equal(o.hEnvio, '2026-11-17T08:30');
   assert.throws(() => mudar(o, 'liberar', q, { hLib: '2026-11-17T06:00' }), /antes da solicitação/);
   o = { ...o, ...mudar(o, 'liberar', q, { hLib: '2026-11-17T13:10' }) }; assert.equal(o.status, 'liberada');
   assert.throws(() => mudar(o, 'finalizar', q, { hFim: '2026-11-17T12:00' }), /antes da liberação/);
@@ -82,4 +82,11 @@ test('avisos: nova para quem trata no conjunto; devolvida e liberada para quem a
   assert.deepEqual(l.filter(x => x.tipo === 'nova').map(x => x.uid).sort(), ['adm', 'tec']);
   assert.deepEqual(l.filter(x => x.tipo === 'devolvida').map(x => x.uid), ['lider']);
   assert.ok(!l.some(x => x.om.id === 'velha'));
+});
+
+test('cliente: obrigatório no envio e sugerido pelos já usados', () => {
+  assert.throws(() => mudar(om({ status: 'aprovada' }), 'enviar', { uid: 'tec' }, { numero: '1' }), e => e.campo === 'omCli');
+  const l = [om({ id: 'a', cliente: 'Elétrica', hEnvio: '2026-11-10T08:00' }), om({ id: 'b', cliente: 'Mecânica', contato: 'Ramal 1', hEnvio: '2026-11-16T08:00' }), om({ id: 'c', cliente: 'mecânica', hEnvio: '2026-11-01T08:00' }), om({ id: 'd' })];
+  assert.deepEqual(clientesUsados(l), [{ cliente: 'Mecânica', contato: 'Ramal 1' }, { cliente: 'Elétrica', contato: '' }]);
+  assert.deepEqual(filtrar(l, { q: 'elétrica' }).map(o => o.id), ['a']);
 });

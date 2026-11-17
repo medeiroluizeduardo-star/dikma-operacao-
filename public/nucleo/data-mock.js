@@ -232,13 +232,6 @@ export function procSalvarCfg(patch) {
   cache.proc = { ...cache.proc, cfg: { ...c, ...x, itens } }; changed(); return Promise.resolve();
 }
 export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs, [id]: { ...(cache.proc.docs[id] || {}), ...dados } }; changed(); return Promise.resolve(); }
-// Administração › Documentos e OMs: na demonstração, em memória, com um vencido, um vencendo e um em dia.
-{ const h = today(); const d = n => add(h, n);
-  cache.docs = { loaded: true, d: {
-    dc1: { id: 'dc1', tipo: 'POP', numero: 'POP-012', titulo: 'Limpeza das correias transportadoras', rev: '03', conj: 'patio', area: 'PREPARAÇÃO', local: 'Correias da preparação', resp: 'Supervisão do Pátio', emitente: 'Engenharia', emissao: d(-360), period: null, aviso: 30, validade: d(-5), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
-    dc2: { id: 'dc2', tipo: 'OM', numero: 'OM 4500123', titulo: 'Troca do raspador da correia 3', conj: 'bateria', area: 'BATERIA 2', local: 'Correia 3', prio: 'alta', resp: 'Manutenção', emitente: 'Operação', emissao: d(-20), period: null, aviso: 15, validade: d(12), situacao: 'Em andamento', link: '', obs: '', criadoNome: 'Demonstração' },
-    dc3: { id: 'dc3', tipo: 'PT', numero: 'PT-0457', titulo: 'Trabalho em altura na bateria', conj: 'bateria', resp: 'Segurança', emissao: d(-10), validade: d(170), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
-    dc4: { id: 'dc4', tipo: 'ASO', numero: '', titulo: 'ASO periódico', colab: 'Colaborador de exemplo', mat: '1001', period: 12, conj: 'coq', resp: 'RH', emissao: d(-400), validade: d(-30), situacao: 'Concluído', link: '', obs: '', criadoNome: 'Demonstração' } } }; }
 // Operação › OMs: na demonstração, em memória, uma OM em cada etapa do caminho.
 { const h = today(); const d = n => add(h, n); const hr = (n, hh) => d(n) + 'T' + hh;
   const p = (s, em, txt) => ({ s, em, por: 'demo', nome: 'Demonstração', ...(txt ? { txt } : {}) });
@@ -246,20 +239,17 @@ export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs
   cache.oms = { patio: { loaded: true, d: {
     om1: base('om1', { area: 'RECEBIMENTO', equip: 'TC-03', local: 'Correia transportadora 3', titulo: 'Troca de rolete travado', prio: 'alta', status: 'solicitada', hSol: hr(0, '07:40'), hist: [p('solicitada', hr(0, '07:40'))] }),
     om2: base('om2', { area: 'PREPARAÇÃO', equip: 'BR-01', local: 'Britador', titulo: 'Vazamento de óleo no redutor', status: 'devolvida', motivo: 'Falta a foto e o ponto exato do vazamento', hSol: hr(-1, '14:10'), hist: [p('solicitada', hr(-1, '14:10')), p('devolvida', hr(-1, '15:00'), 'Falta a foto e o ponto exato do vazamento')] }),
-    om3: base('om3', { area: 'FINAL DO PÁTIO', local: 'Rampa de acesso', titulo: 'Recompor grade de proteção', tipo: 'seguranca', status: 'enviada', numero: '4500123', hSol: hr(-2, '09:00'), hAprov: hr(-2, '09:30'), hEnvio: hr(-2, '10:00'), hist: [p('solicitada', hr(-2, '09:00')), p('aprovada', hr(-2, '09:30')), p('enviada', hr(-2, '10:00'), 'OM 4500123')] }),
+    om3: base('om3', { area: 'FINAL DO PÁTIO', local: 'Rampa de acesso', titulo: 'Recompor grade de proteção', tipo: 'seguranca', status: 'enviada', numero: '4500123', cliente: 'Manutenção mecânica', contato: 'Ramal 1234', hSol: hr(-2, '09:00'), hAprov: hr(-2, '09:30'), hEnvio: hr(-2, '10:00'), hist: [p('solicitada', hr(-2, '09:00')), p('aprovada', hr(-2, '09:30')), p('enviada', hr(-2, '10:00'), 'Manutenção mecânica · Ramal 1234 · OM 4500123')] }),
     om4: base('om4', { area: 'TRATAMENTO DE COQUE', equip: 'PN-02', local: 'Peneira 2', titulo: 'Troca de tela da peneira', tipo: 'preventiva', status: 'liberada', numero: '4500118', hSol: hr(-3, '08:00'), hAprov: hr(-3, '08:20'), hEnvio: hr(-3, '08:40'), hLib: hr(-1, '07:30'), hist: [p('solicitada', hr(-3, '08:00')), p('aprovada', hr(-3, '08:20')), p('enviada', hr(-3, '08:40')), p('liberada', hr(-1, '07:30'))] }),
-    om5: base('om5', { area: 'RECEBIMENTO', equip: 'TC-01', local: 'Correia 1', titulo: 'Alinhar correia', status: 'finalizada', numero: '4500101', hSol: hr(-5, '07:00'), hAprov: hr(-5, '07:30'), hEnvio: hr(-5, '08:00'), hLib: hr(-4, '13:00'), hFim: hr(-4, '16:30'), obsFim: 'Correia alinhada e testada', hist: [p('solicitada', hr(-5, '07:00')), p('finalizada', hr(-4, '16:30'))] })
+    om5: base('om5', { area: 'RECEBIMENTO', equip: 'TC-01', local: 'Correia 1', titulo: 'Alinhar correia', status: 'finalizada', numero: '4500101', cliente: 'Manutenção mecânica', hSol: hr(-5, '07:00'), hAprov: hr(-5, '07:30'), hEnvio: hr(-5, '08:00'), hLib: hr(-4, '13:00'), hFim: hr(-4, '16:30'), obsFim: 'Correia alinhada e testada', hist: [p('solicitada', hr(-5, '07:00')), p('finalizada', hr(-4, '16:30'))] })
   } }, bateria: { loaded: true, d: {} } }; }
 export function omsWatch() { /* tudo já está em memória */ }
+export function omApagar(id, conj) { const c = cache.oms[conj]; if (c) { c.d = { ...c.d }; delete c.d[id]; cache.oms = { ...cache.oms }; } changed(); return Promise.resolve(); }
 export const omNovoId = () => 'om' + Date.now().toString(36);
 export function omSalvar(id, conj, dados, novo = false) {
   const c = cache.oms[conj] || { d: {}, loaded: true };
   c.d = { ...c.d, [id]: { ...(c.d[id] || {}), id, ...dados, ...(novo ? { conj, solPor: me.uid, solNome: me.nome } : {}) } }; cache.oms = { ...cache.oms, [conj]: c }; changed(); return Promise.resolve();
 }
-export function docsWatch() { /* tudo já está em memória */ }
-export const docNovoId = () => 'dc' + Date.now().toString(36);
-export function docSalvar(id, dados, novo = false) { cache.docs.d = { ...cache.docs.d, [id]: { ...(cache.docs.d[id] || {}), id, ...dados, ...(novo ? { criadoNome: me.nome } : {}) } }; changed(); return Promise.resolve(); }
-export function docApagar(id) { delete cache.docs.d[id]; changed(); return Promise.resolve(); }
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;
