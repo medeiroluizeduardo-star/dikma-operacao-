@@ -127,6 +127,7 @@ function renderTela() {
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
   if (arq === 'DC') return tela(comModulo('DC', m => m.renderView(v)));
+  if (arq === 'OM') return tela(comModulo('OM', m => m.renderView(v)));
   if (arq === 'FN') return tela(comModulo('FN', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }

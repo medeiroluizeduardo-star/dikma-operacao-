@@ -486,6 +486,36 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Operação › Solicitações de OM (contas/oms.js): quem tem a Operação no conjunto lê. Abre: líder e supervisor (nas
+    // áreas deles), coordenador, gestor e administrador. Trata (aprova, devolve, envia ao cliente, libera, cancela): Técnico de
+    // Processo, coordenador e gestor da Operação no conjunto, e o administrador. Quem abriu corrige ou cancela enquanto está
+    // com o técnico ou devolvida; o líder da área finaliza a OM liberada. Conjunto e quem abriu não mudam.
+    function omTrata(e) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['tecnico', 'coordenador', 'gestor']); }
+    function omAbre(e, area) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && areaEm(pEm('operacao'), area)); }
+    function omOk(d) {
+      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor'])
+        && d.conj in ['patio', 'bateria'] && d.status in ['solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada', 'finalizada', 'cancelada']
+        && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 200 && d.area is string && d.area.size() <= 40
+        && d.get('tipo', 'corretiva') in ['corretiva', 'preventiva', 'melhoria', 'seguranca'] && d.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
+        && tTxt(d, 'local', 120) && tTxt(d, 'equip', 80) && tTxt(d, 'desc', 1000) && tTxt(d, 'numero', 40) && tTxt(d, 'motivo', 400) && tTxt(d, 'obsFim', 600)
+        && tTxt(d, 'hSol', 16) && tTxt(d, 'hAprov', 16) && tTxt(d, 'hEnvio', 16) && tTxt(d, 'hLib', 16) && tTxt(d, 'hFim', 16)
+        && tTxt(d, 'solNome', 150) && tTxt(d, 'aprovNome', 150) && tTxt(d, 'criadoEm', 40)
+        && d.get('hist', []) is list && d.get('hist', []).size() <= 60;
+    }
+    match /oms/{id} {
+      allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
+      allow create: if marcaOk() && omOk(request.resource.data) && request.resource.data.status == 'solicitada'
+        && request.resource.data.solPor == request.auth.uid && omAbre(request.resource.data.conj, request.resource.data.area);
+      allow update: if marcaOk() && omOk(request.resource.data)
+        && request.resource.data.conj == resource.data.conj && request.resource.data.solPor == resource.data.solPor
+        && (omTrata(resource.data.conj)
+          || (resource.data.solPor == request.auth.uid && ativo() && resource.data.status in ['solicitada', 'devolvida'] && request.resource.data.status in ['solicitada', 'cancelada']
+              && omAbre(resource.data.conj, request.resource.data.area))
+          || (resource.data.status == 'liberada' && request.resource.data.status == 'finalizada' && omAbre(resource.data.conj, resource.data.area)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hFim', 'obsFim', 'hist', 'atualizadoEm', 'atualizadoPor'])));
+      allow delete: if admin();
+    }
+
     // Administração › Documentos e OMs (contas/documentos.js): POP, PT, OS, ASO, treinamentos e OMs com validade.
     // O administrador e o Gestor e o Coordenador da Gestão leem, cadastram, alteram e apagam, sempre com a marca de quem gravou.
     function docsEdita() { return admin() || (ativo() && pEm('gestao') in ['gestor', 'coordenador']); }

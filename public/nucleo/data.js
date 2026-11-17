@@ -380,6 +380,7 @@ function stopData() {
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
   if (docsSub) { try { docsSub(); } catch (e) { /* já fechado */ } } docsSub = null; cache.docs = { d: {}, loaded: false };
+  for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -753,6 +754,21 @@ export function docSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'documentos', id), x, { merge: true }));
 }
 export function docApagar(id) { const d = { ...cache.docs.d }; delete d[id]; cache.docs = { ...cache.docs, d }; changed(); const b = writeBatch(db); b.delete(doc(db, 'documentos', id)); return track(b.commit()); }
+// Operação › OMs (contas/oms.js): oms/{id}, uma escuta por conjunto (Pátio, Bateria), aberta quando a tela abre.
+// Quem tem a Operação no conjunto lê; quem abre, o Técnico de Processo e o administrador gravam (firestore.rules).
+const omSubs = new Map(); cache.oms = {};
+export function omsWatch(conj) {
+  if (omSubs.has(conj)) return;
+  omSubs.set(conj, onSnapshot(query(collection(db, 'oms'), where('conj', '==', conj)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.oms = { ...cache.oms, [conj]: { d, loaded: true } }; changed(); },
+    e => { cache.oms = { ...cache.oms, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omSubs.delete(conj); changed(); }));
+}
+export const omNovoId = () => doc(collection(db, 'oms')).id;
+export function omSalvar(id, conj, dados, novo = false) {
+  const x = novo ? { ...dados, conj, solPor: me.uid, solNome: me.nome || me.login || '', criadoEm: new Date().toISOString(), ...marca() } : { ...dados, ...marca() };
+  const c = cache.oms[conj] || { d: {}, loaded: true };
+  cache.oms = { ...cache.oms, [conj]: { ...c, d: { ...c.d, [id]: { ...(c.d[id] || {}), id, ...x } } } }; changed();
+  return track(setDoc(doc(db, 'oms', id), x, { merge: true }));
+}
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

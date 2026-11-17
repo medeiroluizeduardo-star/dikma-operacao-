@@ -11,7 +11,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'documentos']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'documentos', 'oms']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
@@ -151,8 +151,10 @@ for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where
 const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() })).filter(x => !x.apagado);
 // Administração › Documentos e OMs: só na segunda, das 7h em diante (o aviso leva só números).
 const documentos = new Date().getDay() === 1 && new Date().getHours() >= 7 ? (await db.collection('documentos').get()).docs.map(x => ({ id: x.id, ...x.data() })) : [];
+// Operação › Solicitações de OM em andamento (aviso de nova, devolvida e liberada).
+const oms = []; for (const st of ['solicitada', 'devolvida', 'liberada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, documentos, agora: new Date() });
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, documentos, oms, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

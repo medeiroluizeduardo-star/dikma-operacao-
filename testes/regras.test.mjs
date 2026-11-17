@@ -1591,6 +1591,28 @@ test('Administração › Processos e rotina (processos/config, rotina/{id}): s�
   await assertFails(setDoc0(cfg('admin'), { outra: 1, ...mk('admin') }, { merge: true }), 'campo fora da lista nos processos');
 });
 
+test('Operação › Solicitações de OM (oms/{id}): líder abre na área, técnico trata, líder finaliza a liberada', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const ref = (u, id = 'om1') => doc(db(u), 'oms', id);
+  const nova = (u, x = {}) => ({ conj: 'patio', area: 'PREPARAÇÃO', titulo: 'Troca de rolete', local: 'Correia 3', tipo: 'corretiva', prio: 'alta', status: 'solicitada', solPor: u, solNome: 'X', hSol: '2026-11-17T07:40', hist: [], ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('supPatio'), nova('supPatio')), 'supervisor abre na área dele');
+  await assertFails(setDoc0(ref('supPatio', 'om2'), nova('supPatio', { area: 'BATERIA 1' })), 'fora da área');
+  await assertFails(setDoc0(ref('supPatio', 'om2'), nova('supPatio', { status: 'aprovada' })), 'já aprovada');
+  await assertFails(setDoc0(ref('supPatio', 'om2'), nova('supPatio', { solPor: 'admin' })), 'em nome de outra pessoa');
+  await assertFails(setDoc0(ref('supPatio', 'om2'), nova('supPatio', { outra: 1 })), 'campo fora da lista');
+  await assertSucceeds(getDoc(ref('supPatio')), 'quem tem a Operação no Pátio lê');
+  await assertFails(getDoc(ref('rhSo')), 'sem a Operação não lê');
+  await assertFails(setDoc0(ref('supPatio'), { status: 'aprovada', ...mk('supPatio') }, { merge: true }), 'quem abriu não aprova');
+  await assertSucceeds(setDoc0(ref('supPatio'), { titulo: 'Troca de rolete travado', ...mk('supPatio') }, { merge: true }), 'quem abriu corrige enquanto está com o técnico');
+  await assertSucceeds(setDoc0(ref('opGestorSo'), { status: 'aprovada', hAprov: '2026-11-17T08:00', ...mk('opGestorSo') }, { merge: true }), 'gestor da Operação trata');
+  await assertFails(setDoc0(ref('supPatio'), { titulo: 'Mudou depois de aprovada', ...mk('supPatio') }, { merge: true }), 'depois de aprovada, quem abriu não muda');
+  await assertSucceeds(setDoc0(ref('admin'), { status: 'liberada', hLib: '2026-11-17T13:00', numero: '4500123', ...mk('admin') }, { merge: true }), 'administrador registra a liberação');
+  await assertFails(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', titulo: 'Outro título', ...mk('supPatio') }, { merge: true }), 'ao finalizar, só a hora e a observação');
+  await assertSucceeds(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', obsFim: 'ok', ...mk('supPatio') }, { merge: true }), 'líder/supervisor da área finaliza');
+  await assertFails(setDoc0(ref('opGestorSo'), { conj: 'bateria', ...mk('opGestorSo') }, { merge: true }), 'o conjunto não muda');
+  await assertFails(deleteDoc(ref('opGestorSo')), 'só o administrador apaga');
+});
+
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {
   const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
   const ref = (u, id = 'dc1') => doc(db(u), 'documentos', id);
