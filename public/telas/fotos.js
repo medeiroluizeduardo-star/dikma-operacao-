@@ -106,11 +106,13 @@ export function passoFotosCel(doc, i, k, sit, ok, cancelar) {
 export function seloFotos(doc, i, k) {
   const pid = doc.ids[i]; const n = fotosDaCel(doc, pid, k); const c = doc.d[i][k]; const ref = `${esc(doc.id)}|${i}|${k}`;
   if (n) return ` · <button type="button" class="fotob" data-act="verFotos" data-k="${ref}" aria-label="Ver ${n} foto${n > 1 ? 's' : ''}" title="Ver as fotos">${I.cam}<span class="num">${n}</span></button>`;
-  const cfg = cfgF();
-  if (!'RNE'.includes(c) || !exigeFoto({ ...cfg, obrig: true }, c, fpDe(doc, pid, k))) return '';
-  const dt = diasDe(doc)[k];
-  if (!cfg.obrig || dt < cfg.desde) return ' · <span class="semfoto antiga" title="Apontada antes da foto obrigatória">sem foto</span>';
-  return canEdit(doc.area) ? ` · <button type="button" class="fotob falta" data-act="verFotos" data-k="${ref}">sem foto · adicionar</button>` : ' · <span class="semfoto">sem foto</span>';
+  if (!'RNE'.includes(c)) return '';
+  const cfg = cfgF(); const pede = exigeFoto(cfg, c, fpDe(doc, pid, k)) && diasDe(doc)[k] >= cfg.desde;
+  if (pede) return canEdit(doc.area) ? ` · <button type="button" class="fotob falta" data-act="verFotos" data-k="${ref}">sem foto · adicionar</button>` : ' · <span class="semfoto">sem foto</span>';
+  // Foto não obrigatória aqui: quem aponta ainda pode juntar fotos, se quiser.
+  if (canEdit(doc.area)) return ` · <button type="button" class="fotob" data-act="verFotos" data-k="${ref}" aria-label="Adicionar foto (opcional)" title="Foto opcional">${I.cam}<span>foto</span></button>`;
+  if (cfg.obrig && exigeFoto(cfg, c, fpDe(doc, pid, k))) return ' · <span class="semfoto antiga" title="Apontada antes da foto obrigatória">sem foto</span>';
+  return '';
 }
 const achar = ref => { const p = String(ref).split('|'); const k = +p.pop(), i = +p.pop(); const doc = DB.cache.semanas[p.join('|')]; return doc && doc.ids[i] ? { doc, i, k } : null; };
 acoes.verFotos = (t, d) => { const x = achar(d.k); if (x) verFotosCel(x.doc, x.i, x.k); };
