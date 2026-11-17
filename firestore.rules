@@ -453,11 +453,11 @@ service cloud.firestore {
         && tTxt(d, 'pauta', 5000) && tTxt(d, 'decisoes', 5000) && tTxt(d, 'participantes', 600)
         && d.get('enc', []) is list && d.get('enc', []).size() <= 60;
     }
-    function tratOk(d) { return (d.tipo == 'acao' && tratAcaoOk(d)) || (d.tipo == 'plano' && tratPlanoOk(d)) || (d.tipo == 'ata' && tratAtaOk(d)); }
+    function tratDocOk(d) { return (d.tipo == 'acao' && tratAcaoOk(d)) || (d.tipo == 'plano' && tratPlanoOk(d)) || (d.tipo == 'ata' && tratAtaOk(d)); }
     match /tratativas/{id} {
       allow read: if tratLe();
-      allow create: if tratEdita() && tratOk(request.resource.data) && request.resource.data.get('criadoPor', '') == request.auth.uid && marcaOk();
-      allow update: if tratEdita() && tratOk(request.resource.data) && marcaOk() && request.resource.data.tipo == resource.data.tipo
+      allow create: if tratEdita() && tratDocOk(request.resource.data) && request.resource.data.get('criadoPor', '') == request.auth.uid && marcaOk();
+      allow update: if tratEdita() && tratDocOk(request.resource.data) && marcaOk() && request.resource.data.tipo == resource.data.tipo
         && request.resource.data.get('criadoPor', '') == resource.data.get('criadoPor', '');
       allow delete: if admin() || (tratEdita() && (pEm('gestao') == 'gestor' || resource.data.get('criadoPor', '') == request.auth.uid));
     }
