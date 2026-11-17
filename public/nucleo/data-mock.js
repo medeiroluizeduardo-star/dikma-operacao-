@@ -4,6 +4,7 @@ import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOf
 import { legadoDoAcesso, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
 import { prepararImportacao } from '../contas/planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
+import { TIPOS_INSP, notaInsp } from '../contas/inspecoes.js';
 import { aplicarCampos } from '../contas/limpeza.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt, cfgFotos, exigeFoto, metaFoto, refCel } from '../contas/fotos.js';
@@ -697,6 +698,20 @@ function cartoesExemplo() {
     return c;
   });
 }
+// Inspeções de exemplo: algumas no mês, uma com item Não OK que virou a anomalia de exemplo do guarda-corpo.
+function inspExemplo() {
+  const hoje = today(); const dia = n => add(hoje, -n); const ms = (d, h = 9) => new Date(`${d}T${String(h).padStart(2, '0')}:10:00`).getTime();
+  const TEC = { por: 'segr', porNome: 'Técnico de Segurança' };
+  const PAT = { area: 'PÁTIO DE CARVÃO', conj: 'patio' }, BAT = { area: 'BATERIA', conj: 'bateria' };
+  const it = (tipo, rs, obs = {}) => TIPOS_INSP[tipo].itens.map((t, k) => ({ t, r: rs[k], obs: obs[k] || '' }));
+  const l = [
+    [1, 's5', PAT, 'PREPARAÇÃO - PENEIRAS', ['ok', 'ok', 'no', 'ok', 'ok'], { 2: 'Dreno da peneira 2 com acúmulo de material' }],
+    [2, 'seg', BAT, 'TOPO DA BATERIA 1', ['ok', 'ok', 'ok', 'ok', 'na'], {}],
+    [4, 'area', PAT, 'CORREIA C5613A', ['no', 'ok', 'ok', 'ok', 'ok'], { 0: 'Material acumulado embaixo da correia' }],
+    [8, 's5', BAT, 'CDQ', ['ok', 'ok', 'ok', 'ok', 'ok'], {}]
+  ];
+  return l.map(([n, tipo, A, local, rs, obs], i) => { const data = dia(n); const itens = it(tipo, rs, obs); return { id: 'sp' + i, tipo, data, mes: data.slice(0, 7), ...A, local, itens, nota: notaInsp(itens), obs: '', ...TEC, em: ms(data, 8 + i) }; });
+}
 // O que a pessoa lê da Segurança: o que a Segurança dá a ela e, nos Indicadores, os registros dos conjuntos do escopo.
 const veSegMock = r => veRegSeg(me, r) || conjsInd(me).includes(r.conj);
 function iniciarSeg() {
@@ -704,19 +719,20 @@ function iniciarSeg() {
   try { SEG = JSON.parse(localStorage.getItem(LSS) || 'null'); } catch (e) { SEG = null; }
   if (!SEG || !Array.isArray(SEG.inter)) { SEG = segExemplo(); segPersist(); }
   if (!Array.isArray(SEG.cartao)) { SEG.cartao = cartoesExemplo(); segPersist(); }
+  if (!Array.isArray(SEG.insp)) { SEG.insp = inspExemplo(); segPersist(); }
   segVer++;
 }
 Object.defineProperty(cache, 'seg', {
   get: () => {
-    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], meses: new Set(), v: 0 };
+    if (!SEG) return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], insp: [], meses: new Set(), v: 0 };
     const k = segVer + '|' + (me ? me.uid : '');
-    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(veSegMock), anom: SEG.anom.filter(veSegMock), cartao: SEG.cartao.filter(veSegMock), meses: new Set(), v: segVer } };
+    if (segMemo.k !== k) segMemo = { k, v: { on: true, loaded: true, cfg: SEG.cfg, cfgLoaded: true, inter: SEG.inter.filter(veSegMock), anom: SEG.anom.filter(veSegMock), cartao: SEG.cartao.filter(veSegMock), insp: SEG.insp.filter(veSegMock), meses: new Set(), v: segVer } };
     return segMemo.v;
   },
   enumerable: false
 });
 const segId = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const segChave = col => ({ seginter: 'inter', seganom: 'anom', segcartao: 'cartao' }[col]);
+const segChave = col => ({ seginter: 'inter', seganom: 'anom', segcartao: 'cartao', seginsp: 'insp' }[col]);
 export function segWatch() { /* tudo já está em memória */ }
 export function segNovo(col, dados, fotos) {
   const id = segId({ seginter: 'si', seganom: 'sa', segcartao: 'sc' }[col]); const ids = fotos.map(() => segId('sf'));
@@ -730,6 +746,14 @@ export function segTratar(a, patch, foto) {
   if (foto) { const fid = segId('sf'); SEG.fotos[fid] = { reg: a.id, col: 'seganom', tipo: 'depois', mini: foto.mini, dados: foto.dados, ordem: 0, autor: a.por, por: me.uid, conj: a.conj || '', area: a.area, mes: a.mes }; p.trat = { ...p.trat, fotoDepois: fid, miniDepois: foto.mini }; }
   const i = SEG.anom.findIndex(x => x.id === a.id); if (i >= 0) SEG.anom[i] = { ...SEG.anom[i], ...p, atualizadoPor: me.uid };
   segCh();
+}
+// Inspeção e as anomalias dos itens "Não OK" novos (o mesmo lote de data.js).
+export function segInspSalvar(id, dados, anoms = []) {
+  const iid = id || segId('sp'); const itens = dados.itens.map(i => ({ ...i })); const quem = { por: me.uid, porNome: me.nome || me.login || '' };
+  for (const a of anoms) { const aid = segId('sa'); itens[a.i].anom = aid; SEG.anom.push({ ...a.dados, id: aid, insp: iid, fotos: [], minis: [], ...quem, em: Date.now() }); }
+  const i = SEG.insp.findIndex(x => x.id === iid);
+  if (i >= 0) SEG.insp[i] = { ...SEG.insp[i], ...dados, itens }; else SEG.insp.push({ ...dados, itens, id: iid, ...quem, em: Date.now() });
+  segCh(); return iid;
 }
 export async function segValidar(c, patch) { const i = SEG.cartao.findIndex(x => x.id === c.id); if (i >= 0) SEG.cartao[i] = { ...SEG.cartao[i], ...patch, atualizadoPor: me.uid }; segCh(); }
 export async function segFoto(id) { const f = SEG && SEG.fotos[id]; return f ? f.dados : null; }

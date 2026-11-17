@@ -17,14 +17,14 @@ rules_version = '2';
 //     registros da Segurança do conjunto e treinamentos. Nenhuma gravação passa por este perfil. Veja indE.
 //   - Usuários, config/permissoes = Administração completa (administrador).
 //   - Limpeza de dados (Administração, só o administrador): apagar semanas, aprovações e histórico é só do
-//     administrador; Segurança (seginter, seganom, segcartao, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
+//     administrador; Segurança (seginter, seganom, segcartao, seginsp, segfotos) também. Equipamentos (eqlanc, eqpar, eqinsp): o autor,
 //     o supervisor para cima e o administrador apagam um a um (veja o bloco de equipamentos).
 //   - Fotos das atividades (evidencias, evidenciasArquivo e b_): cria quem aponta na área, em nome próprio; lê quem lê
 //     as semanas; o autor só ajusta refs (24 h); exportação/lixeira/remoção e apagar = administrador; config/fotos =
 //     administrador. Parte 2 (Relatórios e arquivo de fotos): lixeira só da foto exportada; a foto completa só sai do
 //     banco junto da marca removidaEm (e só da que está na lixeira). Veja o bloco "Fotos das atividades" abaixo e
 //     docs/fotos-atividades.md.
-//   - Segurança (seginter, seganom, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
+//   - Segurança (seginter, seganom, seginsp, segfotos, config/seguranca) = perfil da Segurança (registra, trata, gestor, leitor)
 //     e o supervisor da área (Operação · Supervisor numa área do conjunto da anomalia). Veja o bloco Segurança abaixo.
 // Só vale o acesso por módulo: cadastro sem o campo acesso não tem acesso a nenhum módulo. Do cadastro antigo ficam
 // só papel (qualquer perfil = ativo; 'bloqueado' = sem acesso nenhum) e 'gestao' em modulos (= com as Fichas).
@@ -769,8 +769,8 @@ service cloud.firestore {
         && txtOk(d, 'desvioOutro', 0, 200) && txtOk(d, 'desc', 0, 3000) && txtOk(d, 'acao', 0, 3000) && txtOk(d, 'resp', 1, 120);
     }
     function anomOk(d) {
-      return regOk(d) && d.keys().hasOnly(['data', 'hora', 'mes', 'area', 'conj', 'local', 'regime', 'desc', 'conseq', 'acao', 'causas', 'sugest', 'comunic', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'status', 'trat', 'conclEm', 'atualizadoEm', 'atualizadoPor'])
-        && d.hora is string && d.hora.matches('[0-9]{2}:[0-9]{2}') && txtOk(d, 'regime', 1, 40)
+      return regOk(d) && d.keys().hasOnly(['data', 'hora', 'mes', 'area', 'conj', 'local', 'regime', 'desc', 'conseq', 'acao', 'causas', 'sugest', 'comunic', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'status', 'trat', 'conclEm', 'atualizadoEm', 'atualizadoPor', 'insp'])
+        && txtOk(d, 'insp', 0, 40) && d.hora is string && d.hora.matches('[0-9]{2}:[0-9]{2}') && txtOk(d, 'regime', 1, 40)
         && txtOk(d, 'desc', 1, 3000) && txtOk(d, 'conseq', 1, 3000) && txtOk(d, 'acao', 1, 3000) && txtOk(d, 'causas', 1, 3000)
         && txtOk(d, 'sugest', 1, 3000) && txtOk(d, 'comunic', 1, 120) && d.status in ['aberta', 'tratamento', 'concluida'];
     }
@@ -806,6 +806,23 @@ service cloud.firestore {
         || (autorNoPrazo() && resource.data.status == 'aberta' && corrige('seganom') && anomOk(request.resource.data));
       allow delete: if admin();
     }
+    // Inspeções (Segurança › Inspeções, contas/inspecoes.js): 5S, segurança ou limpeza e qualidade da área, com os itens
+    // (OK / Não OK / N/A) e a nota. Registra e lê como os outros registros da Segurança; o autor corrige por 24 h (no mesmo
+    // lote, os itens Não OK novos viram anomalias com o id da inspeção); apagar = administrador.
+    function inspOk(d) {
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && d.conj is string && txtOk(d, 'local', 1, 120)
+        && d.keys().hasOnly(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
+        && d.tipo in ['s5', 'seg', 'area'] && d.itens is list && d.itens.size() >= 1 && d.itens.size() <= 20
+        && (d.get('nota', null) == null || (d.nota is number && d.nota >= 0 && d.nota <= 100))
+        && txtOk(d, 'obs', 0, 2000) && d.por is string && txtOk(d, 'porNome', 0, 120);
+    }
+    match /seginsp/{id} {
+      allow read: if segLe(resource.data);
+      allow create: if segRegistra() && inspOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
+      allow update: if autorNoPrazo() && soAltera(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'atualizadoEm']) && inspOk(request.resource.data);
+      allow delete: if admin();
+    }
+
     // Cartão Amarelo (Direito ao Trabalho Seguro): registra quem registra na Segurança (nasce pendente, sem validação);
     // lê como os outros registros; valida quem trata as anomalias (trata, gestor, administrador = Seg. do Trabalho)
     // e o supervisor da área (Líder imediato), só nos campos da validação. O autor corrige por 24 h enquanto pendente.

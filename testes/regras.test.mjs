@@ -1235,6 +1235,40 @@ test('Segurança · Cartão Amarelo: registra quem registra; valida o líder (su
   await assertFails(deleteDoc(doc(db('segTrata'), 'segcartao', 'c3')), 'só o administrador apaga');
   await assertSucceeds(deleteDoc(doc(db('admin'), 'segcartao', 'c3')));
 });
+test('Segurança · Inspeções: registra quem registra, com os itens; Não OK vira anomalia no mesmo lote; o autor corrige por 24 h', async () => {
+  const ITENS = [{ t: 'EPIs corretos', r: 'ok', obs: '' }, { t: 'Área isolada', r: 'no', obs: 'Sem fita' }];
+  const nova = (por, extra = {}) => ({ tipo: 'seg', data: '2026-11-02', mes: '2026-11', ...PAT, local: 'CORREIA C1', itens: ITENS, nota: 50, obs: '', por, porNome: 'X', em: serverTimestamp(), ...extra });
+  await assertSucceeds(setDoc(doc(db('segReg'), 'seginsp', 'p1'), nova('segReg')));
+  await assertSucceeds(setDoc(doc(db('segTrata'), 'seginsp', 'p2'), nova('segTrata', { nota: null, tipo: 's5' })));
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p3'), nova('segReg2')), 'não registra em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('segLeitor'), 'seginsp', 'p4'), nova('segLeitor')), 'somente leitura não registra');
+  await assertFails(setDoc(doc(db('supPatio'), 'seginsp', 'p5'), nova('supPatio')), 'supervisor sem perfil na Segurança não registra');
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p6'), nova('segReg', { tipo: 'outra' })), 'tipo inválido');
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p7'), nova('segReg', { itens: [] })), 'sem itens');
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p8'), nova('segReg', { nota: 120 })), 'nota de 0 a 100');
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p9'), nova('segReg', { local: '' })), 'local obrigatório');
+  await assertFails(setDoc(doc(db('segReg'), 'seginsp', 'p10'), nova('segReg', { extra: 1 })), 'só os campos da inspeção');
+  // inspeção e a anomalia do item Não OK no mesmo lote, ligadas pelos ids
+  const dR = db('segReg'); const b = writeBatch(dR);
+  b.set(doc(dR, 'seganom', 'pa1'), novaAnom('segReg', { insp: 'p11' }));
+  b.set(doc(dR, 'seginsp', 'p11'), nova('segReg', { itens: [ITENS[0], { ...ITENS[1], anom: 'pa1' }] }));
+  await assertSucceeds(b.commit());
+  await assertFails(setDoc(doc(db('segReg'), 'seganom', 'pa2'), novaAnom('segReg', { insp: 'x'.repeat(41) })), 'id da inspeção curto');
+  // leitura: o autor, quem vê tudo e o supervisor da área; não o outro autor
+  await assertSucceeds(getDoc(doc(db('segReg'), 'seginsp', 'p1')));
+  await assertSucceeds(getDoc(doc(db('segLeitor'), 'seginsp', 'p1')));
+  await assertSucceeds(getDoc(doc(db('supPatio'), 'seginsp', 'p1')));
+  await assertFails(getDoc(doc(db('segReg2'), 'seginsp', 'p1')), 'inspeção de outra pessoa');
+  await assertSucceeds(getDocs(query(collection(db('segReg'), 'seginsp'), where('mes', '==', '2026-11'), where('por', '==', 'segReg'))));
+  // correção do autor (por 24 h) e só nos campos da inspeção
+  await assertSucceeds(updateDoc(doc(db('segReg'), 'seginsp', 'p1'), { local: 'CORREIA C2', atualizadoEm: serverTimestamp() }));
+  await assertFails(updateDoc(doc(db('segReg2'), 'seginsp', 'p1'), { local: 'NÃO É MEU' }));
+  await assertFails(updateDoc(doc(db('segReg'), 'seginsp', 'p1'), { por: 'segReg2' }), 'autor não muda');
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'seginsp', 'pv'), { ...nova('segReg'), em: Timestamp.fromMillis(Date.now() - 2 * 864e5) }); });
+  await assertFails(updateDoc(doc(db('segReg'), 'seginsp', 'pv'), { local: 'TARDE' }), 'passou de 24 horas');
+  await assertFails(deleteDoc(doc(db('segTrata'), 'seginsp', 'p1')), 'só o administrador apaga');
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'seginsp', 'p1')));
+});
 test('Segurança: listas dos formulários — todos os ativos leem; administrador e o gestor da Segurança (Dos módulos) alteram', async () => {
   for (const u of ['segReg', 'supPatio', 'liderRec']) await assertSucceeds(getDoc(doc(db(u), 'config', 'seguranca')), u);
   await assertSucceeds(setDoc(doc(db('admin'), 'config', 'seguranca'), { tipos: ['ROTINA'] }));

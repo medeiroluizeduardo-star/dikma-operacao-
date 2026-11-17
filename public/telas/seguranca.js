@@ -19,6 +19,7 @@ import { toast, formSheet } from '../ui/janelas.js';
 import { render, schedule, isMobile, trocarTela } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 import { telaTreinos } from './treinos.js';
+import { criarInspecoes } from './inspecoes.js';
 import { veTreinos, painelTreinos, vigentes, situacaoTreino, diasAte, tipoOficial, areaDe, ehNA, ANTECEDENCIA } from '../contas/treinos.js';
 
 // Painel: situação dos treinamentos hoje, por Pátio/Bateria e área, os treinamentos com mais pendências e quem vence logo.
@@ -702,9 +703,13 @@ export function criarSeguranca() {
     if (v === 'sginter') return vInter();
     if (v === 'sganom') return vAnom();
     if (v === 'sgcartao') return vCartao();
+    if (v === 'sginsp') return INSP.view();
     if (v === 'sgpainel') return vPainel();
     if (v === 'sgconfig') return vConfig();
     return vAnom();
   }
+  // Inspeções (telas/inspecoes.js): usa a folha, os filtros e o detalhe da anomalia deste módulo.
+  const INSP = criarInspecoes({ U, S, L, hoje, selMes, selArea, busca, vazio, mesNome, dm, quemVe, podeRegistrar, podeExportar, minhaMat, sugestoesLocal,
+    folha: (o, acao) => { const f = folha(o); folhaAcao = acao; return f; }, abrirAnom: id => abrirDetalhe('seganom', id) });
   return { render: renderTela };
 }
