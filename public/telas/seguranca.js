@@ -494,7 +494,7 @@ export function criarSeguranca() {
         <td class="tc-t"><b>${esc(curtoNome(c.comunic))}</b><small class="muted"> · ${esc(c.area)}</small></td>
         <td class="tc-full" data-l="Motivo"><div class="sgdesc">${esc(c.motivo)}</div>${(c.faltou || []).length ? `<div class="sgfalta">${c.faltou.map(p => `<span class="pill warn">${esc(title(p.replace('?', '')))}</span>`).join(' ')}</div>` : ''}</td>
         <td data-l="Situação">${pillCartao(c)}</td>
-        <td class="tc-acao r nowrap">${pendenteCartao(c) && validaCartao(ME, c) ? `<button class="btn sm pri" data-act="sgValidar" data-id="${esc(c.id)}">Validar</button> ` : ''}<button class="btn sm" data-act="sgVer" data-col="segcartao" data-id="${esc(c.id)}">Abrir</button></td></tr>`).join('')}
+        <td class="tc-acao r nowrap">${pendenteCartao(c) && validaCartao(ME, c) ? `<button class="btn sm" data-act="sgValidar" data-id="${esc(c.id)}">Validar</button> ` : ''}<button class="btn sm" data-act="sgVer" data-col="segcartao" data-id="${esc(c.id)}">Abrir</button></td></tr>`).join('')}
       </tbody></table></div></div>`;
     return h;
   }
@@ -526,7 +526,7 @@ export function criarSeguranca() {
     h += rascBanner('anom');
     // O que pede atenção agora (antes ficava no Painel, que foi para Indicadores): no topo da fila.
     h += `<section class="card sgp-card sgatencao"><header><h2>Precisa de atenção</h2><p>Agora · ${esc(U.area ? title(U.area) : quemVe())}</p></header><div class="body">${atencao(U.area)}</div></section>`;
-    h += `<div class="kpis">
+    h += `<div class="kpis compacta">
       <div class="kpi hero"><span class="lbl">Em aberto</span><span class="v num">${ab.length}</span><span class="s">${ab.filter(a => a.status === 'tratamento').length} em tratamento · ${quemVe()}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Prazo vencido</span><span class="v num">${venc.length}</span><span class="s">${venc.length ? 'precisam de atenção' : 'nenhuma atrasada'}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Sem responsável</span><span class="v num">${sem.length}</span><span class="s">ninguém assumiu ainda</span></div>
@@ -540,7 +540,7 @@ export function criarSeguranca() {
         <td data-l="Situação">${pillSit(a)}</td><td data-l="Responsável">${tr.resp ? esc(curtoNome(tr.resp)) : '<span class="muted small">ninguém</span>'}</td>
         <td data-l="Prazo" class="nowrap">${tr.prazo ? `<span class="${v ? 'bad b' : ''}">${dBR(tr.prazo)}</span>` : '<span class="muted small">—</span>'}</td>
         <td data-l="Fotos"><div class="sgfotos">${minis(a, 2)}${tr.miniDepois ? `<button type="button" class="sgmini depois" data-act="sgFoto" data-id="${esc(tr.fotoDepois)}" aria-label="Ver a foto do depois"><img src="${tr.miniDepois}" alt=""></button>` : ''}</div></td>
-        <td class="tc-acao r nowrap">${pode && abertaSeg(a) && !tr.resp ? `<button class="btn sm pri" data-act="sgAssumir" data-id="${esc(a.id)}">Assumir</button> ` : ''}${pode ? `<button class="btn sm" data-act="sgTratar" data-id="${esc(a.id)}">${a.status === 'concluida' ? 'Ajustar' : 'Acompanhar'}</button> ` : ''}<button class="btn sm ghost" data-act="sgVer" data-col="seganom" data-id="${esc(a.id)}">Abrir</button></td></tr>`; }).join('')}
+        <td class="tc-acao r nowrap">${pode && abertaSeg(a) && !tr.resp ? `<button class="btn sm" data-act="sgAssumir" data-id="${esc(a.id)}">Assumir</button> ` : ''}${pode ? `<button class="btn sm" data-act="sgTratar" data-id="${esc(a.id)}">${a.status === 'concluida' ? 'Ajustar' : 'Acompanhar'}</button> ` : ''}<button class="btn sm ghost" data-act="sgVer" data-col="seganom" data-id="${esc(a.id)}">Abrir</button></td></tr>`; }).join('')}
       </tbody></table></div></div>`;
     return h;
   }
