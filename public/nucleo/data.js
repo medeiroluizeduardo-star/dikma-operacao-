@@ -57,7 +57,9 @@
 //                             desc, acao, resp, mat, fotos[ids], minis[], por, porNome, em }
 //   seganom/{id}              registro de anomalia { data, hora, mes, area, conj, local, regime, desc, conseq, acao, causas,
 //                             sugest, comunic, mat, fotos[], minis[], por, porNome, em, status, trat{resp, respUid, prazo,
-//                             coment, fotoDepois, miniDepois, hist[]}, conclEm }
+//                             coment, fotoDepois, miniDepois, hist[]}, conclEm, insp (id da inspeção que gerou, se houver) }
+//   seginsp/{id}              inspeção (Segurança › Inspeções) { tipo: s5|seg|area, data, mes, area, conj, local,
+//                             itens[{t, r: ok|no|na, obs, anom}], nota (0–100 ou null), obs, por, porNome, em }
 //   segcartao/{id}            Cartão Amarelo { data, mes, area, conj, faltou[], motivo, comoSeguro, comunic, mat, fotos[],
 //                             minis[], por, porNome, em, status: pendente|validado, valid{tipo: lider|seg, nome, mat, uid, em} }
 //   segfotos/{id}             { reg, col, tipo: antes|depois, mini, dados, ordem, autor, por, conj, area, mes, em }  uma foto
@@ -1148,14 +1150,14 @@ export async function eImportar(seed) {
 // Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
 // As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
 // dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
-function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], meses: new Set(), v: 0 }; }
+function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], insp: [], meses: new Set(), v: 0 }; }
 cache.seg = novoSeg();
 let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
 const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
 function segJuntar() {
-  const inter = {}, anom = {}, cartao = {};
-  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segcartao') ? cartao : anom; for (const x of l) alvo[x.id] = x; }
-  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.cartao = Object.values(cartao);
+  const inter = {}, anom = {}, cartao = {}, insp = {};
+  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segcartao') ? cartao : k.startsWith('seginsp') ? insp : anom; for (const x of l) alvo[x.id] = x; }
+  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.cartao = Object.values(cartao); cache.seg.insp = Object.values(insp);
   cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
 }
 function segOuvir(key, q) {
@@ -1185,7 +1187,7 @@ export function segWatch(meses, inicial) {
   if (!db || !me || !segOn) return;
   for (const m of new Set(meses.filter(Boolean))) {
     if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
-    for (const col of ['seginter', 'seganom', 'segcartao']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
+    for (const col of ['seginter', 'seganom', 'segcartao', 'seginsp']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
   }
 }
 // Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
@@ -1210,6 +1212,19 @@ export function segTratar(a, patch, foto) {
   }
   b.update(doc(db, 'seganom', a.id), { ...p, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
   track(b.commit());
+}
+// Segurança › Inspeções (contas/inspecoes.js): grava a inspeção e, no mesmo lote, uma anomalia (seganom, aberta) para
+// cada item "Não OK" novo; o item guarda o id da anomalia (anom) e a anomalia, o da inspeção (insp).
+// id vazio = inspeção nova. anoms: [{ i: posição do item, dados: anomDaInsp(...) }].
+export function segInspSalvar(id, dados, anoms = []) {
+  const r = id ? doc(db, 'seginsp', id) : doc(collection(db, 'seginsp'));
+  const itens = dados.itens.map(i => ({ ...i })); const quem = { por: me.uid, porNome: me.nome || me.login || '' };
+  const b = writeBatch(db);
+  for (const a of anoms) { const ar = doc(collection(db, 'seganom')); itens[a.i].anom = ar.id; b.set(ar, { ...a.dados, insp: r.id, fotos: [], minis: [], ...quem, em: serverTimestamp() }); }
+  if (id) b.update(r, { ...dados, itens, atualizadoEm: serverTimestamp() });
+  else b.set(r, { ...dados, itens, ...quem, em: serverTimestamp() });
+  track(b.commit());
+  return r.id;
 }
 // Validação do Cartão Amarelo (só status, valid e o carimbo de quem gravou).
 export const segValidar = (c, patch) => track(updateDoc(doc(db, 'segcartao', c.id), { ...patch, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));

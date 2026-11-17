@@ -1480,6 +1480,19 @@ table.freq tr.grp-row th>*{vertical-align:middle}
 .sgop:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
 .sgop:has(input:focus-visible){outline:2px solid var(--focus);outline-offset:1px}
 .sgoutro{margin-top:2px}
+/* Segurança › Inspeções (telas/inspecoes.js): um item por linha com OK / Não OK / N/A e a observação */
+.insp-cab{display:grid;grid-template-columns:minmax(0,160px) minmax(0,1fr);gap:8px}
+.insp-cab .sel{min-width:0}.insp-cab .in{width:100%}
+.insp-topo{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.insp-l{display:flex;flex-direction:column;gap:8px}
+.insp-i{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:10px 12px;border:1px solid var(--line-2);border-left:4px solid var(--line);border-radius:10px;background:var(--surface)}
+.insp-i>.in,.insp-i>.small,.insp-i>.btn,.insp-i>.muted{grid-column:1/-1}
+.insp-i>.btn{justify-self:start}
+.insp-i.r-ok{border-left-color:var(--st-real)}.insp-i.r-no{border-left-color:var(--st-nreal)}.insp-i.r-na{border-left-color:var(--ink-3)}
+.insp-t{font-size:13.5px;font-weight:600;min-width:0}
+.insp-r .sgop{min-height:36px;padding:4px 10px}
+.insp-gera{border-color:color-mix(in srgb,var(--st-nreal) 40%,var(--line-2))}
+@media (max-width:640px){.insp-i{grid-template-columns:1fr}.insp-cab{grid-template-columns:1fr}}
 .sgfotos{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .sgfth{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
 .sgfth img{width:100%;height:100%;object-fit:cover;display:block}

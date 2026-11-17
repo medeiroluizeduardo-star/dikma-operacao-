@@ -67,6 +67,8 @@ export const VIEWS = [
   { id: 'sginter', nome: 'Interações', ic: 'conversa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sganom', nome: 'Anomalias', ic: 'anomalia', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgcartao', nome: 'Cartão Amarelo', ic: 'cartao', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
+  // Inspeções de 5S, segurança e da área (telas/inspecoes.js; vieram do Campo do Meu painel). Não OK vira anomalia.
+  { id: 'sginsp', nome: 'Inspeções', ic: 'lupa', grp: 'Registros', mod: 'seguranca', sup: true, tela: 'SG' },
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência ----
   { id: 'rcolab', nome: 'Colaboradores', ic: 'users', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'CO' },
@@ -135,6 +137,7 @@ export const SUB_S = {
   sgtrein: 'NRs, ASO e outros treinamentos: quem está vencido, quem vence em 30 dias e importação por planilha',
   sginter: 'Registros de interação: riscos e desvios vistos em campo',
   sganom: 'O que pede atenção agora e a fila das anomalias: situação, responsável e prazo',
+  sginsp: '5S, segurança e limpeza da área, com nota: o que estiver Não OK vira anomalia na fila',
   sgcartao: 'Direito ao Trabalho Seguro: cartões dados em campo e a validação do líder ou da segurança',
   sgpainel: 'Os números do mês, a evolução, as áreas e os treinamentos',
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
@@ -153,7 +156,7 @@ export const MODS = {
   operacao: { nome: 'Operação', curto: 'Operação', sub: 'Apontar, Aprovação, Equipamentos e Efetivo', key: 'operacao', inicio: 'apontar' },
   gestao: { nome: 'Gestão', curto: 'Gestão', sub: 'Programação, Efetivo e Fichas de acompanhamento', key: 'gestao', inicio: 'prog' },
   // A Segurança abre em Anomalias (com o que pede atenção no topo); o painel foi para Indicadores.
-  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, Cartão Amarelo e treinamentos', key: 'seguranca', inicio: 'sganom' },
+  seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, inspeções, Cartão Amarelo e treinamentos', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Colaboradores, frequência e férias', key: 'rh', inicio: 'afreq' },
   indicadores: { nome: 'Indicadores', curto: 'Indicadores', sub: 'Visão geral do contrato, atividades, equipamentos, queda zero, segurança, pessoas e histórico', key: 'indicadores', inicio: 'ivisao' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
@@ -216,7 +219,7 @@ export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: 
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['prog', 'gtrat', 'gcolab', 'causas', 'esdim', 'eaval'],
-  seguranca: () => ['sganom', 'sginter', 'sgcartao', 'sgtrein'],
+  seguranca: () => ['sganom', 'sginter', 'sginsp', 'sgcartao', 'sgtrein'],
   rh: () => ['rcolab', 'afreq'],
   indicadores: () => ['ivisao', 'painel', 'epainel', 'qpainel', 'sgpainel', 'fpainel', 'gpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
