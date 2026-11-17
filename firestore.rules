@@ -809,7 +809,7 @@ service cloud.firestore {
     // Inspeções (Segurança › Inspeções, contas/inspecoes.js): 5S, segurança ou limpeza e qualidade da área, com os itens
     // (OK / Não OK / N/A) e a nota. Registra e lê como os outros registros da Segurança; o autor corrige por 24 h (no mesmo
     // lote, os itens Não OK novos viram anomalias com o id da inspeção); apagar = administrador.
-    function inspOk(d) {
+    function segInspOk(d) {
       return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && d.conj is string && txtOk(d, 'local', 1, 120)
         && d.keys().hasOnly(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
         && d.tipo in ['s5', 'seg', 'area'] && d.itens is list && d.itens.size() >= 1 && d.itens.size() <= 20
@@ -818,8 +818,8 @@ service cloud.firestore {
     }
     match /seginsp/{id} {
       allow read: if segLe(resource.data);
-      allow create: if segRegistra() && inspOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
-      allow update: if autorNoPrazo() && soAltera(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'atualizadoEm']) && inspOk(request.resource.data);
+      allow create: if segRegistra() && segInspOk(request.resource.data) && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time;
+      allow update: if autorNoPrazo() && soAltera(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'atualizadoEm']) && segInspOk(request.resource.data);
       allow delete: if admin();
     }
 
