@@ -135,7 +135,7 @@ export const SUB_G = {
 };
 export const SUB_A = {
   rcolab: 'Cadastro único: dados, matrículas Dikma e Arcelor, área, rota, liderança e férias',
-  afreq: 'Folha de frequência de 16 a 15, por grupo',
+  afreq: 'Faltas, atestados e horas extras de 16 a 15, por grupo, e o efetivo enviado pelos líderes',
   aimport: 'Planilhas de frequência e de férias'
 };
 export const SUB_S = {
