@@ -9,9 +9,10 @@ import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
 import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
+import { resumo as resumoDocs, veDocsU, ANTECEDENCIA as ANTE_DOCS } from './lib/documentos.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, documentos: true, efetivo: true, efetivoRH: true };
 // Administração › Processos e rotina (a rotina do analista, que antes vinha do Meu painel).
 export const ROTINA_URL = '/?m=administracao&v=cfproc';
 const up = s => String(s || '').toUpperCase();
@@ -296,6 +297,19 @@ export function planejar(d) {
       if (!r.vencido && !r.vence) continue;
       const partes = [r.vencido && `${r.vencido} vencido${r.vencido > 1 ? 's' : ''}`, r.vence && `${r.vence} vence${r.vence > 1 ? 'm' : ''} em ${ANTECEDENCIA} dias`].filter(Boolean);
       msgs.push({ uid: x.uid, titulo: `Treinamentos e ASO: ${partes.join(', ')}`, corpo: 'Abra Segurança › Treinamentos e ASO para programar as renovações.', tag: 'treinos', url: '/?m=seguranca&v=sgtrein' });
+    }
+  }
+  // 11) Administração › Documentos e OMs: vencidos e vencendo nos próximos 30 dias (segunda-feira, a partir das 7h, uma vez),
+  //     para o administrador e o Gestor e o Coordenador da Gestão. Só números.
+  if (hora >= 7 && new Date(hoje + 'T12:00:00').getDay() === 1 && (d.documentos || []).length) {
+    const r = resumoDocs(d.documentos, hoje);
+    for (const x of alvo) {
+      const chave = `docs|${x.uid}|${hoje}`;
+      if (!x.prefs.documentos || d.enviados[chave] || !veDocsU(x.u)) continue;
+      marcar.add(chave);
+      if (!r.alerta) continue;
+      const partes = [r.vencido && `${r.vencido} vencido${r.vencido > 1 ? 's' : ''}`, r.vence && `${r.vence} vence${r.vence > 1 ? 'm' : ''} em ${ANTE_DOCS} dias`].filter(Boolean);
+      msgs.push({ uid: x.uid, titulo: `Documentos e OMs: ${partes.join(', ')}`, corpo: 'Abra Administração › Documentos e OMs para renovar ou encerrar.', tag: 'documentos', url: '/?m=administracao&v=cfdocs' });
     }
   }
   return { msgs, marcar: [...marcar] };

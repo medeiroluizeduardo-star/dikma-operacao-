@@ -368,6 +368,7 @@ function stopData() {
   monthSubs.clear();
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
+  if (docsSub) { try { docsSub(); } catch (e) { /* já fechado */ } } docsSub = null; cache.docs = { d: {}, loaded: false };
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -725,6 +726,21 @@ export function rotinaMarcar(id, dados) {
   cache.proc.docs = { ...cache.proc.docs, [id]: { ...(cache.proc.docs[id] || {}), ...dados } }; changed();
   return track(setDoc(doc(db, 'rotina', id), { ...dados, ...marca() }));
 }
+// Administração › Documentos e OMs (contas/documentos.js): documentos/{id}. O administrador e o Gestor e o Coordenador da
+// Gestão leem e gravam (firestore.rules); a coleção é lida quando a tela abre.
+let docsSub = null; cache.docs = { d: {}, loaded: false };
+export function docsWatch() {
+  if (docsSub) return;
+  docsSub = onSnapshot(collection(db, 'documentos'), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.docs = { d, loaded: true }; changed(); },
+    e => { cache.docs = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; docsSub = null; changed(); });
+}
+export const docNovoId = () => doc(collection(db, 'documentos')).id;
+export function docSalvar(id, dados, novo = false) {
+  const x = novo ? { ...dados, criadoEm: new Date().toISOString(), criadoPor: me.uid, criadoNome: me.nome || me.login || '', ...marca() } : { ...dados, ...marca() };
+  cache.docs = { ...cache.docs, d: { ...cache.docs.d, [id]: { ...(cache.docs.d[id] || {}), id, ...dados } } }; changed();
+  return track(setDoc(doc(db, 'documentos', id), x, { merge: true }));
+}
+export function docApagar(id) { const d = { ...cache.docs.d }; delete d[id]; cache.docs = { ...cache.docs, d }; changed(); const b = writeBatch(db); b.delete(doc(db, 'documentos', id)); return track(b.commit()); }
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

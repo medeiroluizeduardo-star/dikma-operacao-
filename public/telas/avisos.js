@@ -3,12 +3,13 @@
 // O administrador também cola aqui a chave pública Web Push e acompanha a rotina de avisos.
 // (Antes ficava no fim do "Meu dia", que foi retirado do sistema.)
 import { veTreinos } from '../contas/treinos.js';
+import { veDocsU } from '../contas/documentos.js';
 import { aprovaPapel } from '../contas/aprovacao.js';
 import { temSeg, trataTudoSeg, supConjs } from '../contas/segcalc.js';
 import { editaAdm } from '../contas/acessos.js';
 import { horasEf, HORAS_AVISO } from '../contas/efetivo-dia.js';
 
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, documentos: true, efetivo: true, efetivoRH: true };
 
 export function criarAvisos(X) {
   const { DB, esc, toast, render } = X;
@@ -41,6 +42,7 @@ export function criarAvisos(X) {
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
+      veDocsU(ME()) && ['documentos', 'Documentos e OMs vencidos ou vencendo em 30 dias (segunda, às 7h)'],
       ehAdm() && ['painel', 'Processos e rotina: tarefas do dia (7h) e o que ficou em aberto (16h)']
     ].filter(Boolean);
     let corpo;

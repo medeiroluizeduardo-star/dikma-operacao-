@@ -7,6 +7,7 @@ import { aprovador, acompanha } from '../calc/atividades.js';
 import { trocarTela } from '../ui/shell.js';
 import { supConjs } from '../contas/segcalc.js';
 import { veTreinos } from '../contas/treinos.js';
+import { veDocsU } from '../contas/documentos.js';
 import { acoes } from './acoes.js';
 
 // Todas as abas do sistema, declaradas uma vez só, já no módulo (mod) e no grupo do menu (grp) em que aparecem.
@@ -102,6 +103,9 @@ export const VIEWS = [
   { id: 'cflimpa', nome: 'Limpeza de dados', ic: 'lixo', grp: 'Geral', mod: 'administracao', ord: 1.6, req: () => isAdmin(), tela: 'CF', fora: true, pai: 'cfgeral' },
   // Processos e rotina (telas/processos.js): os processos do analista e a rotina do dia (era Processos do Meu painel).
   { id: 'cfproc', nome: 'Processos e rotina', ic: 'prog', grp: 'Geral', mod: 'administracao', ord: 1.8, req: () => isAdmin(), tela: 'PR' },
+  // Documentos e OMs (telas/documentos.js): validade dos POP, PT, OS, ASO e OMs (era Campo do Meu painel). O Gestor e o
+  // Coordenador da Gestão também veem (soReq: só o req decide, fora de Perfis e permissões).
+  { id: 'cfdocs', nome: 'Documentos e OMs', ic: 'arquivo', grp: 'Geral', mod: 'administracao', ord: 1.85, req: () => veDocsU(ME), soReq: true, tela: 'DC' },
   { id: 'cfescala', nome: 'Escalas e turnos', ic: 'turno', grp: 'Geral', mod: 'administracao', ord: 2, req: () => admDe('escala'), tela: 'CF' },
   { id: 'config', nome: 'Rotas e configurações', ic: 'rota', grp: 'Atividades', mod: 'administracao', ord: 3, req: () => admDe('ativ') },
   { id: 'plano', nome: 'Plano padrão', ic: 'plano', grp: 'Atividades', mod: 'administracao', ord: 4, req: () => admDe('ativ') },
@@ -143,7 +147,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', cfdocs: 'Documentos' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
@@ -170,7 +174,7 @@ export const viewsDoModulo = () => {
   const m = UI.modulo;
   // Supervisor da área sem perfil na Segurança: vê as abas marcadas com sup (as anomalias e interações da área dele).
   const supSeg = m === 'seguranca' && !perfil('seguranca') && supConjs(ME).length > 0;
-  const l = VIEWS.filter(v => (v.mod === m || v.mod === 'all') && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : podeVer(ME, v, permCfg(), m)));
+  const l = VIEWS.filter(v => (v.mod === m || v.mod === 'all') && (!v.req || v.req()) && (!v.reqU || v.reqU(ME)) && (supSeg ? !!v.sup : v.soReq || podeVer(ME, v, permCfg(), m)));
   return m === 'administracao' ? l.sort((a, b) => (a.ord || 0) - (b.ord || 0)) : l;
 };
 // Abas que aparecem no menu: sem as que abrem por botão de outra aba e, das juntas, só a primeira que a pessoa vê.

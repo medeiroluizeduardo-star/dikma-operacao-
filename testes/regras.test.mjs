@@ -1540,6 +1540,28 @@ test('Administração › Processos e rotina (processos/config, rotina/{id}): s�
   await assertFails(setDoc0(cfg('admin'), { outra: 1, ...mk('admin') }, { merge: true }), 'campo fora da lista nos processos');
 });
 
+test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const ref = (u, id = 'dc1') => doc(db(u), 'documentos', id);
+  const ok = (u, x = {}) => ({ tipo: 'POP', numero: 'POP-012', titulo: 'Correias', conj: 'patio', resp: 'Supervisão', emissao: '2026-01-01', validade: '2026-12-01', situacao: 'Vigente', link: '', obs: '', criadoEm: '2026-11-17T10:00:00Z', criadoPor: u, criadoNome: 'X', ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('admin'), ok('admin')), 'administrador cadastra');
+  await assertSucceeds(setDoc0(ref('geGestorSo', 'dc2'), ok('geGestorSo', { tipo: 'OM', validade: '' })), 'Gestor da Gestão cadastra');
+  await assertSucceeds(setDoc0(ref('geCoord'), { situacao: 'Concluído', ...mk('geCoord') }, { merge: true }), 'Coordenador da Gestão altera');
+  await assertSucceeds(getDoc(ref('geCoord')), 'Coordenador lê');
+  for (const u of ['supPatio', 'opGestorSo', 'rhSo']) {
+    await assertFails(getDoc(ref(u)), `${u} não lê`);
+    await assertFails(setDoc0(ref(u, 'dc3'), ok(u)), `${u} não cadastra`);
+  }
+  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { tipo: 'Carta' })), 'tipo fora da lista');
+  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { situacao: 'Talvez' })), 'situação fora da lista');
+  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { validade: '01/12/2026' })), 'data fora do formato');
+  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { outra: 1 })), 'campo fora da lista');
+  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { obs: 'a'.repeat(501) })), 'observação longa demais');
+  await assertFails(setDoc0(ref('admin', 'dc4'), { ...ok('admin'), atualizadoPor: 'geCoord' }), 'sem a própria marca');
+  await assertFails(deleteDoc(ref('supPatio')), 'supervisor não apaga');
+  await assertSucceeds(deleteDoc(ref('geGestorSo')), 'Gestor da Gestão apaga');
+});
+
 test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {
   const ref = u => doc(db(u), 'config', 'indicadores');
   const ok = { metas: { abs: 3, he: 200 }, valores: { '2026-10': { iccc: 96.5, iccp: null } }, hist: { 'patio|2026-10': { esc: 400, aus: 9, em: '2026-11-01' } }, atualizadoEm: serverTimestamp(), por: 'Gestor' };
