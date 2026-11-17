@@ -32,18 +32,29 @@ const db = getFirestore();
 const porId = qs => Object.fromEntries(qs.docs.map(x => [x.id, x.data()]));
 const hoje = today(), amanha = add(hoje, 1), mes = hoje.slice(0, 7);
 
+// Excluídos (apagado: true) há mais que isto saem de vez do banco. Precisa ser bem maior que INC_DIAS de nucleo/data.js.
+const APAGADO_DIAS = 45;
+
 // Resumos do dia (uma vez por dia; antes de olhar se alguém ligou os avisos, para valer mesmo sem avisos)
 let fichas = null;
 {
   const fa = (await db.doc('adm/feriasAtivas').get()).data() || {};
   if (fa.dia !== hoje) {
-    const lista = (await db.collection('ferias').get()).docs.map(x => x.data());
+    const lista = (await db.collection('ferias').get()).docs.map(x => x.data()).filter(x => !x.apagado);
     fichas = (await db.collection('gcolab').get()).docs.flatMap(x => x.data().itens || []);
     const fer = resumoFerias(lista, hoje), des = resumoDesligados(fichas);
     console.log(`Resumos do dia: ${fer.length} período(s) de férias, ${des.length} desligamento(s).`);
     if (!soTestar) {
       await db.doc('adm/feriasAtivas').set({ itens: fer, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() }, { merge: true });
       await db.doc('adm/desligados').set({ itens: des, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() });
+      // Treinamentos e Férias excluídos no sistema ficam marcados "apagado" (os aparelhos só recebem o que mudou e
+      // precisam saber da exclusão); passados APAGADO_DIAS, apaga de vez. Lê só os marcados.
+      const limite = Date.now() - APAGADO_DIAS * 864e5;
+      for (const c of ['treinos', 'ferias']) {
+        const velhos = (await db.collection(c).where('apagado', '==', true).get()).docs.filter(x => { const t = x.get('atualizadoEm'); return !t || t.toMillis() < limite; });
+        for (let i = 0; i < velhos.length; i += 400) { const b = db.batch(); velhos.slice(i, i + 400).forEach(x => b.delete(x.ref)); await b.commit(); }
+        if (velhos.length) console.log(`${c}: ${velhos.length} registro(s) excluído(s) há mais de ${APAGADO_DIAS} dias apagado(s) de vez.`);
+      }
     }
   }
 }
@@ -137,7 +148,7 @@ const painel = {};
 const segAnom = [];
 for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where('status', '==', st).get()).forEach(x => { const a = x.data(); segAnom.push({ ...a, id: x.id, em: a.em && a.em.toMillis ? a.em.toMillis() : +a.em || 0 }); });
 // RH: treinamentos, NRs e ASO (só as datas e o tipo entram na conta; o aviso leva só números).
-const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() }));
+const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() })).filter(x => !x.apagado);
 // Administração › Documentos e OMs: só na segunda, das 7h em diante (o aviso leva só números).
 const documentos = new Date().getDay() === 1 && new Date().getHours() >= 7 ? (await db.collection('documentos').get()).docs.map(x => ({ id: x.id, ...x.data() })) : [];
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};

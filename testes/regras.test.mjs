@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { acessoDoLegado } from './legado.mjs';
-import { doc, getDoc, getDocs, setDoc as setDoc0, updateDoc as updateDoc0, deleteDoc, collection, query, where, orderBy, limit, serverTimestamp, writeBatch as writeBatch0, Timestamp, deleteField, increment, arrayUnion, FieldPath } from 'firebase/firestore';
+import { ouvirIncremental } from '../public/nucleo/incremental.js';
+import { doc, getDoc, getDocs, setDoc as setDoc0, updateDoc as updateDoc0, deleteDoc, collection, query, where, orderBy, limit, serverTimestamp, writeBatch as writeBatch0, onSnapshot, Timestamp, deleteField, increment, arrayUnion, FieldPath } from 'firebase/firestore';
 
 const raiz = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 let env;
@@ -736,6 +737,48 @@ test('treinamentos: o técnico de segurança (registra) lê, grava e importa; o 
   await assertSucceeds(getDocs(collection(db('segLeitor'), 'treinos')));
   await assertFails(setDoc(doc(db('segLeitor'), 'treinos', 's6'), { nome: 'X', tipo: 'ASO' }));
   await assertFails(deleteDoc(doc(db('segLeitor'), 'treinos', 's1')));
+});
+test('treinamentos e férias: excluir marca "apagado" (os aparelhos leem só o que mudou); só quem edita marca', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'treinos', 'ap1'), { nome: 'PESSOA TESTE', tipo: 'NR-33', validade: '2026-12-01' });
+    await setDoc(doc(ctx.firestore(), 'ferias', 'fap1'), { nome: 'PESSOA TESTE', inicio: '2026-10-01', termino: '2026-10-30' });
+  });
+  const marca = u => ({ apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: u });
+  await assertFails(setDoc(doc(db('segLeitor'), 'treinos', 'ap1'), marca('segLeitor'), { merge: true }));
+  await assertFails(setDoc(doc(db('segReg'), 'treinos', 'ap1'), { apagado: 'sim' }, { merge: true }), 'apagado só sim/não');
+  await assertSucceeds(setDoc(doc(db('segReg'), 'treinos', 'ap1'), marca('segReg'), { merge: true }));
+  await assertSucceeds(getDocs(query(collection(db('segLeitor'), 'treinos'), where('atualizadoEm', '>', Timestamp.fromMillis(0)))), 'consulta do que mudou');
+  await assertFails(setDoc(doc(db('liderRec'), 'ferias', 'fap1'), marca('liderRec'), { merge: true }));
+  await assertFails(setDoc(doc(db('admAn'), 'ferias', 'fap1'), { apagado: 1 }, { merge: true }), 'apagado só sim/não');
+  await assertSucceeds(setDoc(doc(db('admAn'), 'ferias', 'fap1'), marca('admAn'), { merge: true }));
+  await assertSucceeds(getDocs(query(collection(db('admAn'), 'ferias'), where('atualizadoEm', '>', Timestamp.fromMillis(0)))));
+});
+test('treinamentos: o aparelho lê tudo uma vez e depois só o que mudou (exclusão marcada some da lista)', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const f = ctx.firestore();
+    for (const id of ['i1', 'i2', 'i3']) await setDoc(doc(f, 'treinos', id), { nome: 'PESSOA ' + id, tipo: 'ASO', validade: '2027-01-01', atualizadoEm: Timestamp.fromMillis(Date.parse('2026-11-01')) });
+  });
+  const usadas = [];
+  const fb = { onSnapshot, collection, query, where: (...a) => { usadas.push(a); return where(...a); } };
+  const marcas = new Map(), guarda = { ler: k => marcas.get(k) || 0, gravar: (k, v) => marcas.set(k, v) };
+  const esperar = (pred, ms = 8000) => new Promise((ok, falha) => { const t0 = Date.now(); const v = () => (pred() ? ok() : Date.now() - t0 > ms ? falha(new Error('tempo esgotado')) : setTimeout(v, 50)); v(); });
+  const leitor = db('segLeitor');
+  // 1ª vez: sem marca, lê tudo e guarda a marca
+  let l1 = null; const p1 = ouvirIncremental(fb, leitor, 'treinos', 'k', (l, ok) => { if (ok) l1 = l; }, e => { throw e; }, guarda);
+  await esperar(() => l1 && l1.some(x => x.id === 'i3') && marcas.get('k'));
+  assert.equal(usadas.length, 0, 'primeira vez sem filtro');
+  p1();
+  // 2ª vez: com marca e cópia no aparelho, pede só o que mudou depois do mais novo da cópia
+  let l2 = null; const p2 = ouvirIncremental(fb, leitor, 'treinos', 'k', (l, ok) => { if (ok) l2 = l; }, e => { throw e; }, guarda);
+  await esperar(() => l2 && ['i1', 'i2', 'i3'].every(id => l2.some(x => x.id === id)));
+  assert.equal(usadas.length, 1); assert.equal(usadas[0][0], 'atualizadoEm'); assert.equal(usadas[0][1], '>');
+  // outra pessoa muda um e exclui (marca apagado) outro: o aparelho recebe
+  const t = db('segReg');
+  await setDoc(doc(t, 'treinos', 'i1'), { validade: '2028-01-01', atualizadoEm: serverTimestamp() }, { merge: true });
+  await setDoc(doc(t, 'treinos', 'i2'), { apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: 'segReg' }, { merge: true });
+  await esperar(() => !l2.some(x => x.id === 'i2') && l2.find(x => x.id === 'i1').validade === '2028-01-01');
+  assert.ok(l2.some(x => x.id === 'i3'), 'o resto continua');
+  p2();
 });
 test('acesso: líder com Operação e Administrativo entra nos dois', async () => {
   await assertSucceeds(getDoc(doc(db('liderAmbos'), 'semanas', SEM)));
