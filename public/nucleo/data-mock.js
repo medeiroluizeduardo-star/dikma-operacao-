@@ -232,6 +232,17 @@ export function procSalvarCfg(patch) {
   cache.proc = { ...cache.proc, cfg: { ...c, ...x, itens } }; changed(); return Promise.resolve();
 }
 export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs, [id]: { ...(cache.proc.docs[id] || {}), ...dados } }; changed(); return Promise.resolve(); }
+// Administração › Documentos e OMs: na demonstração, em memória, com um vencido, um vencendo e um em dia.
+{ const h = today(); const d = n => add(h, n);
+  cache.docs = { loaded: true, d: {
+    dc1: { id: 'dc1', tipo: 'POP', numero: 'POP-012', titulo: 'Limpeza das correias transportadoras', conj: 'patio', resp: 'Supervisão do Pátio', emissao: d(-360), validade: d(-5), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
+    dc2: { id: 'dc2', tipo: 'OM', numero: 'OM 4500123', titulo: 'Troca do raspador da correia 3', conj: 'bateria', resp: 'Manutenção', emissao: d(-20), validade: d(12), situacao: 'Em andamento', link: '', obs: '', criadoNome: 'Demonstração' },
+    dc3: { id: 'dc3', tipo: 'PT', numero: 'PT-0457', titulo: 'Trabalho em altura na bateria', conj: 'bateria', resp: 'Segurança', emissao: d(-10), validade: d(170), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
+    dc4: { id: 'dc4', tipo: 'ASO', numero: '', titulo: 'ASO periódico da equipe de limpeza', conj: 'coq', resp: 'RH', emissao: d(-400), validade: d(-30), situacao: 'Concluído', link: '', obs: '', criadoNome: 'Demonstração' } } }; }
+export function docsWatch() { /* tudo já está em memória */ }
+export const docNovoId = () => 'dc' + Date.now().toString(36);
+export function docSalvar(id, dados, novo = false) { cache.docs.d = { ...cache.docs.d, [id]: { ...(cache.docs.d[id] || {}), id, ...dados, ...(novo ? { criadoNome: me.nome } : {}) } }; changed(); return Promise.resolve(); }
+export function docApagar(id) { delete cache.docs.d[id]; changed(); return Promise.resolve(); }
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;

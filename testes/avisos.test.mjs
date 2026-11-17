@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'documentos'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -309,4 +309,19 @@ test('Efetivo do dia: líder às 9h (área que trabalha e não enviou), devoluç
   assert.equal(h(14).msgs.filter(m => m.uid === 'lider').length, 1);
   assert.equal(h(8).msgs.filter(m => m.uid === 'rh').length, 1, 'RH no horário configurado');
   assert.equal(planejar({ avisosCfg: { horas: { efLider: 3 } }, usuarios: us, avisos: av, paradas: [], ocorr: [], sets: { patio: S }, enviados: { [chDev]: D }, agora: new Date(`${D}T08:05:00`), hoje: D }).msgs.filter(m => m.uid === 'lider').length, 0, 'horário fora da rotina volta ao padrão (9h)');
+});
+
+test('documentos e OMs: segunda às 7h, administrador e Gestor/Coordenador da Gestão, só números, uma vez', () => {
+  const SEG = '2026-10-19';
+  const us = conv({ adm: { papel: 'admin', nome: 'Adm' }, geG: { papel: 'gestor', nome: 'Gestor', acesso: { gestao: 'gestor' }, escopos: ['patio'] }, geS: { papel: 'supervisor', nome: 'Sup', acesso: { gestao: 'supervisor' }, escopos: ['patio'] }, rh: { papel: 'supervisor', nome: 'RH', acesso: { rh: 'administrativo' }, escopos: [] } });
+  const av = { adm: tok, geG: tok, geS: tok, rh: tok };
+  const documentos = [{ id: 'a', tipo: 'POP', numero: 'POP-1', validade: '2026-10-01', situacao: 'Vigente' }, { id: 'b', tipo: 'OM', numero: 'OM 9', validade: '2026-11-05', situacao: 'Em andamento' }, { id: 'c', tipo: 'PT', validade: '2026-10-02', situacao: 'Arquivado' }];
+  const base = { usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: {}, documentos };
+  const m = planejar({ ...base, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos');
+  assert.deepEqual(m.map(x => x.uid).sort(), ['adm', 'geG']);
+  assert.match(m[0].titulo, /1 vencido, 1 vence em 30 dias/);
+  assert.equal(m[0].url, '/?m=administracao&v=cfdocs');
+  assert.equal(planejar({ ...base, agora: new Date('2026-10-20T07:10:00'), hoje: '2026-10-20' }).msgs.filter(x => x.tag === 'documentos').length, 0, 'só na segunda');
+  assert.equal(planejar({ ...base, enviados: { [`docs|adm|${SEG}`]: SEG, [`docs|geG|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos').length, 0, 'uma vez');
+  assert.equal(planejar({ ...base, avisos: { adm: { tokens: ['t'], prefs: { documentos: false } } }, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos').length, 0, 'desligado');
 });

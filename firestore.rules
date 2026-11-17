@@ -486,6 +486,24 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Administração › Documentos e OMs (contas/documentos.js): POP, PT, OS, ASO, treinamentos e OMs com validade.
+    // O administrador e o Gestor e o Coordenador da Gestão leem, cadastram, alteram e apagam, sempre com a marca de quem gravou.
+    function docsEdita() { return admin() || (ativo() && pEm('gestao') in ['gestor', 'coordenador']); }
+    function dtOk(d, k) { return !(k in d) || d[k] == '' || (d[k] is string && d[k].matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')); }
+    match /documentos/{id} {
+      allow read: if docsEdita();
+      allow create, update: if docsEdita() && marcaOk()
+        && request.resource.data.keys().hasOnly(['tipo', 'numero', 'titulo', 'conj', 'resp', 'emissao', 'validade', 'situacao', 'link', 'obs', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.tipo in ['POP', 'PT', 'OS', 'ASO', 'Treinamento', 'OM', 'Outro']
+        && request.resource.data.situacao in ['Vigente', 'Em andamento', 'Pendente', 'Concluído', 'Cancelado', 'Arquivado']
+        && request.resource.data.get('conj', 'coq') in ['coq', 'patio', 'bateria']
+        && tTxt(request.resource.data, 'numero', 40) && tTxt(request.resource.data, 'titulo', 140) && tTxt(request.resource.data, 'resp', 120)
+        && tTxt(request.resource.data, 'link', 500) && tTxt(request.resource.data, 'obs', 500)
+        && tTxt(request.resource.data, 'criadoEm', 40) && tTxt(request.resource.data, 'criadoPor', 128) && tTxt(request.resource.data, 'criadoNome', 150)
+        && dtOk(request.resource.data, 'emissao') && dtOk(request.resource.data, 'validade');
+      allow delete: if docsEdita();
+    }
+
     // Indicadores do contrato (Indicadores › Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses.
     // Quem tem o módulo Indicadores lê; o Gestor dos Indicadores e o administrador gravam (só estes campos, mapas pequenos).
     match /config/indicadores {
