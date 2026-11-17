@@ -2,7 +2,7 @@
 import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
 import * as M from './movimento.js';
 import { semAcento, filtrarLista } from './busca.js';
-import { DEMO, DB, PAINEL_URL, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
+import { DEMO, DB, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
 import { I, MOD_IC } from './icones.js';
 import { atrasadasAll, aprovador, areasAprov, listaAprov } from '../calc/atividades.js';
@@ -127,7 +127,6 @@ function renderTela() {
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
   if (arq === 'DC') return tela(comModulo('DC', m => m.renderView(v)));
-  if (arq === 'MP') return tela(comModulo('MP', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
@@ -191,8 +190,6 @@ function renderNav() {
     ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button>${histBtn()}<button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button><a class="btn rail-btn" href="guia.html">Guia visual</a>`
     : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos no celular</button>${histBtn()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
-  // Atalho para o Painel Coqueria (site próprio, mesmo login): só para o administrador.
-  { const w = $('who'); if (w && !w.querySelector('[data-painel]') && isAdmin()) w.insertAdjacentHTML('afterbegin', `<a class="btn rail-btn" data-painel href="${PAINEL_URL}" target="_blank" rel="noopener">${I.painel} Meu painel</a>`); }
   pintarBarra(barraDe());
 }
 export const SELOS = {};
@@ -322,7 +319,7 @@ function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
-const SUB_ADM = { cfpainel: 'Traz para o Dikma as ações, planos, atas, inspeções, documentos e a Medição do seu Meu painel', cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cfdocs: 'POP, PT, OS, ASO, treinamentos e OMs com validade: o que venceu e o que vence em 30 dias', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
+const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cfdocs: 'POP, PT, OS, ASO, treinamentos e OMs com validade: o que venceu e o que vence em 30 dias', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {

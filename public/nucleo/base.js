@@ -10,7 +10,6 @@ export const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
 // Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
 { const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 export const DB = await import(DEMO ? './data-mock.js' : './data.js');
-export const PAINEL_URL = 'https://gestao-eduardo.web.app/';
 
 export const TODAY = today();
 export const CUR_WEEK = weekOf(TODAY);

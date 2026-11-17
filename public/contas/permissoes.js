@@ -29,7 +29,7 @@ export function valorCfg(cfg, mod, papel, id) {
   const a = antigoDe(papel); const o = a && cfg[a];
   return o && typeof o[id] === 'boolean' ? o[id] : undefined;
 }
-const SO_ADMIN = ['usuarios', 'perfis', 'gimport', 'cflimpa', 'cfhist', 'cffotos', 'cfarqfotos', 'cfdocs', 'cfpainel'];
+const SO_ADMIN = ['usuarios', 'perfis', 'gimport', 'cflimpa', 'cfhist', 'cffotos', 'cfarqfotos', 'cfdocs'];
 // Aba que o perfil do módulo pode ter ligada (as da Administração, só o perfil 'Dos módulos').
 export const configuravel = (mod, papel, v) => !SO_ADMIN.includes(v.id) && (mod !== 'administracao' || papel === 'modulo');
 // Módulo de uma aba para a configuração: Avisos no celular (all) fica com o módulo pedido.
