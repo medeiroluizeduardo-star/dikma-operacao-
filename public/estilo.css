@@ -1827,3 +1827,33 @@ button.ic-card:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
 .md-aviso{color:var(--atencao)}
 .md-total{text-align:right;margin-top:var(--s2)}
 @media (max-width:640px){.md-cards{grid-template-columns:1fr 1fr}.md-card .p-ind-v{font-size:24px}.md-barra .md-tipos button{flex:1 1 45%}}
+/* Gestão › Tratativas (telas/tratativas.js) */
+.tr-barra .sel{min-width:140px}
+.tr-lista{display:flex;flex-direction:column;gap:var(--s2)}
+.tr-it{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;padding:var(--s3);border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:inherit;font:inherit;cursor:pointer}
+button.tr-it:hover{border-color:var(--marca)}
+.tr-it.fechada{opacity:.72}
+.tr-it-s{flex:0 0 auto;min-width:96px}
+.tr-it-t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.tr-it-t b{overflow-wrap:anywhere}
+.tr-it-t small{color:var(--ink-3);font-size:12px;overflow-wrap:anywhere}
+.tr-plano{color:var(--marca);font-weight:600}
+.tr-w5{display:inline-flex;gap:2px;flex:0 0 auto}
+.tr-w5 i{display:inline-grid;place-items:center;width:16px;height:18px;border-radius:4px;font-size:10px;font-style:normal;font-weight:700;background:var(--surface-2);color:var(--ink-3)}
+.tr-w5 i.on{background:color-mix(in srgb,var(--marca) 18%,var(--surface));color:var(--marca)}
+.tr-w5.cheio i{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--ok)}
+.tr-planos{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--s3)}
+.tr-pl .body{display:flex;flex-direction:column;gap:var(--s2)}
+.tr-meter{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.tr-meter i{display:block;height:100%;background:var(--ok)}
+.tr-atr{color:var(--critico)}
+.tr-ata-bts{display:inline-flex;flex-wrap:wrap;gap:var(--s1);align-items:center;justify-content:flex-end}
+.tr-form h4{margin:var(--s2) 0 0}
+.tr-evol{display:flex;flex-direction:column;gap:var(--s2);max-height:200px;overflow:auto;padding:var(--s2);border:1px solid var(--line-2);border-radius:8px}
+.tr-del{display:flex;gap:var(--s2);align-items:flex-start;font-size:13px;color:var(--critico)}
+.tr-del.tr-ok{color:inherit}
+.tr-encs{display:flex;flex-direction:column;gap:var(--s2);margin-bottom:var(--s2)}
+.tr-enc{display:grid;grid-template-columns:2fr 1fr 150px;gap:var(--s2);align-items:center}
+.tr-enc.feita{grid-template-columns:1fr auto;font-size:13px}
+.tr-txt{white-space:pre-wrap;font:inherit;font-size:13px;margin:0}
+@media (max-width:640px){.tr-it{flex-wrap:wrap}.tr-it-s{min-width:0}.tr-it-t{flex-basis:100%;order:2}.tr-w5{order:1;margin-left:auto}.tr-enc{grid-template-columns:1fr 1fr}.tr-enc input:first-child{grid-column:1/-1}.tr-planos{grid-template-columns:1fr}.tr-barra .sel{min-width:0;flex:1 1 45%}}

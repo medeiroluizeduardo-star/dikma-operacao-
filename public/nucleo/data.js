@@ -365,6 +365,7 @@ function stopData() {
   for (const fs of monthSubs.values()) fs.forEach(f => f());
   monthSubs.clear();
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
+  if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -472,10 +473,10 @@ export function setAprov(docId, area, mes, itens) {
 }
 const st0 = () => S[cur];
 // Plano de ação das causas: cria (id vazio) ou altera uma ação.
-export function salvarAcao(id, dados) {
-  const ref = id ? doc(db, C('acoes'), id) : doc(collection(db, C('acoes')));
+export function salvarAcao(id, dados, k = cur) {
+  const ref = id ? doc(db, C('acoes', k), id) : doc(collection(db, C('acoes', k)));
   const x = id ? { ...dados, atualizadoEm: new Date().toISOString(), atualizadoPor: me.uid } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome || me.login || '' };
-  st0().acoes[ref.id] = { ...(st0().acoes[ref.id] || {}), id: ref.id, ...x };
+  S[k].acoes[ref.id] = { ...(S[k].acoes[ref.id] || {}), id: ref.id, ...x };
   return track(setDoc(ref, x, { merge: true }));
 }
 // k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Usado para lançar a hora extra de quem cobre em outro conjunto.
@@ -683,6 +684,22 @@ export function medWatch(ym) {
 }
 // campo: l (lançado) · oc (oculto) · man (digitado); val = null apaga.
 export const medGravar = (ym, campo, id, val) => track(setDoc(doc(db, 'medicao', ym), { [campo]: { [id]: val == null ? deleteField() : val }, ...marca() }, { merge: true }));
+// Gestão › Tratativas (tratativas/{id}: tipo acao | plano | ata; contas/tratativas.js). A coleção é lida quando a tela
+// abre (ou Causas e ações); grava quem edita as Tratativas (firestore.rules), sempre com a marca de quem gravou.
+let tratSub = null; cache.trat = { d: {}, loaded: false };
+export function tratWatch() {
+  if (tratSub) return;
+  tratSub = onSnapshot(collection(db, 'tratativas'), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data({ serverTimestamps: 'estimate' }) }; }); cache.trat = { d, loaded: true }; changed(); },
+    e => { cache.trat = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; tratSub = null; changed(); });
+}
+export const tratNovoId = () => doc(collection(db, 'tratativas')).id;
+// novo = true na criação (grava quem criou e quando); depois, só os campos que mudaram.
+export function tratSalvar(id, dados, novo = false) {
+  const x = novo ? { ...dados, criadoEm: new Date().toISOString(), criadoPor: me.uid, criadoNome: me.nome || me.login || '', ...marca() } : { ...dados, ...marca() };
+  cache.trat.d[id] = { ...(cache.trat.d[id] || {}), id, ...x }; changed();
+  return track(setDoc(doc(db, 'tratativas', id), x, { merge: true }));
+}
+export function tratApagar(id) { delete cache.trat.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'tratativas', id)); return track(b.commit()); }
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

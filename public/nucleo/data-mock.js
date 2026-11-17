@@ -198,6 +198,25 @@ export function medGravar(ym, campo, id, val) {
   if (val == null) delete o[id]; else o[id] = val;
   cache.med[ym] = { d: { ...m.d, [campo]: o }, loaded: true }; changed(); return Promise.resolve();
 }
+// Gestão › Tratativas (tratativas/{id}): na demonstração, em memória, com um plano, uma ata e algumas ações.
+{ const h = today(); const d = n => add(h, n); const em = n => d(n) + 'T10:00:00.000Z';
+  const base = (id, x) => ({ id, criadoEm: em(-12), criadoPor: 'demo', criadoNome: 'Gestor Demonstração', plano: '', ...x });
+  cache.trat = { loaded: true, d: Object.fromEntries([
+    base('tpl1', { tipo: 'plano', nome: 'Reduzir paradas das pás carregadeiras', objetivo: 'Baixar as horas perdidas dos equipamentos para menos de 50 h no mês', conj: 'equip', status: 'ativo' }),
+    base('tata1', { tipo: 'ata', titulo: 'Alinhamento semanal com a liderança do Pátio', data: d(-6), local: 'Sala da coordenação', participantes: 'Coordenação, supervisão e líderes do Pátio', pauta: 'Atividades não realizadas da semana e limpeza das correias.', decisoes: 'Reforçar a limpeza da correia 3 no turno da manhã.', enc: [{ oque: 'Programar limpeza extra da correia 3', quem: 'Supervisor do Pátio', prazo: d(2), trat: 'ta3' }, { oque: 'Conferir a escala do fim de semana', quem: 'Líder do Recebimento', prazo: d(1), trat: '' }], plano: '' }),
+    base('ta1', { tipo: 'acao', titulo: 'Revisar o plano de lubrificação das pás carregadeiras', por: 'Paradas repetidas por falta de lubrificação', origem: 'equipamentos', ref: 'Pá carregadeira 03', conj: 'equip', local: 'Oficina', inicio: d(-10), prazo: d(-2), resp: 'Supervisor de Equipamentos', como: 'Levantar as paradas do mês e ajustar a frequência com a manutenção', custo: 0, custoReal: null, status: 'andamento', plano: 'tpl1', evol: [{ t: 'Levantamento das paradas feito', em: em(-5), nome: 'Supervisor de Equipamentos', uid: 'demo' }] }),
+    base('ta2', { tipo: 'acao', titulo: 'Treinar operadores na inspeção diária antes da partida', por: 'Reduzir paradas por falha do operador', origem: 'equipamentos', conj: 'equip', inicio: d(-3), prazo: d(5), resp: 'Técnico de Segurança', como: 'DDS de 15 minutos em cada turno com o checklist', custo: 350, status: 'aberta', plano: 'tpl1' }),
+    base('ta3', { tipo: 'acao', titulo: 'Programar limpeza extra da correia 3', por: 'Encaminhamento da reunião “Alinhamento semanal com a liderança do Pátio”', origem: 'reuniao', ref: 'Alinhamento semanal com a liderança do Pátio', conj: 'patio', local: 'Correia 3', inicio: d(-6), prazo: d(2), resp: 'Supervisor do Pátio', status: 'aberta', ata: 'tata1' }),
+    base('ta4', { tipo: 'acao', titulo: 'Sinalizar o ponto de queda de material na transferência', por: 'Queda de material registrada duas vezes no mês', origem: 'queda', conj: 'patio', local: 'Torre de transferência', inicio: d(-20), prazo: d(-8), resp: 'Líder da Preparação', como: 'Placa e cone no local; conferir na inspeção semanal', custo: 120, custoReal: 95, status: 'feita', feitaEm: em(-9) })
+  ].map(o => [o.id, o])) }; }
+export function tratWatch() { /* tudo já está em memória */ }
+let tratN = 0;
+export const tratNovoId = () => 't' + Date.now().toString(36) + (tratN++);
+export function tratSalvar(id, dados, novo = false) {
+  const x = novo ? { ...dados, criadoEm: new Date().toISOString(), criadoPor: me.uid, criadoNome: me.nome } : dados;
+  cache.trat.d[id] = { ...(cache.trat.d[id] || {}), id, ...x }; changed(); return Promise.resolve();
+}
+export function tratApagar(id) { delete cache.trat.d[id]; changed(); return Promise.resolve(); }
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;
@@ -244,9 +263,9 @@ export const sitExtraMes = m => (S[cur].sitExtra || {})[m] || { cob: {}, he: {},
 export const movMes = (m, k = cur) => (((S[k] || S[cur]).sitExtra || {})[m] || {}).mov || {};
 export async function setMov(key, val, k = cur) { const m = key.split('|')[1].slice(0, 7); const x = (S[k].sitExtra[m] ||= { cob: {}, he: {} }); (x.mov ||= {})[key] = val; changed(); }
 export async function setSitExtra(campo, key, val, k = cur) { const m = key.split('|')[1].slice(0, 7); const x = (S[k].sitExtra[m] ||= { cob: {}, he: {} }); const o = (x[campo] ||= {}); if (val) o[key] = val; else delete o[key]; changed(); }
-export async function salvarAcao(id, dados) {
+export async function salvarAcao(id, dados, k = cur) {
   const i = id || 'ac' + Date.now().toString(36); const x = id ? { ...dados, atualizadoEm: new Date().toISOString() } : { ...dados, em: new Date().toISOString(), por: me.uid, porNome: me.nome };
-  S[cur].acoes[i] = { ...(S[cur].acoes[i] || {}), id: i, ...x }; changed();
+  S[k].acoes[i] = { ...(S[k].acoes[i] || {}), id: i, ...x }; changed();
 }
 export async function setAprov(docId, area, mes, itens) {
   const em = new Date().toISOString(); const a = (S[cur].aprov[docId] ||= {});

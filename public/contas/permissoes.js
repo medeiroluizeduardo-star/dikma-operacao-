@@ -85,7 +85,7 @@ export const ITENS = [
   { id: 'i_operacao', mod: 'operacao', nome: 'Lançar e editar em Equipamentos', d: 'Alocações, paradas, equipe e inspeções', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   { id: 'i_efetivo', mod: 'operacao', nome: 'Lançar na Escala do dia', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   ...comunsDe('operacao', ['gestor', 'coordenador', 'supervisor', 'tecnico', 'lider', 'leitor']),
-  { id: 'i_acoes', mod: 'gestao', nome: 'Criar e acompanhar ações das causas', d: 'Plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
+  { id: 'i_acoes', mod: 'gestao', nome: 'Criar e acompanhar tratativas', d: 'Ações, planos 5W2H e atas em Tratativas, e o plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
   { id: 'i_fichas', mod: 'gestao', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
   { id: 'i_medicao', mod: 'gestao', nome: 'Lançar na Medição', d: 'Marcar lançado, ocultar e digitar registros em Gestão › Medição', quem: ['gestor', 'coordenador'] },
   { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },

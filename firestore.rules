@@ -429,6 +429,39 @@ service cloud.firestore {
       allow delete: if admin();
     }
 
+    // Gestão › Tratativas (tratativas/{id}: tipo acao | plano | ata; contas/tratativas.js). Lê: quem tem a Gestão.
+    // Cria e altera: administrador e Gestão (Gestor, Coordenador, Supervisor), sempre em nome de quem grava e com a hora
+    // do servidor (marcaOk), sem trocar o tipo nem quem criou. Apaga: administrador, Gestor da Gestão ou quem criou.
+    function tratLe() { return ativo() && (admin() || pEm('gestao') != ''); }
+    function tratEdita() { return ativo() && (admin() || pEm('gestao') in ['gestor', 'coordenador', 'supervisor']); }
+    function tTxt(d, k, n) { return !(k in d) || (d[k] is string && d[k].size() <= n); }
+    function tratAcaoOk(d) {
+      return d.keys().hasOnly(['tipo', 'titulo', 'por', 'origem', 'ref', 'conj', 'local', 'inicio', 'prazo', 'resp', 'como', 'custo', 'custoReal', 'status', 'plano', 'causa', 'area', 'ata', 'evol', 'feitaEm', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 400
+        && d.status in ['aberta', 'andamento', 'feita', 'cancelada']
+        && d.origem in ['atividades', 'equipamentos', 'efetivo', 'queda', 'seguranca', 'reuniao', 'cliente', 'outra']
+        && tTxt(d, 'por', 2000) && tTxt(d, 'como', 2000) && tTxt(d, 'resp', 120) && tTxt(d, 'local', 120) && tTxt(d, 'ref', 120)
+        && d.get('evol', []) is list && d.get('evol', []).size() <= 200;
+    }
+    function tratPlanoOk(d) {
+      return d.keys().hasOnly(['tipo', 'nome', 'objetivo', 'conj', 'status', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && d.nome is string && d.nome.size() >= 3 && d.nome.size() <= 120 && d.status in ['ativo', 'concluido'] && tTxt(d, 'objetivo', 2000);
+    }
+    function tratAtaOk(d) {
+      return d.keys().hasOnly(['tipo', 'titulo', 'data', 'local', 'participantes', 'pauta', 'decisoes', 'enc', 'plano', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && d.titulo is string && d.titulo.size() >= 3 && d.titulo.size() <= 300 && d.data is string && d.data.matches('^20[0-9]{2}-[0-9]{2}-[0-9]{2}$')
+        && tTxt(d, 'pauta', 5000) && tTxt(d, 'decisoes', 5000) && tTxt(d, 'participantes', 600)
+        && d.get('enc', []) is list && d.get('enc', []).size() <= 60;
+    }
+    function tratDocOk(d) { return (d.tipo == 'acao' && tratAcaoOk(d)) || (d.tipo == 'plano' && tratPlanoOk(d)) || (d.tipo == 'ata' && tratAtaOk(d)); }
+    match /tratativas/{id} {
+      allow read: if tratLe();
+      allow create: if tratEdita() && tratDocOk(request.resource.data) && request.resource.data.get('criadoPor', '') == request.auth.uid && marcaOk();
+      allow update: if tratEdita() && tratDocOk(request.resource.data) && marcaOk() && request.resource.data.tipo == resource.data.tipo
+        && request.resource.data.get('criadoPor', '') == resource.data.get('criadoPor', '');
+      allow delete: if admin() || (tratEdita() && (pEm('gestao') == 'gestor' || resource.data.get('criadoPor', '') == request.auth.uid));
+    }
+
     // Indicadores do contrato (Indicadores › Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses.
     // Quem tem o módulo Indicadores lê; o Gestor dos Indicadores e o administrador gravam (só estes campos, mapas pequenos).
     match /config/indicadores {

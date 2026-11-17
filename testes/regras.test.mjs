@@ -1461,6 +1461,30 @@ test('Gestão › Medição (medicao/{mês}): Gestor e Coordenador da Gestão gr
   await assertFails(deleteDoc(ref('geGestorSo')), 'Gestor não apaga o mês');
 });
 
+test('Gestão › Tratativas (tratativas/{id}): quem tem a Gestão lê; Gestor, Coordenador e Supervisor da Gestão gravam', async () => {
+  const ref = (u, id = 'ta1') => doc(db(u), 'tratativas', id);
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const acao = (u, x = {}) => ({ tipo: 'acao', titulo: 'Revisar a lubrificação das pás', por: 'Paradas repetidas', origem: 'equipamentos', conj: 'equip', prazo: '2026-11-30', resp: 'Supervisor', status: 'aberta', plano: '', criadoEm: '2026-11-17T10:00:00Z', criadoPor: u, criadoNome: 'Fulano', ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('geGestorSo'), acao('geGestorSo')), 'Gestor da Gestão cria uma ação');
+  await assertSucceeds(setDoc0(ref('supPatio'), { status: 'andamento', evol: [{ t: 'Começou', em: '2026-11-17T11:00:00Z', nome: 'Sup', uid: 'supPatio' }], ...mk('supPatio') }, { merge: true }), 'Supervisor da Gestão muda a situação e comenta');
+  await assertSucceeds(setDoc0(ref('geCoord', 'pl1'), { tipo: 'plano', nome: 'Reduzir paradas', objetivo: 'Menos de 50 h', conj: 'equip', status: 'ativo', criadoEm: 'x', criadoPor: 'geCoord', criadoNome: 'C', ...mk('geCoord') }), 'Coordenador cria um plano');
+  await assertSucceeds(setDoc0(ref('admin', 'at1'), { tipo: 'ata', titulo: 'Reunião semanal', data: '2026-11-17', enc: [{ oque: 'Limpar a correia 3', quem: 'Líder', prazo: '2026-11-20', trat: '' }], plano: '', criadoEm: 'x', criadoPor: 'admin', criadoNome: 'A', ...mk('admin') }), 'administrador registra uma ata');
+  await assertSucceeds(getDoc(ref('geAdmv')), 'Administrativo da Gestão lê');
+  await assertFails(setDoc0(ref('geAdmv'), { status: 'feita', ...mk('geAdmv') }, { merge: true }), 'Administrativo da Gestão não grava');
+  await assertFails(getDoc(ref('rhSo')), 'sem a Gestão não lê');
+  await assertFails(getDoc(ref('opGestorSo')), 'só a Operação não lê');
+  await assertFails(setDoc0(ref('geGestorSo', 'ta2'), acao('geCoord', mk('geGestorSo'))), 'cria em nome de outra pessoa');
+  await assertFails(setDoc0(ref('geGestorSo', 'ta3'), { ...acao('geGestorSo'), atualizadoPor: 'geCoord' }), 'sem a própria marca de quem gravou');
+  await assertFails(setDoc0(ref('geGestorSo'), { tipo: 'plano', ...mk('geGestorSo') }, { merge: true }), 'troca o tipo');
+  await assertFails(setDoc0(ref('geGestorSo'), { criadoPor: 'geGestorSo2', ...mk('geGestorSo') }, { merge: true }), 'troca quem criou');
+  await assertFails(setDoc0(ref('geGestorSo'), { outra: 1, ...mk('geGestorSo') }, { merge: true }), 'campo fora da lista');
+  await assertFails(setDoc0(ref('geGestorSo'), { status: 'perdida', ...mk('geGestorSo') }, { merge: true }), 'situação fora da lista');
+  await assertFails(setDoc0(ref('geGestorSo', 'ta4'), acao('geGestorSo', { titulo: 'oi' })), 'sem dizer o que será feito');
+  await assertFails(deleteDoc(ref('supPatio', 'pl1')), 'Supervisor não apaga o que outra pessoa criou');
+  await assertSucceeds(deleteDoc(ref('geGestorSo', 'pl1')), 'Gestor da Gestão apaga');
+  await assertSucceeds(deleteDoc(ref('geGestorSo')), 'quem criou apaga');
+});
+
 test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {
   const ref = u => doc(db(u), 'config', 'indicadores');
   const ok = { metas: { abs: 3, he: 200 }, valores: { '2026-10': { iccc: 96.5, iccp: null } }, hist: { 'patio|2026-10': { esc: 400, aus: 9, em: '2026-11-01' } }, atualizadoEm: serverTimestamp(), por: 'Gestor' };

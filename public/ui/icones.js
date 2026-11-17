@@ -63,6 +63,7 @@ Object.assign(I, {
   carimbo: svg('<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 14l2 2 4-4"/>'),
   lanc: svg('<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4M9 10h6M9 14h6M9 18h3"/>'),
   presenca: svg('<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.7-3.6 3.3-5.8 6.5-5.8 1.5 0 2.8.4 3.9 1.2"/><path d="M15 18l2 2 4-4.5"/>'),
+  alvo: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><path d="M12 12l7-7M16 5h3v3"/>'),
   nota: svg('<path d="M12 21H6V3h8l4 4v3"/><path d="M14 3v4h4"/><path d="M14 21l.8-3.2 4.7-4.7 2.4 2.4-4.7 4.7z"/>'),
   organograma: svg('<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/>'),
   balanca: svg('<path d="M12 4v16M7 20h10M5 7h14"/><path d="M5 7l-3 6h6zM19 7l-3 6h6z"/>'),

@@ -16,6 +16,8 @@ import { fotosDaCel } from '../contas/fotos.js';
 import { agruparAprov } from '../contas/aprovacao.js';
 import { abre } from '../ui/dobra.js';
 import { modsHistorico } from '../contas/acessos.js';
+import { conferirAcao } from '../contas/tratativas.js';
+import { viewsDoModulo } from '../nucleo/navegacao.js';
 
 
 /* ---------------- PAINEL ---------------- */
@@ -151,6 +153,13 @@ function pedirDevolucao(x) {
 const OUTRAS = 'Outras justificativas (escritas)';
 const causaDe = m => (MOTIVOS.includes(m) ? m : OUTRAS);
 const podeAcao = area => acompanha() && podeItem('i_acoes') && (area === 'TODAS' ? todasAreas() : (todasAreas() || myAreas().includes(area)));
+// Ações das causas: as antigas (acoes/ do conjunto aberto) e as das Tratativas com origem Atividades neste conjunto.
+function acoesDasCausas() {
+  if (DB.tratWatch) DB.tratWatch();
+  const novas = Object.values((DB.cache.trat || {}).d || {}).filter(x => x.tipo === 'acao' && x.origem === 'atividades' && x.conj === SK && x.causa)
+    .map(x => ({ id: 't:' + x.id, _t: x.id, acao: x.titulo, causa: x.causa, area: x.area || 'TODAS', resp: x.resp, prazo: x.prazo, status: x.status === 'andamento' ? 'aberta' : x.status, em: x.criadoEm }));
+  return [...Object.values(DB.cache.acoes || {}), ...novas];
+}
 export function contarCausas(docs, rota) {
   const por = {}, escritas = {}; let total = 0;
   for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p || (rota && p.rota !== rota)) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = d.m[id + '|' + k] || 'Sem justificativa'; const c = m === 'Sem justificativa' ? m : causaDe(m); por[c] = (por[c] || 0) + 1; total++; if (c === OUTRAS) escritas[m] = (escritas[m] || 0) + 1; } });
@@ -179,7 +188,7 @@ export function vCausas() {
   const lista = Object.entries(por).sort((a, b) => b[1] - a[1]); const mx = Math.max(1, ...lista.map(x => x[1]));
   let acum = 0; const nf = v => v.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
   const atrasadas = atrasadasAll(area).filter(x => x.doc.mes === UI.mes).length;
-  const acoes = Object.values(DB.cache.acoes || {}).filter(a => a.status !== 'cancelada' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
+  const acoes = acoesDasCausas().filter(a => a.status !== 'cancelada' && (area === 'TODAS' || a.area === area || a.area === 'TODAS'));
   const abertas = acoes.filter(a => a.status !== 'feita');
   const vencidas = abertas.filter(a => a.prazo && a.prazo < TODAY);
   let h = `<div class="mini"><div><b class="num" style="color:${total ? 'var(--st-nreal)' : 'inherit'}">${total}</b><span>Não realizadas no mês</span></div><div><b class="num">${lista.length}</b><span>Causas diferentes</span></div><div><b class="num">${atrasadas}</b><span>Atrasadas sem apontar</span></div><div><b class="num">${abertas.length}</b><span>Ações abertas</span></div><div><b class="num" style="color:${vencidas.length ? 'var(--st-nreal)' : 'inherit'}">${vencidas.length}</b><span>Ações com prazo vencido</span></div></div>`;
@@ -201,7 +210,7 @@ export function vCausas() {
   }
   // plano de ação
   const ord = { aberta: 0, feita: 1 };
-  h += `<div class="card"><header><h2>Plano de ação</h2><p>O que está sendo feito para cada causa · o efeito compara a média por semana nas 4 semanas antes e depois da ação</p></header><div class="body">${acoes.length ? `<div class="plist">${acoes.slice().sort((a, b) => (ord[a.status] || 0) - (ord[b.status] || 0) || String(a.prazo || '9').localeCompare(String(b.prazo || '9'))).map(a => {
+  h += `<div class="card"><header><h2>Plano de ação</h2><p>O que está sendo feito para cada causa · o efeito compara a média por semana nas 4 semanas antes e depois da ação</p>${viewsDoModulo().some(v => v.id === 'gtrat') ? '<span class="r"><button class="btn sm" data-go="gtrat">Ver em Tratativas</button></span>' : ''}</header><div class="body">${acoes.length ? `<div class="plist">${acoes.slice().sort((a, b) => (ord[a.status] || 0) - (ord[b.status] || 0) || String(a.prazo || '9').localeCompare(String(b.prazo || '9'))).map(a => {
     const ef = efeitoAcao(a.causa, a.area, a.em || TODAY); const venc = a.status !== 'feita' && a.prazo && a.prazo < TODAY; const ed = podeAcao(a.area);
     return `<div class="pitem acao"><div class="minw"><div class="t">${esc(a.acao)}</div><div class="l">${esc(a.causa)} · ${a.area === 'TODAS' ? 'todas as áreas' : AREA_S[a.area] || esc(a.area)}${a.resp ? ` · resp. ${esc(a.resp)}` : ''}${a.prazo ? ` · prazo ${ddmm(a.prazo)}` : ''}</div><div class="l">${ef.antes != null ? `Antes: ${nf(ef.antes)}/semana` : 'Antes: sem dados'} · ${ef.depois != null ? `depois: <b>${nf(ef.depois)}/semana</b>${ef.antes != null ? (ef.depois < ef.antes ? ' <span class="pill ok">caiu</span>' : ef.depois > ef.antes ? ' <span class="pill bad">subiu</span>' : ' <span class="pill neu">igual</span>') : ''}` : 'depois: aguardando a próxima semana'}</div></div><div class="row-gap">${a.status === 'feita' ? '<span class="pill ok">feita</span>' : venc ? '<span class="pill bad">prazo vencido</span>' : '<span class="pill warn">aberta</span>'}${ed ? (a.status === 'feita' ? `<button class="btn sm" data-act="acaoSt" data-k="${esc(a.id)}|aberta">Reabrir</button>` : `<button class="btn sm pri" data-act="acaoSt" data-k="${esc(a.id)}|feita">Concluir</button>`) + `<button class="btn sm ghost" data-act="acaoSt" data-k="${esc(a.id)}|cancelada" title="Tirar do plano">✕</button>` : ''}</div></div>`;
   }).join('')}</div>` : `<div class="empty"><b>Nenhuma ação ainda</b><span>${acompanha() ? 'Toque em “+ Ação” ao lado de uma causa no Pareto para registrar o que será feito.' : 'As ações registradas pela supervisão aparecem aqui.'}</span></div>`}</div></div>`;
@@ -214,7 +223,8 @@ function novaAcaoSheet(causa) {
     <label class="sel"><span>Área</span><select class="in" id="acArea">${opts.map(a => `<option value="${a}">${a === 'TODAS' ? 'Todas as áreas' : AREA_S[a]}</option>`).join('')}</select></label>`, 'Criar ação', async () => {
     const acao = ($('acTxt').value || '').replace(/\s+/g, ' ').trim(); if (acao.length < 5) throw new Error('Descreva a ação.');
     const ar = $('acArea').value; if (!podeAcao(ar)) throw new Error('Seu perfil não cria ação nesta área.');
-    await DB.salvarAcao('', { causa, area: ar, acao, resp: ($('acResp').value || '').trim(), prazo: $('acPrazo').value || '', status: 'aberta' });
+    // Vai para Gestão › Tratativas (origem Atividades); as ações antigas continuam em acoes/ e aparecem junto.
+    DB.tratSalvar(DB.tratNovoId(), conferirAcao({ titulo: acao, por: `Causa de não realização: ${causa}`, origem: 'atividades', ref: causa, causa, conj: SK, area: ar === 'TODAS' ? '' : ar, resp: $('acResp').value, prazo: $('acPrazo').value, inicio: TODAY, status: 'aberta' }), true);
     DB.log(`Plano de ação: ${causa} → ${acao}`, 'gestao'); toast('Ação criada'); render();
   });
 }
@@ -368,7 +378,8 @@ function exportCSV() {
 acoes.limparProg = (t, d) => { UI.q = ''; UI.soPend = false; UI.rota = 'TODAS'; UI.tipo = 'TODOS'; render(); };
 acoes.progTodas = (t, d) => { const area = areaScope(); const ks = new Set(); for (const doc of docsFor({ ini: UI.ini, area })) doc.ids.forEach(id => { const p = PL.get(id); if (p) ks.add(doc.area + '|' + p.rota); }); UI.progAbertas = (UI.progAbertas || []).length ? [] : [...ks]; render(); };
 acoes.novaAcao = (t, d) => { novaAcaoSheet(d.k); };
-acoes.acaoSt = (t, d) => { const [id, stt] = d.k.split('|'); const a = (DB.cache.acoes || {})[id]; if (!a || !podeAcao(a.area)) return; DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`, 'gestao'); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); };
+acoes.acaoSt = (t, d) => { const [id, stt] = d.k.split('|'); const a = acoesDasCausas().find(x => x.id === id); if (!a || !podeAcao(a.area)) return;
+  if (a._t) DB.tratSalvar(a._t, { status: stt, feitaEm: stt === 'feita' ? new Date().toISOString() : '' }); else DB.salvarAcao(id, { status: stt }); DB.log(`Plano de ação: "${a.acao}" ${stt === 'feita' ? 'concluída' : stt === 'cancelada' ? 'retirada' : 'reaberta'}`, 'gestao'); toast(stt === 'feita' ? 'Ação concluída' : stt === 'cancelada' ? 'Ação retirada do plano' : 'Ação reaberta'); render(); };
 acoes.aprv = (t, d) => { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) { aprovar([x]); toast('Aprovada'); render(); } };
 acoes.devl = (t, d) => { const x = achaAprov(d.k); if (x && areasAprov().includes(x.doc.area)) pedirDevolucao(x); };
 acoes.aprvGrupo = (t, d) => { const [dt, a, r] = d.k.split('|'); const xs = listaAprov(areasAprov().filter(z => z === a)).filter(x => x.dt === dt && x.p.rota === r); aprovar(xs); toast(`${xs.length} aprovada${xs.length > 1 ? 's' : ''}`); render(); };
