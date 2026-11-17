@@ -17,7 +17,7 @@ import { render, schedule, isMobile } from '../ui/shell.js';
 // Criadas por inicio.js (PES, AV) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
 export let PES = null, AV = null, EQ = null, AD = null, GE = null, SG = null;
 // Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), e Resumos (RE).
-let CF = null, RE = null, CO = null, IC = null, MD = null, TR = null;
+let CF = null, RE = null, CO = null, IC = null, MD = null, TR = null, PR = null;
 
 // Pessoas e Avisos no celular (antes de abrir o link recebido).
 export function criarModulos() {
@@ -49,13 +49,15 @@ const CARGA = {
   MD: () => import('../telas/medicao.js').then(m => { MD = m; }),
   // TR: Gestão › Tratativas (ações, planos 5W2H e atas de reunião)
   TR: () => import('../telas/tratativas.js').then(m => { TR = m; }),
+  // PR: Administração › Processos e rotina (rotina do analista)
+  PR: () => import('../telas/processos.js').then(m => { PR = m; }),
   CF: () => import('../telas/config.js').then(m => { CF = m; }),
   RE: () => import('../telas/relatorios.js').then(m => { RE = m; }),
   // CO: RH › Colaboradores (cadastro único, ficha em abas)
   CO: () => import('../telas/colaboradores.js').then(m => { CO = m; }),
   GE: () => import('../telas/gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
-const pronto = { TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO };
+const pronto = { PR: () => PR, TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO };
 const pedidos = {};
 // Baixa (uma vez só) o arquivo da tela; quando chega, a tela é redesenhada. Devolve uma promessa.
 export function carregarModulo(k) {

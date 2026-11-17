@@ -217,6 +217,20 @@ export function tratSalvar(id, dados, novo = false) {
   cache.trat.d[id] = { ...(cache.trat.d[id] || {}), id, ...x }; changed(); return Promise.resolve();
 }
 export function tratApagar(id) { delete cache.trat.d[id]; changed(); return Promise.resolve(); }
+// Administração › Processos e rotina: na demonstração, em memória, com a rotina valendo há 10 dias e algumas marcas.
+{ const h = today(); const d = n => add(h, n);
+  cache.proc = { loaded: true, rotLoaded: true, cfg: { desde: d(-10), itens: { P07: { dikma: 'Coordenação', arcelor: '' } } }, docs: {} };
+  for (let i = 1; i <= 10; i++) { const x = d(-i); const w = new Date(x + 'T12:00:00Z').getUTCDay(); if (w === 0 || w === 6) continue;
+    cache.proc.docs['P07_' + x] = { pid: 'P07', data: x, status: 'feita', passos: [true, true, true], obs: '', feitaEm: x + 'T15:00:00.000Z' };
+    if (i % 2) cache.proc.docs['P04_' + x] = { pid: 'P04', data: x, status: 'feita', passos: [true, true], obs: '', feitaEm: x + 'T16:00:00.000Z' }; } }
+export function procWatch() { /* tudo já está em memória */ }
+export function procSalvarCfg(patch) {
+  const c = cache.proc.cfg || {}; const itens = { ...(c.itens || {}) };
+  for (const [id, v] of Object.entries(patch.itens || {})) { if (v == null) delete itens[id]; else itens[id] = v; }
+  const x = { ...patch }; delete x.itens;
+  cache.proc = { ...cache.proc, cfg: { ...c, ...x, itens } }; changed(); return Promise.resolve();
+}
+export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs, [id]: { ...(cache.proc.docs[id] || {}), ...dados } }; changed(); return Promise.resolve(); }
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;

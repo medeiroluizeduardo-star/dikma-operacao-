@@ -41,7 +41,7 @@ export function criarAvisos(X) {
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
-      ehAdm() && ['painel', 'Meu painel: tarefas do dia (7h), pendências e lançamentos da Medição (16h)']
+      ehAdm() && ['painel', 'Processos e rotina: tarefas do dia (7h) e o que ficou em aberto (16h)']
     ].filter(Boolean);
     let corpo;
     if (!cfg.vapid) corpo = ehAdm()
