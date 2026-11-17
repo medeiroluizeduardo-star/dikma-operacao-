@@ -235,10 +235,10 @@ export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs
 // Administração › Documentos e OMs: na demonstração, em memória, com um vencido, um vencendo e um em dia.
 { const h = today(); const d = n => add(h, n);
   cache.docs = { loaded: true, d: {
-    dc1: { id: 'dc1', tipo: 'POP', numero: 'POP-012', titulo: 'Limpeza das correias transportadoras', conj: 'patio', resp: 'Supervisão do Pátio', emissao: d(-360), validade: d(-5), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
-    dc2: { id: 'dc2', tipo: 'OM', numero: 'OM 4500123', titulo: 'Troca do raspador da correia 3', conj: 'bateria', resp: 'Manutenção', emissao: d(-20), validade: d(12), situacao: 'Em andamento', link: '', obs: '', criadoNome: 'Demonstração' },
+    dc1: { id: 'dc1', tipo: 'POP', numero: 'POP-012', titulo: 'Limpeza das correias transportadoras', rev: '03', conj: 'patio', area: 'PREPARAÇÃO', local: 'Correias da preparação', resp: 'Supervisão do Pátio', emitente: 'Engenharia', emissao: d(-360), period: null, aviso: 30, validade: d(-5), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
+    dc2: { id: 'dc2', tipo: 'OM', numero: 'OM 4500123', titulo: 'Troca do raspador da correia 3', conj: 'bateria', area: 'BATERIA 2', local: 'Correia 3', prio: 'alta', resp: 'Manutenção', emitente: 'Operação', emissao: d(-20), period: null, aviso: 15, validade: d(12), situacao: 'Em andamento', link: '', obs: '', criadoNome: 'Demonstração' },
     dc3: { id: 'dc3', tipo: 'PT', numero: 'PT-0457', titulo: 'Trabalho em altura na bateria', conj: 'bateria', resp: 'Segurança', emissao: d(-10), validade: d(170), situacao: 'Vigente', link: '', obs: '', criadoNome: 'Demonstração' },
-    dc4: { id: 'dc4', tipo: 'ASO', numero: '', titulo: 'ASO periódico da equipe de limpeza', conj: 'coq', resp: 'RH', emissao: d(-400), validade: d(-30), situacao: 'Concluído', link: '', obs: '', criadoNome: 'Demonstração' } } }; }
+    dc4: { id: 'dc4', tipo: 'ASO', numero: '', titulo: 'ASO periódico', colab: 'Colaborador de exemplo', mat: '1001', period: 12, conj: 'coq', resp: 'RH', emissao: d(-400), validade: d(-30), situacao: 'Concluído', link: '', obs: '', criadoNome: 'Demonstração' } } }; }
 export function docsWatch() { /* tudo já está em memória */ }
 export const docNovoId = () => 'dc' + Date.now().toString(36);
 export function docSalvar(id, dados, novo = false) { cache.docs.d = { ...cache.docs.d, [id]: { ...(cache.docs.d[id] || {}), id, ...dados, ...(novo ? { criadoNome: me.nome } : {}) } }; changed(); return Promise.resolve(); }

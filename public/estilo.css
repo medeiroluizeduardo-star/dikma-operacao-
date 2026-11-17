@@ -1888,3 +1888,17 @@ button.tr-it:hover{border-color:var(--marca)}
 .pr-chks{display:flex;flex-direction:column;gap:6px}
 .pr-dono{display:flex;flex-direction:column;gap:var(--s2);align-items:flex-start}
 @media (max-width:640px){.pr-procs{grid-template-columns:1fr}.pr-it .tr-it-t{order:0;flex-basis:calc(100% - 44px)}.pr-it .tr-it-s{order:1}.pr-bts{order:2;margin-left:auto}}
+/* Administração › Documentos e OMs: formulário em seções (telas/documentos.js) */
+.sheet:has(.dc-form){width:min(660px,100%)}
+.dc-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dc-form [hidden]{display:none!important}
+.dc-sec{grid-column:1/-1;margin:6px 0 0;padding-top:10px;border-top:1px solid var(--line);font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.dc-sec:first-child{border-top:0;padding-top:0;margin-top:0}
+.dc-full{grid-column:1/-1}
+.dc-par{display:grid;grid-template-columns:1fr 96px;gap:10px}
+.dc-par:has(.dc-rev[hidden]){grid-template-columns:1fr}
+.dc-ob{color:var(--crit,#c0392b);font-style:normal;font-weight:700}
+.dc-form .in[aria-invalid="true"]{border-color:var(--crit,#c0392b)}
+.dc-form .sel small{display:block;margin-top:2px;font-size:11.5px}
+.dc-form .in[readonly]{opacity:.75}
+@media (max-width:640px){.dc-form{grid-template-columns:1fr}}

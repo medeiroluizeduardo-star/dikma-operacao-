@@ -319,7 +319,7 @@ test('documentos e OMs: segunda às 7h, administrador e Gestor/Coordenador da Ge
   const base = { usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados: {}, documentos };
   const m = planejar({ ...base, agora: new Date(`${SEG}T07:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos');
   assert.deepEqual(m.map(x => x.uid).sort(), ['adm', 'geG']);
-  assert.match(m[0].titulo, /1 vencido, 1 vence em 30 dias/);
+  assert.match(m[0].titulo, /1 vencido, 1 vence em breve/);
   assert.equal(m[0].url, '/?m=administracao&v=cfdocs');
   assert.equal(planejar({ ...base, agora: new Date('2026-10-20T07:10:00'), hoje: '2026-10-20' }).msgs.filter(x => x.tag === 'documentos').length, 0, 'só na segunda');
   assert.equal(planejar({ ...base, enviados: { [`docs|adm|${SEG}`]: SEG, [`docs|geG|${SEG}`]: SEG }, agora: new Date(`${SEG}T09:10:00`), hoje: SEG }).msgs.filter(x => x.tag === 'documentos').length, 0, 'uma vez');

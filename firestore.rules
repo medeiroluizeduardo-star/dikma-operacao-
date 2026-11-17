@@ -493,12 +493,17 @@ service cloud.firestore {
     match /documentos/{id} {
       allow read: if docsEdita();
       allow create, update: if docsEdita() && marcaOk()
-        && request.resource.data.keys().hasOnly(['tipo', 'numero', 'titulo', 'conj', 'resp', 'emissao', 'validade', 'situacao', 'link', 'obs', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.keys().hasOnly(['tipo', 'numero', 'rev', 'titulo', 'conj', 'area', 'local', 'resp', 'emitente', 'colab', 'mat', 'prio', 'emissao', 'period', 'validade', 'aviso', 'situacao', 'link', 'obs', 'criadoEm', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
         && request.resource.data.tipo in ['POP', 'PT', 'OS', 'ASO', 'Treinamento', 'OM', 'Outro']
         && request.resource.data.situacao in ['Vigente', 'Em andamento', 'Pendente', 'Concluído', 'Cancelado', 'Arquivado']
         && request.resource.data.get('conj', 'coq') in ['coq', 'patio', 'bateria']
         && tTxt(request.resource.data, 'numero', 40) && tTxt(request.resource.data, 'titulo', 140) && tTxt(request.resource.data, 'resp', 120)
         && tTxt(request.resource.data, 'link', 500) && tTxt(request.resource.data, 'obs', 500)
+        && tTxt(request.resource.data, 'rev', 10) && tTxt(request.resource.data, 'area', 40) && tTxt(request.resource.data, 'local', 120)
+        && tTxt(request.resource.data, 'emitente', 120) && tTxt(request.resource.data, 'colab', 150) && tTxt(request.resource.data, 'mat', 20)
+        && request.resource.data.get('prio', '') in ['', 'baixa', 'media', 'alta', 'emergencia']
+        && (request.resource.data.get('period', null) == null || request.resource.data.period in [0, 1, 3, 6, 12, 24, 36, 60])
+        && (!('aviso' in request.resource.data) || request.resource.data.aviso in [7, 15, 30, 60, 90])
         && tTxt(request.resource.data, 'criadoEm', 40) && tTxt(request.resource.data, 'criadoPor', 128) && tTxt(request.resource.data, 'criadoNome', 150)
         && dtOk(request.resource.data, 'emissao') && dtOk(request.resource.data, 'validade');
       allow delete: if docsEdita();
