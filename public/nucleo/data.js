@@ -741,6 +741,58 @@ export function docSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'documentos', id), x, { merge: true }));
 }
 export function docApagar(id) { const d = { ...cache.docs.d }; delete d[id]; cache.docs = { ...cache.docs, d }; changed(); const b = writeBatch(db); b.delete(doc(db, 'documentos', id)); return track(b.commit()); }
+// Administração › Trazer do Meu painel (contas/trazer-painel.js): lê uma vez o painel/{uid}/... de quem está logado (só o
+// dono lê) e grava, em lotes, só o que ainda não existe no Dikma. Rodar de novo não duplica nem desfaz o que mudou depois.
+export async function painelLer(cols) {
+  const out = {};
+  for (const c of cols) { const qs = await getDocs(collection(db, 'painel', me.uid, c)); out[c] = {}; qs.forEach(x => { out[c][x.id] = x.data(); }); }
+  return out;
+}
+// pl = planoDoPainel(...); faltaMed/faltaInd = as contas que tiram o que o destino já tem. Devolve { novos, ja }.
+export async function painelTrazer(pl, { faltaMed, faltaInd }) {
+  const nome = me.nome || me.login || '';
+  const itens = [...pl.trat.map(x => ['tratativas', x]), ...pl.docs.map(x => ['documentos', x]), ...pl.insp.map(x => ['seginsp', x]), ...pl.rotina.map(x => ['rotina', x])];
+  const ops = []; let ja = 0;
+  // ops: [ref, dados, merge, coleção, quantos itens]
+  for (let i = 0; i < itens.length; i += 40) {
+    const grupo = itens.slice(i, i + 40);
+    const ss = await Promise.all(grupo.map(([c, x]) => getDoc(doc(db, c, x.id))));
+    grupo.forEach(([c, x], k) => {
+      if (ss[k].exists()) { ja++; return; }
+      const r = doc(db, c, x.id);
+      if (c === 'seginsp') ops.push([r, { ...x.dados, por: me.uid, porNome: nome, em: serverTimestamp() }, false, c, 1]);
+      else if (c === 'rotina') ops.push([r, { ...x.dados, ...marca() }, false, c, 1]);
+      else ops.push([r, { ...x.dados, criadoEm: x.dados.criadoEm || new Date().toISOString(), criadoPor: me.uid, criadoNome: nome, ...marca() }, false, c, 1]);
+    });
+  }
+  for (const [ym, m] of Object.entries(pl.med)) {
+    const s = await getDoc(doc(db, 'medicao', ym));
+    const f = faltaMed(m, s.exists() ? s.data() : {});
+    const n = Object.values(f).reduce((a, x) => a + Object.keys(x).length, 0);
+    const tot = Object.values(m).reduce((a, x) => a + Object.keys(x).length, 0);
+    ja += tot - n;
+    if (n) ops.push([doc(db, 'medicao', ym), { ...f, ...marca() }, true, 'medicao', n]);
+  }
+  if (Object.keys(pl.ind.metas).length || Object.keys(pl.ind.valores).length) {
+    const s = await getDoc(doc(db, 'config', 'indicadores'));
+    const f = faltaInd(pl.ind, s.exists() ? s.data() : {});
+    const n = Object.keys(f.metas).length + Object.keys(f.valores).length;
+    ja += Object.keys(pl.ind.metas).length + Object.keys(pl.ind.valores).length - n;
+    if (n) ops.push([doc(db, 'config', 'indicadores'), { ...(Object.keys(f.metas).length ? { metas: f.metas } : {}), ...(Object.keys(f.valores).length ? { valores: f.valores } : {}), atualizadoEm: serverTimestamp(), por: nome }, true, 'indicadores', n]);
+  }
+  // Um lote por destino (até 400 por lote): se um destino recusar, os outros seguem e a tela mostra o que falhou.
+  let novos = 0; const falhas = [];
+  for (const col of [...new Set(ops.map(o => o[3]))]) {
+    const l = ops.filter(o => o[3] === col);
+    for (let i = 0; i < l.length; i += 400) {
+      const b = writeBatch(db); const parte = l.slice(i, i + 400);
+      for (const [r, d, merge] of parte) b.set(r, d, merge ? { merge: true } : {});
+      try { await b.commit(); novos += parte.reduce((a, o) => a + o[4], 0); }
+      catch (e) { falhas.push({ col, n: parte.reduce((a, o) => a + o[4], 0), erro: e.code || e.message || 'erro' }); }
+    }
+  }
+  return { novos, ja, falhas };
+}
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.
 export const salvarHorasAvisos = horas => track(setDoc(doc(db, 'config', 'avisos'), { horas }, { merge: true }));

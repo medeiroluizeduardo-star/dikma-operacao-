@@ -1888,3 +1888,10 @@ button.tr-it:hover{border-color:var(--marca)}
 .pr-chks{display:flex;flex-direction:column;gap:6px}
 .pr-dono{display:flex;flex-direction:column;gap:var(--s2);align-items:flex-start}
 @media (max-width:640px){.pr-procs{grid-template-columns:1fr}.pr-it .tr-it-t{order:0;flex-basis:calc(100% - 44px)}.pr-it .tr-it-s{order:1}.pr-bts{order:2;margin-left:auto}}
+/* Administração › Trazer do Meu painel */
+.tp-lista{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0}
+.tp-it{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.tp-it>span{display:flex;flex-direction:column;flex:1;min-width:0}.tp-it small{color:var(--ink-3)}
+.tp-n{font-size:20px;min-width:2.2em;text-align:right;font-variant-numeric:tabular-nums}
+.tp-zero{opacity:.55}
+.tp-fora{margin:0 0 var(--s2);padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
