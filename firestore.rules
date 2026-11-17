@@ -414,6 +414,21 @@ service cloud.firestore {
         && request.resource.data.get('motivos', []) is list && request.resource.data.get('motivos', []).size() <= 200;
     }
 
+    // Gestão › Medição (medicao/{AAAA-MM}): l = lançados, oc = ocultos, man = registros digitados (contas/medicao.js).
+    // Lê: administrador e Gestão (Gestor, Coordenador, Administrativo). Grava: administrador, Gestor e Coordenador da
+    // Gestão, sempre em nome de quem grava e com a hora do servidor (marcaOk). Só estes campos, mapas com limite.
+    function medLe() { return ativo() && (admin() || pEm('gestao') in ['gestor', 'coordenador', 'administrativo']); }
+    function medEdita() { return ativo() && (admin() || pEm('gestao') in ['gestor', 'coordenador']); }
+    match /medicao/{mes} {
+      allow read: if medLe();
+      allow create, update: if medEdita() && mes.matches('^20[0-9]{2}-(0[1-9]|1[0-2])$') && marcaOk()
+        && request.resource.data.keys().hasOnly(['l', 'oc', 'man', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.get('l', {}) is map && request.resource.data.get('l', {}).size() <= 5000
+        && request.resource.data.get('oc', {}) is map && request.resource.data.get('oc', {}).size() <= 5000
+        && request.resource.data.get('man', {}) is map && request.resource.data.get('man', {}).size() <= 1500;
+      allow delete: if admin();
+    }
+
     // Indicadores do contrato (Indicadores › Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses.
     // Quem tem o módulo Indicadores lê; o Gestor dos Indicadores e o administrador gravam (só estes campos, mapas pequenos).
     match /config/indicadores {

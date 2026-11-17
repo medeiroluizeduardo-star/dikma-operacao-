@@ -1813,3 +1813,17 @@ button.ic-card:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
 .ic-hv.ok{color:var(--ok)}.ic-hv.fora{color:var(--critico)}
 .p-recolhe .ic-grade{padding:var(--s3)}
 .seg.setsw.ic-sw{grid-template-columns:repeat(3,auto)}
+/* Gestão › Medição (telas/medicao.js) */
+.md-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s3);margin-bottom:var(--s4)}
+.md-card .p-ind-v{font-size:30px}
+.md-card.md-on{border-color:var(--marca);box-shadow:0 0 0 1px var(--marca) inset}
+.md-card.atencao{border-left:4px solid var(--atencao)}.md-card.critico{border-left:4px solid var(--critico)}
+.md-barra{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:flex-end;margin-bottom:var(--s3)}
+.md-barra .md-tipos{flex:1 1 100%;display:flex;flex-wrap:wrap}
+.md-busca{min-width:180px;flex:1 1 180px}
+.md-bts{display:inline-flex;flex-wrap:wrap;gap:var(--s1)}
+.md-tog.on{background:var(--ok-bg,rgba(30,140,80,.12));border-color:var(--ok);color:var(--ok)}
+.md-tog svg{width:14px;height:14px;vertical-align:-2px}
+.md-aviso{color:var(--atencao)}
+.md-total{text-align:right;margin-top:var(--s2)}
+@media (max-width:640px){.md-cards{grid-template-columns:1fr 1fr}.md-card .p-ind-v{font-size:24px}.md-barra .md-tipos button{flex:1 1 45%}}
