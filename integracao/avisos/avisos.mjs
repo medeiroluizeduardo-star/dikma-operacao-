@@ -151,7 +151,7 @@ for (const st of ['aberta', 'tratamento']) (await db.collection('seganom').where
 const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id, ...x.data() })).filter(x => !x.apagado);
 // Administração › Documentos e OMs: só na segunda, das 7h em diante (o aviso leva só números).
 // Operação › Solicitações de OM em andamento (aviso de nova, devolvida e liberada).
-const oms = []; for (const st of ['solicitada', 'devolvida', 'liberada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
+const oms = []; for (const st of ['solicitada', 'enviada', 'devolvida', 'liberada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
 const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);

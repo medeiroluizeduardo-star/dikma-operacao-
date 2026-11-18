@@ -325,3 +325,12 @@ test('solicitações de OM: nova vai para o Técnico de Processo do conjunto; de
   const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-10-19']));
   assert.equal(planejar({ ...base, enviados, agora: new Date('2026-10-19T09:10:00'), hoje: '2026-10-19' }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez');
 });
+
+test('solicitações de OM: enviada ao cliente avisa o usuário do cliente do conjunto', () => {
+  const us = conv({ cli: { papel: 'leitor', nome: 'Usuário Pátio', acesso: { operacao: 'leitor' }, escopos: ['patio'] } });
+  const oms = [{ id: 'o3', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Troca de rolete', equip: 'TC-03', numero: '4500123', status: 'enviada', clienteUid: 'cli', cliente: 'Usuário Pátio', solPor: 'x', hSol: '2026-10-19T07:40', hist: [{ s: 'enviada', em: '2026-10-19T08:00' }] }];
+  const m = planejar({ usuarios: us, avisos: { cli: tok }, paradas: [], ocorr: [], sets: {}, enviados: {}, oms, agora: new Date('2026-10-19T08:10:00'), hoje: '2026-10-19' }).msgs.filter(x => x.tag === 'oms');
+  assert.deepEqual(m.map(x => x.uid), ['cli']);
+  assert.match(m[0].titulo, /OM do Dikma para liberar: Troca de rolete/);
+  assert.match(m[0].corpo, /OM 4500123/);
+});

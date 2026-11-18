@@ -300,7 +300,7 @@ export function planejar(d) {
     }
   }
   // 11) Operação › Solicitações de OM: solicitação nova → quem trata no conjunto (Técnico de Processo, coordenador, gestor,
-  //     administrador); devolvida e liberada → quem abriu. Na hora (rotina de hora em hora), uma vez por mudança.
+  //     administrador); enviada → o usuário do cliente do conjunto; devolvida e liberada → quem abriu. Na hora (rotina de hora em hora), uma vez por mudança.
   if ((d.oms || []).length) {
     const porPessoa = new Map();
     for (const x of avisosOms(d.oms, d.usuarios, hoje)) {
@@ -311,6 +311,7 @@ export function planejar(d) {
     for (const { uid, tipo, l } of porPessoa.values()) {
       const n = l.length, s = n > 1 ? 's' : '';
       const titulo = tipo === 'nova' ? (n === 1 ? `OM para aprovar: ${l[0].titulo}` : `${n} solicitações de OM para aprovar`)
+        : tipo === 'enviada' ? (n === 1 ? `OM do Dikma para liberar: ${l[0].titulo}` : `${n} OMs do Dikma para liberar`)
         : tipo === 'devolvida' ? (n === 1 ? `OM devolvida: ${l[0].titulo}` : `${n} OMs devolvidas para corrigir`) : (n === 1 ? `OM liberada: ${l[0].titulo}` : `${n} OMs liberadas para executar`);
       const corpo = l.slice(0, 3).map(o => [o.equip || o.local, tipo === 'devolvida' ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
       msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms` });

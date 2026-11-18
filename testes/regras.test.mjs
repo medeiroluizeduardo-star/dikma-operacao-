@@ -1610,7 +1610,12 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', titulo: 'Outro título', ...mk('supPatio') }, { merge: true }), 'ao finalizar, só a hora e a observação');
   await assertSucceeds(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', obsFim: 'ok', ...mk('supPatio') }, { merge: true }), 'líder/supervisor da área finaliza');
   await assertFails(setDoc0(ref('opGestorSo'), { conj: 'bateria', ...mk('opGestorSo') }, { merge: true }), 'o conjunto não muda');
-  await assertSucceeds(setDoc0(ref('opGestorSo'), { cliente: 'Manutenção mecânica', contato: 'Ramal 1234', ...mk('opGestorSo') }, { merge: true }), 'quem trata informa o cliente');
+  await assertSucceeds(setDoc0(ref('opGestorSo'), { cliente: 'Usuário Pátio', clienteUid: 'leitor', contato: 'Ramal 1234', ...mk('opGestorSo') }, { merge: true }), 'quem trata informa o cliente');
+  const cfg = u => doc(db(u), 'config', 'oms');
+  await assertSucceeds(setDoc0(cfg('admin'), { clientes: { patio: { uid: 'leitor', nome: 'Usuário Pátio' } }, atualizadoPor: 'admin' }), 'administrador escolhe o cliente do conjunto');
+  await assertFails(setDoc0(cfg('opGestorSo'), { clientes: { patio: { uid: 'x', nome: 'X' } } }), 'só o administrador escolhe o cliente');
+  await assertFails(setDoc0(cfg('admin'), { clientes: { outro: { uid: 'x' } } }), 'só Pátio e Bateria');
+  await assertSucceeds(getDoc(cfg('supPatio')), 'quem está ativo lê o cliente');
   await assertFails(setDoc0(ref('opGestorSo'), { cliente: 'x'.repeat(121), ...mk('opGestorSo') }, { merge: true }), 'cliente com limite de tamanho');
   await assertFails(deleteDoc(ref('supPatio')), 'quem abriu não apaga');
   await assertFails(deleteDoc(ref('tecBat')), 'técnico de outro conjunto não apaga');
