@@ -8,6 +8,7 @@
 1. Nunca mexer direto na `main` (a `main` publica no ar sozinha). Criar uma branch nova (conferir antes com `git ls-remote --heads origin NOME` que o nome não existe), commit, push e **pull request**.
 2. Esperar a CI do PR (`testar`, `telas` e `previa`) e mandar ao usuário o **link da prévia** (comentário do PR com `...web.app`).
 3. Só fazer o merge (squash) quando o usuário disser **"pode publicar"**. Depois conferir que o workflow **"Publicar no Firebase"** terminou com sucesso.
+   - Exceção (aprovada pelo Eduardo em 2026-11-18): mudança de **baixo risco**, que não mexe em `public/` (telas), em `firestore.rules`/`firestore.indexes.json` nem em dados reais (ex.: workflows, limpeza, testes, documentação, ferramentas), pode ser mesclada sem perguntar assim que a CI passar. Avisar depois o que foi publicado. Na dúvida, perguntar.
 4. A cada mudança em `public/`, subir a versão `V` em `public/sw.js` (`dikma-operacao-vNN`) e incluir arquivos novos da tela no `SHELL`.
 5. Ao terminar, resumir para o usuário: o que mudou, como usar e o que foi testado. Curto.
 
