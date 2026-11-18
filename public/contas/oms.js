@@ -1,18 +1,21 @@
 // Operação › OMs: solicitação de ordem de manutenção, do líder ao cliente. Contas sem tela.
 // Caminho: a OM pode nascer como plano ("Planejada", com a data prevista), cadastrada pelo líder ou pelo técnico, e no dia
 // vira solicitação com um toque. O líder (ou supervisor, coordenador, gestor) abre a solicitação → o Técnico de Processo aprova ou devolve →
-// envia ao cliente → registra a liberação → quem executou (líder da área ou o técnico) finaliza.
+// envia ao cliente → o cliente libera, recusa ou cancela → quem executou (líder da área ou o técnico) finaliza.
+// Recusada: o cliente não aceitou a OM como veio (motivo obrigatório); o técnico ajusta e envia de novo, ou cancela.
+// Cancelada pelo cliente: com a OM com ele ou já liberada, o serviço não vai mais acontecer (motivo obrigatório).
+// Em cada passo dá para deixar uma observação, que fica no histórico da OM (campo obs da linha).
 // Usado pela tela (telas/oms.js), pelos testes (testes/oms.test.mjs) e pela rotina dos avisos no celular.
 import { perfilDe, ehAdminU, escoposDe, areasDoCadastro } from './acessos.js';
 import { add, weekOf } from './cal.js';
 
 export const STATUS = {
   planejada: 'Planejada', solicitada: 'Aguardando técnico', devolvida: 'Devolvida', aprovada: 'Aprovada', enviada: 'Com o cliente',
-  liberada: 'Liberada', finalizada: 'Finalizada', cancelada: 'Cancelada'
+  recusada: 'Recusada pelo cliente', liberada: 'Liberada', finalizada: 'Finalizada', cancelada: 'Cancelada'
 };
 // Situação do selo na lista (ui/padrao.js › etiqueta).
-export const COR = { planejada: 'neutro', solicitada: 'atencao', devolvida: 'critico', aprovada: 'info', enviada: 'info', liberada: 'atencao', finalizada: 'ok', cancelada: 'neutro' };
-export const ABERTAS = ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'];
+export const COR = { planejada: 'neutro', solicitada: 'atencao', devolvida: 'critico', aprovada: 'info', enviada: 'info', recusada: 'critico', liberada: 'atencao', finalizada: 'ok', cancelada: 'neutro' };
+export const ABERTAS = ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'recusada', 'liberada'];
 export const PRIORIDADES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', emergencia: 'Emergência' };
 export const TIPOS = { corretiva: 'Corretiva', preventiva: 'Preventiva', melhoria: 'Melhoria', seguranca: 'Segurança' };
 // Documentação de cada OM (não obrigatória: só mostra o que está pronto). Cada item: pronto, pendente ou não precisa.
@@ -23,7 +26,7 @@ export const DOC_SIT = { pend: 'Pendente', ok: 'Pronto', na: 'Não precisa' };
 export const PRAZO_PADRAO = { emergencia: 2, alta: 24, media: 48, baixa: 120 };
 export const PRAZO_MAX = 720;
 // Nomes das linhas do histórico que não são situação.
-export const PASSOS = { ciente: 'Ciente do cliente' };
+export const PASSOS = { ciente: 'Ciente do cliente', observacao: 'Observação' };
 export const LIMITES = { titulo: 200, local: 120, equip: 80, desc: 1000, motivo: 400, numero: 40, obs: 600, hist: 60, cliente: 120, contato: 120 };
 
 /* ---------- quem faz o quê ---------- */
@@ -56,15 +59,21 @@ export function acoesDe(om, u) {
   const daArea = abreOmU(u, om.conj, om.area); const cli = ehClienteDa(om, u);
   const a = [];
   // O cliente vem primeiro: a liberação é dele; o técnico registra só se o cliente liberou por fora.
-  if (cli && om.status === 'enviada') { if (!om.hCiente) a.push('ciente'); a.push('liberar'); }
+  if (cli && om.status === 'enviada') { if (!om.hCiente) a.push('ciente'); a.push('liberar', 'recusar'); }
+  // O cliente também cancela (o serviço não vai mais acontecer), com a OM com ele ou já liberada.
+  if (cli && ['enviada', 'liberada'].includes(om.status)) a.push('cancelar');
   if ((dono || trata) && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) a.push('editar');
   // No dia (ou antes), a planejada vira solicitação: quem cadastrou, quem trata ou o líder da área.
   if ((dono || trata || daArea) && om.status === 'planejada') a.push('solicitar');
   if (trata && om.status === 'solicitada') a.push('aprovar', 'devolver');
-  if (trata && om.status === 'aprovada') a.push('enviar');
-  if (trata && om.status === 'enviada' && !a.includes('liberar')) a.push('liberar');
+  // Recusada: o técnico ajusta e envia de novo ao cliente (ou cancela).
+  if (trata && ['aprovada', 'recusada'].includes(om.status)) a.push('enviar');
+  if (trata && om.status === 'enviada' && !a.includes('liberar')) a.push('liberar', 'recusar');
   if ((trata || daArea) && om.status === 'liberada') a.push('finalizar');
-  if ((dono && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) || (trata && ABERTAS.includes(om.status))) a.push('cancelar');
+  if (!a.includes('cancelar') && ((dono && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) || (trata && ABERTAS.includes(om.status)))) a.push('cancelar');
+  // Observação avulsa no histórico (sem mudar a situação): quem participa da OM, enquanto ela está aberta.
+  // (o cliente, com a OM com ele ou liberada; quem abriu, enquanto ela não foi aprovada.)
+  if (((trata || daArea) && ABERTAS.includes(om.status)) || (cli && ['enviada', 'liberada'].includes(om.status)) || (dono && ['planejada', 'solicitada'].includes(om.status))) a.push('obs');
   // Apagar de vez (aberta por engano, repetida): quem trata no conjunto e o administrador, em qualquer situação.
   // Documentação (PT, APR, bloqueio…): quem trata e o líder da área, enquanto a OM está aberta.
   if ((trata || daArea) && ABERTAS.includes(om.status)) a.push('docs');
@@ -146,37 +155,55 @@ export function prazoOm(om, cfg, agora = agoraLocal()) {
 // Com o cliente e já passou do prazo (fica vermelha na tela e gera aviso).
 export const foraDoPrazo = (om, cfg, agora) => { const p = prazoOm(om, cfg, agora); return !!(p && p.aberta && p.fora); };
 // Linha do histórico da OM.
-export const passo = (s, quem, txt = '', em = agoraLocal()) => ({ s, em, por: quem.uid || '', nome: quem.nome || '', ...(txt ? { txt: t(txt, LIMITES.motivo) } : {}) });
+// obs = observação livre de quem fez o passo (opcional, em todos os passos).
+export const passo = (s, quem, txt = '', em = agoraLocal(), obs = '') => {
+  const o = t(obs, LIMITES.obs);
+  return { s, em, por: quem.uid || '', nome: quem.nome || '', ...(txt ? { txt: t(txt, LIMITES.motivo) } : {}), ...(o ? { obs: o } : {}) };
+};
+// Observações da OM, na ordem (para a tela, a impressão e o Excel).
+export const observacoes = om => (om && Array.isArray(om.hist) ? om.hist : []).filter(p => p && p.obs).map(p => ({ s: p.s, em: p.em, nome: p.nome || '', obs: p.obs }));
 const comHist = (om, linha) => [...(om.hist || []), linha].slice(-LIMITES.hist);
 // Mudança de situação: devolve só os campos que mudam (para gravar). d = dados digitados na janela.
 export function mudar(om, acao, quem, d = {}) {
-  const ag = agoraLocal();
+  const ag = agoraLocal(); const obs = d.obs;
   switch (acao) {
     case 'solicitar': {
       const h = ehHora(d.hSol) ? d.hSol : ag;
-      return { status: 'solicitada', hSol: h, hist: comHist(om, passo('solicitada', quem, om.dPrev ? 'planejada para ' + dataBR(om.dPrev) : '', h)) };
+      return { status: 'solicitada', hSol: h, hist: comHist(om, passo('solicitada', quem, om.dPrev ? 'planejada para ' + dataBR(om.dPrev) : '', h, obs)) };
     }
-    case 'reenviar': return { status: 'solicitada', motivo: '', hist: comHist(om, passo('solicitada', quem, 'corrigida e reenviada', ag)) };
-    case 'aprovar': return { status: 'aprovada', hAprov: ag, aprovPor: quem.uid, aprovNome: quem.nome || '', hist: comHist(om, passo('aprovada', quem, d.obs, ag)) };
+    case 'reenviar': return { status: 'solicitada', motivo: '', hist: comHist(om, passo('solicitada', quem, 'corrigida e reenviada', ag, obs)) };
+    case 'aprovar': return { status: 'aprovada', hAprov: ag, aprovPor: quem.uid, aprovNome: quem.nome || '', hist: comHist(om, passo('aprovada', quem, '', ag, obs)) };
     case 'devolver': {
       const m = t(d.motivo, LIMITES.motivo); if (m.length < 5) erro('Diga o que precisa corrigir (mínimo 5 letras).', 'omMotivo');
-      return { status: 'devolvida', motivo: m, hist: comHist(om, passo('devolvida', quem, m, ag)) };
+      return { status: 'devolvida', motivo: m, hist: comHist(om, passo('devolvida', quem, m, ag, obs)) };
     }
     case 'enviar': {
       const h = ehHora(d.hEnvio) ? d.hEnvio : ag;
       const c = d.cliente || {}; const cliente = t(c.nome, LIMITES.cliente), contato = t(d.contato, LIMITES.contato), numero = t(d.numero, LIMITES.numero);
       if (!c.uid || cliente.length < 2) erro('O cliente deste conjunto ainda não foi definido. O administrador escolhe o usuário do cliente no topo da tela.', 'omCli');
-      const txt = ['para ' + cliente, contato, numero ? 'OM ' + numero : ''].filter(Boolean).join(' · ');
-      return { status: 'enviada', hEnvio: h, numero, cliente, clienteUid: c.uid, contato, hist: comHist(om, passo('enviada', quem, txt, h)) };
+      const txt = [om.status === 'recusada' ? 'reenviada' : '', 'para ' + cliente, contato, numero ? 'OM ' + numero : ''].filter(Boolean).join(' · ');
+      // Reenvio depois da recusa: a recusa fica no histórico e a OM volta limpa para o cliente (novo prazo, novo ciente).
+      const limpa = om.status === 'recusada' ? { motivo: '', hCanc: '', cancNome: '', cancCli: false, hCiente: '', cienteNome: '' } : {};
+      return { status: 'enviada', hEnvio: h, numero, cliente, clienteUid: c.uid, contato, ...limpa, hist: comHist(om, passo('enviada', quem, txt, h, obs)) };
     }
-    case 'ciente': return { hCiente: ag, cienteNome: t(quem.nome, 150), hist: comHist(om, passo('ciente', quem, '', ag)) };
+    case 'ciente': return { hCiente: ag, cienteNome: t(quem.nome, 150), hist: comHist(om, passo('ciente', quem, '', ag, obs)) };
+    case 'obs': {
+      const o = t(obs, LIMITES.obs); if (o.length < 3) erro('Escreva a observação.', 'omObs');
+      return { hist: comHist(om, passo('observacao', quem, '', ag, o)) };
+    }
+    case 'recusar': {
+      // O cliente recusa pelo sistema (hora do toque); o técnico registra a recusa que o cliente passou por fora.
+      const m = t(d.motivo, LIMITES.motivo); if (m.length < 5) erro('Diga o motivo da recusa (mínimo 5 letras).', 'omMotivo');
+      const cli = !!d.peloCliente;
+      return { status: 'recusada', motivo: m, hCanc: ag, cancNome: t(quem.nome, 150), cancCli: cli, hist: comHist(om, passo('recusada', quem, (cli ? '' : 'registrada pelo técnico: ') + m, ag, obs)) };
+    }
     case 'liberar': {
       // O cliente libera pelo sistema: vale a hora do toque (a real). O técnico registra a hora que o cliente informou.
       const cli = !!d.peloCliente; const h = cli ? ag : d.hLib;
       if (!ehHora(h)) erro('Informe a hora da liberação.', 'omHLib');
       if (om.hSol && h < om.hSol) erro('A liberação não pode ser antes da solicitação.', 'omHLib');
       const ciente = cli && !om.hCiente ? { hCiente: h, cienteNome: t(quem.nome, 150) } : {};
-      return { status: 'liberada', hLib: h, libNome: t(quem.nome, 150), libCli: cli, ...ciente, ...(d.numero ? { numero: t(d.numero, LIMITES.numero) } : {}), hist: comHist(om, passo('liberada', quem, cli ? 'liberada pelo cliente' : 'registrada pelo técnico', h)) };
+      return { status: 'liberada', hLib: h, libNome: t(quem.nome, 150), libCli: cli, ...ciente, ...(d.numero ? { numero: t(d.numero, LIMITES.numero) } : {}), hist: comHist(om, passo('liberada', quem, cli ? 'liberada pelo cliente' : 'registrada pelo técnico', h, obs)) };
     }
     case 'finalizar': {
       if (!ehHora(d.hFim)) erro('Informe a hora da finalização.', 'omHFim');
@@ -185,14 +212,15 @@ export function mudar(om, acao, quem, d = {}) {
     }
     case 'cancelar': {
       const m = t(d.motivo, LIMITES.motivo); if (m.length < 5) erro('Diga o motivo do cancelamento (mínimo 5 letras).', 'omMotivo');
-      return { status: 'cancelada', motivo: m, hist: comHist(om, passo('cancelada', quem, m, ag)) };
+      const cli = !!d.peloCliente;
+      return { status: 'cancelada', motivo: m, hCanc: ag, cancNome: t(quem.nome, 150), cancCli: cli, hist: comHist(om, passo('cancelada', quem, (cli ? 'pelo cliente: ' : '') + m, ag, obs)) };
     }
     default: throw new Error('Ação desconhecida');
   }
 }
 
 /* ---------- lista ---------- */
-const ORDEM = { devolvida: 0, solicitada: 1, aprovada: 2, enviada: 3, liberada: 4, planejada: 5, finalizada: 6, cancelada: 7 };
+const ORDEM = { recusada: 0, devolvida: 0, solicitada: 1, aprovada: 2, enviada: 3, liberada: 4, planejada: 5, finalizada: 6, cancelada: 7 };
 const PRIO_ORD = { emergencia: 0, alta: 1, media: 2, baixa: 3 };
 export const ordenar = l => [...l].sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || String(b.hSol || '').localeCompare(String(a.hSol || '')));
 // f = { status: '' | 'abertas' | um status, area, q, mes ('AAAA-MM', para finalizadas e canceladas) }
@@ -205,7 +233,7 @@ export function filtrar(l, f = {}) {
 }
 // Contagens dos cartões. mes = 'AAAA-MM' (finalizadas e tempo médio do mês).
 export function resumo(l, mes) {
-  const r = { planejada: 0, solicitada: 0, devolvida: 0, aprovada: 0, enviada: 0, liberada: 0, finalizadasMes: 0, esperaMedia: null, execMedia: null };
+  const r = { planejada: 0, solicitada: 0, devolvida: 0, aprovada: 0, enviada: 0, recusada: 0, liberada: 0, finalizadasMes: 0, esperaMedia: null, execMedia: null };
   const esp = [], exe = [];
   for (const o of l) {
     if (r[o.status] != null) r[o.status]++;
@@ -233,7 +261,7 @@ export function visaoHoje(l, hoje, cfg = null, agora = agoraLocal()) {
   const doDia = l.filter(o => (ABERTAS.includes(o.status) && !(o.status === 'planejada' && diaDe(o) > hoje)) || String(o.hFim || '').startsWith(hoje));
   const urg = o => (atrasada(o, hoje) ? 0 : 1);
   const lista = doDia.sort((a, b) => (ABERTAS.includes(b.status) - ABERTAS.includes(a.status)) || urg(a) - urg(b) || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status] || diaDe(a).localeCompare(diaDe(b)));
-  return { pedir: pedir.length, comCliente: cli.length, foraPrazo: cli.filter(o => foraDoPrazo(o, cfg, agora)).length, liberadas: lib.length, atrasadas: atr.length, lista };
+  return { pedir: pedir.length, comCliente: cli.length, recusadas: l.filter(o => o.status === 'recusada').length, foraPrazo: cli.filter(o => foraDoPrazo(o, cfg, agora)).length, liberadas: lib.length, atrasadas: atr.length, lista };
 }
 const doDiaOrd = l => [...l].sort((a, b) => PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status]);
 // Semana de segunda a domingo: [{ dia, oms }] (as canceladas ficam de fora).
@@ -275,12 +303,13 @@ export function palpiteCliente(usuarios, conj) {
 export const docsTxt = o => { const r = docsResumo(o); return r ? r.itens.map(i => `${i.nome} ${i.ok ? 'pronto' : 'pendente'}`).join(', ') : ''; };
 export const prazoTxt = p => (p ? `${p.horas} h · ${p.fora ? 'fora do prazo' : p.aberta ? 'resta ' + duracao(p.resta) : 'no prazo'}` : '');
 export function linhasExcel(l, areaNome = a => a, cfg = null) {
-  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Data prevista', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização', 'Documentação', 'Ciente do cliente', 'Liberada por', 'Prazo do cliente'],
-    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', dataBR(o.dPrev), horaBR(o.hSol), horaBR(o.hAprov), o.cliente || '', o.contato || '', horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '', docsTxt(o), horaBR(o.hCiente), o.libNome ? `${o.libNome}${o.libCli ? ' (cliente)' : ' (técnico)'}` : '', prazoTxt(prazoOm(o, cfg))]; })];
+  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Data prevista', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização', 'Documentação', 'Ciente do cliente', 'Liberada por', 'Prazo do cliente', 'Recusa/cancelamento', 'Observações'],
+    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', dataBR(o.dPrev), horaBR(o.hSol), horaBR(o.hAprov), o.cliente || '', o.contato || '', horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '', docsTxt(o), horaBR(o.hCiente), o.libNome ? `${o.libNome}${o.libCli ? ' (cliente)' : ' (técnico)'}` : '', prazoTxt(prazoOm(o, cfg)), o.hCanc ? `${horaBR(o.hCanc)} · ${o.cancNome || ''}${o.cancCli ? ' (cliente)' : ''}` : '', observacoes(o).map(x => `${horaBR(x.em)} ${x.nome}: ${x.obs}`).join(' | ')]; })];
 }
 
 /* ---------- avisos no celular (rotina de hora em hora) ---------- */
-// Quem recebe o quê: solicitação nova → quem trata no conjunto; enviada → o usuário do cliente; devolvida e liberada → quem abriu.
+// Quem recebe o quê: solicitação nova → quem trata no conjunto; enviada → o usuário do cliente; devolvida e liberada → quem abriu;
+// recusada ou cancelada pelo cliente → quem abriu e quem trata.
 // Só mudanças dos últimos 2 dias (as marcas de enviado duram 15 dias). usuarios = { uid: perfil }.
 // Prazo: a OM que passa do prazo com o cliente avisa uma vez o cliente e quem trata no conjunto (cfg = config/oms).
 // Liberada pelo cliente: avisa também quem trata (o técnico acompanha sem precisar registrar nada).
@@ -301,6 +330,11 @@ export function avisosOms(oms, usuarios, hoje, cfg = null, agora = agoraLocal())
       for (const [uid, u] of Object.entries(usuarios)) if (uid !== autor && trataOmU({ ...u, uid }, o.conj)) l.push({ uid, tipo: 'nova', om: o, chave: `om|${uid}|${o.id}|${quando}` });
     } else if (o.status === 'enviada' && o.clienteUid && usuarios[o.clienteUid]) {
       l.push({ uid: o.clienteUid, tipo: 'enviada', om: o, chave: `om|${o.clienteUid}|${o.id}|enviada|${quando}` });
+    } else if (o.status === 'recusada' || (o.status === 'cancelada' && o.cancCli)) {
+      // Recusa ou cancelamento pelo cliente: quem trata no conjunto e quem abriu (sem avisar quem fez).
+      const autor = ult && ult.por;
+      const alvo = [...new Set([...(o.solPor && usuarios[o.solPor] ? [o.solPor] : []), ...tratam(o)])].filter(uid => uid !== autor);
+      for (const uid of alvo) l.push({ uid, tipo: o.status, om: o, chave: `om|${uid}|${o.id}|${o.status}|${quando}` });
     } else if (['devolvida', 'liberada'].includes(o.status)) {
       const alvo = o.solPor && usuarios[o.solPor] ? [o.solPor] : [];
       if (o.status === 'liberada' && o.libCli) for (const uid of tratam(o, o.solPor)) alvo.push(uid);

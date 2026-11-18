@@ -1906,6 +1906,7 @@ button.tr-it:hover{border-color:var(--marca)}
 .om-mot{display:block;color:var(--crit,#c0392b);font-size:12.5px;margin-top:2px}
 .om-dados{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
 .om-hist{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.om-obs{display:block;margin-top:3px;padding:4px 8px;border-left:3px solid var(--line);background:var(--surface-2);border-radius:4px;font-size:12.5px;white-space:pre-wrap}
 .om-acoes{padding-top:6px;border-top:1px solid var(--line)}
 /* Operação › OMs: Hoje, Semana e Mês */
 .om-cards4{grid-template-columns:repeat(4,minmax(0,1fr))}

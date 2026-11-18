@@ -3,7 +3,7 @@
 // aprova ou devolve e envia ao cliente; o cliente toca em Ciente e em Liberar (o técnico registra só se ele liberou por fora);
 // quem executou registra a hora da finalização. Cada OM tem a lista de documentação (não obrigatória) e o prazo do cliente.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, ehClienteDa, docsTxt } from '../contas/oms.js';
+import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes } from '../contas/oms.js';
 import { AREA_S, SETS, DAYS, today, add, weekOf, addMonth, monthLabel, ddmm, pd } from '../contas/cal.js';
 import { etiqueta, vazio, carregando, abas } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
@@ -38,7 +38,7 @@ function item(o) {
   const hora = o.status === 'finalizada' ? `finalizada ${horaBR(o.hFim)}${x.total != null ? ' · total ' + duracao(x.total) : ''}` : o.status === 'liberada' ? `liberada ${horaBR(o.hLib)}${x.espera != null ? ' · espera ' + duracao(x.espera) : ''}` : o.status === 'planejada' ? `prevista ${dataBR(o.dPrev)}` : `solicitada ${horaBR(o.hSol)}${o.dPrev && o.dPrev !== String(o.hSol || '').slice(0, 10) ? ' · prevista ' + dataBR(o.dPrev) : ''}`;
   const meta = [comCliente(o), o.hCiente && o.status === 'enviada' ? 'cliente ciente ' + horaBR(o.hCiente) : '', o.numero ? 'OM ' + o.numero : '', areaNome(o.area), o.cliente ? 'cliente ' + o.cliente : '', [o.equip, o.local].filter(Boolean).join(' · '), o.prio && o.prio !== 'media' ? 'prioridade ' + PRIORIDADES[o.prio].toLowerCase() : '', o.solNome, hora].filter(Boolean).map(esc).join(' · ');
   return `<button type="button" class="tr-it${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><span class="tr-it-s">${etiqueta(STATUS[o.status] || o.status, COR[o.status])}${atrasada(o, today()) ? etiqueta('Atrasada', 'critico') : ''}${foraDoPrazo(o, cfg()) ? etiqueta('Fora do prazo', 'critico') : ''}</span>
-    <span class="tr-it-t"><b>${esc(o.titulo)}</b><small>${meta}</small>${docsChips(o)}${o.status === 'devolvida' && o.motivo ? `<small class="om-mot">Devolvida: ${esc(o.motivo)}</small>` : ''}</span></button>`;
+    <span class="tr-it-t"><b>${esc(o.titulo)}</b><small>${meta}</small>${docsChips(o)}${['devolvida', 'recusada'].includes(o.status) && o.motivo ? `<small class="om-mot">${o.status === 'recusada' ? 'Recusada' : 'Devolvida'}: ${esc(o.motivo)}</small>` : ''}</span></button>`;
 }
 // "com o cliente há 5 h · prazo 24 h" (enviada e ainda não liberada: conta desde o envio).
 function comCliente(o) {
@@ -58,6 +58,7 @@ function cartoes(r, trata) {
     c('solicitada', 'Aguardando técnico', r.solicitada, trata ? 'aprove ou devolva' : 'em análise', r.solicitada && trata ? 'atencao' : ''),
     c('devolvida', 'Devolvidas', r.devolvida, 'corrigir e reenviar', r.devolvida ? 'critico' : ''),
     c('enviada', 'Com o cliente', r.comCliente, 'aprovadas e enviadas', ''),
+    ...(r.recusada ? [c('recusada', 'Recusadas', r.recusada, 'ajustar e reenviar', 'critico')] : []),
     c('liberada', 'Liberadas', r.liberada, 'em execução', r.liberada ? 'atencao' : ''),
     c('finalizada', 'Finalizadas no mês', r.finalizadasMes, r.esperaMedia != null ? `espera média ${duracao(r.esperaMedia)}` : 'tempo médio aparece aqui', '')
   ].join('')}</div>`;
@@ -74,7 +75,7 @@ function vHoje(l) {
   const c = (rot, n, sub, cls) => `<div class="p-ind md-card ${n ? cls : ''}"><span class="p-ind-rot">${esc(rot)}</span><span class="p-ind-v">${n}</span><span class="p-ind-pe">${esc(sub)}</span></div>`;
   let h = `<div class="md-cards om-cards4">${[
     c('Pedir hoje', v.pedir, 'planejadas para hoje ou antes', 'atencao'),
-    c('Com o cliente', v.comCliente, v.foraPrazo ? `${v.foraPrazo} fora do prazo` : 'aprovadas e enviadas', v.foraPrazo ? 'critico' : ''),
+    c('Com o cliente', v.comCliente, [v.foraPrazo ? `${v.foraPrazo} fora do prazo` : '', v.recusadas ? `${v.recusadas} recusada${v.recusadas > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') || 'aprovadas e enviadas', v.foraPrazo || v.recusadas ? 'critico' : ''),
     c('Liberadas', v.liberadas, 'em execução', 'atencao'),
     c('Atrasadas', v.atrasadas, 'passaram da data prevista', 'critico')
   ].join('')}</div>`;
@@ -129,7 +130,7 @@ function vCliente(l) {
   if (!l.length) return h + `<p class="muted small m0">Nenhuma OM esperando você. As que o Técnico de Processo enviar aparecem aqui; as programadas ficam em <b>Semana</b>.</p></section>`;
   const L = [...l].sort((a, b) => foraDoPrazo(b, cfg()) - foraDoPrazo(a, cfg()) || String(a.hEnvio || '').localeCompare(String(b.hEnvio || '')));
   h += L.map(o => `<div class="om-cliv-it${foraDoPrazo(o, cfg()) ? ' fora' : ''}"><button type="button" class="om-cliv-t" data-act="omAbrir" data-id="${esc(o.id)}"><b>${esc(o.titulo)}</b><small>${esc([areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.numero ? 'OM ' + o.numero : '', PRIORIDADES[o.prio || 'media'] ? 'prioridade ' + PRIORIDADES[o.prio || 'media'].toLowerCase() : ''].filter(Boolean).join(' · '))}</small><small>${esc(comCliente(o))}${foraDoPrazo(o, cfg()) ? ' · <b>fora do prazo</b>' : ''}${o.hCiente ? ' · ciente ' + esc(horaBR(o.hCiente)) : ''}</small>${docsChips(o)}</button>
-    <div class="om-cliv-b">${o.hCiente ? '' : `<button type="button" class="btn" data-act="omAcao" data-id="${esc(o.id)}" data-v="ciente">Ciente</button>`}<button type="button" class="btn pri" data-act="omAcao" data-id="${esc(o.id)}" data-v="liberar">Liberar</button></div></div>`).join('');
+    <div class="om-cliv-b">${o.hCiente ? '' : `<button type="button" class="btn" data-act="omAcao" data-id="${esc(o.id)}" data-v="ciente">Ciente</button>`}<button type="button" class="btn ghost" data-act="omAcao" data-id="${esc(o.id)}" data-v="recusar">Recusar</button><button type="button" class="btn pri" data-act="omAcao" data-id="${esc(o.id)}" data-v="liberar">Liberar</button></div></div>`).join('');
   return h + '</section>';
 }
 function vTela() {
@@ -139,8 +140,8 @@ function vTela() {
   const areas = [...new Set([...(SETS[SK] ? [...SETS[SK].areas, ...(SETS[SK].gerais || [])] : []), ...todos.map(o => o.area)])].filter(Boolean);
   let h = b.erro ? `<p class="err">Não foi possível ler as OMs (${esc(b.erro)}).</p>` : '';
   const cli = cliente(); const souCliente = !!cli && cli.uid === ME.uid;
-  if (souCliente && !trata) h += `<p class="ic-placar">Você é o cliente do ${esc(conjNome())}. Toque em <b>Ciente</b> quando receber a OM e em <b>Liberar</b> quando o serviço puder começar: a hora fica registrada na mesma hora. As programadas ficam em <b>Semana</b>.</p>`;
-  else h += `<p class="ic-placar">${trata ? 'Planeje as OMs com a data prevista, aprove ou devolva as solicitações, envie ao cliente e registre a liberação.' : 'Planeje a OM com a data prevista ou abra a solicitação com a hora em que o serviço foi pedido. O Técnico de Processo confere e envia ao cliente.'} Caminho: planejada → solicitada → aprovada → com o cliente → liberada → finalizada.</p>`;
+  if (souCliente && !trata) h += `<p class="ic-placar">Você é o cliente do ${esc(conjNome())}. Toque em <b>Ciente</b> quando receber a OM e em <b>Liberar</b> quando o serviço puder começar: a hora fica registrada na mesma hora. Se a OM não puder ser aceita como veio, use <b>Recusar</b> (com o motivo); se o serviço não vai mais acontecer, abra a OM e use <b>Cancelar</b>. Em todo passo dá para deixar uma observação. As programadas ficam em <b>Semana</b>.</p>`;
+  else h += `<p class="ic-placar">${trata ? 'Planeje as OMs com a data prevista, aprove ou devolva as solicitações, envie ao cliente e registre a liberação.' : 'Planeje a OM com a data prevista ou abra a solicitação com a hora em que o serviço foi pedido. O Técnico de Processo confere e envia ao cliente.'} Caminho: planejada → solicitada → aprovada → com o cliente → liberada → finalizada. O cliente também pode recusar (o técnico ajusta e reenvia) ou cancelar.</p>`;
   const minhas = todos.filter(o => o.status === 'enviada' && ehClienteDa(o, ME));
   if (souCliente || minhas.length) h += vCliente(minhas);
   if (!souCliente && (trata || isAdmin())) {
@@ -162,6 +163,8 @@ const op = (l, val) => l.map(([k, n]) => `<option value="${esc(k)}" ${String(k) 
 const ob = '<i class="dc-ob" aria-hidden="true">*</i>';
 // Documentação (não obrigatória): um seletor por item, Pendente, Pronto ou Não precisa.
 const docsCampos = d => `<fieldset class="om-docf dc-full"><legend>Documentação <small>(não obrigatória: marque o que já está pronto)</small></legend>${Object.entries(DOCS).map(([k, n]) => `<label class="sel"><span>${esc(n)}</span><select class="in" id="omDoc_${k}">${op(Object.entries(DOC_SIT), (d && d[k]) || 'pend')}</select></label>`).join('')}</fieldset>`;
+// Observação de cada passo (opcional): vai para o histórico da OM, com o nome e a hora.
+const obsCampo = (rot = 'Observação (opcional)', dica = 'Fica no histórico da OM') => `<label class="sel dc-full"><span>${rot}</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="${esc(dica)}"></textarea></label>`;
 const docsLidos = () => conferirDocs(Object.fromEntries(Object.keys(DOCS).map(k => [k, v$('omDoc_' + k)])));
 const focar = e => { const el = e.campo && document.getElementById(e.campo); if (el) { el.focus(); el.setAttribute('aria-invalid', 'true'); } throw e; };
 // Nova OM (planejada ou já solicitada), ou corrigir (corrigir uma devolvida já reenvia ao técnico).
@@ -187,6 +190,7 @@ function editar(id) {
     <label class="sel"><span>Prioridade</span><select class="in" id="omPrio">${op(Object.entries(PRIORIDADES), x.prio)}</select></label>
     <label class="sel dc-full"><span>Detalhes</span><textarea class="in" id="omDesc" rows="3" maxlength="${LIMITES.desc}" placeholder="O que está acontecendo, riscos, o que precisa para liberar">${esc(x.desc || '')}</textarea></label>
     ${docsCampos(x.docs)}
+    ${!o || o.status === 'devolvida' ? obsCampo('Observação para o técnico (opcional)', o ? 'O que foi corrigido' : 'Recado para quem vai conferir; fica no histórico') : ''}
     <p class="muted small m0 dc-full" id="omDica">${ob} campo obrigatório. ${plano ? 'A OM fica planejada na agenda; no dia, um toque em <b>Solicitar</b> a envia ao Técnico de Processo.' : 'Ao enviar, a solicitação vai para o Técnico de Processo.'}</p></div>`;
   const titulo = o ? (o.status === 'planejada' ? 'Editar OM planejada' : 'Corrigir solicitação') : 'Nova OM';
   formSheet(titulo, o ? `${esc(STATUS[o.status])} · cadastrada por ${esc(o.solNome || '')}` : 'Planeje com a data prevista ou solicite agora', html, o && o.status === 'devolvida' ? 'Salvar e reenviar' : o ? 'Salvar' : 'Salvar', async () => {
@@ -195,12 +199,12 @@ function editar(id) {
     y.docs = docsLidos();
     if (!o) {
       const st = planejar ? 'planejada' : 'solicitada';
-      const h0 = planejar ? { s: 'planejada', em: agoraLocal(), por: ME.uid, nome: quem().nome, txt: 'prevista para ' + dataBR(y.dPrev) } : { s: 'solicitada', em: y.hSol, por: ME.uid, nome: quem().nome };
+      const h0 = planejar ? passo('planejada', quem(), 'prevista para ' + dataBR(y.dPrev), agoraLocal(), v$('omObs')) : passo('solicitada', quem(), '', y.hSol, v$('omObs'));
       await DB.omSalvar(DB.omNovoId(), SK, { ...y, status: st, hist: [h0] }, true);
       DB.log(`OMs: ${planejar ? 'planejada para ' + dataBR(y.dPrev) : 'solicitação aberta'} (${y.titulo}, ${areaNome(y.area)})`, 'operacao'); toast(planejar ? 'OM planejada para ' + dataBR(y.dPrev) : 'Solicitação enviada ao técnico'); render(); return;
     }
     if (planejar) delete y.hSol;
-    const extra = o.status === 'devolvida' ? mudar(o, 'reenviar', quem()) : {};
+    const extra = o.status === 'devolvida' ? mudar(o, 'reenviar', quem(), { obs: v$('omObs') }) : {};
     await DB.omSalvar(o.id, SK, { ...y, ...extra });
     DB.log(`OMs: solicitação ${o.status === 'devolvida' ? 'corrigida e reenviada' : 'alterada'} (${y.titulo})`, 'operacao'); toast(o.status === 'devolvida' ? 'Solicitação reenviada' : 'Solicitação salva'); render();
   });
@@ -212,21 +216,26 @@ function agir(id, acao) {
   const cli = cliente(); const souCli = ehClienteDa(o, ME);
   // O cliente libera com um toque (vale a hora do toque); o técnico registra a hora que o cliente informou.
   const libCli = acao === 'liberar' && souCli;
+  // Recusa e cancelamento feitos pelo próprio cliente (pelo sistema) ficam marcados como dele.
+  const peloCli = souCli && ['liberar', 'recusar', 'cancelar'].includes(acao);
+  const OBS = obsCampo();
   const campos = {
-    ciente: `<p class="m0">Você confirma que recebeu esta OM. A hora (${esc(horaBR(ag))}) fica no histórico, e o Dikma vê que você já está ciente.</p>`,
+    ciente: `<p class="m0">Você confirma que recebeu esta OM. A hora (${esc(horaBR(ag))}) fica no histórico, e o Dikma vê que você já está ciente.</p>${OBS}`,
+    obs: `<p class="muted small m0">A observação entra no histórico da OM com o seu nome e a hora, sem mudar a situação. Todos que acompanham a OM veem.</p>${obsCampo('Observação ' + ob, 'Ex.: equipamento só para às 14h; trazer o bloqueio do painel 2')}`,
+    recusar: `${peloCli ? `<p class="m0">A OM volta para o Técnico de Processo do Dikma com o motivo, para ajustar e enviar de novo. A hora (${esc(horaBR(ag))}) fica registrada.</p>` : '<p class="muted small m0">Registre aqui a recusa que o cliente passou por fora (telefone, rádio). Depois de ajustar, use <b>Enviar ao cliente</b> de novo.</p>'}<label class="sel"><span>Motivo da recusa ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}" placeholder="Ex.: falta a APR; equipamento em produção nesta data"></textarea></label>${OBS}`,
     docs: docsCampos(o.docs),
-    solicitar: `<p class="m0">Planejada para <b>${esc(dataBR(o.dPrev))}</b>. A solicitação vai para o Técnico de Processo conferir.</p><label class="sel"><span>Hora da solicitação ${ob}</span><input class="in" type="datetime-local" id="omHSol" value="${ag}"></label>`,
-    aprovar: `<label class="sel"><span>Observação (opcional)</span><input class="in" id="omObs" maxlength="${LIMITES.motivo}" autocomplete="off"></label>`,
-    devolver: `<label class="sel"><span>O que precisa corrigir ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
-    cancelar: `<label class="sel"><span>Motivo do cancelamento ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
-    enviar: `<div class="dc-form"><div class="sel dc-full"><span>Cliente</span><p class="om-cli m0${cli ? '' : ' falta'}" id="omCli" tabindex="-1">${cli ? `<b>${esc(cli.nome)}</b> · usuário do cliente no ${esc(conjNome())}` : 'Ainda não definido: o administrador escolhe o usuário do cliente no topo da tela.'}</p></div><label class="sel"><span>Contato no cliente</span><input class="in" id="omCont" maxlength="${LIMITES.contato}" value="${esc(o.contato || '')}" placeholder="Nome ou ramal (opcional)" autocomplete="off"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label></div>`,
-    liberar: libCli ? `<p class="m0">A liberação fica registrada agora, <b>${esc(horaBR(ag))}</b>, e a equipe do Dikma é avisada para executar.</p><label class="sel"><span>Nº da OM (se tiver)</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label>`
-      : `<div class="dc-form">${o.clienteUid ? '<p class="muted small m0 dc-full">O cliente libera pelo sistema. Registre aqui só se ele liberou por fora (telefone, rádio).</p>' : ''}<label class="sel"><span>Hora da liberação ${ob}</span><input class="in" type="datetime-local" id="omHLib" value="${ag}"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label></div>`,
+    solicitar: `<p class="m0">Planejada para <b>${esc(dataBR(o.dPrev))}</b>. A solicitação vai para o Técnico de Processo conferir.</p><label class="sel"><span>Hora da solicitação ${ob}</span><input class="in" type="datetime-local" id="omHSol" value="${ag}"></label>${obsCampo('Observação para o técnico (opcional)')}`,
+    aprovar: OBS,
+    devolver: `<label class="sel"><span>O que precisa corrigir ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>${OBS}`,
+    cancelar: `${peloCli ? '<p class="m0">A OM é encerrada como <b>cancelada pelo cliente</b> e a equipe do Dikma é avisada. O motivo fica no histórico.</p>' : ''}<label class="sel"><span>Motivo do cancelamento ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>${OBS}`,
+    enviar: `<div class="dc-form"><div class="sel dc-full"><span>Cliente</span><p class="om-cli m0${cli ? '' : ' falta'}" id="omCli" tabindex="-1">${cli ? `<b>${esc(cli.nome)}</b> · usuário do cliente no ${esc(conjNome())}` : 'Ainda não definido: o administrador escolhe o usuário do cliente no topo da tela.'}</p></div><label class="sel"><span>Contato no cliente</span><input class="in" id="omCont" maxlength="${LIMITES.contato}" value="${esc(o.contato || '')}" placeholder="Nome ou ramal (opcional)" autocomplete="off"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label>${o.status === 'recusada' && o.motivo ? `<p class="om-mot dc-full">Recusada pelo cliente: ${esc(o.motivo)}</p>` : ''}${obsCampo('Observação para o cliente (opcional)', o.status === 'recusada' ? 'O que foi ajustado' : 'Recado para o cliente; fica no histórico')}</div>`,
+    liberar: libCli ? `<p class="m0">A liberação fica registrada agora, <b>${esc(horaBR(ag))}</b>, e a equipe do Dikma é avisada para executar.</p><label class="sel"><span>Nº da OM (se tiver)</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label>${OBS}`
+      : `<div class="dc-form">${o.clienteUid ? '<p class="muted small m0 dc-full">O cliente libera pelo sistema. Registre aqui só se ele liberou por fora (telefone, rádio).</p>' : ''}<label class="sel"><span>Hora da liberação ${ob}</span><input class="in" type="datetime-local" id="omHLib" value="${ag}"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label>${obsCampo()}</div>`,
     apagar: `<p class="m0">A OM some da lista e dos números. <b>Não dá para desfazer.</b> Se ela só não vai mais acontecer, prefira <b>Cancelar</b>, que guarda o motivo no histórico.</p>`,
     finalizar: `<label class="sel"><span>Hora da finalização ${ob}</span><input class="in" type="datetime-local" id="omHFim" value="${ag}"></label><label class="sel"><span>Como ficou (opcional)</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="Serviço feito, testado, pendências"></textarea></label>`
   }[acao];
-  const nome = { ciente: 'Ciente da OM', docs: 'Documentação da OM', solicitar: 'Solicitar a OM agora', aprovar: 'Aprovar a solicitação', devolver: 'Devolver ao solicitante', cancelar: 'Cancelar a OM', enviar: 'Enviar ao cliente', liberar: libCli ? 'Liberar a OM' : 'Registrar a liberação', finalizar: 'Finalizar a OM', apagar: 'Apagar a OM de vez?' }[acao];
-  const btn = { ciente: 'Estou ciente', docs: 'Salvar', solicitar: 'Enviar ao técnico', aprovar: 'Aprovar', devolver: 'Devolver', cancelar: 'Cancelar a OM', enviar: 'Marcar como enviada', liberar: libCli ? 'Liberar agora' : 'Registrar liberação', finalizar: 'Finalizar', apagar: 'Apagar de vez' }[acao];
+  const nome = { obs: 'Adicionar observação', recusar: peloCli ? 'Recusar a OM' : 'Registrar a recusa do cliente', ciente: 'Ciente da OM', docs: 'Documentação da OM', solicitar: 'Solicitar a OM agora', aprovar: 'Aprovar a solicitação', devolver: 'Devolver ao solicitante', cancelar: peloCli ? 'Cancelar a OM (cliente)' : 'Cancelar a OM', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', liberar: libCli ? 'Liberar a OM' : 'Registrar a liberação', finalizar: 'Finalizar a OM', apagar: 'Apagar a OM de vez?' }[acao];
+  const btn = { obs: 'Salvar observação', recusar: peloCli ? 'Recusar' : 'Registrar recusa', ciente: 'Estou ciente', docs: 'Salvar', solicitar: 'Enviar ao técnico', aprovar: 'Aprovar', devolver: 'Devolver', cancelar: 'Cancelar a OM', enviar: o.status === 'recusada' ? 'Reenviar' : 'Marcar como enviada', liberar: libCli ? 'Liberar agora' : 'Registrar liberação', finalizar: 'Finalizar', apagar: 'Apagar de vez' }[acao];
   formSheet(nome, `${esc(o.titulo)} · ${esc(areaNome(o.area))}`, `<div class="p-form">${campos}</div>`, btn, async () => {
     if (acao === 'apagar') {
       await DB.omApagar(o.id, SK);
@@ -236,10 +245,11 @@ function agir(id, acao) {
       const docs = docsLidos(); await DB.omSalvar(o.id, SK, { docs });
       DB.log(`OMs: documentação atualizada (${o.titulo}: ${docsTxt({ docs }) || 'nada a preparar'})`, 'operacao'); toast('Documentação salva'); render(); return;
     }
-    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), hSol: v$('omHSol'), cliente: cli, contato: v$('omCont'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim'), peloCliente: libCli }); } catch (e) { focar(e); }
+    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), hSol: v$('omHSol'), cliente: cli, contato: v$('omCont'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim'), peloCliente: peloCli }); } catch (e) { focar(e); }
     await DB.omSalvar(o.id, SK, y);
     if (acao === 'ciente') { DB.log(`OMs: cliente ciente (${o.titulo})`, 'operacao'); toast('Ciente registrado'); render(); return; }
-    DB.log(`OMs: ${STATUS[y.status].toLowerCase()}${libCli ? ' pelo cliente' : ''} (${o.titulo}${y.numero || o.numero ? ', OM ' + (y.numero || o.numero) : ''})`, 'operacao'); toast(STATUS[y.status]); render();
+    if (acao === 'obs') { DB.log(`OMs: observação (${o.titulo})`, 'operacao'); toast('Observação salva'); render(); return; }
+    DB.log(`OMs: ${STATUS[y.status].toLowerCase()}${peloCli && acao !== 'recusar' ? ' pelo cliente' : ''} (${o.titulo}${y.numero || o.numero ? ', OM ' + (y.numero || o.numero) : ''})`, 'operacao'); toast(STATUS[y.status]); render();
   }, { cancelarTxt: 'Voltar' });
 }
 function abrir(id) {
@@ -254,13 +264,14 @@ function abrir(id) {
       ${linha('Enviada ao cliente', esc(horaBR(o.hEnvio)))}${linha('Cliente ciente', esc([horaBR(o.hCiente), o.cienteNome].filter(Boolean).join(' · ')))}
       ${linha('Prazo do cliente', pz ? `${pz.horas} h · ${pz.fora ? etiqueta('Fora do prazo', 'critico') : pz.aberta ? 'resta ' + esc(duracao(pz.resta)) : 'liberada no prazo'}` : '')}
       ${linha('Hora da liberação', esc([horaBR(o.hLib), o.libNome ? `${o.libNome}${o.libCli ? ' (cliente)' : ' (registrada pelo técnico)'}` : ''].filter(Boolean).join(' · ')))}${linha('Hora da finalização', esc(horaBR(o.hFim)))}
+      ${o.hCanc && ['recusada', 'cancelada'].includes(o.status) ? linha(o.status === 'recusada' ? 'Recusada em' : 'Cancelada em', esc([horaBR(o.hCanc), o.cancNome ? `${o.cancNome}${o.cancCli ? ' (cliente)' : o.status === 'recusada' ? ' (registrada pelo técnico)' : ''}` : ''].filter(Boolean).join(' · '))) : ''}
       ${linha('Espera até liberar', esc(duracao(x.espera)))}${linha('Execução', esc(duracao(x.execucao)))}
-      ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}${o.motivo ? `<div class="dc-full"><dt>${o.status === 'cancelada' ? 'Motivo do cancelamento' : 'O que corrigir'}</dt><dd>${esc(o.motivo)}</dd></div>` : ''}
+      ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}${o.motivo ? `<div class="dc-full"><dt>${o.status === 'cancelada' ? 'Motivo do cancelamento' : o.status === 'recusada' ? 'Motivo da recusa' : 'O que corrigir'}</dt><dd>${esc(o.motivo)}</dd></div>` : ''}
       ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}
       ${dr ? `<div class="dc-full"><dt>Documentação (${dr.prontos} de ${dr.total} pronta${dr.total === 1 ? '' : 's'})</dt><dd>${dr.total ? docsChips(o) : 'Nada a preparar'}</dd></div>` : ''}</dl>
-    ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || PASSOS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}</li>`).join('')}</ol>` : ''}
+    ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || PASSOS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}${p.obs ? `<span class="om-obs">${esc(p.obs)}</span>` : ''}</li>`).join('')}</ol>` : ''}
     <div class="row-gap om-acoes"><button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button></div>
-    ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['solicitar', 'aprovar', 'enviar', 'finalizar'].includes(a) || (a === 'liberar' && (souCli || !o.clienteUid)) ? ' pri' : a === 'cancelar' || a === 'apagar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: 'Aprovar', devolver: 'Devolver', enviar: 'Enviar ao cliente', ciente: 'Ciente', docs: 'Documentação', liberar: souCli ? 'Liberar' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
+    ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['solicitar', 'aprovar', 'enviar', 'finalizar'].includes(a) || (a === 'liberar' && (souCli || !o.clienteUid)) ? ' pri' : a === 'cancelar' || a === 'apagar' || a === 'recusar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Recusar' : 'Registrar recusa do cliente', obs: '+ Observação', ciente: 'Ciente', docs: 'Documentação', liberar: souCli ? 'Liberar' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
   formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))}`, html, 'Fechar', async () => {}, {});
   const f = document.getElementById('fSheet'); if (!f) return;
   const c = f.querySelector('[data-close]'); if (c) c.hidden = true;
@@ -284,11 +295,13 @@ function imprimir(id) {
       ${lin('Data prevista', dataBR(o.dPrev))}${lin('Solicitante', o.solNome)}${lin('Hora da solicitação', horaBR(o.hSol))}
       ${lin('Aprovada por', [o.aprovNome, horaBR(o.hAprov)].filter(Boolean).join(' · '))}${lin('Enviada ao cliente', horaBR(o.hEnvio))}
       ${lin('Hora da liberação', horaBR(o.hLib))}${lin('Hora da finalização', horaBR(o.hFim))}
-      ${lin('Documentação', docsTxt(o))}${o.hCiente ? lin('Cliente ciente', horaBR(o.hCiente)) : ''}
+      ${lin('Documentação', docsTxt(o))}${o.hCiente ? lin('Cliente ciente', horaBR(o.hCiente)) : ''}${o.hCanc && ['recusada', 'cancelada'].includes(o.status) ? lin(o.status === 'recusada' ? 'Recusada em' : 'Cancelada em', [horaBR(o.hCanc), o.cancNome, o.cancCli ? '(cliente)' : ''].filter(Boolean).join(' ')) : ''}
       ${x.espera != null ? lin('Espera até liberar', duracao(x.espera)) : ''}${x.execucao != null ? lin('Execução', duracao(x.execucao)) : ''}
     </tbody></table>
     ${o.desc ? `<h3>Detalhes do serviço</h3><p class="omi-txt">${esc(o.desc)}</p>` : ''}
+    ${o.motivo && ['recusada', 'cancelada', 'devolvida'].includes(o.status) ? `<h3>${o.status === 'recusada' ? 'Motivo da recusa' : o.status === 'cancelada' ? 'Motivo do cancelamento' : 'O que corrigir'}</h3><p class="omi-txt">${esc(o.motivo)}</p>` : ''}
     ${o.obsFim ? `<h3>Como ficou</h3><p class="omi-txt">${esc(o.obsFim)}</p>` : ''}
+    ${observacoes(o).length ? `<h3>Observações</h3><table class="omi-tab"><tbody>${observacoes(o).map(x => `<tr><th>${esc(horaBR(x.em))}<br><small>${esc(STATUS[x.s] || PASSOS[x.s] || x.s)}${x.nome ? ' · ' + esc(x.nome) : ''}</small></th><td>${esc(x.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
     <div class="omi-ass">${['Solicitante (Dikma)', 'Técnico de Processo (Dikma)', 'Cliente'].map(t => `<div><span></span><small>${t}</small></div>`).join('')}</div>
     <footer class="omi-pe">Impresso em ${esc(horaBR(agoraLocal()))} pelo Dikma Gestão</footer>`;
   let box = document.getElementById('omImp');
