@@ -546,7 +546,7 @@ service cloud.firestore {
         && omPrazosOk(request.resource.data.get('prazos', {}));
     }
     match /oms/{id} {
-      allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
+      allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj)) || indE(resource.data.conj);   // Indicadores › OMs: só leitura no escopo
       // Começa pelo barato (documento novo, situação e autor): a gravação com merge confere a criação e a alteração na mesma
       // conta de 1000 expressões.
       allow create: if resource == null && request.resource.data.status in ['solicitada', 'planejada'] && request.resource.data.solPor == request.auth.uid && marcaOk()

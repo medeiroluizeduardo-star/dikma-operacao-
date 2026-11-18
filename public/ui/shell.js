@@ -127,6 +127,7 @@ function renderTela() {
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
   if (arq === 'OM') return tela(comModulo('OM', m => m.renderView(v)));
+  if (arq === 'OI') return tela(comModulo('OI', m => m.renderView(v)));
   if (arq === 'FN') return tela(comModulo('FN', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
@@ -332,6 +333,7 @@ function renderTop() {
   if (v.id === 'avisos') { pintarTopo(v.nome, 'Escolha o que receber neste aparelho, mesmo com o sistema fechado'); return; }
   if (v.id === 'historico') { pintarTopo(v.nome, 'Quem mudou o quê e quando, nos módulos em que você é gestor'); return; }
   if (v.tela === 'IC') { const IC = modulo('IC'); pintarTopo(v.nome, v.id === 'ivisao' ? 'Os 8 indicadores do contrato: resultado, meta e os últimos 6 meses' : 'Os indicadores do contrato mês a mês, nos últimos 12 meses', IC ? IC.topo(v.id) : ''); return; }
+  if (v.tela === 'OI') { const OI = modulo('OI'); pintarTopo(v.nome, 'Programação cumprida, resposta do cliente, recusas e documentação, e o que vem nos próximos 7 dias', OI ? OI.topo() : ''); return; }
   if (v.tela === 'TR') { const TR = modulo('TR'); pintarTopo(v.nome, 'Planos de ação de todas as origens: o que será feito, por quê, quem, até quando e como está', TR ? TR.topo() : ''); return; }
   if (v.tela === 'MD') { const MD = modulo('MD'); pintarTopo(v.nome, 'Faltas, horas extras, horas perdidas e ICCC/ICCP do mês para a medição do contrato', MD ? MD.topo() : ''); return; }
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
