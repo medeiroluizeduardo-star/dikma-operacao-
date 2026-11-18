@@ -5,11 +5,14 @@ import { DB, TODAY } from '../nucleo/base.js';
 import { escala } from '../calc/presenca.js';
 import { toast } from '../ui/janelas.js';
 
+// item: uma atividade ou várias da mesma área (várias atividades novas do mesmo local, de uma vez).
 export async function planoNaProgramacao(item) {
-  if (!item || !DB.semanasDaArea) return;
+  const itens = (Array.isArray(item) ? item : [item]).filter(Boolean);
+  if (!itens.length || !DB.semanasDaArea) return;
   try {
-    const docs = await DB.semanasDaArea(item.area);
-    const muda = planoNasSemanas(docs, item, { hoje: TODAY, fer: escala().feriados || new Map() });
+    const docs = await DB.semanasDaArea(itens[0].area);
+    const opc = { hoje: TODAY, fer: escala().feriados || new Map() };
+    const muda = itens.flatMap(x => planoNasSemanas(docs, x, opc));
     if (!muda.length) return;
     await DB.gravarPlanoNasSemanas(muda);
     toast(resumoMudanca(muda));
