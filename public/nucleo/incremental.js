@@ -29,7 +29,9 @@ export function ouvirIncremental(fb, db, col, chave, fn, onErr = () => {}, guard
       let desde = null;
       if (recente) for (const d of qs.docs) { const t = d.get('atualizadoEm'); if (ms(t) > ms(desde)) desde = t; }
       temCopia = !!desde;
-      srv = fb.onSnapshot(desde ? fb.query(ref, fb.where('atualizadoEm', '>', desde)) : ref, s => {
+      // includeMetadataChanges: sem ele, quando o servidor só confirma o que o aparelho já tem (nada mudou), o Firebase
+      // não avisa (só muda o fromCache), e a tela ficava carregando para sempre (aparelho com cópia mas sem a marca).
+      srv = fb.onSnapshot(desde ? fb.query(ref, fb.where('atualizadoEm', '>', desde)) : ref, { includeMetadataChanges: true }, s => {
         if (s.metadata.fromCache || servidor || !vivo) return;
         servidor = true; if (!desde) guarda.gravar(chave, Date.now()); fn(ult, true);
       }, e => { servidor = true; if (vivo) fn(ult, true); onErr(e); });
