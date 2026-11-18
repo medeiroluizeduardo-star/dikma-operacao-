@@ -26,7 +26,11 @@ Arquivos:
 - **Apontar**: ao marcar uma situação que exige foto, abre o **passo de fotos antes de concluir**. O contador mostra
   "Fotos: 0 de 1 obrigatória · máximo 3" (vermelho enquanto falta, âmbar com parte, verde quando está certo). O botão
   de confirmar só ativa com o mínimo; acima do máximo as fotos a mais não entram. **Cancelar não marca a atividade.**
-- **Marcar restantes**: um passo de fotos só para o lote. As mesmas fotos valem para todas as atividades marcadas naquele
+- **Apontar por local/equipamento** (desde a v181): o líder abre o local, marca o checklist (feita / não feita com
+  justificativa) e junta as **fotos do local**, que valem para todas as atividades do local no dia (`refs` de todas,
+  guardadas uma vez só). Com a foto obrigatória, o local só salva com o mínimo de fotos. O número de fotos do local é o
+  maior `ft` entre as atividades dele. Execução do local = feitas ÷ previstas (`public/contas/execucao.js`).
+- **Marcar restantes** (saiu da tela com o Apontar por local; o lote abaixo continua valendo para fotos antigas): um passo de fotos só para o lote. As mesmas fotos valem para todas as atividades marcadas naquele
   momento e ficam guardadas **uma vez só**, com `refs` de todas.
 - **Fora da programação**: a atividade incluída pelo supervisor, ao ser marcada como realizada, vale como **Extra**
   (exige foto se Realizada ou Extra estiverem marcadas).
