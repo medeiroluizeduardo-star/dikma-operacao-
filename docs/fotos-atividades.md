@@ -38,10 +38,10 @@ Arquivos:
   contam para o mínimo.
 - **Lista do Apontar e Programação**: cada atividade com foto mostra 📷n; tocar abre as miniaturas e, tocando numa, a
   foto grande (lida de `evidenciasArquivo`). Quem aponta pode **adicionar foto** a um apontamento já feito, até o máximo.
-- **Apagar foto** (líder da área e administrador; os outros perfis não veem o botão): nas fotos da atividade, cada
+- **Apagar foto** (quem aponta na área, ou seja líder, supervisor, coordenador ou gestor da Operação, e o administrador; os outros perfis não veem o botão): nas fotos da atividade, cada
   miniatura tem **Apagar**, que pede confirmação. Apaga o documento leve e a foto completa e diminui a contagem `ft` da
   semana no **mesmo lote** (`DB.apagarFotoAtividade`; espera o servidor, sem sinal dá erro). A foto que vale para várias
-  atividades ("Marcar restantes") sai de todas (a tela avisa). O líder só apaga a foto **No banco** (ainda não
+  atividades ("Marcar restantes") sai de todas (a tela avisa). Quem aponta só apaga a foto **No banco** (ainda não
   exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
 - **Queda zero**: não fica nas fotos nem no Apontar. Tem aba própria em Operação › Queda zero
   (`public/telas/queda-zero.js`). Os registros antigos feitos junto da foto aparecem lá, no dia deles.
@@ -51,7 +51,7 @@ Arquivos:
   (`evidencias` + `evidenciasArquivo`, mesmo lote do lançamento), com a "atividade" `QZ-<id>` no lugar do PID
   (`refs = 'semana|QZ-<id>|k'`, `pidFotoQZ`), **sem** somar em `ft`; o lançamento guarda quantas tem em `qz[key].f`.
   Entram no arquivo de fotos e no relatório como as outras (título = texto da queda). Apagar foto ou lançamento com
-  foto: líder da área (foto não exportada) ou administrador (`DB.apagarFotosQZ`).
+  foto: quem aponta na área (foto não exportada) ou administrador (`DB.apagarFotosQZ`).
 - **Antes da regra** (dia anterior a `desde`): não pede foto; aparece "sem foto" discreto.
 - **Indicadores**: Gestão › Indicadores › Atividades mostra "Atividades com foto" (% das realizadas/extras do período,
   desde `desde`). O Meu dia do supervisor, coordenador, gestor e administrador mostra as realizadas sem foto dos últimos
@@ -118,7 +118,7 @@ antes) também é somado. Uma foto com 20 `refs` soma 1 em cada uma das 20 célu
 | `removidaEm` | **só o administrador** | `null` na criação. Parte 2: arquivo completo apagado; as telas mostram só a miniatura com o selo "Arquivada fora do banco" |
 | `atualizadoEm`, `atualizadoPor` | quem altera depois | |
 
-Apagar o documento: o **administrador** ou o **líder da área** (este só a foto ainda não exportada). Veja "Apagar foto no Apontar" abaixo.
+Apagar o documento: o **administrador** ou **quem aponta na área** (líder, supervisor, coordenador ou gestor; só a foto ainda não exportada). Veja "Apagar foto no Apontar" abaixo.
 
 ### `evidenciasArquivo/{id}` (Bateria: `b_evidenciasArquivo`) — foto completa, mesmo id do leve
 
@@ -139,7 +139,7 @@ por esse campo, e a contagem soma `ev`. A Parte 2 deve tratar `refs` ausente com
 - **Ler**: quem lê as semanas do conjunto (Operação ou Gestão com o escopo).
 - **Alterar**: autor só `refs` (24 h e ainda apontando na área); administrador `refs`, `exportadoEm`, `exportLote`,
   `lixeiraEm`, `removidaEm`.
-- **Apagar**: o administrador; o líder da área só a foto ainda não exportada (Apontar).
+- **Apagar**: o administrador; quem aponta na área só a foto ainda não exportada (Apontar).
 - `semanas`/`b_semanas`: quem aponta pode alterar `ft` (além de `s`, `m`, `ev`).
 - `config/fotos`: todos os ativos leem; só o administrador grava, com os limites.
 

@@ -324,9 +324,10 @@ service cloud.firestore {
     //   sem-sha) ao confirmar o .zip salvo; lixeiraEm (hora) só na foto já exportada (restaurar = lixeiraEm null);
     //   removidaEm (hora) só na foto que está na lixeira, no MESMO lote que apaga a foto completa (evidenciasArquivo).
     //   Depois de removida, a foto não volta: removidaEm, lixeiraEm e exportadoEm ficam como estão.
-    // - Apagar o documento leve: o administrador; o líder da área (Apontar › fotos da atividade) só a foto que ainda não
-    //   foi exportada. Apagar a foto completa (evidenciasArquivo): o administrador junto da marca removidaEm numa foto
-    //   exportada ou junto com o documento leve; o líder da área só junto com o documento leve.
+    // - Apagar o documento leve: o administrador; quem aponta na área (líder, supervisor, coordenador ou gestor da
+    //   Operação; Apontar › fotos da atividade/do local) só a foto que ainda não foi exportada. Apagar a foto completa
+    //   (evidenciasArquivo): o administrador junto da marca removidaEm numa foto exportada ou junto com o documento leve;
+    //   quem aponta na área só junto com o documento leve.
     function fotoCampos() { return ['refs', 'semana', 'area', 'conj', 'pid', 'k', 'dia', 'mes', 'rota', 'sit', 'local', 'ativ', 'nome', 'tipo', 'tamanho',
       'bytes', 'w', 'h', 'sha', 'thumb', 'por', 'porNome', 'at', 'exportadoEm', 'exportLote', 'exportConf', 'lixeiraEm', 'removidaEm']; }
     function fotoOk(d, col) {
@@ -374,16 +375,16 @@ service cloud.firestore {
       return (admin() && (!existsAfter(/databases/$(database)/documents/$(col)/$(id))
         || (getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('removidaEm', null) != null
           && getAfter(/databases/$(database)/documents/$(col)/$(id)).data.get('exportadoEm', null) != null)))
-        || (liderDa(resource.data.area, e) && !existsAfter(/databases/$(database)/documents/$(col)/$(id)));
+        || (apontaDa(resource.data.area, e) && !existsAfter(/databases/$(database)/documents/$(col)/$(id)));
     }
-    // Líder da área (Operação · líder, na área e no escopo): apaga a foto ainda não exportada (Apontar).
-    function liderDa(area, e) { return apontaDa(area, e) && pEm('operacao') == 'lider'; }
-    function fotoLiderApaga(e) { return liderDa(resource.data.area, e) && resource.data.get('exportadoEm', null) == null; }
+    // Quem aponta na área (Operação · líder, supervisor, coordenador ou gestor, na área e no escopo): apaga a foto ainda
+    // não exportada (Apontar).
+    function fotoApontaApaga(e) { return apontaDa(resource.data.area, e) && resource.data.get('exportadoEm', null) == null; }
     match /evidencias/{id} {
       allow read: if op();
       allow create: if (admin() || gestorDa(request.resource.data.area)) && fotoOk(request.resource.data, 'semanas');
       allow update: if (fotoAutor('patio') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
-      allow delete: if admin() || fotoLiderApaga('patio');
+      allow delete: if admin() || fotoApontaApaga('patio');
     }
     match /evidenciasArquivo/{id} {
       allow read: if op();
@@ -659,7 +660,7 @@ service cloud.firestore {
       allow read: if ba();
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && fotoOk(request.resource.data, 'b_semanas');
       allow update: if (fotoAutor('bateria') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
-      allow delete: if admin() || fotoLiderApaga('bateria');
+      allow delete: if admin() || fotoApontaApaga('bateria');
     }
     match /b_evidenciasArquivo/{id} {
       allow read: if ba();
