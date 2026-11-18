@@ -380,6 +380,7 @@ function stopData() {
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
   for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
+  if (omsCfgSub) { try { omsCfgSub(); } catch (e) { /* já fechado */ } } omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -741,7 +742,10 @@ export function rotinaMarcar(id, dados) {
 // Operação › OMs (contas/oms.js): oms/{id}, uma escuta por conjunto (Pátio, Bateria), aberta quando a tela abre.
 // Quem tem a Operação no conjunto lê; quem abre, o Técnico de Processo e o administrador gravam (firestore.rules).
 const omSubs = new Map(); cache.oms = {};
+let omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
 export function omsWatch(conj) {
+  if (!omsCfgSub) omsCfgSub = onSnapshot(doc(db, 'config', 'oms'), s => { cache.omsCfg = { loaded: true, d: s.exists() ? s.data() : null }; changed(); },
+    () => { cache.omsCfg = { loaded: true, d: null }; omsCfgSub = null; changed(); });
   if (omSubs.has(conj)) return;
   omSubs.set(conj, onSnapshot(query(collection(db, 'oms'), where('conj', '==', conj)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.oms = { ...cache.oms, [conj]: { d, loaded: true } }; changed(); },
     e => { cache.oms = { ...cache.oms, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omSubs.delete(conj); changed(); }));
@@ -752,6 +756,12 @@ export function omSalvar(id, conj, dados, novo = false) {
   const c = cache.oms[conj] || { d: {}, loaded: true };
   cache.oms = { ...cache.oms, [conj]: { ...c, d: { ...c.d, [id]: { ...(c.d[id] || {}), id, ...x } } } }; changed();
   return track(setDoc(doc(db, 'oms', id), x, { merge: true }));
+}
+// Cliente de cada conjunto (contas/oms.js › clienteDe): só o administrador escolhe.
+export function omsClienteSalvar(conj, cliente) {
+  const c = { ...((cache.omsCfg.d || {}).clientes || {}), [conj]: cliente };
+  cache.omsCfg = { loaded: true, d: { ...(cache.omsCfg.d || {}), clientes: c } }; changed();
+  return track(setDoc(doc(db, 'config', 'oms'), { clientes: c, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
 }
 export function omApagar(id, conj) {
   const c = cache.oms[conj] || { d: {}, loaded: true }; const d = { ...c.d }; delete d[id];

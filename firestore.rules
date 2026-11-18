@@ -493,14 +493,20 @@ service cloud.firestore {
     function omTrata(e) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['tecnico', 'coordenador', 'gestor']); }
     function omAbre(e, area) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && areaEm(pEm('operacao'), area)); }
     function omOk(d) {
-      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor'])
+      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'clienteUid', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor'])
         && d.conj in ['patio', 'bateria'] && d.status in ['solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada', 'finalizada', 'cancelada']
         && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 200 && d.area is string && d.area.size() <= 40
         && d.get('tipo', 'corretiva') in ['corretiva', 'preventiva', 'melhoria', 'seguranca'] && d.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
         && tTxt(d, 'local', 120) && tTxt(d, 'equip', 80) && tTxt(d, 'desc', 1000) && tTxt(d, 'numero', 40) && tTxt(d, 'motivo', 400) && tTxt(d, 'obsFim', 600)
         && tTxt(d, 'hSol', 16) && tTxt(d, 'hAprov', 16) && tTxt(d, 'hEnvio', 16) && tTxt(d, 'hLib', 16) && tTxt(d, 'hFim', 16)
-        && tTxt(d, 'solNome', 150) && tTxt(d, 'aprovNome', 150) && tTxt(d, 'criadoEm', 40) && tTxt(d, 'cliente', 120) && tTxt(d, 'contato', 120)
+        && tTxt(d, 'solNome', 150) && tTxt(d, 'aprovNome', 150) && tTxt(d, 'criadoEm', 40) && tTxt(d, 'cliente', 120) && tTxt(d, 'clienteUid', 128) && tTxt(d, 'contato', 120)
         && d.get('hist', []) is list && d.get('hist', []).size() <= 60;
+    }
+    // Cliente de cada conjunto (usuário do sistema que recebe as OMs enviadas): quem está ativo lê, o administrador escolhe.
+    match /config/oms {
+      allow read: if ativo();
+      allow write: if admin() && request.resource.data.keys().hasOnly(['clientes', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.clientes is map && request.resource.data.clientes.keys().hasOnly(['patio', 'bateria']);
     }
     match /oms/{id} {
       allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));

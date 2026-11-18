@@ -97,10 +97,10 @@ export function mudar(om, acao, quem, d = {}) {
     }
     case 'enviar': {
       const h = ehHora(d.hEnvio) ? d.hEnvio : ag;
-      const cliente = t(d.cliente, LIMITES.cliente), contato = t(d.contato, LIMITES.contato), numero = t(d.numero, LIMITES.numero);
-      if (cliente.length < 2) erro('Informe para qual cliente (setor ou área) a OM foi enviada.', 'omCli');
-      const txt = [cliente, contato, numero ? 'OM ' + numero : ''].filter(Boolean).join(' · ');
-      return { status: 'enviada', hEnvio: h, numero, cliente, contato, hist: comHist(om, passo('enviada', quem, txt, h)) };
+      const c = d.cliente || {}; const cliente = t(c.nome, LIMITES.cliente), contato = t(d.contato, LIMITES.contato), numero = t(d.numero, LIMITES.numero);
+      if (!c.uid || cliente.length < 2) erro('O cliente deste conjunto ainda não foi definido. O administrador escolhe o usuário do cliente no topo da tela.', 'omCli');
+      const txt = ['para ' + cliente, contato, numero ? 'OM ' + numero : ''].filter(Boolean).join(' · ');
+      return { status: 'enviada', hEnvio: h, numero, cliente, clienteUid: c.uid, contato, hist: comHist(om, passo('enviada', quem, txt, h)) };
     }
     case 'liberar': {
       if (!ehHora(d.hLib)) erro('Informe a hora da liberação.', 'omHLib');
@@ -147,13 +147,16 @@ export function resumo(l, mes) {
   r.esperaMedia = m(esp); r.execMedia = m(exe); r.comCliente = r.aprovada + r.enviada;
   return r;
 }
-// Clientes já usados no conjunto (sugestões no envio), do mais recente para o mais antigo.
-export function clientesUsados(l) {
-  const vistos = new Map();
-  for (const o of [...l].sort((a, b) => String(b.hEnvio || '').localeCompare(String(a.hEnvio || '')))) {
-    const c = String(o.cliente || '').trim(); if (c && !vistos.has(c.toLowerCase())) vistos.set(c.toLowerCase(), { cliente: c, contato: o.contato || '' });
-  }
-  return [...vistos.values()];
+/* ---------- cliente de cada conjunto ---------- */
+// O cliente é um usuário do sistema (Pátio: o usuário do Pátio; Bateria: o usuário da Bateria), escolhido pelo
+// administrador e guardado em config/oms { clientes: { patio: { uid, nome }, bateria: { uid, nome } } }.
+export const clienteDe = (cfg, conj) => { const c = cfg && cfg.clientes && cfg.clientes[conj]; return c && c.uid ? { uid: c.uid, nome: c.nome || '' } : null; };
+const sem = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+// Sugestão para o administrador: o usuário cujo nome ou login fala do conjunto ("Usuário Pátio", "patio"…).
+export function palpiteCliente(usuarios, conj) {
+  const chave = conj === 'patio' ? 'patio' : 'bateria';
+  const l = (usuarios || []).filter(u => u && u.papel !== 'bloqueado' && (sem(u.nome).includes(chave) || sem(u.login).includes(chave)));
+  return l.sort((a, b) => (sem(a.nome).startsWith('usuario') ? 0 : 1) - (sem(b.nome).startsWith('usuario') ? 0 : 1) || sem(a.nome).length - sem(b.nome).length)[0] || null;
 }
 export function linhasExcel(l, areaNome = a => a) {
   return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização'],
@@ -161,7 +164,7 @@ export function linhasExcel(l, areaNome = a => a) {
 }
 
 /* ---------- avisos no celular (rotina de hora em hora) ---------- */
-// Quem recebe o quê: solicitação nova → quem trata no conjunto; devolvida e liberada → quem abriu.
+// Quem recebe o quê: solicitação nova → quem trata no conjunto; enviada → o usuário do cliente; devolvida e liberada → quem abriu.
 // Só mudanças dos últimos 2 dias (as marcas de enviado duram 15 dias). usuarios = { uid: perfil }.
 export function avisosOms(oms, usuarios, hoje) {
   const desde = (() => { const d = new Date(hoje + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 2); return d.toISOString().slice(0, 10); })();
@@ -171,6 +174,8 @@ export function avisosOms(oms, usuarios, hoje) {
     if (String(quando).slice(0, 10) < desde) continue;
     if (o.status === 'solicitada') {
       for (const [uid, u] of Object.entries(usuarios)) if (uid !== o.solPor && trataOmU({ ...u, uid }, o.conj)) l.push({ uid, tipo: 'nova', om: o, chave: `om|${uid}|${o.id}|${quando}` });
+    } else if (o.status === 'enviada' && o.clienteUid && usuarios[o.clienteUid]) {
+      l.push({ uid: o.clienteUid, tipo: 'enviada', om: o, chave: `om|${o.clienteUid}|${o.id}|enviada|${quando}` });
     } else if (['devolvida', 'liberada'].includes(o.status) && o.solPor && usuarios[o.solPor]) {
       l.push({ uid: o.solPor, tipo: o.status, om: o, chave: `om|${o.solPor}|${o.id}|${o.status}|${quando}` });
     }

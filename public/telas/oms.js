@@ -1,11 +1,11 @@
 // Operação › OMs: solicitação de ordem de manutenção. O líder abre (com a hora da solicitação), o Técnico de Processo
 // aprova ou devolve, envia ao cliente e registra a hora da liberação; quem executou registra a hora da finalização.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, agoraLocal, horaBR, duracao, tempos, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clientesUsados } from '../contas/oms.js';
+import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, agoraLocal, horaBR, duracao, tempos, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente } from '../contas/oms.js';
 import { AREA_S, SETS, today } from '../contas/cal.js';
 import { etiqueta, vazio, carregando } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
-import { ME, UI, SK, salvarUI } from '../nucleo/estado.js';
+import { ME, UI, SK, salvarUI, isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
@@ -24,6 +24,9 @@ function base() {
 const lista = () => Object.values(base().d || {});
 const achar = id => base().d[id];
 const quem = () => ({ uid: ME.uid, nome: ME.nome || ME.login || '' });
+const cfg = () => (DB.cache.omsCfg || {}).d || null;
+const cliente = () => clienteDe(cfg(), SK);
+const conjNome = () => (SETS[SK] && SETS[SK].local) || SK;
 
 /* ---------- desenho ---------- */
 function item(o) {
@@ -52,6 +55,9 @@ function vTela() {
   const areas = [...new Set([...(SETS[SK] ? [...SETS[SK].areas, ...(SETS[SK].gerais || [])] : []), ...todos.map(o => o.area)])].filter(Boolean);
   let h = b.erro ? `<p class="err">Não foi possível ler as OMs (${esc(b.erro)}).</p>` : '';
   h += `<p class="ic-placar">${trata ? 'Você aprova ou devolve as solicitações, envia ao cliente e registra a liberação.' : 'Abra a solicitação com a hora em que o serviço foi pedido. O Técnico de Processo confere e envia ao cliente.'} Caminho: solicitada → aprovada → com o cliente → liberada → finalizada.</p>`;
+  const cli = cliente(); const souCliente = !!cli && cli.uid === ME.uid;
+  if (souCliente) h += `<p class="om-cli">Você é o cliente do ${esc(conjNome())}: as OMs que o Técnico de Processo envia aparecem aqui em <b>Com o cliente</b>. Toque na OM para ver os detalhes ou imprimir.</p>`;
+  else if (trata || isAdmin()) h += `<p class="om-cli${cli ? '' : ' falta'}">Cliente do ${esc(conjNome())}: <b>${cli ? esc(cli.nome) : 'não definido'}</b>${isAdmin() ? ` <button type="button" class="btn sm ghost" data-act="omCliente">${cli ? 'Trocar' : 'Escolher o usuário do cliente'}</button>` : cli ? '' : ' (o administrador escolhe o usuário do cliente)'}</p>`;
   h += cartoes(resumo(todos, MES), trata);
   h += `<div class="md-barra tr-barra">${abre ? `<button type="button" class="btn pri" data-act="omNova">${I.plus} Nova solicitação</button>` : ''}
     ${sel('omFSit', 'Situação', u.status, [['abertas', 'Em aberto'], ...Object.entries(STATUS), ['', 'Todas']])}
@@ -100,12 +106,12 @@ function editar(id) {
 function agir(id, acao) {
   const o = achar(id); if (!o || !acoesDe(o, ME).includes(acao)) return;
   const ag = agoraLocal();
-  const cli = acao === 'enviar' ? clientesUsados(lista()) : []; const ult = cli[0] || {};
+  const cli = cliente();
   const campos = {
     aprovar: `<label class="sel"><span>Observação (opcional)</span><input class="in" id="omObs" maxlength="${LIMITES.motivo}" autocomplete="off"></label>`,
     devolver: `<label class="sel"><span>O que precisa corrigir ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
     cancelar: `<label class="sel"><span>Motivo do cancelamento ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
-    enviar: `<div class="dc-form"><label class="sel"><span>Cliente (setor ou área) ${ob}</span><input class="in" id="omCli" list="omCliL" maxlength="${LIMITES.cliente}" value="${esc(o.cliente || ult.cliente || '')}" placeholder="Ex.: Manutenção mecânica da Coqueria" autocomplete="off"></label><label class="sel"><span>Contato no cliente</span><input class="in" id="omCont" list="omContL" maxlength="${LIMITES.contato}" value="${esc(o.contato || ult.contato || '')}" placeholder="Nome ou ramal (opcional)" autocomplete="off"></label><datalist id="omCliL">${cli.map(c => `<option value="${esc(c.cliente)}">`).join('')}</datalist><datalist id="omContL">${[...new Set(cli.map(c => c.contato).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label></div>`,
+    enviar: `<div class="dc-form"><div class="sel dc-full"><span>Cliente</span><p class="om-cli m0${cli ? '' : ' falta'}" id="omCli" tabindex="-1">${cli ? `<b>${esc(cli.nome)}</b> · usuário do cliente no ${esc(conjNome())}` : 'Ainda não definido: o administrador escolhe o usuário do cliente no topo da tela.'}</p></div><label class="sel"><span>Contato no cliente</span><input class="in" id="omCont" maxlength="${LIMITES.contato}" value="${esc(o.contato || '')}" placeholder="Nome ou ramal (opcional)" autocomplete="off"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label></div>`,
     liberar: `<div class="dc-form"><label class="sel"><span>Hora da liberação ${ob}</span><input class="in" type="datetime-local" id="omHLib" value="${ag}"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label></div>`,
     apagar: `<p class="m0">A OM some da lista e dos números. <b>Não dá para desfazer.</b> Se ela só não vai mais acontecer, prefira <b>Cancelar</b>, que guarda o motivo no histórico.</p>`,
     finalizar: `<label class="sel"><span>Hora da finalização ${ob}</span><input class="in" type="datetime-local" id="omHFim" value="${ag}"></label><label class="sel"><span>Como ficou (opcional)</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="Serviço feito, testado, pendências"></textarea></label>`
@@ -117,7 +123,7 @@ function agir(id, acao) {
       await DB.omApagar(o.id, SK);
       DB.log(`OMs: apagada (${o.titulo}${o.numero ? ', OM ' + o.numero : ''})`, 'operacao'); toast('OM apagada'); render(); return;
     }
-    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), cliente: v$('omCli'), contato: v$('omCont'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim') }); } catch (e) { focar(e); }
+    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), cliente: cli, contato: v$('omCont'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim') }); } catch (e) { focar(e); }
     await DB.omSalvar(o.id, SK, y);
     DB.log(`OMs: ${STATUS[y.status].toLowerCase()} (${o.titulo}${y.numero || o.numero ? ', OM ' + (y.numero || o.numero) : ''})`, 'operacao'); toast(STATUS[y.status]); render();
   }, { cancelarTxt: 'Voltar' });
@@ -136,6 +142,7 @@ function abrir(id) {
       ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}${o.motivo ? `<div class="dc-full"><dt>${o.status === 'cancelada' ? 'Motivo do cancelamento' : 'O que corrigir'}</dt><dd>${esc(o.motivo)}</dd></div>` : ''}
       ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}</dl>
     ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}</li>`).join('')}</ol>` : ''}
+    <div class="row-gap om-acoes"><button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button></div>
     ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['aprovar', 'enviar', 'liberar', 'finalizar'].includes(a) ? ' pri' : a === 'cancelar' || a === 'apagar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', aprovar: 'Aprovar', devolver: 'Devolver', enviar: 'Enviar ao cliente', liberar: 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
   formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))}`, html, 'Fechar', async () => {}, {});
   const f = document.getElementById('fSheet'); if (!f) return;
@@ -143,9 +150,60 @@ function abrir(id) {
   const s = f.querySelector('[type=submit]'); if (s) s.classList.remove('pri');
   // A janela não deixa o clique subir até a página: os botões das ações são ligados aqui.
   f.querySelectorAll('[data-act="omAcao"]').forEach(b => b.addEventListener('click', () => acoes.omAcao(b, b.dataset)));
+  f.querySelectorAll('[data-act="omImprimir"]').forEach(b => b.addEventListener('click', () => imprimir(b.dataset.id)));
+}
+
+/* ---------- impressão (ou "Salvar como PDF" na janela de impressão) para enviar ao cliente ---------- */
+function imprimir(id) {
+  const o = achar(id); if (!o) return;
+  const x = tempos(o); const cli = o.cliente ? { nome: o.cliente } : cliente();
+  const lin = (r, v) => `<tr><th>${esc(r)}</th><td>${v ? esc(v) : '—'}</td></tr>`;
+  const html = `<header class="omi-top"><img src="img/dikma-logo.png" alt="Dikma"><div><h1>Solicitação de OM</h1><p>${esc(conjNome())}${o.numero ? ' · OM ' + esc(o.numero) : ''} · ${esc(STATUS[o.status] || o.status)}</p></div></header>
+    <h2>${esc(o.titulo)}</h2>
+    <table class="omi-tab"><tbody>
+      ${lin('Cliente', [cli && cli.nome, o.contato].filter(Boolean).join(' · '))}${lin('Nº da OM no cliente', o.numero)}
+      ${lin('Área', areaNome(o.area))}${lin('Equipamento', o.equip)}${lin('Local', o.local)}
+      ${lin('Tipo', TIPOS[o.tipo])}${lin('Prioridade', PRIORIDADES[o.prio])}
+      ${lin('Solicitante', o.solNome)}${lin('Hora da solicitação', horaBR(o.hSol))}
+      ${lin('Aprovada por', [o.aprovNome, horaBR(o.hAprov)].filter(Boolean).join(' · '))}${lin('Enviada ao cliente', horaBR(o.hEnvio))}
+      ${lin('Hora da liberação', horaBR(o.hLib))}${lin('Hora da finalização', horaBR(o.hFim))}
+      ${x.espera != null ? lin('Espera até liberar', duracao(x.espera)) : ''}${x.execucao != null ? lin('Execução', duracao(x.execucao)) : ''}
+    </tbody></table>
+    ${o.desc ? `<h3>Detalhes do serviço</h3><p class="omi-txt">${esc(o.desc)}</p>` : ''}
+    ${o.obsFim ? `<h3>Como ficou</h3><p class="omi-txt">${esc(o.obsFim)}</p>` : ''}
+    <div class="omi-ass">${['Solicitante (Dikma)', 'Técnico de Processo (Dikma)', 'Cliente'].map(t => `<div><span></span><small>${t}</small></div>`).join('')}</div>
+    <footer class="omi-pe">Impresso em ${esc(horaBR(agoraLocal()))} pelo Dikma Gestão</footer>`;
+  let box = document.getElementById('omImp');
+  if (!box) { box = document.createElement('div'); box.id = 'omImp'; document.body.appendChild(box); }
+  box.innerHTML = html;
+  document.body.classList.add('om-imprimindo');
+  const fim = () => { document.body.classList.remove('om-imprimindo'); window.removeEventListener('afterprint', fim); };
+  window.addEventListener('afterprint', fim);
+  const img = box.querySelector('img');
+  // A classe só vale na impressão (estilo.css › @media print): pode ficar até o afterprint, mesmo no celular, onde a
+  // janela de impressão não segura o código.
+  const ir = () => window.print();
+  if (img && !img.complete) { img.addEventListener('load', ir, { once: true }); img.addEventListener('error', ir, { once: true }); } else ir();
+}
+
+// O administrador escolhe o usuário do cliente deste conjunto.
+function escolherCliente() {
+  if (!isAdmin()) return;
+  const us = (DB.cache.usuarios || []).filter(u => u.papel !== 'bloqueado').sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
+  const atual = cliente(); const pal = palpiteCliente(us, SK);
+  const sel = (atual && atual.uid) || (pal && pal.uid) || '';
+  const html = `<div class="p-form"><label class="sel"><span>Usuário do cliente no ${esc(conjNome())}</span><select class="in" id="omCliU"><option value="">Escolha…</option>${us.map(u => `<option value="${esc(u.uid)}" ${u.uid === sel ? 'selected' : ''}>${esc(u.nome)}${u.login ? ' (' + esc(u.login) + ')' : ''}</option>`).join('')}</select></label>
+    <p class="muted small m0">Esse usuário vê as OMs do ${esc(conjNome())} enviadas ao cliente e recebe o aviso no celular. Ele precisa ter a Operação (pode ser Somente leitura) neste conjunto.</p></div>`;
+  formSheet('Cliente das OMs', esc(conjNome()), html, 'Salvar', async () => {
+    const uid = v$('omCliU'); const u = us.find(x => x.uid === uid);
+    if (!u) { const e = new Error('Escolha o usuário do cliente.'); e.campo = 'omCliU'; focar(e); }
+    await DB.omsClienteSalvar(SK, { uid: u.uid, nome: u.nome || u.login || '' });
+    DB.log(`OMs: cliente do ${conjNome()} passou a ser ${u.nome || u.login}`, 'operacao'); toast('Cliente salvo'); render();
+  });
 }
 
 acoes.omNova = () => editar('');
+acoes.omCliente = () => escolherCliente();
 acoes.omAbrir = (el, d) => abrir(d.id);
 acoes.omSit = (el, d) => { U().status = U().status === d.v ? 'abertas' : d.v; salvarUI(); render(); };
 acoes.omAcao = (el, d) => { document.getElementById('layer').innerHTML = ''; if (d.v === 'editar') editar(d.id); else agir(d.id, d.v); };
