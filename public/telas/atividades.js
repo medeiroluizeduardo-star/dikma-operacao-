@@ -18,6 +18,7 @@ import { abre } from '../ui/dobra.js';
 import { modsHistorico } from '../contas/acessos.js';
 import { conferirAcao } from '../contas/tratativas.js';
 import { viewsDoModulo } from '../nucleo/navegacao.js';
+import { execPorLocal } from '../contas/execucao.js';
 
 
 /* ---------------- PAINEL ---------------- */
@@ -72,6 +73,11 @@ export function vPainel() {
   h += `<div class="card"><header><h2>Rotas que pedem atenção</h2><p>Ordenadas por atrasadas${todasRotas ? '' : ` · as 8 primeiras de ${rs.length}`}</p>${rs.length > 8 ? `<span class="r"><button class="btn sm" data-act="rotasTodas">${UI.rotasTodas ? 'Só as 8 primeiras' : `Ver todas (${rs.length})`}</button></span>` : ''}</header><div class="tw"><table><thead><tr><th>Rota</th><th>Área</th><th class="r">Programadas</th><th class="r">Realizadas</th><th class="r">Não realiz.</th><th class="r">Atrasadas</th><th>Eficiência até hoje</th></tr></thead><tbody>
   ${(todasRotas ? rs : rs.slice(0, 8)).map(({ r, x }) => { const e = pct(x.Rhoje, x.progHoje); return `<tr class="clicavel" data-progrota="${esc(r.area + '|' + r.rota)}" title="Abrir a Programação desta rota"><td><b>${esc(r.rota)}</b></td><td class="muted">${AREA_S[r.area]}</td><td class="r num">${x.prog}</td><td class="r num">${x.R}</td><td class="r num">${x.N}</td><td class="r num">${x.A ? `<span class="pill warn">${x.A}</span>` : '0'}</td><td><span class="ef"><i style="width:${e}%"></i></span><span class="num">${e}%</span></td></tr>`; }).join('')}
   </tbody></table></div></div>`;
+  // Execução por local/equipamento (feitas ÷ previstas até hoje): os locais com a menor execução primeiro.
+  { const ls = execPorLocal(docs, pid => PL.get(pid) || null, diasDe, TODAY).filter(x => x.pct < 100); const todos = !!UI.locaisTodos || ls.length <= 8;
+    if (ls.length) h += `<div class="card"><header><h2>Locais que pedem atenção</h2><p>Execução = feitas ÷ previstas até hoje · menor primeiro${todos ? '' : ` · os 8 primeiros de ${ls.length}`}</p>${ls.length > 8 ? `<span class="r"><button class="btn sm" data-act="locaisTodos">${UI.locaisTodos ? 'Só os 8 primeiros' : `Ver todos (${ls.length})`}</button></span>` : ''}</header><div class="tw"><table><thead><tr><th>Local / equipamento</th><th>Rota</th><th>Área</th><th class="r">Previstas</th><th class="r">Feitas</th><th class="r">Não feitas</th><th class="r">A fazer</th><th>Execução</th></tr></thead><tbody>
+    ${(todos ? ls : ls.slice(0, 8)).map(x => `<tr><td><b>${esc(x.local)}</b></td><td>${esc(x.rota)}</td><td class="muted">${AREA_S[x.area] || esc(x.area)}</td><td class="r num">${x.prev}</td><td class="r num">${x.feitas}</td><td class="r num">${x.nao}</td><td class="r num">${x.pend ? `<span class="pill warn">${x.pend}</span>` : '0'}</td><td><span class="ef ${x.faixa}"><i style="width:${x.pct}%"></i></span><span class="num">${x.pct}%</span></td></tr>`).join('')}
+    </tbody></table></div></div>`; }
   { const { por, total } = contarCausas(docs); const cs = Object.entries(por).sort((a, b) => b[1] - a[1]).slice(0, 5); const mx = cs.length ? cs[0][1] : 1;
     h += `<div class="grid2"><div class="card"><header><h2>Por que não foi feito</h2><p>Principais causas no período</p>${modsDe(ME).includes('gestao') ? '<span class="r"><button class="btn sm" data-go="causas">Causas e ações</button></span>' : ''}</header><div class="body">${cs.length ? `<div class="bars">${cs.map(([c, n]) => `<div class="barrow"><span class="n">${esc(c)}<small>${pct(n, total)}% das não realizadas</small></span><div class="stack"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Nenhuma não realizada no período.</div>'}</div></div>
     ${veLog() ? `<div class="card"><header><h2>Últimos registros</h2><p>Quem apontou o quê, em tempo real</p></header><div class="body">${logHtml(8)}</div></div>` : ''}</div>`; }
@@ -400,4 +406,5 @@ acoes.rotaok = (t, d) => {
 };
 acoes.csv = (t, d) => { exportCSV(); };
 acoes.rotasTodas = (t, d) => { UI.rotasTodas = !UI.rotasTodas; render(); };
+acoes.locaisTodos = (t, d) => { UI.locaisTodos = !UI.locaisTodos; render(); };
 acoes.pendTodas = (t, d) => { const k = t.dataset.k; const l = UI.pendTodas || []; UI.pendTodas = l.includes(k) ? l.filter(x => x !== k) : [...l, k]; render(); };

@@ -1978,3 +1978,29 @@ button.tr-it:hover{border-color:var(--marca)}
   .omi-ass span{display:block;border-top:1px solid #000;height:1px}.omi-ass small{display:block;text-align:center;margin-top:4px}
   .omi-pe{margin-top:24px;font-size:9pt;color:#555}
 }
+
+/* Apontar por local/equipamento: lista de locais da rota e checklist do local */
+.aplead{margin:4px 2px 0}
+.lclista{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))}
+.lcard{display:grid;gap:6px;text-align:left;width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 12px 12px 15px;position:relative;color:inherit;font:inherit;cursor:pointer}
+.lcard::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 2px 2px 0;background:var(--st-prog)}
+.lcard.ok::before{background:var(--st-real)}.lcard.atencao::before{background:var(--st-atr)}.lcard.critico::before{background:var(--st-nreal)}
+.lcard:hover{border-color:var(--line-2)}
+.lcard.devolvida{box-shadow:inset 3px 0 0 var(--st-nreal)}
+.lc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;min-width:0}
+.lc-top b{font-weight:650;line-height:1.3;overflow-wrap:anywhere}
+.lc-sub,.lc-num{font-size:12px;color:var(--ink-3)}
+.lc-foto{display:inline-flex;align-items:center;gap:3px;vertical-align:middle}
+.lc-foto svg{width:13px;height:13px}
+.lc-bar{display:flex;align-items:center;gap:10px}
+.lc-bar .meter{flex:1;margin-top:0}
+.lc-p{font-weight:700;min-width:42px;text-align:right}
+.lcard.atencao .meter i,.lc-bar.atencao .meter i{background:var(--st-atr)}
+.lcard.critico .meter i,.lc-bar.critico .meter i{background:var(--st-nreal)}
+.lc-p.ok{color:var(--st-real)}.lc-p.atencao{color:var(--st-atr)}.lc-p.critico{color:var(--st-nreal)}
+.lchead .lc-tit{font-size:18px;margin:0;line-height:1.25;overflow-wrap:anywhere}
+.lchead .lc-p{font-size:18px}
+.cklist .act{background:var(--surface-2)}
+.lcsalvar{position:sticky;bottom:8px;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:10px 12px;box-shadow:var(--e1)}
+@media (max-width:860px){.lcsalvar{bottom:calc(76px + env(safe-area-inset-bottom,0px))}.lcsalvar .btn.pri{flex:1}}
+.ef.atencao i{background:var(--st-atr)}.ef.critico i{background:var(--st-nreal)}

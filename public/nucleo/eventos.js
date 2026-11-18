@@ -91,12 +91,12 @@ document.addEventListener('click', async e => {
   if (d.esc) { UI.escopo = d.esc; render(); return; }
   if (d.area) { UI.area = d.area; render(); return; }
   if (d.cell) { const [id, i, k] = d.cell.split('|').length === 4 ? [d.cell.split('|').slice(0, 2).join('|'), ...d.cell.split('|').slice(2)] : d.cell.split('|'); cellMenu(DB.cache.semanas[id], +i, +k); return; }
-  if (d.dia != null) { UI.dia = +d.dia; UI.confirm = null; render(); return; }
-  if (d.arota) { UI.aRota = d.arota; UI.confirm = null; render(); salvarUI(); { const a = document.querySelector('.rchips.linha [aria-pressed="true"]'); if (a) a.scrollIntoView({ inline: 'center', block: 'nearest' }); } if (t.closest('.fimrota')) scrollTo(0, 0); return; }
+  if (d.dia != null) { UI.dia = +d.dia; UI.confirm = null; UI.apLocal = null; render(); return; }
+  if (d.arota) { UI.aRota = d.arota; UI.confirm = null; UI.apLocal = null; render(); salvarUI(); { const a = document.querySelector('.rchips.linha [aria-pressed="true"]'); if (a) a.scrollIntoView({ inline: 'center', block: 'nearest' }); } if (t.closest('.fimrota')) scrollTo(0, 0); return; }
   if (d.efg) { const l = new Set(UI.efAbertas || []); if (l.has(d.efg)) l.delete(d.efg); else l.add(d.efg); UI.efAbertas = [...l]; render(); return; }
   if (d.pgrp) { const l = new Set(UI.progAbertas || []); if (l.has(d.pgrp)) l.delete(d.pgrp); else l.add(d.pgrp); UI.progAbertas = [...l]; render(); return; }
   if (d.aprarea) { UI.aprArea = d.aprarea; UI.confirm = null; render(); return; }
-  if (d.aparea) { UI.apArea = d.aparea; if (myAreas().length > 1) UI.area = d.aparea; UI.confirm = null; render(); salvarUI(); return; }
+  if (d.aparea) { UI.apArea = d.aparea; if (myAreas().length > 1) UI.area = d.aparea; UI.confirm = null; UI.apLocal = null; render(); salvarUI(); return; }
   if (d.ap) {
     const [i, k, v] = d.ap.split('|'); const doc = DB.cache.semanas[apArea() + '|' + UI.ini];
     if (v === 'rmE') return apply(doc, +i, +k, '_');
