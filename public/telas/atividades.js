@@ -18,7 +18,7 @@ import { abre } from '../ui/dobra.js';
 import { modsHistorico } from '../contas/acessos.js';
 import { conferirAcao } from '../contas/tratativas.js';
 import { viewsDoModulo } from '../nucleo/navegacao.js';
-import { execPorLocal } from '../contas/execucao.js';
+import { execPorLocal, resumoExec, chipDoLocal } from '../contas/execucao.js';
 
 
 /* ---------------- PAINEL ---------------- */
@@ -257,6 +257,8 @@ export function vProg() {
   if (UI.rota !== 'TODAS' && !rts.includes(UI.rota)) UI.rota = 'TODAS';
   const s = stats(docs, { rota: UI.rota, tipo: UI.tipo });
   const cel = isMobile();
+  // Execução até hoje da semana (feitas ÷ previstas, contas/execucao.js), com os mesmos filtros de rota e tipo.
+  s.exAte = resumoExec(docs.flatMap(d => d.ids.flatMap((id, i) => { const p = PL.get(id); if (!p || (UI.rota !== 'TODAS' && p.rota !== UI.rota) || (UI.tipo !== 'TODOS' && p.tipo !== UI.tipo)) return []; return [...d.d[i]].filter((c, k) => add(d.ini, k) <= TODAY); })));
   // Feriado sem operação de cada dia da semana (pela marca nas semanas; feriados.js)
   const ferSem = DAYS.map((_, k) => { for (const d of docs) if (d.fe) for (const [key, v] of Object.entries(d.fe)) if (key.endsWith('|' + k) && v) return v; return ''; });
   const selRota = `<label class="sel"><span>Rota</span><select class="in" id="fRota"><option value="TODAS">Todas as rotas</option>${rts.map(r => `<option ${r === UI.rota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
@@ -264,60 +266,82 @@ export function vProg() {
   let h = `<div class="filters">
    ${cel ? '' : selRota}
    <label class="sel grow"><span>Buscar</span><input class="in" id="fQ" type="search" placeholder="Local, atividade ou ID" value="${esc(UI.q)}"></label>
-   <label class="btn" style="align-self:flex-end"><input type="checkbox" id="fPend" ${UI.soPend ? 'checked' : ''}> Só com pendência</label>
+   <label class="btn" style="align-self:flex-end"><input type="checkbox" id="fPend" ${UI.soPend ? 'checked' : ''}> Só locais com pendência</label>
    ${!framed && !cel ? `<button class="btn" data-act="csv" style="align-self:flex-end">${I.dl} Exportar Excel</button>` : ''}
   </div>${cel ? `<details class="legdet"${UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' open' : ''}><summary>Filtrar por rota ou tipo</summary><div class="filters">${selRota}</div></details>` : ''}
-  <div class="mini compacta"><div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
-  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span><span><span class="chip sm R ft">${CHIP.R}</span>Com foto · <span class="fotob">${I.cam}<span class="num">n</span></span> abre as fotos</span>${docs.some(d => d.dx && Object.keys(d.dx).length) ? `<span><span class="chip sm D">${CHIP.D}</span>${ST_NOME.D}</span>` : ''}${ferSem.some(Boolean) ? `<span><span class="chip sm F">${CHIP.F}</span>Feriado sem operação (não conta)</span>` : ''}<span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Clique em um dia para apontar' : 'Somente leitura · toque num ✕ para ver a justificativa'}</span></div></details>`;
+  <div class="mini compacta">${s.exAte.pct == null ? '' : `<div><b class="num fx-${s.exAte.faixa}">${s.exAte.pct}%</b><span>Executado até hoje</span></div>`}<div><b class="num">${s.prog}</b><span>Programadas</span></div><div><b class="num" style="color:var(--st-real)">${s.R}</b><span>Realizadas</span></div><div><b class="num" style="color:var(--st-nreal)">${s.N}</b><span>Não realizadas</span></div><div><b class="num" style="color:var(--st-atr)">${s.A}</b><span>Atrasadas</span></div><div><b class="num">${s.P - s.A}</b><span>A fazer</span></div><div><b class="num" style="color:var(--st-extra)">${s.E}</b><span>Extras</span></div></div>
+  <details class="legdet"${cel ? '' : ' open'}><summary>Legenda</summary><div class="legend">${['P', 'R', 'N', 'A'].map(c => `<span><span class="chip sm ${c}">${CHIP[c]}</span>${ST_NOME[c]}</span>`).join('')}<span><span class="chip sm P fp">${CHIP.P}</span>Fora da programação</span><span><span class="chip sm R ft">${CHIP.R}</span>Com foto · <span class="fotob">${I.cam}<span class="num">n</span></span> abre as fotos</span>${docs.some(d => d.dx && Object.keys(d.dx).length) ? `<span><span class="chip sm D">${CHIP.D}</span>${ST_NOME.D}</span>` : ''}${ferSem.some(Boolean) ? `<span><span class="chip sm F">${CHIP.F}</span>Feriado sem operação (não conta)</span>` : ''}<span class="muted">Linha do local: ✓ concluído · ✕ com não feitas · ! atrasado · 1/3 em andamento · % = executado até hoje</span><span class="muted">${canEdit(area === 'TODAS' ? null : area) || isAdmin() ? 'Toque no local para ver as atividades · toque num dia do local para abrir o checklist no Apontar' : 'Somente leitura · toque no local para ver as atividades e num ✕ para ver a justificativa'}</span></div></details>`;
   if (ferSem.some(Boolean)) h += `<p class="ferav">${DAYS.map((d, k) => (ferSem[k] ? `<b>${d} ${ddmm(add(UI.ini, k))} · Feriado · ${esc(ferSem[k])}</b>` : '')).filter(Boolean).join(' · ')} — dia sem operação: as atividades programadas não contam como programadas nem como atrasadas.</p>`;
   const q = UI.q.trim().toLowerCase();
-  const rows = [];
+  // Rota → local/equipamento → atividades (a mesma lógica do Apontar: o local é a unidade; execução = feitas ÷ previstas).
+  const grupos = new Map();
   for (const doc of docs) doc.ids.forEach((id, i) => {
     const p = PL.get(id); if (!p) return;
     if (UI.rota !== 'TODAS' && p.rota !== UI.rota) return; if (UI.tipo !== 'TODOS' && p.tipo !== UI.tipo) return;
     if (q && !(p.id + ' ' + p.local + ' ' + p.ativ).toLowerCase().includes(q)) return;
-    if (UI.soPend && ![...doc.d[i]].some((c, k) => c === 'P' && add(doc.ini, k) <= TODAY)) return;
-    rows.push({ doc, i, p });
+    const key = doc.area + '|' + p.rota;
+    if (!grupos.has(key)) grupos.set(key, { area: doc.area, rota: p.rota, doc, locais: new Map() });
+    const lnome = String(p.local || '').trim() || 'Sem local'; const lk = key + '|' + lnome.toUpperCase();
+    const ls = grupos.get(key).locais; if (!ls.has(lk)) ls.set(lk, { key: lk, local: lnome, rows: [] });
+    ls.get(lk).rows.push({ doc, i, p });
   });
-  if (!rows.length) return h + `<div class="card"><div class="empty">Nenhuma atividade com esses filtros nesta semana.${UI.q || UI.soPend || UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' <button class="btn sm" data-act="limparProg">Limpar filtros</button>' : ''}</div></div>`;
+  // Só com pendência: fica o local que tem alguma atividade a fazer até hoje (o local inteiro, para o líder ver o checklist todo).
+  const atrasou = r => [...r.doc.d[r.i]].some((c, k) => c === 'P' && add(r.doc.ini, k) <= TODAY);
+  if (UI.soPend) for (const [key, g] of grupos) { for (const [lk, l] of g.locais) if (!l.rows.some(atrasou)) g.locais.delete(lk); if (!g.locais.size) grupos.delete(key); }
+  if (!grupos.size) return h + `<div class="card"><div class="empty">Nenhuma atividade com esses filtros nesta semana.${UI.q || UI.soPend || UI.rota !== 'TODAS' || UI.tipo !== 'TODOS' ? ' <button class="btn sm" data-act="limparProg">Limpar filtros</button>' : ''}</div></div>`;
   const tk = DAYS.map((_, k) => add(UI.ini, k) === TODAY);
+  const ate = DAYS.map((_, k) => add(UI.ini, k) <= TODAY); // a execução conta só os dias até hoje (o futuro não pesa)
+  const codDia = (rs, k) => rs.map(r => r.doc.d[r.i][k]);
+  const execAte = rs => resumoExec(DAYS.flatMap((_, k) => (ate[k] ? codDia(rs, k) : [])));
+  const PILL = { ok: 'ok', atencao: 'warn', critico: 'bad' };
+  const pctPill = r => (r.pct == null ? '<span class="pill neu">—</span>' : `<span class="pill ${PILL[r.faixa]} num" title="Execução até hoje: ${r.feitas} de ${r.prev} feitas">${r.pct}%</span>`);
+  for (const g0 of grupos.values()) { const rs = [...g0.locais.values()].flatMap(l => l.rows); g0.n = rs.length; g0.ex = execAte(rs); g0.A = 0; for (const r of rs) for (let k = 0; k < 7; k++) if (st(r.doc, r.i, k) === 'A') g0.A++; }
   // Rotas recolhidas: cada rota mostra o resumo; o detalhe abre ao tocar. Com busca ou uma rota escolhida, abre tudo.
-  const grupos = new Map();
-  for (const r of rows) { const key = r.doc.area + '|' + r.p.rota; if (!grupos.has(key)) grupos.set(key, { area: r.doc.area, rota: r.p.rota, rows: [], R: 0, A: 0, tot: 0 }); const g0 = grupos.get(key); g0.rows.push(r); for (let k = 0; k < 7; k++) { const c = st(r.doc, r.i, k); if (c === 'X' || c === 'D' || c === 'F') continue; g0.tot++; if (c === 'R' || c === 'E') g0.R++; if (c === 'A') g0.A++; } }
   const tudoAberto = !!q || UI.rota !== 'TODAS' || grupos.size === 1;
   const abertas = new Set(UI.progAbertas || []);
   const aberto = key => tudoAberto || abertas.has(key);
-  const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.rows.length} ${x.rows.length === 1 ? 'atividade' : 'atividades'}</small></span><span class="pres num">${x.R} de ${x.tot} feitas${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
-  if (!tudoAberto) h += `<div class="row-gap pgtool"><button class="btn sm" data-act="progTodas">${abertas.size ? 'Recolher todas' : 'Abrir todas'}</button><span class="muted small">${grupos.size} rotas · toque numa rota para ver as atividades</span></div>`;
-  rows.length = 0; for (const [key, x] of grupos) { if (aberto(key)) rows.push(...x.rows); else rows.push({ fechado: key }); }
+  const locAbertos = new Set(UI.progLocais || []);
+  const locAberto = l => !!q || locAbertos.has(l.key);
+  const cabGrupo = (key, x) => { const tag = tudoAberto ? 'div' : 'button'; return `<${tag} class="pgrp${aberto(key) ? ' on' : ''}" ${tudoAberto ? '' : `type="button" data-pgrp="${esc(key)}" aria-expanded="${aberto(key)}"`}>${tudoAberto ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="pg-t"><b>${esc(x.rota)}</b><small>${area === 'TODAS' ? AREA_S[x.area] + ' · ' : ''}${x.locais.size} ${x.locais.size === 1 ? 'local' : 'locais'} · ${x.n} ${x.n === 1 ? 'atividade' : 'atividades'}</small></span><span class="pres num">${x.ex.pct == null ? 'nada previsto até hoje' : `<strong class="fx-${x.ex.faixa}">${x.ex.pct}% executado</strong> · ${x.ex.feitas} de ${x.ex.prev} até hoje`}${x.A ? ` · <span class="atr">${x.A} atrasada${x.A > 1 ? 's' : ''}</span>` : ''}</span></${tag}>`; };
+  if (!tudoAberto) h += `<div class="row-gap pgtool"><button class="btn sm" data-act="progTodas">${abertas.size ? 'Recolher todas' : 'Abrir todas'}</button><span class="muted small">${grupos.size} rotas · toque numa rota para ver os locais</span></div>`;
+  // Lista corrida: rota, local e (com o local aberto) as atividades dele.
+  const linhas = [];
+  for (const [key, x] of grupos) { linhas.push({ rota: key }); if (!aberto(key)) continue; for (const l of x.locais.values()) { linhas.push({ loc: l, g: x }); if (locAberto(l)) for (const r of l.rows) linhas.push({ r }); } }
   const chip = (doc, i, k) => { const c = st(doc, i, k); const m = doc.m[doc.ids[i] + '|' + k]; const fp = doc.fp && doc.fp[doc.ids[i] + '|' + k]; const nf = fotosDaCel(doc, doc.ids[i], k); return `<button class="chip ${c}${fp ? ' fp' : ''}${nf ? ' ft' : ''}" data-cell="${esc(doc.id)}|${i}|${k}" aria-label="${DAYS[k]}: ${c === 'F' ? 'Feriado · ' + esc(doc.fe[doc.ids[i] + '|' + k]) : ST_NOME[c]}${nf ? ` · ${nf} foto${nf > 1 ? 's' : ''}` : ''}" title="${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${c === 'F' ? 'Feriado · ' + esc(doc.fe[doc.ids[i] + '|' + k]) + ' (sem operação, não conta)' : ST_NOME[c]}${m ? ' · ' + esc(m) : ''}${fp ? ' · fora da programação' : ''}${nf ? ` · ${nf} foto${nf > 1 ? 's' : ''}` : ''}">${CHIP[c]}</button>`; };
+  // Dia do local: a situação do checklist do local naquele dia; quem aponta abre o checklist no Apontar.
+  const chipLocal = (l, g, k) => {
+    const rs = l.rows; const doc = rs[0].doc;
+    if (rs.every(r => st(doc, r.i, k) === 'F')) return `<span class="chip F" title="${DAYS[k]} · Feriado · sem operação">${CHIP.F}</span>`;
+    const passou = add(UI.ini, k) < TODAY; const r = resumoExec(codDia(rs, k), passou); const c = chipDoLocal(r, passou);
+    const tit = `${DAYS[k]} ${ddmm(add(UI.ini, k))} · ${esc(l.local)} · ${r.prev ? `${({ vazio: 'Sem programação', afazer: 'A fazer', atrasado: 'Atrasado', andamento: 'Em andamento', concluido: 'Concluído', fechado: 'Concluído com não feitas' })[r.situ]} · ${r.feitas} de ${r.prev} feitas` : 'Sem programação'}`;
+    if (!r.prev && !rs.some(x => x.doc.d[x.i][k] === 'E')) return `<span class="chip X" title="${tit}">${c.t}</span>`;
+    return canEdit(g.area) ? `<button class="chip ${c.c} lchip" data-go="apontar" data-aplocal="${esc(g.area + '|' + g.rota + '|' + k + '|' + l.local)}" title="${tit} · abrir o checklist no Apontar" aria-label="${tit}, abrir o checklist">${c.t}</button>` : `<span class="chip ${c.c} lchip" title="${tit}">${c.t}</span>`;
+  };
+  const cabLocal = (l, compacto) => { const ex = execAte(l.rows); const on = locAberto(l); const n = l.rows.length; const tag = q ? 'div' : 'button'; return `<${tag} class="lgrp${on ? ' on' : ''}"${q ? '' : ` type="button" data-plocal="${esc(l.key)}" aria-expanded="${on}"`}>${q ? '' : '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>'}<span class="lg-t"><b>${esc(l.local)}</b><small>${n} ${n === 1 ? 'atividade' : 'atividades'}${compacto ? '' : ' · toque para ver'}</small></span>${pctPill(ex)}</${tag}>`; };
   // Fotos da atividade na semana: 📷n (abre as fotos do dia; com vários dias, escolhe o dia).
   const fotoBtn = (doc, i) => { const n = fotosSemana(doc, i); return n ? ` <button type="button" class="fotob" data-act="verFotosSem" data-k="${esc(doc.id)}|${i}" aria-label="Ver ${n} foto${n > 1 ? 's' : ''} da semana" title="Fotos da semana">${I.cam}<span class="num">${n}</span></button>` : ''; };
   const LIM = UI.more || (isMobile() ? 80 : 250); // o resto aparece em "Mostrar mais" (abre mais rápido)
-  const shown = rows.slice(0, LIM);
-  let g = '';
+  const shown = linhas.slice(0, LIM);
   if (isMobile()) {
     h += '<div class="mlist">';
-    for (const r of shown) {
-      if (r.fechado) { h += cabGrupo(r.fechado, grupos.get(r.fechado)); g = r.fechado; continue; }
-      const { doc, i, p } = r;
-      const key = doc.area + '|' + p.rota;
-      if (key !== g) { g = key; h += cabGrupo(key, grupos.get(key)); }
-      h += `<div class="mcard"><div><div class="t">${esc(p.ativ)}</div><div class="loc wrapit">${esc(p.local)}</div></div><div class="row-gap"><span class="tag">${esc(p.tipo)}</span><span class="mono muted">${p.id}</span>${fotoBtn(doc, i)}</div><div class="days">${DAYS.map((d, k) => `<div>${DL[k]}${chip(doc, i, k)}</div>`).join('')}</div></div>`;
+    for (const x of shown) {
+      if (x.rota) { h += cabGrupo(x.rota, grupos.get(x.rota)); continue; }
+      if (x.loc) { h += `<div class="mcard lcardp">${cabLocal(x.loc, true)}<div class="days">${DAYS.map((d, k) => `<div>${DL[k]}${chipLocal(x.loc, x.g, k)}</div>`).join('')}</div></div>`; continue; }
+      const { doc, i, p } = x.r;
+      h += `<div class="mcard msub"><div><div class="t">${esc(p.ativ)}</div></div><div class="row-gap"><span class="tag">${esc(p.tipo)}</span><span class="mono muted">${p.id}</span>${fotoBtn(doc, i)}</div><div class="days">${DAYS.map((d, k) => `<div>${DL[k]}${chip(doc, i, k)}</div>`).join('')}</div></div>`;
     }
     h += '</div>';
   } else {
-    h += `<div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}${ferSem[k] ? ' fer' : ''}"${ferSem[k] ? ` title="Feriado · ${esc(ferSem[k])} · sem operação"` : ''}>${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span>${ferSem[k] ? '<br><span class="thf">feriado</span>' : ''}</th>`).join('')}</tr></thead><tbody>`;
-    for (const r of shown) {
-      if (r.fechado) { h += `<tr class="grp"><td colspan="11">${cabGrupo(r.fechado, grupos.get(r.fechado))}</td></tr>`; g = r.fechado; continue; }
-      const { doc, i, p } = r;
-      const key = doc.area + '|' + p.rota;
-      if (key !== g) { g = key; h += `<tr class="grp"><td colspan="11">${cabGrupo(key, grupos.get(key))}</td></tr>`; }
-      h += `<tr><td class="mono muted">${p.id}</td><td><div class="loc" title="${esc(p.local)}">${esc(p.local)}</div></td><td>${esc(p.ativ)}${fotoBtn(doc, i)}</td><td><span class="tag">${esc(p.tipo)}</span></td>${DAYS.map((_, k) => `<td class="c ${tk[k] ? 'today' : ''}">${chip(doc, i, k)}</td>`).join('')}</tr>`;
+    h += `<div class="card"><div class="tw"><table class="progtab"><thead><tr><th>ID</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map((d, k) => `<th class="c ${tk[k] ? 'today' : ''}${ferSem[k] ? ' fer' : ''}"${ferSem[k] ? ` title="Feriado · ${esc(ferSem[k])} · sem operação"` : ''}>${d}<br><span class="thd">${ddmm(add(UI.ini, k))}</span>${ferSem[k] ? '<br><span class="thf">feriado</span>' : ''}</th>`).join('')}</tr></thead><tbody>`;
+    for (const x of shown) {
+      if (x.rota) { h += `<tr class="grp"><td colspan="11">${cabGrupo(x.rota, grupos.get(x.rota))}</td></tr>`; continue; }
+      if (x.loc) { h += `<tr class="lrow"><td colspan="4">${cabLocal(x.loc)}</td>${DAYS.map((_, k) => `<td class="c ${tk[k] ? 'today' : ''}">${chipLocal(x.loc, x.g, k)}</td>`).join('')}</tr>`; continue; }
+      const { doc, i, p } = x.r;
+      h += `<tr class="lsub"><td class="mono muted">${p.id}</td><td><div class="loc muted" title="${esc(p.local)}">${esc(p.local)}</div></td><td>${esc(p.ativ)}${fotoBtn(doc, i)}</td><td><span class="tag">${esc(p.tipo)}</span></td>${DAYS.map((_, k) => `<td class="c ${tk[k] ? 'today' : ''}">${chip(doc, i, k)}</td>`).join('')}</tr>`;
     }
     h += '</tbody></table></div></div>';
   }
-  if (rows.length > shown.length) h += `<button class="btn center" data-act="more" data-n="${LIM + 400}">Mostrar mais ${Math.min(400, rows.length - shown.length)} de ${rows.length - shown.length}</button>`;
+  if (linhas.length > shown.length) h += `<button class="btn center" data-act="more" data-n="${LIM + 400}">Mostrar mais ${Math.min(400, linhas.length - shown.length)} de ${linhas.length - shown.length}</button>`;
   return h;
 }
 

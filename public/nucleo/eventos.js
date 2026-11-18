@@ -10,6 +10,7 @@ import { veHistorico } from '../contas/acessos.js';
 import { acoes } from './acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { setSt, tirarFora } from '../calc/atividades.js';
+import { mesmoLocal } from '../contas/execucao.js';
 import { sitDia, curto, removerCobertura, comTurma } from '../calc/presenca.js';
 import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
 import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
@@ -70,6 +71,8 @@ document.addEventListener('click', async e => {
     }
     // Atalho para uma configuração (ex.: Gerador de meses no Apontar): abre na Administração no mesmo conjunto.
     { const tv = VIEWS.find(v => v.id === d.go); if (tv && tv.mod === 'administracao' && UI.modulo !== 'administracao' && modsDe(ME).includes('administracao')) { if (UI.modulo === 'operacao' || UI.modulo === 'gestao') UI.cfSet = SK; UI.modulo = 'administracao'; UI.modOpen = false; aplicarSet(); } }
+    // Programação → Apontar: o dia de um local abre o checklist daquele local, rota e dia (mesma semana).
+    if (d.aplocal) { const [a, r, k, ...l] = d.aplocal.split('|'); UI.apArea = a; UI.aRota = r; UI.aRotaPor = { ...(UI.aRotaPor || {}), [a]: r }; UI.dia = +k; UI.apLocal = l.join('|'); UI.apRasc = null; }
     irParaModuloDa(d.go);
     UI.view = d.go; UI.confirm = null; UI.more = 0; UI.perm = null; if (UI.g) UI.g.mat = null; salvarUI(); trocarTela(d.go); return;
   }
@@ -94,6 +97,7 @@ document.addEventListener('click', async e => {
   if (d.dia != null) { UI.dia = +d.dia; UI.confirm = null; UI.apLocal = null; render(); return; }
   if (d.arota) { UI.aRota = d.arota; UI.confirm = null; UI.apLocal = null; render(); salvarUI(); { const a = document.querySelector('.rchips.linha [aria-pressed="true"]'); if (a) a.scrollIntoView({ inline: 'center', block: 'nearest' }); } if (t.closest('.fimrota')) scrollTo(0, 0); return; }
   if (d.efg) { const l = new Set(UI.efAbertas || []); if (l.has(d.efg)) l.delete(d.efg); else l.add(d.efg); UI.efAbertas = [...l]; render(); return; }
+  if (d.plocal) { const l = new Set(UI.progLocais || []); if (l.has(d.plocal)) l.delete(d.plocal); else l.add(d.plocal); UI.progLocais = [...l]; render(); return; }
   if (d.pgrp) { const l = new Set(UI.progAbertas || []); if (l.has(d.pgrp)) l.delete(d.pgrp); else l.add(d.pgrp); UI.progAbertas = [...l]; render(); return; }
   if (d.aprarea) { UI.aprArea = d.aprarea; UI.confirm = null; render(); return; }
   if (d.aparea) { UI.apArea = d.aparea; if (myAreas().length > 1) UI.area = d.aparea; UI.confirm = null; UI.apLocal = null; render(); salvarUI(); return; }
@@ -217,6 +221,17 @@ document.addEventListener('change', e => {
     const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, [campo]: v } : x));
     DB.cache.plano[p.area] = itens; DB.savePlano(p.area, itens); rebuild();
     DB.log(`Plano padrão: ${id} · ${{ rota: 'rota', local: 'local', ativ: 'atividade', tipo: 'tipo' }[campo]} "${p[campo]}" → "${v}"`, 'operacao'); toast('Plano atualizado · vale para os meses gerados e já gerados'); render(); return;
+  }
+  // Plano padrão por local: o nome no cabeçalho do local muda em todas as atividades dele (mesma área e rota).
+  if (t.dataset.plnome) {
+    if (!admDe('ativ')) return;
+    const [area, rota, ...l] = t.dataset.plnome.split('|'); const velho = l.join('|');
+    const v = String(t.value || '').replace(/\s+/g, ' ').trim(); if (!v) { toast('O nome do local não pode ficar vazio'); t.value = velho; return; }
+    if (v === velho) return;
+    let n = 0; const itens = (DB.cache.plano[area] || []).map(x => (x.rota === rota && x.ativo !== false && mesmoLocal(x.local, velho) ? (n++, { ...x, local: v }) : x));
+    if (!n) return;
+    DB.cache.plano[area] = itens; DB.savePlano(area, itens); rebuild();
+    DB.log(`Plano padrão: local "${velho}" → "${v}" (${rota}, ${n} atividade${n === 1 ? '' : 's'})`, 'operacao'); toast(`Local renomeado em ${n} atividade${n === 1 ? '' : 's'} · vale para os meses gerados e já gerados`); render(); return;
   }
   // Renomear rota: troca na lista de rotas, no plano padrão e nos colaboradores da rota (mesma área)
   if (t.dataset.rnome) {

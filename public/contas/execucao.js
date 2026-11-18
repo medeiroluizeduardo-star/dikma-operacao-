@@ -80,3 +80,32 @@ export function execPorLocal(semanas, plano, dias, hoje, { de = '0000-00-00', at
 
 // Fotos do local: o maior número de fotos entre as atividades do local no dia (a foto do local vale para todas).
 export const fotosDoLocal = (contagens) => contagens.reduce((m, n) => Math.max(m, n || 0), 0);
+
+// Programação por local: o "botão" de cada dia na linha do local (Concluído ✓, Com não feitas ✕, Atrasado !,
+// Em andamento "2/3", A fazer vazio, sem programação ·). r = resumoExec das atividades do local naquele dia;
+// passou = o dia já passou (em andamento com sobra fica com a cor de atrasado).
+export function chipDoLocal(r, passou = false) {
+  if (!r.prev) return { c: 'X', t: '·' };
+  if (r.situ === 'concluido') return { c: 'R', t: '✓' };
+  if (r.situ === 'fechado') return { c: 'N', t: '✕' };
+  if (r.situ === 'atrasado') return { c: 'A', t: '!' };
+  if (r.situ === 'andamento') return { c: r.pend && passou ? 'A' : 'P', t: `${r.feitas + r.nao}/${r.prev}` };
+  return { c: 'P', t: '' };
+}
+
+// Nomes de local "quase iguais": sem acento, maiúsculas, sem espaços nem pontuação ("Correia C5613 A" = "CORREIA C5613A").
+export const chaveParecida = nome => String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+// Locais da mesma rota escritos de jeitos diferentes (o Apontar separa um do outro).
+// itens: [{ rota, local }] · devolve [{ rota, chave, nomes: [{ nome, n }] }], o nome mais usado primeiro.
+export function locaisParecidos(itens) {
+  const mapa = new Map();
+  for (const x of itens) {
+    const nome = String(x.local || '').trim(); const ch = chaveParecida(nome); if (!ch) continue;
+    const key = x.rota + '|' + ch;
+    if (!mapa.has(key)) mapa.set(key, { rota: x.rota, chave: ch, nomes: new Map() });
+    const g = mapa.get(key); g.nomes.set(nome, (g.nomes.get(nome) || 0) + 1);
+  }
+  return [...mapa.values()].filter(g => g.nomes.size > 1)
+    .map(g => ({ rota: g.rota, chave: g.chave, nomes: [...g.nomes].map(([nome, n]) => ({ nome, n })).sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome)) }));
+}

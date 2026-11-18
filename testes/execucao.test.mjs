@@ -1,7 +1,7 @@
 // Apontar por local/equipamento (contas/execucao.js): execução = feitas ÷ previstas, situação do local e ranking por local.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resumoExec, agruparLocais, mesmoLocal, execPorLocal, faixa, fotosDoLocal } from '../public/contas/execucao.js';
+import { resumoExec, agruparLocais, mesmoLocal, execPorLocal, faixa, fotosDoLocal, chipDoLocal, chaveParecida, locaisParecidos } from '../public/contas/execucao.js';
 
 test('resumo do local: feitas ÷ previstas; feriado, sem programação e extra antiga não entram', () => {
   const r = resumoExec(['R', 'R', 'N', 'P', '_', 'E']);
@@ -43,4 +43,23 @@ test('execução por local nos indicadores: só até hoje, pior primeiro', () =>
 
 test('fotos do local = o maior número entre as atividades', () => {
   assert.equal(fotosDoLocal([0, 2, 1]), 2); assert.equal(fotosDoLocal([]), 0);
+});
+
+test('dia do local na Programação', () => {
+  assert.deepEqual(chipDoLocal(resumoExec([])), { c: 'X', t: '·' });
+  assert.deepEqual(chipDoLocal(resumoExec(['R', 'R'])), { c: 'R', t: '✓' });
+  assert.deepEqual(chipDoLocal(resumoExec(['R', 'N'])), { c: 'N', t: '✕' });
+  assert.deepEqual(chipDoLocal(resumoExec(['P', 'P'], true), true), { c: 'A', t: '!' });
+  assert.deepEqual(chipDoLocal(resumoExec(['P', 'P'])), { c: 'P', t: '' });
+  assert.deepEqual(chipDoLocal(resumoExec(['R', 'P', 'P'])), { c: 'P', t: '1/3' });
+  assert.deepEqual(chipDoLocal(resumoExec(['R', 'P'], true), true), { c: 'A', t: '1/2' });
+});
+
+test('locais com nome quase igual na mesma rota', () => {
+  const itens = [{ rota: 'R1', local: 'CORREIA C5613A' }, { rota: 'R1', local: 'CORREIA C5613A' }, { rota: 'R1', local: 'Correia C5613 A' }, { rota: 'R2', local: 'Correia c5613-a' }, { rota: 'R1', local: 'Balança' }, { rota: 'R1', local: 'BALANCA' }];
+  assert.equal(chaveParecida('Correia C5613 A'), 'CORREIAC5613A');
+  const r = locaisParecidos(itens);
+  assert.equal(r.length, 2);
+  assert.deepEqual(r[0], { rota: 'R1', chave: 'CORREIAC5613A', nomes: [{ nome: 'CORREIA C5613A', n: 2 }, { nome: 'Correia C5613 A', n: 1 }] });
+  assert.equal(r[1].chave, 'BALANCA');
 });

@@ -2004,3 +2004,29 @@ button.tr-it:hover{border-color:var(--marca)}
 .lcsalvar{position:sticky;bottom:8px;z-index:4;display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);padding:10px 12px;box-shadow:var(--e1)}
 @media (max-width:860px){.lcsalvar{bottom:calc(76px + env(safe-area-inset-bottom,0px))}.lcsalvar .btn.pri{flex:1}}
 .ef.atencao i{background:var(--st-atr)}.ef.critico i{background:var(--st-nreal)}
+/* Programação e Plano padrão por local/equipamento (mesma lógica do Apontar) */
+.fx-ok{color:var(--st-real)}.fx-atencao{color:var(--st-atr)}.fx-critico{color:var(--st-nreal)}
+.lgrp{width:100%;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;text-align:left;background:none;border:0;padding:4px 0;color:var(--ink);font:inherit;cursor:pointer}
+div.lgrp{cursor:default;grid-template-columns:minmax(0,1fr) auto}
+.lgrp .chev{width:14px;height:14px;transition:transform var(--t1) var(--ease);color:var(--ink-3)}
+.lgrp.on .chev{transform:rotate(90deg)}
+.lgrp .lg-t{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}
+.lgrp .lg-t b{font-weight:600;overflow-wrap:anywhere}
+.lgrp small{color:var(--ink-3);font-size:12px}
+.progtab tr.lrow td{background:var(--surface-2);border-top:1px solid var(--line)}
+.progtab tr.lsub td:first-child{padding-left:22px}
+.chip.lchip{font-size:11px;width:auto;min-width:30px;padding:0 3px}
+.mcard.lcardp{gap:6px}
+.mcard.msub{margin-left:14px;border-style:dashed}
+.mcard .days .chip.lchip{font-size:11px}
+.plocal-h td{background:var(--surface-2);border-top:1px solid var(--line)}
+.plocal-h .pl-cab{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.plocal-h .pl-cab input{flex:1 1 280px;max-width:460px;font-weight:600}
+#nAtiv{font:inherit;resize:vertical}
+.pgrp .pres strong{font-weight:700}.pgrp .pres strong.fx-ok{color:var(--st-real)}.pgrp .pres strong.fx-atencao{color:var(--st-atr)}.pgrp .pres strong.fx-critico{color:var(--st-nreal)}
+.plocal-h .pl-n{font-size:12px;color:var(--ink-3)}
+.plano-dias{display:inline-flex;gap:2px;font-size:11px}
+.plano-dias span{width:16px;text-align:center;border-radius:3px;color:var(--ink-3)}
+.plano-dias span.on{background:var(--st-real);color:#fff}
+.pparec{margin:0}
+.pparec li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:4px 0}

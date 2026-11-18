@@ -21,6 +21,7 @@ import { comModulo } from '../nucleo/modulos.js';
 import { abre } from '../ui/dobra.js';
 import { listasSeg } from '../contas/segcalc.js';
 import { planoNaProgramacao } from './plano-prog.js';
+import { agruparLocais, chaveParecida, locaisParecidos } from '../contas/execucao.js';
 import { vLimpeza } from './limpeza.js';
 import { vHistorico } from './historico.js';
 import { vCfFotos } from './fotos.js';
@@ -211,23 +212,50 @@ export function vPlano() {
   const ps = todas.filter(p => (!fr || p.rota === fr) && (!q || semAcento([p.id, p.ativ, p.local, p.tipo, p.rota].join(' ')).toLowerCase().includes(q)));
   const contaRota = new Map(); todas.forEach(p => contaRota.set(p.rota, (contaRota.get(p.rota) || 0) + 1));
   const rotasPlano = [...contaRota.keys()].sort((x, y) => (rts.indexOf(x) + 1 || 999) - (rts.indexOf(y) + 1 || 999) || x.localeCompare(y));
+  // Rota → local/equipamento → atividades (a mesma lógica do Apontar: o líder abre o local e marca o checklist dele).
+  const ordemRota = r => rotasPlano.indexOf(r);
+  const porRota = new Map(); for (const p of ps) { if (!porRota.has(p.rota)) porRota.set(p.rota, []); porRota.get(p.rota).push(p); }
+  const blocos = [...porRota.keys()].sort((x, y) => ordemRota(x) - ordemRota(y)).flatMap(r => agruparLocais(porRota.get(r)).map(g => ({ rota: r, ...g })));
+  const LIM = UI.more || 60; let usados = 0; const vis = [];
+  for (const g of blocos) { if (usados >= LIM) break; vis.push(g); usados += g.itens.length; }
+  const resto = ps.length - usados;
+  const parec = locaisParecidos(todas);
+  const locaisArea = [...new Set(todas.map(p => String(p.local || '').trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y));
+  const linha = p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" data-opts="rota" aria-label="Rota de ${p.id}"><option selected>${esc(p.rota)}</option></select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="Mudar só nesta atividade (para mudar o local inteiro, use o nome no cabeçalho)"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" data-opts="tipo" aria-label="Tipo de ${p.id}"><option selected>${esc(p.tipo)}</option></select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`;
+  const cabLocal = g => { const n = g.itens.length; const porDia = DAYS.map((_, k) => g.itens.filter(p => p.dias[k] === '1').length); const tot = porDia.reduce((a2, b2) => a2 + b2, 0);
+    return `<tr class="plocal-h"><td colspan="14"><div class="pl-cab"><span class="tag">${esc(g.rota)}</span><input class="in" data-plnome="${esc(a + '|' + g.rota + '|' + g.local)}" value="${esc(g.local)}" maxlength="120" aria-label="Nome do local ${esc(g.local)} (muda em todas as atividades dele)" title="Mudar aqui troca o nome em todas as atividades deste local"><span class="pl-n num">${n} ${n === 1 ? 'atividade' : 'atividades'} · ${tot} por semana</span><span class="plano-dias" aria-label="Dias com atividade">${DL.map((d, k) => `<span class="${porDia[k] ? 'on' : ''}" title="${DAYS[k]}: ${porDia[k]} atividade${porDia[k] === 1 ? '' : 's'}">${d}</span>`).join('')}</span><button type="button" class="btn sm" data-act="planoNoLocal" data-k="${esc(g.rota + '|' + g.local)}">${I.plus} Atividade neste local</button></div></td></tr>`; };
   return `<div class="filters"><label class="sel"><span>Área</span><select class="in" id="fPArea">${AREAS.map(x => `<option value="${x}" ${x === a ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label>
    <label class="sel"><span>Rota</span><select class="in" id="fPRota"><option value="">Todas as rotas (${todas.length})</option>${rotasPlano.map(r => `<option value="${esc(r)}" ${r === fr ? 'selected' : ''}>${esc(r)} (${contaRota.get(r)})</option>`).join('')}</select></label>
    <div class="sel wide"><span>Buscar</span>${caixaBusca('fPQ', UI.pQ || '', 'Atividade, local, equipamento ou código')}</div>
    ${fr || q ? `<button class="btn sm ghost" data-act="limparPF" style="align-self:flex-end">Limpar filtros</button>` : ''}
-   <span class="muted" style="align-self:flex-end">${fr || q ? `${ps.length} de ${todas.length}` : ps.length} atividades · rota, local, atividade e tipo mudam na hora; os dias e as atividades tiradas ou incluídas valem na Programação de hoje em diante, também nos meses já gerados</span></div>
-  <div class="card"><header><h2>Nova atividade</h2></header><div class="body"><form id="fNova" class="form">
+   <span class="muted" style="align-self:flex-end">${fr || q ? `${ps.length} de ${todas.length}` : ps.length} atividades em ${blocos.length} ${blocos.length === 1 ? 'local' : 'locais'} · rota, local, atividade e tipo mudam na hora; os dias e as atividades tiradas ou incluídas valem na Programação de hoje em diante, também nos meses já gerados</span></div>
+  ${parec.length ? `<div class="card"><header><h2>Locais com nome quase igual</h2><p>O Apontar mostra cada nome como um local separado. Junte para ficar um local só.</p></header><div class="body"><ul class="pparec">${parec.map(g => `<li><span class="tag">${esc(g.rota)}</span>${g.nomes.map(x => `<b>${esc(x.nome)}</b> <span class="muted num">(${x.n})</span>`).join(' · ')}${UI.confirm === 'junta:' + g.rota + '|' + g.chave ? `<span class="confirm"><button class="btn pri sm" data-act="juntarLocais" data-k="${esc(g.rota + '|' + g.chave)}">Juntar como “${esc(g.nomes[0].nome)}”</button><button class="btn sm" data-act="cancel">Não</button></span>` : `<button class="btn sm" data-act="askJuntar" data-k="${esc(g.rota + '|' + g.chave)}">Juntar</button>`}</li>`).join('')}</ul></div></div>` : ''}
+  <div class="card"><header><h2>Nova atividade</h2><p>Escolha um local que já existe (ou digite um novo) e escreva uma atividade por linha para incluir várias de uma vez.</p></header><div class="body"><form id="fNova" class="form">
    <label class="sel"><span>Rota</span><select class="in" id="nRota">${rts.map(r => `<option>${esc(r)}</option>`).join('')}</select></label>
-   <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required placeholder="Ex.: CORREIA C5613A"></label>
-   <label class="sel wide"><span>Atividade</span><input class="in" id="nAtiv" required placeholder="Ex.: Mesa impacto - Lavagem"></label>
+   <label class="sel wide"><span>Local / equipamento</span><input class="in" id="nLocal" required list="nLocais" autocomplete="off" placeholder="Ex.: CORREIA C5613A"><datalist id="nLocais">${locaisArea.map(l => `<option value="${esc(l)}"></option>`).join('')}</datalist></label>
+   <label class="sel wide"><span>Atividades <small class="muted">(uma por linha)</small></span><textarea class="in" id="nAtiv" required rows="2" placeholder="Ex.: Mesa impacto - Lavagem"></textarea></label>
    <label class="sel"><span>Tipo</span><select class="in" id="nTipo">${tipos().map(t => `<option>${esc(t)}</option>`).join('')}</select></label>
    <div class="sel"><span>Dias</span><div class="row-gap tight diastog">${DL.map((d, k) => `<button type="button" class="tog lbl-on" data-ntog="${k}" aria-pressed="${k < 5}" aria-label="${DAYS[k]}">${d}</button>`).join('')}</div></div>
    <button class="btn pri" type="submit">${I.plus} Adicionar</button>
   </form></div></div>
   <div class="card"><div class="tw"><table><thead><tr><th>ID</th><th>Rota</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th class="r">Freq.</th><th></th></tr></thead><tbody>
-  ${ps.slice(0, UI.more || 60).map(p => `<tr><td class="mono muted">${p.id}</td><td><select class="in pin" data-prota="${p.id}" data-opts="rota" aria-label="Rota de ${p.id}"><option selected>${esc(p.rota)}</option></select></td><td><input class="in pin" data-pcampo="${p.id}|local" value="${esc(p.local)}" maxlength="120" aria-label="Local de ${p.id}" title="${esc(p.local)}"></td><td><input class="in pin" data-pcampo="${p.id}|ativ" value="${esc(p.ativ)}" maxlength="120" aria-label="Atividade ${p.id}"></td><td><select class="in pin" data-pcampo="${p.id}|tipo" data-opts="tipo" aria-label="Tipo de ${p.id}"><option selected>${esc(p.tipo)}</option></select></td>${[...p.dias].map((c, k) => `<td class="c"><button class="tog" data-ptog="${p.id}|${k}" aria-pressed="${c === '1'}" aria-label="${DAYS[k]}">✓</button></td>`).join('')}<td class="r num">${[...p.dias].filter(c => c === '1').length}</td><td>${UI.confirm === 'del:' + p.id ? `<span class="confirm"><button class="btn danger" data-act="del" data-id="${p.id}">Excluir</button><button class="btn" data-act="cancel">Não</button></span>` : `<button class="btn ghost danger" data-act="askDel" data-id="${p.id}" aria-label="Excluir ${p.id}">✕</button>`}</td></tr>`).join('')}
-  </tbody></table></div>${ps.length > (UI.more || 60) ? `<div class="body pt0"><button class="btn center" style="white-space:normal;max-width:100%" data-act="more" data-n="${(UI.more || 60) + 120}">Mostrar mais ${Math.min(120, ps.length - (UI.more || 60))} (faltam ${ps.length - (UI.more || 60)})</button></div>` : ''}</div>`;
+  ${vis.map(g => cabLocal(g) + g.itens.map(linha).join('')).join('')}
+  </tbody></table></div>${resto > 0 ? `<div class="body pt0"><button class="btn center" style="white-space:normal;max-width:100%" data-act="more" data-n="${LIM + 120}">Mostrar mais (faltam ${resto})</button></div>` : ''}</div>`;
 }
+
+// Plano padrão por local: "+ Atividade neste local" já preenche a rota e o local da Nova atividade.
+acoes.planoNoLocal = (t, d) => { const [r, ...l] = d.k.split('|'); const f = $('fNova'); if (!f) return; if ($('nRota')) $('nRota').value = r; $('nLocal').value = l.join('|'); f.scrollIntoView({ block: 'center' }); $('nAtiv').focus(); };
+// Locais com nome quase igual: junta todos no nome mais usado (vale também nos meses já gerados, que apontam para o plano).
+acoes.askJuntar = (t, d) => { UI.confirm = 'junta:' + d.k; render(); };
+acoes.juntarLocais = (t, d) => {
+  if (!admDe('ativ')) return; UI.confirm = null;
+  const a = UI.pArea; const [r, ch] = d.k.split('|'); const g = locaisParecidos(DB.cache.plano[a] || []).find(x => x.rota === r && x.chave === ch); if (!g) { render(); return; }
+  const alvo = g.nomes[0].nome; let n = 0;
+  const itens = DB.cache.plano[a].map(p => (p.rota === r && p.local !== alvo && chaveParecida(p.local) === ch ? (n++, { ...p, local: alvo }) : p));
+  DB.cache.plano[a] = itens; DB.savePlano(a, itens); rebuild();
+  DB.log(`Plano padrão: locais juntados em "${alvo}" (${r}) · ${g.nomes.slice(1).map(x => x.nome).join(', ')}`, 'operacao');
+  toast(`${n} atividade${n === 1 ? '' : 's'} passaram para “${alvo}”`); render();
+};
 
 // Plano padrão: cada lista (rota, tipo) nasce só com o valor atual; as opções entram quando a pessoa toca nela.
 // Com 120 linhas, montar todas as opções de todas as listas deixava a tela com ~5 mil elementos (cerca de 1 s no celular).

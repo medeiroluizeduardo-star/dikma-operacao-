@@ -432,8 +432,16 @@ function afterRender() {
     const max = Math.max(0, ...itens.filter(p => p.id.startsWith(pre + '-')).map(p => +p.id.split('-')[1] || 0));
     const dias = [...document.querySelectorAll('[data-ntog]')].map(b => (b.getAttribute('aria-pressed') === 'true' ? '1' : '0')).join('');
     if (!dias.includes('1')) { toast('Escolha pelo menos um dia'); return; }
-    const p = { id: `${pre}-${String(max + 1).padStart(3, '0')}`, area: a, rota: $('nRota').value, local: $('nLocal').value.trim().toUpperCase(), ativ: $('nAtiv').value.trim(), tipo: $('nTipo').value, dias, ativo: true };
-    itens.push(p); DB.cache.plano[a] = itens; DB.savePlano(a, itens); DB.log(`Plano padrão: nova atividade ${p.id} · ${p.ativ}`, 'operacao'); toast(`${p.id} adicionada ao plano`); render(); import('../telas/plano-prog.js').then(m => m.planoNaProgramacao(p));
+    // Várias atividades do mesmo local de uma vez: uma por linha. O local que já existe na rota mantém o nome escrito no plano.
+    const ativs = [...new Set($('nAtiv').value.split(/\n+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+    if (!ativs.length) { toast('Escreva a atividade'); return; }
+    const rota = $('nRota').value; const digitado = $('nLocal').value.replace(/\s+/g, ' ').trim(); if (!digitado) { toast('Escolha o local'); return; }
+    const ja = itens.find(x => x.rota === rota && x.ativo !== false && String(x.local || '').trim().toUpperCase() === digitado.toUpperCase());
+    const local = ja ? String(ja.local).trim() : digitado.toUpperCase();
+    const novas = ativs.map((ativ, j) => ({ id: `${pre}-${String(max + 1 + j).padStart(3, '0')}`, area: a, rota, local, ativ, tipo: $('nTipo').value, dias, ativo: true }));
+    itens.push(...novas); DB.cache.plano[a] = itens; DB.savePlano(a, itens);
+    for (const p of novas) DB.log(`Plano padrão: nova atividade ${p.id} · ${p.ativ}`, 'operacao');
+    toast(novas.length === 1 ? `${novas[0].id} adicionada ao plano` : `${novas.length} atividades adicionadas em ${local}`); render(); import('../telas/plano-prog.js').then(m => m.planoNaProgramacao(novas));
   });
 }
 
