@@ -1948,6 +1948,21 @@ button.tr-it:hover{border-color:var(--marca)}
 /* Operação › OMs: cliente do conjunto e impressão (ou PDF) para enviar ao cliente */
 .om-cli{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 12px;border-radius:10px;background:var(--surface-2,#f3f4f6);font-size:14px;margin:0 0 10px}
 .om-cli.falta{background:#fff4e5;color:#7a4b00}
+/* Operação › OMs: documentação, prazo e a área do cliente (Ciente e Liberar) */
+.om-docs{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.om-docs i{font-style:normal;font-size:10.5px;font-weight:700;line-height:1;padding:3px 5px;border-radius:5px;background:var(--surface-2,#eef0f3);color:var(--ink-3);border:1px solid var(--line-2)}
+.om-docs i.ok{background:var(--ok-f,#e7f6ec);color:var(--ok,#1e7b3c);border-color:var(--ok,#1e7b3c)}
+.om-pz{font-size:12.5px;color:var(--ink-3);flex-basis:100%}
+.om-docf{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:0;padding:8px 10px;border:1px solid var(--line-2);border-radius:10px;min-width:0}
+.om-docf legend{font-size:13px;font-weight:700;padding:0 4px}.om-docf legend small{font-weight:400;color:var(--ink-3)}
+.om-cliv{margin:0 0 12px;padding:10px 12px;border:2px solid var(--marca);border-radius:12px;background:var(--surface)}
+.om-cliv h3{margin:0 0 8px;font-size:15px}.om-cliv h3 span{display:inline-block;min-width:22px;padding:1px 7px;border-radius:11px;background:var(--marca);color:#fff;font-size:12.5px;text-align:center}
+.om-cliv-it{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
+.om-cliv-it.fora .om-cliv-t b{color:var(--critico)}
+.om-cliv-t{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0;text-align:left;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer}
+.om-cliv-t b{font-size:14.5px;overflow-wrap:anywhere}.om-cliv-t small{color:var(--ink-3);font-size:12px;overflow-wrap:anywhere}
+.om-cliv-b{display:flex;gap:8px;flex:0 0 auto}.om-cliv-b .btn{min-height:44px;min-width:96px;font-size:15px}
+@media (max-width:640px){.om-cliv-b{flex:1 1 100%}.om-cliv-b .btn{flex:1}}
 #omImp{display:none}
 @media print{
   body.om-imprimindo>*:not(#omImp){display:none!important}

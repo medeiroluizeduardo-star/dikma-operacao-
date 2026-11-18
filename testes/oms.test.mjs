@@ -1,7 +1,7 @@
 // Operação › Solicitações de OM: contas sem tela (public/contas/oms.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { veOmsU, trataOmU, areasQueAbre, abreOmU, planejaOmU, areasQuePlaneja, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal, clienteDe, palpiteCliente } from '../public/contas/oms.js';
+import { veOmsU, trataOmU, areasQueAbre, abreOmU, planejaOmU, areasQuePlaneja, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal, clienteDe, palpiteCliente, conferirDocs, docsResumo, prazosDe, conferirPrazos, prazoOm, foraDoPrazo, ehClienteDa, PRAZO_PADRAO } from '../public/contas/oms.js';
 
 const U = {
   lider: { uid: 'lider', papel: 'lider', area: 'RECEBIMENTO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
@@ -24,12 +24,12 @@ test('quem vê, abre e trata', () => {
 });
 
 test('botões conforme a situação e a pessoa', () => {
-  assert.deepEqual(acoesDe(om(), U.lider), ['editar', 'cancelar']);
-  assert.deepEqual(acoesDe(om(), U.tec), ['editar', 'aprovar', 'devolver', 'cancelar', 'apagar']);
-  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['enviar', 'cancelar', 'apagar']);
-  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'cancelar', 'apagar']);
-  assert.deepEqual(acoesDe(om({ status: 'liberada' }), U.lider), ['finalizar'], 'o líder da área finaliza');
-  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.lider), [], 'depois de aprovada, o líder só acompanha');
+  assert.deepEqual(acoesDe(om(), U.lider), ['editar', 'cancelar', 'docs']);
+  assert.deepEqual(acoesDe(om(), U.tec), ['editar', 'aprovar', 'devolver', 'cancelar', 'docs', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['enviar', 'cancelar', 'docs', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'cancelar', 'docs', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'liberada' }), U.lider), ['finalizar', 'docs'], 'o líder da área finaliza');
+  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.lider), ['docs'], 'depois de aprovada, o líder só acompanha e marca a documentação');
   assert.deepEqual(acoesDe(om({ status: 'finalizada' }), U.tec), ['apagar'], 'quem trata apaga mesmo finalizada');
   assert.deepEqual(acoesDe(om(), U.leitor), []);
 });
@@ -106,8 +106,8 @@ test('OM planejada: técnico e líder planejam, no dia vira solicitação com um
   const y = conferirSolicitacao({ ...ok, dPrev: '2026-11-20' }, null, true); assert.equal(y.hSol, ''); assert.equal(y.dPrev, '2026-11-20');
   assert.equal(conferirSolicitacao(ok).dPrev, '2026-11-17', 'sem data prevista, vale o dia da solicitação');
   const pl = om({ status: 'planejada', solPor: 'tec', hSol: '', dPrev: '2026-11-20' });
-  assert.deepEqual(acoesDe(pl, U.lider), ['solicitar'], 'o líder da área pede no dia');
-  assert.deepEqual(acoesDe(pl, U.tec), ['editar', 'solicitar', 'cancelar', 'apagar']);
+  assert.deepEqual(acoesDe(pl, U.lider), ['solicitar', 'docs'], 'o líder da área pede no dia');
+  assert.deepEqual(acoesDe(pl, U.tec), ['editar', 'solicitar', 'cancelar', 'docs', 'apagar']);
   assert.deepEqual(acoesDe(pl, U.leitor), []);
   const m = mudar(pl, 'solicitar', { uid: 'lider', nome: 'Líder' }, { hSol: '2026-11-20T07:10' });
   assert.equal(m.status, 'solicitada'); assert.equal(m.hSol, '2026-11-20T07:10'); assert.match(m.hist[0].txt, /planejada para 20\/11/);
@@ -142,4 +142,55 @@ test('agenda: Hoje, Semana e Mês', () => {
   assert.equal(m.previstas, 7); assert.equal(m.finalizadas, 2); assert.equal(m.planejadas, 3); assert.equal(m.atrasadas, 2); assert.equal(m.aderencia, 29);
   assert.equal(m.dias['2026-11-18'].previstas, 3); assert.equal(m.semanas.reduce((a, x) => a + x.previstas, 0), 7);
   assert.equal(m.semanas[0].ini, '2026-10-26');
+});
+
+test('documentação: não obrigatória, pronto, pendente ou não precisa', () => {
+  const d = conferirDocs({ pt: 'ok', apr: 'xx', bloq: 'na', outro: 'ok' });
+  assert.deepEqual(d, { pt: 'ok', apr: 'pend', bloq: 'na', isol: 'pend', acomp: 'pend' });
+  const r = docsResumo({ docs: d }); assert.equal(r.total, 4); assert.equal(r.prontos, 1); assert.equal(r.completa, false);
+  assert.equal(docsResumo(om()), null, 'OM antiga sem a lista');
+  // A documentação não trava o caminho: aprova e envia com tudo pendente.
+  const q = { uid: 'tec', nome: 'Técnico' };
+  assert.equal(mudar(om({ docs: conferirDocs({}) }), 'aprovar', q).status, 'aprovada');
+});
+
+test('cliente: Ciente e Liberar (prioridade do cliente), técnico registra se ele liberou por fora', () => {
+  const cli = { uid: 'cliP', nome: 'Usuário Pátio', papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] };
+  const env = om({ status: 'enviada', clienteUid: 'cliP', cliente: 'Usuário Pátio', hEnvio: '2026-11-17T08:30' });
+  assert.ok(ehClienteDa(env, cli) && !ehClienteDa(env, U.tec) && !ehClienteDa(env, { ...cli, papel: 'bloqueado' }));
+  assert.deepEqual(acoesDe(env, cli), ['ciente', 'liberar']);
+  assert.deepEqual(acoesDe({ ...env, hCiente: '2026-11-17T08:40' }, cli), ['liberar'], 'ciente uma vez só');
+  assert.deepEqual(acoesDe({ ...env, status: 'aprovada' }, cli), [], 'só depois de enviada');
+  assert.deepEqual(acoesDe(env, U.leitor), [], 'outro leitor só acompanha');
+  const c = mudar(env, 'ciente', cli); assert.equal(c.cienteNome, 'Usuário Pátio'); assert.ok(c.hCiente); assert.equal(c.hist[0].s, 'ciente'); assert.equal(c.status, undefined, 'continua com o cliente');
+  const l = mudar(env, 'liberar', cli, { peloCliente: true, hLib: '2000-01-01T00:00' });
+  assert.equal(l.status, 'liberada'); assert.equal(l.libCli, true); assert.equal(l.libNome, 'Usuário Pátio'); assert.notEqual(l.hLib, '2000-01-01T00:00', 'vale a hora do toque');
+  assert.equal(l.hCiente, l.hLib, 'liberar já conta como ciente'); assert.match(l.hist[0].txt, /pelo cliente/);
+  const t = mudar(env, 'liberar', { uid: 'tec', nome: 'Técnico' }, { hLib: '2026-11-17T10:00' });
+  assert.equal(t.libCli, false); assert.equal(t.hLib, '2026-11-17T10:00'); assert.equal(t.hCiente, undefined);
+  // Avisos: liberada pelo cliente avisa quem abriu e quem trata.
+  const us = Object.fromEntries(Object.entries(U).map(([k, u]) => [k, { ...u }]));
+  const av = avisosOms([{ ...env, ...l, hist: [{ s: 'liberada', em: '2026-11-17T09:00' }] }], us, '2026-11-17', null, '2026-11-17T09:05');
+  assert.deepEqual(av.map(x => x.uid).sort(), ['adm', 'lider', 'tec']);
+});
+
+test('prazos do cliente: configuráveis, OM vermelha e aviso quando passa', () => {
+  assert.deepEqual(prazosDe(null), PRAZO_PADRAO);
+  assert.deepEqual(prazosDe({ prazos: { alta: 12, media: -1, baixa: 0 } }), { ...PRAZO_PADRAO, alta: 12, baixa: 0 });
+  assert.deepEqual(conferirPrazos({ emergencia: '4', alta: '12', media: 48, baixa: '0' }), { emergencia: 4, alta: 12, media: 48, baixa: 0 });
+  assert.throws(() => conferirPrazos({ emergencia: '1,5', alta: 1, media: 1, baixa: 1 }), e => e.campo === 'omPz_emergencia');
+  assert.throws(() => conferirPrazos({ emergencia: 1, alta: 1, media: 1, baixa: 721 }), e => e.campo === 'omPz_baixa');
+  const env = om({ status: 'enviada', prio: 'alta', clienteUid: 'cliP', hEnvio: '2026-11-17T08:00' });
+  const p = prazoOm(env, null, '2026-11-17T20:00'); assert.equal(p.horas, 24); assert.equal(p.resta, 12 * 60); assert.equal(p.fora, false);
+  assert.ok(foraDoPrazo(env, null, '2026-11-18T08:01'));
+  assert.ok(!foraDoPrazo(env, { prazos: { alta: 0 } }, '2026-11-30T08:00'), '0 = sem prazo');
+  assert.equal(prazoOm({ ...env, status: 'aprovada' }, null, '2026-11-20T08:00'), null, 'só conta depois de enviada');
+  const lib = prazoOm({ ...env, status: 'liberada', hLib: '2026-11-18T10:00' }, null, '2026-11-30T00:00'); assert.ok(lib.fora && !lib.aberta, 'liberou fora do prazo');
+  assert.equal(visaoHoje([env], '2026-11-18', null, '2026-11-18T09:00').foraPrazo, 1);
+  // Aviso: o cliente e quem trata, mesmo que a última mudança seja antiga; uma vez por envio.
+  const us = { ...Object.fromEntries(Object.entries(U).map(([k, u]) => [k, { ...u }])), cliP: { papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] } };
+  const av = avisosOms([{ ...env, hEnvio: '2026-11-10T08:00', hist: [{ s: 'enviada', em: '2026-11-10T08:00' }] }], us, '2026-11-18', null, '2026-11-18T09:00');
+  assert.deepEqual(av.filter(x => x.tipo === 'prazo').map(x => x.uid).sort(), ['adm', 'cliP', 'tec']);
+  assert.ok(av.every(x => x.chave.endsWith('|prazo|2026-11-10T08:00')));
+  assert.equal(linhasExcel([env], a => a, null)[0].length, linhasExcel([env], a => a, null)[1].length);
 });
