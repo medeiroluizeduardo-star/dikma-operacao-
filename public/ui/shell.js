@@ -126,7 +126,6 @@ function renderTela() {
   if (arq === 'MD') return tela(comModulo('MD', m => m.renderView(v)));
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
-  if (arq === 'DC') return tela(comModulo('DC', m => m.renderView(v)));
   if (arq === 'OM') return tela(comModulo('OM', m => m.renderView(v)));
   if (arq === 'FN') return tela(comModulo('FN', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
@@ -321,13 +320,13 @@ function pintarTopo(titulo, sub, filtros = '') {
   pintar('top', `${modTag()}<h1>${titulo}${sub ? `<small>${sub}</small>` : ''}</h1>${BUSCA_BTN}<div class="syncwrap" id="sync">${syncPill()}</div>`);
   pintar('fbarra', filtros);
 }
-const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cfdocs: 'POP, PT, OS, ASO, treinamentos e OMs com validade: o que venceu e o que vence em breve', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cffun: 'As funções dos colaboradores: criar, renomear, juntar e excluir, com prévia de quem muda', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
+const SUB_ADM = { cfgeral: 'Ajustes de todos os módulos, num lugar só', cfconf: 'O que falta acertar no cadastro das pessoas', cfuso: 'Quanto do plano grátis do banco está sendo usado', cferros: 'Falhas do sistema nos celulares e computadores de quem usa', cflimpa: 'Apagar dados antigos, com prévia e cópia de segurança', cfhist: 'Quem mudou o quê e quando: as últimas 500 alterações', cfproc: 'Os processos do analista e a rotina do dia: o que fazer hoje, atrasadas e próximas entregas', cffotos: 'Foto obrigatória no Apontar: mínimo, máximo e situações', cfarqfotos: 'Relatório em PowerPoint, exportação em .zip e lixeira das fotos', cffun: 'As funções dos colaboradores: criar, renomear, juntar e excluir, com prévia de quem muda', cfescala: 'Regimes, turmas e feriados: a folga é marcada sozinha pela escala', usuarios: 'Quem acessa o sistema e o perfil em cada módulo', perfis: 'Quais abas cada perfil vê e o que pode fazer, em cada módulo' };
 function renderTop() {
   const v = VIEWS.find(x => x.id === UI.view) || VIEWS[0];
   if (UI.modulo === 'administracao') {
     const sub = { ...SUB_ADM, config: `Efetivo padrão, carga e listas · ${SETS[SK].nome}`, plano: `Modelo semanal usado pelo gerador · ${SETS[SK].nome}`, gerador: `Cria as semanas do mês a partir do plano padrão · ${SETS[SK].nome}`, econfig: SUB_E.econfig, gtipos: SUB_G.gtipos, gimport: SUB_G.gimport, sgconfig: SUB_S.sgconfig }[v.id] || '';
     const sw = ['config', 'plano', 'gerador'].includes(v.id) && setsDe(ME).length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${setsDe(ME).map(k => `<button type="button" role="tab" data-cfset="${k}" aria-selected="${SK === k}">${SETS[k].curto}</button>`).join('')}</div>` : '';
-    const PR = ['PR', 'DC', 'FN'].includes(v.tela) ? modulo(v.tela) : null;
+    const PR = ['PR', 'FN'].includes(v.tela) ? modulo(v.tela) : null;
     pintarTopo(v.nome, sub, sw + seletorJuntas(v) + atalhosDe(v) + (PR ? PR.topo() : '')); return;
   }
   if (v.id === 'avisos') { pintarTopo(v.nome, 'Escolha o que receber neste aparelho, mesmo com o sistema fechado'); return; }

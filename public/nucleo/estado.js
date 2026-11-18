@@ -2,7 +2,6 @@
 // versão dos dados (DATAV), a memória da tela (UI) e o que a pessoa pode ver e fazer (módulos, áreas, itens).
 // As variáveis são lidas pelos outros arquivos; só este arquivo as troca (definirAuth, rebuild, aplicarSet, mudouDados).
 import { SETS, AREA_S, PAPEIS, weeksOfMonth, addMonth } from '../contas/cal.js';
-import { veDocsU } from '../contas/documentos.js';
 import { perfilDe, ehAdminU, escoposDe, temFichasU, marcasDe, usuarioEm, areasDoCadastro, temIndU, areasInd } from '../contas/acessos.js';
 import { podeItemU } from '../contas/permissoes.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
@@ -148,7 +147,7 @@ export const modsDe = u => {
   // Indicadores: marcado por pessoa em Usuários (acesso.indicadores), com algum escopo para ver.
   if (temIndU(u) && escoposDe(u).length) l.push('indicadores');
   // Administração: o administrador, o gestor dos módulos e, só para Documentos e OMs, o Gestor e o Coordenador da Gestão.
-  if (ehAdminU(u) || (perfilDe(u, 'administracao') === 'modulo' && ['ativ', 'equip', 'fichas', 'escala', 'seg'].some(a => gerencia(a, u))) || veDocsU(u)) l.push('administracao');
+  if (ehAdminU(u) || (perfilDe(u, 'administracao') === 'modulo' && ['ativ', 'equip', 'fichas', 'escala', 'seg'].some(a => gerencia(a, u)))) l.push('administracao');
   return l;
 };
 export const permCfg = () => DB.cache.permissoes || {};

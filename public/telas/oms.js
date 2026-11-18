@@ -1,7 +1,7 @@
 // Operação › OMs: solicitação de ordem de manutenção. O líder abre (com a hora da solicitação), o Técnico de Processo
 // aprova ou devolve, envia ao cliente e registra a hora da liberação; quem executou registra a hora da finalização.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, agoraLocal, horaBR, duracao, tempos, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel } from '../contas/oms.js';
+import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, agoraLocal, horaBR, duracao, tempos, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clientesUsados } from '../contas/oms.js';
 import { AREA_S, SETS, today } from '../contas/cal.js';
 import { etiqueta, vazio, carregando } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
@@ -29,7 +29,7 @@ const quem = () => ({ uid: ME.uid, nome: ME.nome || ME.login || '' });
 function item(o) {
   const x = tempos(o);
   const hora = o.status === 'finalizada' ? `finalizada ${horaBR(o.hFim)}${x.total != null ? ' · total ' + duracao(x.total) : ''}` : o.status === 'liberada' ? `liberada ${horaBR(o.hLib)}${x.espera != null ? ' · espera ' + duracao(x.espera) : ''}` : `solicitada ${horaBR(o.hSol)}`;
-  const meta = [o.numero ? 'OM ' + o.numero : '', areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.prio && o.prio !== 'media' ? 'prioridade ' + PRIORIDADES[o.prio].toLowerCase() : '', o.solNome, hora].filter(Boolean).map(esc).join(' · ');
+  const meta = [o.numero ? 'OM ' + o.numero : '', areaNome(o.area), o.cliente ? 'cliente ' + o.cliente : '', [o.equip, o.local].filter(Boolean).join(' · '), o.prio && o.prio !== 'media' ? 'prioridade ' + PRIORIDADES[o.prio].toLowerCase() : '', o.solNome, hora].filter(Boolean).map(esc).join(' · ');
   return `<button type="button" class="tr-it${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><span class="tr-it-s">${etiqueta(STATUS[o.status] || o.status, COR[o.status])}</span>
     <span class="tr-it-t"><b>${esc(o.titulo)}</b><small>${meta}</small>${o.status === 'devolvida' && o.motivo ? `<small class="om-mot">Devolvida: ${esc(o.motivo)}</small>` : ''}</span></button>`;
 }
@@ -100,18 +100,24 @@ function editar(id) {
 function agir(id, acao) {
   const o = achar(id); if (!o || !acoesDe(o, ME).includes(acao)) return;
   const ag = agoraLocal();
+  const cli = acao === 'enviar' ? clientesUsados(lista()) : []; const ult = cli[0] || {};
   const campos = {
     aprovar: `<label class="sel"><span>Observação (opcional)</span><input class="in" id="omObs" maxlength="${LIMITES.motivo}" autocomplete="off"></label>`,
     devolver: `<label class="sel"><span>O que precisa corrigir ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
     cancelar: `<label class="sel"><span>Motivo do cancelamento ${ob}</span><textarea class="in" id="omMotivo" rows="3" maxlength="${LIMITES.motivo}"></textarea></label>`,
-    enviar: `<div class="dc-form"><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label></div>`,
+    enviar: `<div class="dc-form"><label class="sel"><span>Cliente (setor ou área) ${ob}</span><input class="in" id="omCli" list="omCliL" maxlength="${LIMITES.cliente}" value="${esc(o.cliente || ult.cliente || '')}" placeholder="Ex.: Manutenção mecânica da Coqueria" autocomplete="off"></label><label class="sel"><span>Contato no cliente</span><input class="in" id="omCont" list="omContL" maxlength="${LIMITES.contato}" value="${esc(o.contato || ult.contato || '')}" placeholder="Nome ou ramal (opcional)" autocomplete="off"></label><datalist id="omCliL">${cli.map(c => `<option value="${esc(c.cliente)}">`).join('')}</datalist><datalist id="omContL">${[...new Set(cli.map(c => c.contato).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" placeholder="Se já tiver" autocomplete="off"></label><label class="sel"><span>Hora do envio</span><input class="in" type="datetime-local" id="omHEnv" value="${ag}"></label></div>`,
     liberar: `<div class="dc-form"><label class="sel"><span>Hora da liberação ${ob}</span><input class="in" type="datetime-local" id="omHLib" value="${ag}"></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label></div>`,
+    apagar: `<p class="m0">A OM some da lista e dos números. <b>Não dá para desfazer.</b> Se ela só não vai mais acontecer, prefira <b>Cancelar</b>, que guarda o motivo no histórico.</p>`,
     finalizar: `<label class="sel"><span>Hora da finalização ${ob}</span><input class="in" type="datetime-local" id="omHFim" value="${ag}"></label><label class="sel"><span>Como ficou (opcional)</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="Serviço feito, testado, pendências"></textarea></label>`
   }[acao];
-  const nome = { aprovar: 'Aprovar a solicitação', devolver: 'Devolver ao solicitante', cancelar: 'Cancelar a OM', enviar: 'Enviar ao cliente', liberar: 'Registrar a liberação', finalizar: 'Finalizar a OM' }[acao];
-  const btn = { aprovar: 'Aprovar', devolver: 'Devolver', cancelar: 'Cancelar a OM', enviar: 'Marcar como enviada', liberar: 'Registrar liberação', finalizar: 'Finalizar' }[acao];
+  const nome = { aprovar: 'Aprovar a solicitação', devolver: 'Devolver ao solicitante', cancelar: 'Cancelar a OM', enviar: 'Enviar ao cliente', liberar: 'Registrar a liberação', finalizar: 'Finalizar a OM', apagar: 'Apagar a OM de vez?' }[acao];
+  const btn = { aprovar: 'Aprovar', devolver: 'Devolver', cancelar: 'Cancelar a OM', enviar: 'Marcar como enviada', liberar: 'Registrar liberação', finalizar: 'Finalizar', apagar: 'Apagar de vez' }[acao];
   formSheet(nome, `${esc(o.titulo)} · ${esc(areaNome(o.area))}`, `<div class="p-form">${campos}</div>`, btn, async () => {
-    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim') }); } catch (e) { focar(e); }
+    if (acao === 'apagar') {
+      await DB.omApagar(o.id, SK);
+      DB.log(`OMs: apagada (${o.titulo}${o.numero ? ', OM ' + o.numero : ''})`, 'operacao'); toast('OM apagada'); render(); return;
+    }
+    let y; try { y = mudar(o, acao, quem(), { obs: v$('omObs'), motivo: v$('omMotivo'), numero: v$('omNum'), cliente: v$('omCli'), contato: v$('omCont'), hEnvio: v$('omHEnv'), hLib: v$('omHLib'), hFim: v$('omHFim') }); } catch (e) { focar(e); }
     await DB.omSalvar(o.id, SK, y);
     DB.log(`OMs: ${STATUS[y.status].toLowerCase()} (${o.titulo}${y.numero || o.numero ? ', OM ' + (y.numero || o.numero) : ''})`, 'operacao'); toast(STATUS[y.status]); render();
   }, { cancelarTxt: 'Voltar' });
@@ -124,13 +130,13 @@ function abrir(id) {
       ${linha('Situação', etiqueta(STATUS[o.status], COR[o.status]))}${linha('Nº OM no cliente', esc(o.numero || ''))}
       ${linha('Área', esc(areaNome(o.area)))}${linha('Equipamento / local', esc([o.equip, o.local].filter(Boolean).join(' · ')))}
       ${linha('Tipo e prioridade', esc(`${TIPOS[o.tipo] || ''} · ${PRIORIDADES[o.prio] || ''}`))}${linha('Solicitante', esc(o.solNome || ''))}
-      ${linha('Hora da solicitação', esc(horaBR(o.hSol)))}${linha('Aprovada', esc([horaBR(o.hAprov), o.aprovNome].filter(Boolean).join(' · ')))}
+      ${linha('Hora da solicitação', esc(horaBR(o.hSol)))}${linha('Aprovada', esc([horaBR(o.hAprov), o.aprovNome].filter(Boolean).join(' · ')))}${linha('Cliente', esc([o.cliente, o.contato].filter(Boolean).join(' · ')))}
       ${linha('Enviada ao cliente', esc(horaBR(o.hEnvio)))}${linha('Hora da liberação', esc(horaBR(o.hLib)))}${linha('Hora da finalização', esc(horaBR(o.hFim)))}
       ${linha('Espera até liberar', esc(duracao(x.espera)))}${linha('Execução', esc(duracao(x.execucao)))}
       ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}${o.motivo ? `<div class="dc-full"><dt>${o.status === 'cancelada' ? 'Motivo do cancelamento' : 'O que corrigir'}</dt><dd>${esc(o.motivo)}</dd></div>` : ''}
       ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}</dl>
     ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}</li>`).join('')}</ol>` : ''}
-    ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['aprovar', 'enviar', 'liberar', 'finalizar'].includes(a) ? ' pri' : a === 'cancelar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', aprovar: 'Aprovar', devolver: 'Devolver', enviar: 'Enviar ao cliente', liberar: 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar' }[a])}</button>`).join('')}</div>` : ''}`;
+    ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['aprovar', 'enviar', 'liberar', 'finalizar'].includes(a) ? ' pri' : a === 'cancelar' || a === 'apagar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', aprovar: 'Aprovar', devolver: 'Devolver', enviar: 'Enviar ao cliente', liberar: 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
   formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))}`, html, 'Fechar', async () => {}, {});
   const f = document.getElementById('fSheet'); if (!f) return;
   const c = f.querySelector('[data-close]'); if (c) c.hidden = true;
