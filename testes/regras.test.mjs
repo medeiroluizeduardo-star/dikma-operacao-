@@ -1658,6 +1658,41 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(cfg('tecPatio'), { prazos: { alta: 4 } }, { merge: true }), 'só o administrador muda os prazos');
 });
 
+test('OMs: o cliente recusa ou cancela com motivo; observações no histórico', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const ref = (u, id) => doc(db(u), 'oms', id);
+  const nova = (u, x = {}) => ({ conj: 'patio', area: 'PREPARAÇÃO', titulo: 'Troca de rolete', local: 'Correia 3', tipo: 'corretiva', prio: 'alta', status: 'solicitada', solPor: u, solNome: 'X', hSol: '2026-11-17T07:40', hist: [], ...mk(u), ...x });
+  const env = { status: 'enviada', clienteUid: 'cliPatio', cliente: 'Usuário Pátio', hEnvio: '2026-11-17T09:00' };
+  const h1 = [{ s: 'recusada', em: '2026-11-17T09:30', por: 'cliPatio', txt: 'Falta a APR', obs: 'Amanhã às 7h' }];
+  for (const id of ['r1', 'r2', 'r3']) {
+    await assertSucceeds(setDoc0(ref('supPatio', id), nova('supPatio')), 'abre ' + id);
+    await assertSucceeds(setDoc0(ref('opGestorSo', id), { ...env, ...mk('opGestorSo') }, { merge: true }), 'envia ' + id);
+  }
+  // Observação avulsa: o cliente, o líder da área e quem trata escrevem no histórico sem mudar a situação.
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r1'), { hist: [{ s: 'observacao', em: '2026-11-17T09:10', obs: 'Só depois das 14h' }], ...mk('cliPatio') }, { merge: true }), 'cliente deixa observação');
+  await assertSucceeds(setDoc0(ref('supPatio', 'r1'), { hist: [{ s: 'observacao', em: '2026-11-17T09:12', obs: 'Ok' }], ...mk('supPatio') }, { merge: true }), 'líder da área deixa observação');
+  await assertFails(setDoc0(ref('cliPatio', 'r1'), { hist: [], titulo: 'Outro serviço', ...mk('cliPatio') }, { merge: true }), 'o cliente não muda o serviço');
+  // Recusa pelo cliente.
+  await assertFails(setDoc0(ref('cliPatio', 'r1'), { status: 'recusada', motivo: 'Não', hCanc: '2026-11-17T09:30', cancNome: 'U', cancCli: true, hist: h1, ...mk('cliPatio') }, { merge: true }), 'recusa sem motivo');
+  await assertFails(setDoc0(ref('cliPatio', 'r1'), { status: 'recusada', motivo: 'Falta a APR', hCanc: '2026-11-17T09:30', cancNome: 'U', cancCli: false, hist: h1, ...mk('cliPatio') }, { merge: true }), 'recusa do cliente fica marcada como dele');
+  await assertFails(setDoc0(ref('cliPatio', 'r1'), { status: 'recusada', motivo: 'Falta a APR', hCanc: '2026-11-17T09:30', cancCli: true, numero: '999', hist: h1, ...mk('cliPatio') }, { merge: true }), 'ao recusar, não muda outros campos');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r1'), { status: 'recusada', motivo: 'Falta a APR', hCanc: '2026-11-17T09:30', cancNome: 'Usuário Pátio', cancCli: true, hist: h1, ...mk('cliPatio') }, { merge: true }), 'o cliente recusa');
+  await assertFails(setDoc0(ref('cliPatio', 'r1'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, ...mk('cliPatio') }, { merge: true }), 'recusada: o cliente não libera sem o reenvio');
+  await assertSucceeds(setDoc0(ref('supPatio', 'r1'), { docs: { pt: 'ok', apr: 'ok' }, ...mk('supPatio') }, { merge: true }), 'recusada: o líder da área ajusta a documentação');
+  await assertSucceeds(setDoc0(ref('tecPatio', 'r1'), { status: 'enviada', motivo: '', hCanc: '', cancNome: '', cancCli: false, hCiente: '', cienteNome: '', hEnvio: '2026-11-17T11:00', ...mk('tecPatio') }, { merge: true }), 'o técnico reenvia');
+  // Cancelamento pelo cliente: com a OM com ele e já liberada.
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r2'), { status: 'cancelada', motivo: 'Serviço não precisa mais', hCanc: '2026-11-17T09:40', cancNome: 'Usuário Pátio', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'o cliente cancela a enviada');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, libNome: 'Usuário Pátio', ...mk('cliPatio') }, { merge: true }), 'libera');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { hist: [{ s: 'observacao', em: '2026-11-17T10:05', obs: 'Área isolada' }], ...mk('cliPatio') }, { merge: true }), 'liberada: o cliente deixa observação');
+  await assertFails(setDoc0(ref('cliPatio', 'r3'), { status: 'recusada', motivo: 'Mudou de ideia', hCanc: '2026-11-17T10:10', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'liberada não se recusa (cancela)');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { status: 'cancelada', motivo: 'Equipamento entrou em produção', hCanc: '2026-11-17T10:10', cancNome: 'Usuário Pátio', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'o cliente cancela a liberada');
+  await assertFails(setDoc0(ref('cliPatio', 'r2'), { status: 'enviada', ...mk('cliPatio') }, { merge: true }), 'cancelada: o cliente não reabre');
+  // Quem abriu cancela, mas não em nome do cliente.
+  await assertSucceeds(setDoc0(ref('supPatio', 'r4'), nova('supPatio')), 'abre r4');
+  await assertFails(setDoc0(ref('supPatio', 'r4'), { status: 'cancelada', motivo: 'Aberta em dobro', cancCli: true, ...mk('supPatio') }, { merge: true }), 'quem abriu não marca como do cliente');
+  await assertSucceeds(setDoc0(ref('supPatio', 'r4'), { status: 'cancelada', motivo: 'Aberta em dobro', hCanc: '2026-11-17T08:00', cancNome: 'X', cancCli: false, ...mk('supPatio') }, { merge: true }), 'quem abriu cancela');
+});
+
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {
   const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
   const ref = (u, id = 'dc1') => doc(db(u), 'documentos', id);

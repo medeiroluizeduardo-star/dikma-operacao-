@@ -301,7 +301,7 @@ export function planejar(d) {
   }
   // 11) Operação › Solicitações de OM: solicitação nova → quem trata no conjunto (Técnico de Processo, coordenador, gestor,
   //     administrador); enviada → o usuário do cliente do conjunto; devolvida e liberada → quem abriu (liberada pelo cliente:
-//     também quem trata); fora do prazo com o cliente → o cliente e quem trata. Na hora (rotina de hora em hora), uma vez por mudança.
+//     também quem trata); recusada ou cancelada pelo cliente → quem abriu e quem trata; fora do prazo com o cliente → o cliente e quem trata. Na hora (rotina de hora em hora), uma vez por mudança.
   if ((d.oms || []).length) {
     const porPessoa = new Map();
     for (const x of avisosOms(d.oms, d.usuarios, hoje, d.omsCfg || null)) {
@@ -314,8 +314,10 @@ export function planejar(d) {
       const titulo = tipo === 'nova' ? (n === 1 ? `OM para aprovar: ${l[0].titulo}` : `${n} solicitações de OM para aprovar`)
         : tipo === 'enviada' ? (n === 1 ? `OM do Dikma para liberar: ${l[0].titulo}` : `${n} OMs do Dikma para liberar`)
         : tipo === 'prazo' ? (n === 1 ? `OM fora do prazo com o cliente: ${l[0].titulo}` : `${n} OMs fora do prazo com o cliente`)
+        : tipo === 'recusada' ? (n === 1 ? `OM recusada pelo cliente: ${l[0].titulo}` : `${n} OMs recusadas pelo cliente`)
+        : tipo === 'cancelada' ? (n === 1 ? `OM cancelada pelo cliente: ${l[0].titulo}` : `${n} OMs canceladas pelo cliente`)
         : tipo === 'devolvida' ? (n === 1 ? `OM devolvida: ${l[0].titulo}` : `${n} OMs devolvidas para corrigir`) : (n === 1 ? `OM liberada: ${l[0].titulo}` : `${n} OMs liberadas para executar`);
-      const corpo = l.slice(0, 3).map(o => [o.equip || o.local, tipo === 'devolvida' ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
+      const corpo = l.slice(0, 3).map(o => [o.equip || o.local, ['devolvida', 'recusada', 'cancelada'].includes(tipo) ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
       msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms` });
     }
   }
