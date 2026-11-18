@@ -1620,6 +1620,16 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(deleteDoc(ref('supPatio')), 'quem abriu não apaga');
   await assertFails(deleteDoc(ref('tecBat')), 'técnico de outro conjunto não apaga');
   await assertSucceeds(deleteDoc(ref('opGestorSo')), 'quem trata no conjunto apaga');
+  // OM planejada (data prevista): quem abre e quem trata cadastram; no dia, o líder da área transforma em solicitação.
+  const plan = (u, x = {}) => nova(u, { status: 'planejada', hSol: '', dPrev: '2026-11-20', ...x });
+  await assertSucceeds(setDoc0(ref('opGestorSo', 'pl1'), plan('opGestorSo')), 'quem trata planeja');
+  await assertSucceeds(setDoc0(ref('supPatio', 'pl2'), plan('supPatio')), 'supervisor planeja na área dele');
+  await assertFails(setDoc0(ref('supPatio', 'pl3'), plan('supPatio', { area: 'BATERIA 1' })), 'não planeja fora da área');
+  await assertFails(setDoc0(ref('supPatio', 'pl3'), plan('supPatio', { dPrev: '2026-11-200' })), 'data prevista com limite');
+  await assertSucceeds(setDoc0(ref('supPatio', 'pl2'), { dPrev: '2026-11-21', ...mk('supPatio') }, { merge: true }), 'quem cadastrou muda a data prevista');
+  await assertFails(setDoc0(ref('supPatio', 'pl1'), { status: 'solicitada', hSol: '2026-11-20T07:00', titulo: 'Mudou o serviço', ...mk('supPatio') }, { merge: true }), 'o líder da área só pede, não muda o serviço');
+  await assertSucceeds(setDoc0(ref('supPatio', 'pl1'), { status: 'solicitada', hSol: '2026-11-20T07:00', hist: [], ...mk('supPatio') }, { merge: true }), 'o líder da área transforma a planejada em solicitação');
+  await assertFails(setDoc0(ref('supPatio', 'pl1'), { status: 'planejada', ...mk('supPatio') }, { merge: true }), 'solicitada não volta a planejada por quem não trata');
 });
 
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {

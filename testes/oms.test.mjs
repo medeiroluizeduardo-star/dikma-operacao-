@@ -1,7 +1,7 @@
 // Operação › Solicitações de OM: contas sem tela (public/contas/oms.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { veOmsU, trataOmU, areasQueAbre, abreOmU, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal, clienteDe, palpiteCliente } from '../public/contas/oms.js';
+import { veOmsU, trataOmU, areasQueAbre, abreOmU, planejaOmU, areasQuePlaneja, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, acoesDe, conferirSolicitacao, mudar, tempos, duracao, minutosEntre, filtrar, resumo, linhasExcel, avisosOms, agoraLocal, clienteDe, palpiteCliente } from '../public/contas/oms.js';
 
 const U = {
   lider: { uid: 'lider', papel: 'lider', area: 'RECEBIMENTO', acesso: { operacao: 'lider' }, escopos: ['patio'] },
@@ -95,4 +95,51 @@ test('cliente: usuário do conjunto, obrigatório no envio, sugestão pelo nome 
   const av = avisosOms([env], { cliP: { papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] } }, hoje);
   assert.deepEqual(av.map(x => [x.uid, x.tipo]), [['cliP', 'enviada']]);
   assert.equal(filtrar([env], { q: 'usuário pátio' }).length, 1);
+});
+
+test('OM planejada: técnico e líder planejam, no dia vira solicitação com um toque', () => {
+  assert.ok(planejaOmU(U.tec, 'patio') && planejaOmU(U.lider, 'patio', 'RECEBIMENTO') && !planejaOmU(U.leitor, 'patio') && !planejaOmU(U.tecBat, 'patio'));
+  assert.equal(areasQuePlaneja(U.tec, 'patio'), null, 'técnico planeja em todas as áreas do conjunto');
+  assert.deepEqual(areasQuePlaneja(U.lider, 'patio'), ['RECEBIMENTO']);
+  const ok = { area: 'RECEBIMENTO', titulo: 'Lubrificar mancais', local: 'Correia 2', hSol: '2026-11-17T07:40' };
+  assert.throws(() => conferirSolicitacao({ ...ok, dPrev: '' }, null, true), e => e.campo === 'omDPrev');
+  const y = conferirSolicitacao({ ...ok, dPrev: '2026-11-20' }, null, true); assert.equal(y.hSol, ''); assert.equal(y.dPrev, '2026-11-20');
+  assert.equal(conferirSolicitacao(ok).dPrev, '2026-11-17', 'sem data prevista, vale o dia da solicitação');
+  const pl = om({ status: 'planejada', solPor: 'tec', hSol: '', dPrev: '2026-11-20' });
+  assert.deepEqual(acoesDe(pl, U.lider), ['solicitar'], 'o líder da área pede no dia');
+  assert.deepEqual(acoesDe(pl, U.tec), ['editar', 'solicitar', 'cancelar', 'apagar']);
+  assert.deepEqual(acoesDe(pl, U.leitor), []);
+  const m = mudar(pl, 'solicitar', { uid: 'lider', nome: 'Líder' }, { hSol: '2026-11-20T07:10' });
+  assert.equal(m.status, 'solicitada'); assert.equal(m.hSol, '2026-11-20T07:10'); assert.match(m.hist[0].txt, /planejada para 20\/11/);
+  // Aviso de solicitação nova: quem trata, menos quem acabou de pedir; o técnico que planejou também recebe.
+  const av = avisosOms([{ ...pl, ...m }], Object.fromEntries(Object.entries(U).map(([k, u]) => [k, { ...u }])), '2026-11-20');
+  assert.deepEqual(av.map(x => x.uid).sort(), ['adm', 'tec']);
+  assert.ok(filtrar([pl], { status: 'abertas' }).length === 1, 'planejada conta como em aberto');
+});
+
+test('agenda: Hoje, Semana e Mês', () => {
+  const hj = '2026-11-18';
+  const l = [
+    om({ id: 'p1', status: 'planejada', hSol: '', dPrev: '2026-11-18', prio: 'baixa' }),
+    om({ id: 'p0', status: 'planejada', hSol: '', dPrev: '2026-11-17', prio: 'alta' }),
+    om({ id: 'p9', status: 'planejada', hSol: '', dPrev: '2026-11-21' }),
+    om({ id: 'e', status: 'enviada', hSol: '2026-11-18T07:00', dPrev: '2026-11-18' }),
+    om({ id: 'li', status: 'liberada', hSol: '2026-11-16T07:00' }),
+    om({ id: 'f', status: 'finalizada', hSol: '2026-11-18T06:00', hFim: '2026-11-18T09:00', dPrev: '2026-11-18' }),
+    om({ id: 'fv', status: 'finalizada', hSol: '2026-11-03T06:00', hFim: '2026-11-03T09:00', dPrev: '2026-11-03' }),
+    om({ id: 'c', status: 'cancelada', dPrev: '2026-11-18' })
+  ];
+  assert.equal(diaDe(l[4]), '2026-11-16', 'antiga sem data prevista: dia da solicitação');
+  assert.ok(atrasada(l[1], hj) && atrasada(l[4], hj) && !atrasada(l[0], hj) && !atrasada(l[6], hj));
+  const h = visaoHoje(l, hj);
+  assert.deepEqual([h.pedir, h.comCliente, h.liberadas, h.atrasadas], [2, 1, 1, 2]);
+  assert.deepEqual(h.lista.map(o => o.id), ['p0', 'li', 'e', 'p1', 'f'], 'atrasadas primeiro, finalizadas de hoje no fim, planejadas futuras fora');
+  const s = visaoSemana(l, '2026-11-20');
+  assert.equal(s[0].dia, '2026-11-16'); assert.equal(s.length, 7);
+  assert.deepEqual(s[2].oms.map(o => o.id), ['e', 'f', 'p1'], 'quarta: sem a cancelada, por prioridade e situação');
+  assert.deepEqual(s[5].oms.map(o => o.id), ['p9'], 'sábado');
+  const m = visaoMes(l, '2026-11', hj);
+  assert.equal(m.previstas, 7); assert.equal(m.finalizadas, 2); assert.equal(m.planejadas, 3); assert.equal(m.atrasadas, 2); assert.equal(m.aderencia, 29);
+  assert.equal(m.dias['2026-11-18'].previstas, 3); assert.equal(m.semanas.reduce((a, x) => a + x.previstas, 0), 7);
+  assert.equal(m.semanas[0].ini, '2026-10-26');
 });
