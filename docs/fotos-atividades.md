@@ -38,10 +38,10 @@ Arquivos:
   contam para o mínimo.
 - **Lista do Apontar e Programação**: cada atividade com foto mostra 📷n; tocar abre as miniaturas e, tocando numa, a
   foto grande (lida de `evidenciasArquivo`). Quem aponta pode **adicionar foto** a um apontamento já feito, até o máximo.
-- **Apagar foto** (líder da área e administrador; os outros perfis não veem o botão): nas fotos da atividade, cada
+- **Apagar foto** (quem aponta na área, ou seja líder, supervisor, coordenador ou gestor da Operação, e o administrador; os outros perfis não veem o botão): nas fotos da atividade, cada
   miniatura tem **Apagar**, que pede confirmação. Apaga o documento leve e a foto completa e diminui a contagem `ft` da
   semana no **mesmo lote** (`DB.apagarFotoAtividade`; espera o servidor, sem sinal dá erro). A foto que vale para várias
-  atividades ("Marcar restantes") sai de todas (a tela avisa). O líder só apaga a foto **No banco** (ainda não
+  atividades ("Marcar restantes") sai de todas (a tela avisa). Quem aponta só apaga a foto **No banco** (ainda não
   exportada); o administrador apaga qualquer uma. Fica registrado no Histórico.
 - **Queda zero**: não fica nas fotos nem no Apontar. Tem aba própria em Operação › Queda zero
   (`public/telas/queda-zero.js`). Os registros antigos feitos junto da foto aparecem lá, no dia deles.

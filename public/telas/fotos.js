@@ -3,7 +3,7 @@
 // As contas ficam em fotos.js; a gravação (um lote só com o apontamento), em data.js › apontarComFotos.
 import { DAYS, SETS, ddmm, setDaArea } from '../contas/cal.js';
 import { DB, TODAY, esc, title, n0, $ } from '../nucleo/base.js';
-import { ME, PL, UI, SK, canEdit, isAdmin, perfil, setsDe } from '../nucleo/estado.js';
+import { ME, PL, UI, SK, canEdit, isAdmin, setsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { sheet, toast } from '../ui/janelas.js';
@@ -118,9 +118,9 @@ const achar = ref => { const p = String(ref).split('|'); const k = +p.pop(), i =
 acoes.verFotos = (t, d) => { const x = achar(d.k); if (x) verFotosCel(x.doc, x.i, x.k); };
 // Pode juntar fotos a um apontamento já feito (até o máximo): quem aponta na área.
 const podeJuntar = (doc, i, k) => canEdit(doc.area) && 'RNE'.includes(doc.d[i][k]) && fotosDaCel(doc, doc.ids[i], k) < cfgF().max;
-// Apagar foto (com confirmação): o administrador e o líder da área; o líder só a foto que ainda não foi exportada
-// (a exportada faz parte do arquivo da empresa). As regras do banco conferem o mesmo.
-const podeApagarFoto = (doc, x) => isAdmin() || (perfil('operacao') === 'lider' && canEdit(doc.area) && statusFoto(x) === 'banco');
+// Apagar foto (com confirmação): o administrador e quem aponta na área (líder, supervisor, coordenador, gestor); quem
+// aponta só a foto que ainda não foi exportada (a exportada faz parte do arquivo da empresa). As regras conferem o mesmo.
+const podeApagarFoto = (doc, x) => isAdmin() || (canEdit(doc.area) && statusFoto(x) === 'banco');
 export const verFotosCel = (doc, i, k) => verFotosGrupo(doc, [i], k);
 // Fotos do local/equipamento (Apontar por local): as fotos de todas as atividades do local no dia, sem repetir.
 export const verFotosLocal = (doc, is, k, local) => verFotosGrupo(doc, is, k, local);
