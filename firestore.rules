@@ -495,23 +495,30 @@ service cloud.firestore {
     // Ciente (só a hora e o nome) e em Liberar (vira liberada, marcada libCli).
     function omTrata(e) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['tecnico', 'coordenador', 'gestor']); }
     function omAbre(e, area) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && areaEm(pEm('operacao'), area)); }
+    // Campos da OM. Na criação, confere todos; na alteração, só os que mudam (bem mais barato: a regra das OMs está perto do
+    // limite de 1000 expressões do Firestore).
+    function omCampos() { return ['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'dPrev', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'clienteUid', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor', 'docs', 'hCiente', 'cienteNome', 'libNome', 'libCli']; }
     function omOk(d) {
-      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'dPrev', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'clienteUid', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor', 'docs', 'hCiente', 'cienteNome', 'libNome', 'libCli'])
-        && d.conj in ['patio', 'bateria'] && d.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada', 'finalizada', 'cancelada']
+      return d.conj in ['patio', 'bateria'] && d.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada', 'finalizada', 'cancelada']
         && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 200 && d.area is string && d.area.size() <= 40
         && d.get('tipo', 'corretiva') in ['corretiva', 'preventiva', 'melhoria', 'seguranca'] && d.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
         && tTxt(d, 'local', 120) && tTxt(d, 'equip', 80) && tTxt(d, 'desc', 1000) && tTxt(d, 'numero', 40) && tTxt(d, 'motivo', 400) && tTxt(d, 'obsFim', 600)
         && tTxt(d, 'hSol', 16) && tTxt(d, 'dPrev', 10) && tTxt(d, 'hAprov', 16) && tTxt(d, 'hEnvio', 16) && tTxt(d, 'hLib', 16) && tTxt(d, 'hFim', 16)
         && tTxt(d, 'solNome', 150) && tTxt(d, 'aprovNome', 150) && tTxt(d, 'criadoEm', 40) && tTxt(d, 'cliente', 120) && tTxt(d, 'clienteUid', 128) && tTxt(d, 'contato', 120)
-        && d.get('hist', []) is list && d.get('hist', []).size() <= 60
-        && tTxt(d, 'hCiente', 16) && tTxt(d, 'cienteNome', 150) && tTxt(d, 'libNome', 150) && d.get('libCli', false) is bool
+        && d.get('hist', []) is list && d.get('hist', []).size() <= 60;
+    }
+    // Campos da parte 2 (documentação, ciente, quem liberou): conferidos só quando mudam, para a regra não passar do
+    // limite de 1000 expressões do Firestore.
+    function omExtraOk(d) {
+      return tTxt(d, 'hCiente', 16) && tTxt(d, 'cienteNome', 150) && tTxt(d, 'libNome', 150) && d.get('libCli', false) is bool
         && omDocsOk(d.get('docs', {}));
     }
-    function omDocV(m, k) { return !(k in m) || m[k] in ['pend', 'ok', 'na']; }
-    function omDocsOk(m) {
-      return m is map && m.keys().hasOnly(['pt', 'apr', 'bloq', 'isol', 'acomp'])
-        && omDocV(m, 'pt') && omDocV(m, 'apr') && omDocV(m, 'bloq') && omDocV(m, 'isol') && omDocV(m, 'acomp');
+    // Quem abriu, ao corrigir: da parte 2 só a documentação (ciente e liberação ficam como estão).
+    function omSoDocs() {
+      return omDocsOk(request.resource.data.get('docs', {})) && request.resource.data.get('hCiente', '') == resource.data.get('hCiente', '')
+        && request.resource.data.get('libCli', false) == resource.data.get('libCli', false) && request.resource.data.get('libNome', '') == resource.data.get('libNome', '');
     }
+    function omDocsOk(m) { return m is map && m.keys().hasOnly(['pt', 'apr', 'bloq', 'isol', 'acomp']) && m.values().hasOnly(['pend', 'ok', 'na']); }
     // Prazo de resposta do cliente por prioridade, em horas inteiras de 0 (sem prazo) a 720.
     function omPzV(m, k) { return !(k in m) || (m[k] is int && m[k] >= 0 && m[k] <= 720); }
     function omPrazosOk(m) {
@@ -528,23 +535,30 @@ service cloud.firestore {
     }
     match /oms/{id} {
       allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
-      allow create: if marcaOk() && omOk(request.resource.data) && request.resource.data.solPor == request.auth.uid
+      // Começa pelo barato (documento novo, situação e autor): a gravação com merge confere a criação e a alteração na mesma
+      // conta de 1000 expressões.
+      allow create: if resource == null && request.resource.data.status in ['solicitada', 'planejada'] && request.resource.data.solPor == request.auth.uid && marcaOk()
+        && request.resource.data.keys().hasOnly(omCampos()) && omOk(request.resource.data) && omExtraOk(request.resource.data)
         && ((request.resource.data.status == 'solicitada' && omAbre(request.resource.data.conj, request.resource.data.area))
           || (request.resource.data.status == 'planejada' && (omAbre(request.resource.data.conj, request.resource.data.area) || omTrata(request.resource.data.conj))));
-      allow update: if marcaOk() && omOk(request.resource.data)
+      // As duas primeiras opções (documentação e cliente) vêm antes e começam pelo que é barato de conferir: a regra das OMs
+      // está perto do limite de 1000 expressões do Firestore.
+      // Os campos da parte 2 (documentação, ciente, quem liberou) são conferidos só no caminho que os grava: a regra das OMs
+      // está perto do limite de 1000 expressões do Firestore.
+      allow update: if marcaOk() && request.resource.data.keys().hasOnly(omCampos()) && omOk(request.resource.data)
         && request.resource.data.conj == resource.data.conj && request.resource.data.solPor == resource.data.solPor
-        && (omTrata(resource.data.conj)
+        && ((omTrata(resource.data.conj) && omExtraOk(request.resource.data))
           || (resource.data.solPor == request.auth.uid && ativo() && resource.data.status in ['planejada', 'solicitada', 'devolvida']
               && (request.resource.data.status in ['solicitada', 'cancelada'] || (resource.data.status == 'planejada' && request.resource.data.status == 'planejada'))
-              && omAbre(resource.data.conj, request.resource.data.area))
+              && omAbre(resource.data.conj, request.resource.data.area) && omSoDocs())
           || (resource.data.status == 'planejada' && request.resource.data.status == 'solicitada' && omAbre(resource.data.conj, resource.data.area)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hSol', 'hist', 'atualizadoEm', 'atualizadoPor']))
           || (resource.data.status == 'liberada' && request.resource.data.status == 'finalizada' && omAbre(resource.data.conj, resource.data.area)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hFim', 'obsFim', 'hist', 'atualizadoEm', 'atualizadoPor']))
-          || (resource.data.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'] && request.resource.data.status == resource.data.status
-              && omAbre(resource.data.conj, resource.data.area)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['docs', 'atualizadoEm', 'atualizadoPor']))
-          || (resource.data.status == 'enviada' && ativo() && resource.data.get('clienteUid', '') == request.auth.uid
+          || (request.resource.data.status == resource.data.status && resource.data.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada']
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['docs', 'atualizadoEm', 'atualizadoPor']) && omAbre(resource.data.conj, resource.data.area)
+              && omDocsOk(request.resource.data.docs))
+          || (resource.data.status == 'enviada' && resource.data.get('clienteUid', '') == request.auth.uid && ativo() && omExtraOk(request.resource.data)
               && ((request.resource.data.status == 'enviada'
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hCiente', 'cienteNome', 'hist', 'atualizadoEm', 'atualizadoPor']))
                 || (request.resource.data.status == 'liberada' && request.resource.data.get('libCli', false) == true
