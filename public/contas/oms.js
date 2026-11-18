@@ -1,16 +1,18 @@
 // Operação › OMs: solicitação de ordem de manutenção, do líder ao cliente. Contas sem tela.
-// Caminho: o líder (ou supervisor, coordenador, gestor) abre a solicitação → o Técnico de Processo aprova ou devolve →
+// Caminho: a OM pode nascer como plano ("Planejada", com a data prevista), cadastrada pelo líder ou pelo técnico, e no dia
+// vira solicitação com um toque. O líder (ou supervisor, coordenador, gestor) abre a solicitação → o Técnico de Processo aprova ou devolve →
 // envia ao cliente → registra a liberação → quem executou (líder da área ou o técnico) finaliza.
 // Usado pela tela (telas/oms.js), pelos testes (testes/oms.test.mjs) e pela rotina dos avisos no celular.
 import { perfilDe, ehAdminU, escoposDe, areasDoCadastro } from './acessos.js';
+import { add, weekOf } from './cal.js';
 
 export const STATUS = {
-  solicitada: 'Aguardando técnico', devolvida: 'Devolvida', aprovada: 'Aprovada', enviada: 'Com o cliente',
+  planejada: 'Planejada', solicitada: 'Aguardando técnico', devolvida: 'Devolvida', aprovada: 'Aprovada', enviada: 'Com o cliente',
   liberada: 'Liberada', finalizada: 'Finalizada', cancelada: 'Cancelada'
 };
 // Situação do selo na lista (ui/padrao.js › etiqueta).
-export const COR = { solicitada: 'atencao', devolvida: 'critico', aprovada: 'info', enviada: 'info', liberada: 'atencao', finalizada: 'ok', cancelada: 'neutro' };
-export const ABERTAS = ['solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'];
+export const COR = { planejada: 'neutro', solicitada: 'atencao', devolvida: 'critico', aprovada: 'info', enviada: 'info', liberada: 'atencao', finalizada: 'ok', cancelada: 'neutro' };
+export const ABERTAS = ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'];
 export const PRIORIDADES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', emergencia: 'Emergência' };
 export const TIPOS = { corretiva: 'Corretiva', preventiva: 'Preventiva', melhoria: 'Melhoria', seguranca: 'Segurança' };
 export const LIMITES = { titulo: 200, local: 120, equip: 80, desc: 1000, motivo: 400, numero: 40, obs: 600, hist: 60, cliente: 120, contato: 120 };
@@ -32,18 +34,24 @@ export function areasQueAbre(u, conj) {
   return ['gestor', 'coordenador'].includes(p) ? null : areasDoCadastro(u, p === 'supervisor');
 }
 export const abreOmU = (u, conj, area) => { const l = areasQueAbre(u, conj); return l === null || (Array.isArray(l) && (area ? l.includes(area) : l.length > 0)); };
+// Quem planeja (cadastra a OM com a data prevista): quem abre e também quem trata (o Técnico de Processo planeja
+// em todas as áreas do conjunto, mas não abre a solicitação em nome do líder).
+export const planejaOmU = (u, conj, area) => abreOmU(u, conj, area) || trataOmU(u, conj);
+export const areasQuePlaneja = (u, conj) => (trataOmU(u, conj) ? null : areasQueAbre(u, conj));
 
 // O que esta pessoa pode fazer nesta OM agora (botões da tela; as regras do banco conferem o mesmo).
 export function acoesDe(om, u) {
   const trata = trataOmU(u, om.conj); const dono = !!u && om.solPor === u.uid;
   const daArea = abreOmU(u, om.conj, om.area);
   const a = [];
-  if ((dono || trata) && ['solicitada', 'devolvida'].includes(om.status)) a.push('editar');
+  if ((dono || trata) && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) a.push('editar');
+  // No dia (ou antes), a planejada vira solicitação: quem cadastrou, quem trata ou o líder da área.
+  if ((dono || trata || daArea) && om.status === 'planejada') a.push('solicitar');
   if (trata && om.status === 'solicitada') a.push('aprovar', 'devolver');
   if (trata && om.status === 'aprovada') a.push('enviar');
   if (trata && om.status === 'enviada') a.push('liberar');
   if ((trata || daArea) && om.status === 'liberada') a.push('finalizar');
-  if ((dono && ['solicitada', 'devolvida'].includes(om.status)) || (trata && ABERTAS.includes(om.status))) a.push('cancelar');
+  if ((dono && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) || (trata && ABERTAS.includes(om.status))) a.push('cancelar');
   // Apagar de vez (aberta por engano, repetida): quem trata no conjunto e o administrador, em qualquer situação.
   if (trata) a.push('apagar');
   return a;
@@ -62,6 +70,8 @@ export function duracao(m) {
   const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = Math.round(m % 60);
   return d ? `${d}d ${h}h` : h ? `${h}h${mm ? ' ' + pad(mm) : ''}` : `${mm} min`;
 }
+export const ehData = s => typeof s === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(s);
+export const dataBR = s => (ehData(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
 export const horaBR = s => (ehHora(s) ? `${s.slice(8, 10)}/${s.slice(5, 7)} ${s.slice(11, 16)}` : '');
 // Tempos da OM: espera até liberar (solicitação → liberação) e execução (liberação → finalização).
 export const tempos = om => ({ espera: minutosEntre(om.hSol, om.hLib), execucao: minutosEntre(om.hLib, om.hFim), total: minutosEntre(om.hSol, om.hFim) });
@@ -70,16 +80,21 @@ export const tempos = om => ({ espera: minutosEntre(om.hSol, om.hLib), execucao:
 const t = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
 const erro = (m, campo) => { const e = new Error(m); e.campo = campo; throw e; };
 // Dados da solicitação (abrir ou corrigir). areasOk = áreas que a pessoa pode escolher (null = todas).
-export function conferirSolicitacao(x, areasOk = null) {
+// planejar = a OM é só um plano (pede a data prevista; a hora da solicitação fica para o dia em que for pedida).
+export function conferirSolicitacao(x, areasOk = null, planejar = false) {
   const y = {
     area: t(x.area, 40), local: t(x.local, LIMITES.local), equip: t(x.equip, LIMITES.equip), titulo: t(x.titulo, LIMITES.titulo),
-    desc: t(x.desc, LIMITES.desc), tipo: TIPOS[x.tipo] ? x.tipo : 'corretiva', prio: PRIORIDADES[x.prio] ? x.prio : 'media', hSol: ehHora(x.hSol) ? x.hSol : ''
+    desc: t(x.desc, LIMITES.desc), tipo: TIPOS[x.tipo] ? x.tipo : 'corretiva', prio: PRIORIDADES[x.prio] ? x.prio : 'media', hSol: planejar ? '' : ehHora(x.hSol) ? x.hSol : '',
+    dPrev: ehData(x.dPrev) ? x.dPrev : ''
   };
   if (!y.area) erro('Escolha a área.', 'omArea');
   if (areasOk && !areasOk.includes(y.area)) erro('Você só abre OM nas áreas que lidera.', 'omArea');
   if (!y.titulo || y.titulo.length < 5) erro('Diga em poucas palavras o serviço (mínimo 5 letras).', 'omTit');
   if (!y.local) erro('Informe o equipamento ou o local.', 'omLocal');
-  if (!y.hSol) erro('Informe a hora da solicitação.', 'omHSol');
+  if (planejar && !y.dPrev) erro('Informe a data prevista do serviço.', 'omDPrev');
+  if (!planejar && !y.hSol) erro('Informe a hora da solicitação.', 'omHSol');
+  // Sem data prevista, a solicitação fica prevista para o dia em que foi pedida.
+  if (!y.dPrev) y.dPrev = y.hSol.slice(0, 10);
   return y;
 }
 // Linha do histórico da OM.
@@ -89,6 +104,10 @@ const comHist = (om, linha) => [...(om.hist || []), linha].slice(-LIMITES.hist);
 export function mudar(om, acao, quem, d = {}) {
   const ag = agoraLocal();
   switch (acao) {
+    case 'solicitar': {
+      const h = ehHora(d.hSol) ? d.hSol : ag;
+      return { status: 'solicitada', hSol: h, hist: comHist(om, passo('solicitada', quem, om.dPrev ? 'planejada para ' + dataBR(om.dPrev) : '', h)) };
+    }
     case 'reenviar': return { status: 'solicitada', motivo: '', hist: comHist(om, passo('solicitada', quem, 'corrigida e reenviada', ag)) };
     case 'aprovar': return { status: 'aprovada', hAprov: ag, aprovPor: quem.uid, aprovNome: quem.nome || '', hist: comHist(om, passo('aprovada', quem, d.obs, ag)) };
     case 'devolver': {
@@ -121,7 +140,7 @@ export function mudar(om, acao, quem, d = {}) {
 }
 
 /* ---------- lista ---------- */
-const ORDEM = { devolvida: 0, solicitada: 1, aprovada: 2, enviada: 3, liberada: 4, finalizada: 5, cancelada: 6 };
+const ORDEM = { devolvida: 0, solicitada: 1, aprovada: 2, enviada: 3, liberada: 4, planejada: 5, finalizada: 6, cancelada: 7 };
 const PRIO_ORD = { emergencia: 0, alta: 1, media: 2, baixa: 3 };
 export const ordenar = l => [...l].sort((a, b) => ORDEM[a.status] - ORDEM[b.status] || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || String(b.hSol || '').localeCompare(String(a.hSol || '')));
 // f = { status: '' | 'abertas' | um status, area, q, mes ('AAAA-MM', para finalizadas e canceladas) }
@@ -129,12 +148,12 @@ export function filtrar(l, f = {}) {
   const q = String(f.q || '').toLowerCase().trim();
   return ordenar(l.filter(o => (!f.status || (f.status === 'abertas' ? ABERTAS.includes(o.status) : o.status === f.status))
     && (!f.area || o.area === f.area)
-    && (!f.mes || ABERTAS.includes(o.status) || String(o.hFim || o.hSol || '').startsWith(f.mes))
+    && (!f.mes || ABERTAS.includes(o.status) || String(o.hFim || o.hSol || o.dPrev || '').startsWith(f.mes))
     && (!q || [o.numero, o.titulo, o.local, o.equip, o.desc, o.solNome, o.area, o.cliente, o.contato, STATUS[o.status]].join(' ').toLowerCase().includes(q))));
 }
 // Contagens dos cartões. mes = 'AAAA-MM' (finalizadas e tempo médio do mês).
 export function resumo(l, mes) {
-  const r = { solicitada: 0, devolvida: 0, aprovada: 0, enviada: 0, liberada: 0, finalizadasMes: 0, esperaMedia: null, execMedia: null };
+  const r = { planejada: 0, solicitada: 0, devolvida: 0, aprovada: 0, enviada: 0, liberada: 0, finalizadasMes: 0, esperaMedia: null, execMedia: null };
   const esp = [], exe = [];
   for (const o of l) {
     if (r[o.status] != null) r[o.status]++;
@@ -147,6 +166,48 @@ export function resumo(l, mes) {
   r.esperaMedia = m(esp); r.execMedia = m(exe); r.comCliente = r.aprovada + r.enviada;
   return r;
 }
+/* ---------- planejamento: Hoje, Semana e Mês ---------- */
+// Dia da OM na agenda: a data prevista; nas antigas (sem data prevista), o dia da solicitação.
+export const diaDe = o => (ehData(o.dPrev) ? o.dPrev : String(o.hSol || '').slice(0, 10));
+// Atrasada: ainda aberta e a data prevista já passou.
+export const atrasada = (o, hoje) => ABERTAS.includes(o.status) && !!diaDe(o) && diaDe(o) < hoje;
+// Hoje: o que pedir (planejadas até hoje), o que está com o cliente, as liberadas e as atrasadas; a lista do dia
+// traz tudo o que pede atenção, das atrasadas para as de mais prioridade (planejadas de dias seguintes ficam de fora).
+export function visaoHoje(l, hoje) {
+  const pedir = l.filter(o => o.status === 'planejada' && diaDe(o) <= hoje);
+  const cli = l.filter(o => ['aprovada', 'enviada'].includes(o.status));
+  const lib = l.filter(o => o.status === 'liberada');
+  const atr = l.filter(o => atrasada(o, hoje));
+  const doDia = l.filter(o => (ABERTAS.includes(o.status) && !(o.status === 'planejada' && diaDe(o) > hoje)) || String(o.hFim || '').startsWith(hoje));
+  const urg = o => (atrasada(o, hoje) ? 0 : 1);
+  const lista = doDia.sort((a, b) => (ABERTAS.includes(b.status) - ABERTAS.includes(a.status)) || urg(a) - urg(b) || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status] || diaDe(a).localeCompare(diaDe(b)));
+  return { pedir: pedir.length, comCliente: cli.length, liberadas: lib.length, atrasadas: atr.length, lista };
+}
+const doDiaOrd = l => [...l].sort((a, b) => PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status]);
+// Semana de segunda a domingo: [{ dia, oms }] (as canceladas ficam de fora).
+export function visaoSemana(l, dia) {
+  const ini = weekOf(dia);
+  return Array.from({ length: 7 }, (_, i) => { const d = add(ini, i); return { dia: d, oms: doDiaOrd(l.filter(o => o.status !== 'cancelada' && diaDe(o) === d)) }; });
+}
+// Mês: quantas OMs há em cada dia (previstas, finalizadas, atrasadas) e o planejado contra o realizado por semana.
+// previstas = OMs do dia na agenda (sem as canceladas); finalizadas = das previstas, as já finalizadas.
+export function visaoMes(l, ym, hoje) {
+  const ok = l.filter(o => o.status !== 'cancelada' && diaDe(o).startsWith(ym));
+  const dias = {};
+  for (const o of ok) {
+    const d = (dias[diaDe(o)] ||= { previstas: 0, finalizadas: 0, atrasadas: 0, planejadas: 0 });
+    d.previstas++; if (o.status === 'finalizada') d.finalizadas++; if (o.status === 'planejada') d.planejadas++; if (atrasada(o, hoje)) d.atrasadas++;
+  }
+  // Semanas do calendário que tocam o mês (a primeira e a última podem ter dias do mês vizinho, que não contam).
+  const semanas = [];
+  for (let ini = weekOf(ym + '-01'); ini.slice(0, 7) <= ym; ini = add(ini, 7)) {
+    const x = ok.filter(o => diaDe(o) >= ini && diaDe(o) <= add(ini, 6));
+    semanas.push({ ini, previstas: x.length, finalizadas: x.filter(o => o.status === 'finalizada').length });
+  }
+  const previstas = ok.length, finalizadas = ok.filter(o => o.status === 'finalizada').length;
+  return { dias, semanas, previstas, finalizadas, planejadas: ok.filter(o => o.status === 'planejada').length, atrasadas: ok.filter(o => atrasada(o, hoje)).length, aderencia: previstas ? Math.round(finalizadas / previstas * 100) : null };
+}
+
 /* ---------- cliente de cada conjunto ---------- */
 // O cliente é um usuário do sistema (Pátio: o usuário do Pátio; Bateria: o usuário da Bateria), escolhido pelo
 // administrador e guardado em config/oms { clientes: { patio: { uid, nome }, bateria: { uid, nome } } }.
@@ -159,8 +220,8 @@ export function palpiteCliente(usuarios, conj) {
   return l.sort((a, b) => (sem(a.nome).startsWith('usuario') ? 0 : 1) - (sem(b.nome).startsWith('usuario') ? 0 : 1) || sem(a.nome).length - sem(b.nome).length)[0] || null;
 }
 export function linhasExcel(l, areaNome = a => a) {
-  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização'],
-    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', horaBR(o.hSol), horaBR(o.hAprov), o.cliente || '', o.contato || '', horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '']; })];
+  return [['Nº OM', 'Situação', 'Área', 'Equipamento ou local', 'Serviço', 'Tipo', 'Prioridade', 'Solicitante', 'Data prevista', 'Hora da solicitação', 'Aprovada em', 'Cliente', 'Contato no cliente', 'Enviada ao cliente', 'Hora da liberação', 'Hora da finalização', 'Espera até liberar', 'Execução', 'Detalhes', 'Motivo (devolução/cancelamento)', 'Observação da finalização'],
+    ...ordenar(l).map(o => { const x = tempos(o); return [o.numero || '', STATUS[o.status] || o.status, areaNome(o.area), [o.equip, o.local].filter(Boolean).join(' · '), o.titulo || '', TIPOS[o.tipo] || '', PRIORIDADES[o.prio] || '', o.solNome || '', dataBR(o.dPrev), horaBR(o.hSol), horaBR(o.hAprov), o.cliente || '', o.contato || '', horaBR(o.hEnvio), horaBR(o.hLib), horaBR(o.hFim), duracao(x.espera), duracao(x.execucao), o.desc || '', o.motivo || '', o.obsFim || '']; })];
 }
 
 /* ---------- avisos no celular (rotina de hora em hora) ---------- */
@@ -173,7 +234,9 @@ export function avisosOms(oms, usuarios, hoje) {
     const ult = (o.hist || []).slice(-1)[0]; const quando = (ult && ult.em) || o.hSol || '';
     if (String(quando).slice(0, 10) < desde) continue;
     if (o.status === 'solicitada') {
-      for (const [uid, u] of Object.entries(usuarios)) if (uid !== o.solPor && trataOmU({ ...u, uid }, o.conj)) l.push({ uid, tipo: 'nova', om: o, chave: `om|${uid}|${o.id}|${quando}` });
+      // Não avisa quem acabou de pedir (o líder que abriu ou que transformou a planejada em solicitação).
+      const autor = (ult && ult.s === 'solicitada' && ult.por) || o.solPor;
+      for (const [uid, u] of Object.entries(usuarios)) if (uid !== autor && trataOmU({ ...u, uid }, o.conj)) l.push({ uid, tipo: 'nova', om: o, chave: `om|${uid}|${o.id}|${quando}` });
     } else if (o.status === 'enviada' && o.clienteUid && usuarios[o.clienteUid]) {
       l.push({ uid: o.clienteUid, tipo: 'enviada', om: o, chave: `om|${o.clienteUid}|${o.id}|enviada|${quando}` });
     } else if (['devolvida', 'liberada'].includes(o.status) && o.solPor && usuarios[o.solPor]) {
