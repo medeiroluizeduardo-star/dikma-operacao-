@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { conectar, resumo, codificar, gravarGz } from './comum.mjs';
-import { planoTroca, regraValida, juntarListas } from '../../public/contas/funcoes.js';
+import { planoTroca, regraValida, juntarListas, resumoFuncoes } from '../../public/contas/funcoes.js';
 import { criarEscala } from '../../public/contas/escala.js';
 import { SETS, SET_KEYS } from '../../public/contas/cal.js';
 
@@ -49,7 +49,11 @@ const md = [
   ...[...new Set(P.mudancas.map(m => m.origem))].map(o => `| ${o} | ${conta(m => m.origem === o)} |`), '',
   `Onde muda: RH ${conta(m => m.onde.includes('RH'))} · Atividades ${conta(m => m.onde.includes('Atividades'))} · Equipamentos ${conta(m => m.onde.includes('Equipamentos'))}.`, ''
 ];
-if (!gravar) { resumo([...md, P.mudancas.length ? 'Para gravar, rode de novo com o modo **gravar**.' : 'Nada a fazer.'].join('\n')); process.exit(0); }
+// Na simulação, todas as funções do banco com quantas pessoas têm cada uma (sem nomes): ajuda a achar o nome exato.
+const todas = resumoFuncoes({ fichas, ativ, ops }, { lista, eqFuncoes, regimes: esc.regimes });
+const tabela = ['#### Todas as funções do banco', '', '| Função | Pessoas | ADM | Turno | RH | Atividades | Equipamentos |', '|---|---|---|---|---|---|---|',
+  ...todas.map(f => `| ${f.nome} | ${f.pessoas} | ${f.adm} | ${f.turno} | ${f.fichas} | ${f.ativ} | ${f.ops} |`), ''];
+if (!gravar) { resumo([...md, P.mudancas.length ? 'Para gravar, rode de novo com o modo **gravar**.' : 'Nada a fazer.', '', ...tabela].join('\n')); process.exit(0); }
 
 // documentos que mudam
 const novo = new Map(); // caminho → patch

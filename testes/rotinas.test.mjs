@@ -289,6 +289,8 @@ test('trocar função: simular só conta; gravar faz a cópia e troca fichas, At
   const sim = rodar('trocar-funcao.mjs', env);
   assert.match(sim, /só conferência/); assert.match(sim, /3 pessoa\(s\) mudariam: 1 ADM e 2 turno/);
   assert.doesNotMatch(sim, /ANA FUNCAO/, 'sem nomes no resumo');
+  assert.match(sim, /\| AJUDANTE \| 3 \| 1 \| 2 \| 3 \| 2 \| 1 \|/, 'lista todas as funções com os números');
+  assert.match(sim, /\| MOTORISTA \| 1 \|/);
   assert.equal((await db.doc('gcolab/RECEBIMENTO').get()).get('itens')[0].funcao, 'AJUDANTE', 'simular não grava');
 
   const gr = rodar('trocar-funcao.mjs', { ...env, FUNCAO_MODO: 'gravar' });
