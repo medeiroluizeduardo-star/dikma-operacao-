@@ -78,7 +78,19 @@ jobs:
           node integracao/admin/enviar-dados.mjs
 
       - name: Publicar site e regras de segurança
-        run: npx --yes firebase-tools@15 deploy --only hosting,firestore:rules,firestore:indexes --project "$PROJECT_ID" --non-interactive
+        # O Google às vezes responde "503 indisponível" por instantes: tenta até 3 vezes, com 60 s entre elas.
+        run: |
+          for tentativa in 1 2 3; do
+            if npx --yes firebase-tools@15 deploy --only hosting,firestore:rules,firestore:indexes --project "$PROJECT_ID" --non-interactive; then
+              exit 0
+            fi
+            if [ "$tentativa" -lt 3 ]; then
+              echo "::warning::Publicação falhou na tentativa $tentativa de 3. Tentando de novo em 60 s."
+              sleep 60
+            fi
+          done
+          echo "::error::Publicação falhou nas 3 tentativas. O site continua como estava; rode de novo mais tarde (Run workflow)."
+          exit 1
 
       - name: Endereço do sistema
         run: echo "::notice::Sistema publicado em https://$PROJECT_ID.web.app"

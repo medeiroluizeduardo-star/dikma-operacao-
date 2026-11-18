@@ -99,19 +99,6 @@ export const temIndU = u => !!perfilDe(u, 'indicadores');
 export const conjsInd = u => (temIndU(u) ? ['patio', 'bateria'].filter(k => escoposDe(u).includes(k)) : []);
 export const eqInd = u => temIndU(u) && escoposDe(u).includes('equipamentos');
 export const areasInd = u => (['admin', 'gestor'].includes(perfilDe(u, 'indicadores')) ? [] : areasDoCadastro(u, true));
-// Ligar os Indicadores para quem já via os painéis antes do módulo (rotina "Ligar Indicadores", uma vez só).
-// Quem tinha Operação, Gestão, Segurança ou RH (sem bloqueio, sem Indicadores e sem ser administrador) ganha
-// Indicadores · Vê. Quem não tem escopo (só Segurança ou só RH, que viam os dois conjuntos) ganha Pátio e Bateria,
-// sem mudar mais nada (o escopo só vale na Operação e na Gestão para quem tem esses módulos).
-// Devolve null (nada a fazer) ou { acesso, escopos } novos.
-export function ligarIndicadores(u) {
-  if (!u || u.papel === 'bloqueado' || !u.acesso || typeof u.acesso !== 'object') return null;
-  const a = u.acesso;
-  if (a.administracao === 'admin' || a.indicadores) return null;
-  if (!['operacao', 'gestao', 'seguranca', 'rh'].some(m => a[m])) return null;
-  const esc = Array.isArray(u.escopos) ? [...u.escopos] : [];
-  return { acesso: { ...a, indicadores: 've' }, escopos: esc.length ? esc : ['patio', 'bateria'] };
-}
 // Marcas no formato antigo, tiradas do acesso (operacao = Pátio, bateria, equipamentos, gestao = fichas,
 // frequencia = RH). Usadas para saber que dados carregar e nas contas que não dependem do perfil.
 export function marcasDe(u) {
