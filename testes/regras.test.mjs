@@ -333,9 +333,10 @@ test('Queda zero com fotos: o líder grava o lançamento e as fotos num lote só
   b.set(doc(d, 'evidenciasArquivo', 'qzf1'), fotoArq());
   await assertSucceeds(b.commit());
   await assertSucceeds(getDocs(query(collection(db('sup'), 'evidencias'), where('refs', 'array-contains', `${SEM}|${pid}|2`))));
-  // o supervisor não apaga foto; o líder apaga a foto e o lançamento juntos
+  // quem não aponta na área (líder de outra área) não apaga foto; o líder apaga a foto e o lançamento juntos
   const apagar = uid => { const x = db(uid); const c = writeBatch(x); c.delete(doc(x, 'evidencias', 'qzf1')); c.delete(doc(x, 'evidenciasArquivo', 'qzf1')); c.update(doc(x, 'semanas', SEM), { [`qz.${key}`]: deleteField(), atualizadoPor: uid }); return c.commit(); };
-  await assertFails(apagar('sup'));
+  await assertFails(apagar('liderPrep'));
+  await assertFails(apagar('freqLeitor'));
   await assertSucceeds(apagar('liderRec'));
 });
 test('Fotos: ninguém grava foto em outra área, em nome de outro, nem com a área diferente da semana', async () => {

@@ -3,7 +3,7 @@
 // salvarQuedaZero (mapa qz da semana).
 import { AREA_S, DAYS, ddmm, add, pd, setDaArea, monthLabel } from '../contas/cal.js';
 import { DB, TODAY, esc, $ } from '../nucleo/base.js';
-import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, perfil, modsDe } from '../nucleo/estado.js';
+import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, modsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
@@ -68,9 +68,9 @@ function gravarQZ(doc, key, k, novo, rotulo, fotos = []) {
   Promise.resolve(DB.salvarQuedaZero(doc.id, doc.area, key, novo, fotos)).catch(() => toast('Não foi possível gravar a queda zero'));
   DB.log(`Queda zero · ${rotulo} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${novo ? `${fmtT(novo.t)} (${textoQZ(novo)})${fotos.length ? ` + ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}` : 'apagada'}`, 'operacao');
 }
-// Fotos do lançamento: o administrador e o líder da área apagam (o líder só a foto ainda não exportada), como nas
+// Fotos do lançamento: o administrador e quem aponta na área apagam (quem aponta só a foto ainda não exportada), como nas
 // fotos das atividades; as regras do banco conferem o mesmo.
-const podeApagarFotoQZ = (doc, x) => isAdmin() || (perfil('operacao') === 'lider' && canEdit(doc.area) && statusFoto(x) === 'banco');
+const podeApagarFotoQZ = (doc, x) => isAdmin() || (canEdit(doc.area) && statusFoto(x) === 'banco');
 const conjDe = doc => setDaArea(doc.area) || SK;
 const legFoto = x => `${x.porNome || ''}${x.at ? ' · ' + x.at.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}`;
 const abrirFoto = (doc, x) => (statusFoto(x) === 'arquivada' ? verFotoGrande(async () => x.thumb, x.thumb, 'Foto da queda zero (miniatura)', legFoto(x) + ' · arquivada fora do banco')
@@ -185,11 +185,11 @@ export function editarQZ(doc, k, key) {
   const ap = $('qzApagar');
   if (ap) ap.addEventListener('click', () => {
     const erro = t => { const e = $('shErr'); e.textContent = t; e.hidden = false; };
-    // Com fotos: as fotos saem junto (só o líder da área e o administrador apagam fotos).
+    // Com fotos: as fotos saem junto (só quem aponta na área e o administrador apagam fotos).
     if (fts.tem()) {
       if (!fts.carregou()) return erro('Espere carregar as fotos (precisa de sinal).');
       const l = fts.salvas();
-      if (l.length < fts.tem() || !l.every(x => podeApagarFotoQZ(doc, x))) return erro('Este lançamento tem fotos: só o líder da área ou o administrador pode apagar (foto já exportada, só o administrador).');
+      if (l.length < fts.tem() || !l.every(x => podeApagarFotoQZ(doc, x))) return erro('Este lançamento tem fotos: só quem aponta na área ou o administrador pode apagar (foto já exportada, só o administrador).');
       if (!ap.dataset.conf) { ap.dataset.conf = '1'; ap.innerHTML = `${I.lixo} Confirmar: apagar com ${l.length} foto${l.length > 1 ? 's' : ''}`; return; }
       ap.disabled = true;
       DB.apagarFotosQZ(doc.id, doc.area, key, l, true).then(() => {
