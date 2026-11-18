@@ -181,22 +181,6 @@ test('cópia de segurança: o Meu painel entra com as subcoleções e volta pela
   assert.equal((await db.doc('gocorr/a').get()).get('n'), 1);
 });
 
-test('apagar a Medição antiga: simular não grava; gravar guarda cópia e apaga só o campo medicao', async () => {
-  await limpar();
-  await db.doc('config/sistema').set({ rotas: ['R1'], medicao: { refTurno: 'x', n: { 'exec|ADM': { postos: 3, cont: 2 } } } });
-  await db.doc('b_config/sistema').set({ rotas: ['B1'] });
-  assert.match(rodar('apagar-medicao.mjs'), /só conferência/);
-  assert.ok((await db.doc('config/sistema').get()).get('medicao'), 'simular não apaga');
-  const s = rodar('apagar-medicao.mjs', { APAGAR_MODO: 'gravar' });
-  assert.match(s, /backups\/antes-apagar-medicao-/);
-  const p = (await db.doc('config/sistema').get()).data();
-  assert.equal(p.medicao, undefined);
-  assert.deepEqual(p.rotas, ['R1'], 'o resto fica');
-  const bk = (await db.collection('backups').get()).docs.find(d => d.id.startsWith('antes-apagar-medicao-'));
-  assert.equal(JSON.parse(bk.get('json')).config.n['exec|ADM'].cont, 2);
-  assert.match(rodar('apagar-medicao.mjs', { APAGAR_MODO: 'gravar' }), /Nada a apagar/);
-});
-
 test('divisão do Efetivo por área: cada ficha vai para a área onde a pessoa está, e ocorrências e assinaturas acompanham', async () => {
   await limpar();
   await db.doc('config/sistema').set({ rotas: [] });

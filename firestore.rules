@@ -109,8 +109,6 @@ service cloud.firestore {
     // Perfil no módulo (para Segurança e para os testes): null/'' = sem acesso.
     function perfilEm(mod) { return pEm(mod); }
     function temMod(mod) { return hasProfile() && perfil().papel != 'bloqueado' && pEm(mod) != ''; }
-    function perfilEmEntre(mod, perfis) { return temMod(mod) && perfilEm(mod) in perfis; }
-    function temEscopo(e) { return hasProfile() && esc(e); }
     function soAltera(campos) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(campos); }
     // Quem gravou e quando: nas coleções principais (semanas, presença, cadastro das Atividades, fichas e ocorrências)
     // cada gravação do site traz atualizadoPor = quem está logado e atualizadoEm = hora do servidor. As rotinas do
