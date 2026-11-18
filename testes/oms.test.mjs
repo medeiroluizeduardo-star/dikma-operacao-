@@ -242,3 +242,43 @@ test('observações em todos os passos ficam no histórico', () => {
   assert.deepEqual(observacoes(x).map(y => y.obs), ['Equipamento só para às 14h']);
   const ex = linhasExcel([x]); assert.equal(ex[0].length, ex[1].length); assert.match(ex[1].at(-1), /14h/);
 });
+
+// Indicadores › OMs (public/contas/oms-indicadores.js)
+import { numerosOms, caminhoOms, temposOms, proximasOms, painelOms, faixaPct } from '../public/contas/oms-indicadores.js';
+test('Indicadores das OMs: aderência, prazo do cliente, recusas e documentação do mês', () => {
+  const p = (s, em, txt) => ({ s, em, ...(txt ? { txt } : {}) });
+  const l = [
+    // prevista e finalizada no mês; liberada em 3 h (prioridade alta, prazo 24 h): no prazo
+    om({ id: 'a', prio: 'alta', status: 'finalizada', dPrev: '2026-11-10', hSol: '2026-11-10T07:00', hAprov: '2026-11-10T07:30', hEnvio: '2026-11-10T08:00', hLib: '2026-11-10T11:00', hFim: '2026-11-10T15:00',
+      docs: { pt: 'ok', apr: 'ok', bloq: 'na', isol: 'na', acomp: 'na' }, hist: [p('enviada', '2026-11-10T08:00'), p('liberada', '2026-11-10T11:00')] }),
+    // recusada e reenviada, liberada em 60 h (média, prazo 48 h): fora do prazo; documentação pendente
+    om({ id: 'b', area: 'PREPARAÇÃO', status: 'liberada', dPrev: '2026-11-12', hSol: '2026-11-11T07:00', hEnvio: '2026-11-11T08:00', hLib: '2026-11-13T20:00',
+      docs: { pt: 'ok', apr: 'pend', bloq: 'na', isol: 'na', acomp: 'na' }, hist: [p('enviada', '2026-11-11T07:30'), p('recusada', '2026-11-11T07:50', 'registrada pelo técnico: Falta a APR'), p('enviada', '2026-11-11T08:00')] }),
+    // cancelada pelo cliente (não entra na aderência)
+    om({ id: 'c', status: 'cancelada', dPrev: '2026-11-14', cancCli: true, hEnvio: '2026-11-14T08:00', hist: [p('enviada', '2026-11-14T08:00'), p('cancelada', '2026-11-14T09:00', 'pelo cliente: Área em carga')] }),
+    // planejada para o dia 20 (atrasada no dia 25) e outra de outubro
+    om({ id: 'd', status: 'planejada', dPrev: '2026-11-20', hSol: '' }),
+    om({ id: 'e', status: 'finalizada', dPrev: '2026-10-05', hFim: '2026-10-05T10:00' })
+  ];
+  const n = numerosOms(l, '2026-11', '2026-11-25', null);
+  assert.equal(n.previstas, 3); assert.equal(n.finalizadas, 1); assert.equal(n.aderencia, 33); assert.equal(n.atrasadas, 2);
+  assert.equal(n.liberadas, 2); assert.equal(n.noPrazo, 1); assert.equal(n.pctPrazo, 50);
+  assert.equal(n.respMedia, (180 + 60 * 60) / 2);
+  assert.equal(n.envios, 4); assert.equal(n.recusas, 1); assert.equal(n.cancelamentos, 1); assert.equal(n.pctCliente, 50);
+  assert.deepEqual(n.eventos.map(e => e.motivo), ['Área em carga', 'Falta a APR']);
+  assert.equal(n.comDocs, 2); assert.equal(n.docsProntos, 1); assert.equal(n.pctDocs, 50);
+  // no meio do mês, só as previstas até hoje contam na aderência
+  assert.deepEqual((({ previstas, finalizadas, aderencia }) => [previstas, finalizadas, aderencia])(numerosOms(l, '2026-11', '2026-11-13')), [2, 1, 50]);
+  // prazo 0 = sem prazo: a liberação não entra no %
+  assert.equal(numerosOms(l, '2026-11', '2026-11-25', { prazos: { emergencia: 2, alta: 0, media: 48, baixa: 120 } }).comPrazo, 1);
+  assert.deepEqual(caminhoOms(l, '2026-11'), [['Na agenda do mês', 4], ['Solicitadas', 3], ['Enviadas ao cliente', 3], ['Liberadas', 2], ['Finalizadas', 1], ['Canceladas', 1]]);
+  assert.deepEqual(temposOms(l, '2026-11').map(x => x[1]), [30, (180 + 3600) / 2, 240, 480]);
+  assert.deepEqual(proximasOms(l, '2026-11-18').map(o => o.id), ['d']);
+  assert.deepEqual(proximasOms(l, '2026-11-21').map(o => o.id), []);
+  const pn = painelOms(l, { ym: '2026-11', meses: ['2026-10', '2026-11'], hoje: '2026-11-25', anterior: '2026-10' });
+  assert.equal(pn.ant.aderencia, 100); assert.equal(pn.serie.length, 2);
+  assert.deepEqual(pn.porArea.map(x => [x.area, x.previstas]), [['RECEBIMENTO', 2], ['PREPARAÇÃO', 1]]);
+  assert.deepEqual(pn.porPrio.map(x => x.prio), ['alta', 'media']);
+  assert.equal(numerosOms([], '2026-11', '2026-11-25').aderencia, null);
+  assert.deepEqual([faixaPct(95), faixaPct(75), faixaPct(10), faixaPct(null)], ['ok', 'atencao', 'critico', '']);
+});

@@ -88,6 +88,8 @@ export const VIEWS = [
   { id: 'epainel', nome: 'Indicadores de equipamentos', ic: 'equip', grp: 'Indicadores', mod: 'indicadores', req: indEq, junto: 'ieq', tela: 'EQ' },
   { id: 'eanal', nome: 'Análises de equipamentos', ic: 'tendencia', grp: 'Indicadores', mod: 'indicadores', req: indEq, tela: 'EQ', junto: 'ieq' },
   { id: 'qpainel', nome: 'Indicadores da queda zero', ic: 'queda', grp: 'Indicadores', mod: 'indicadores', req: indSets, filtros: 'ma', conj: true },
+  // OMs (telas/oms-indicadores.js): aderência à programação, liberação no prazo do cliente, recusas e documentação pronta.
+  { id: 'ompainel', nome: 'Indicadores das OMs', ic: 'ficha', grp: 'Indicadores', mod: 'indicadores', req: indConj, tela: 'OI' },
   { id: 'sgpainel', nome: 'Indicadores da Segurança', ic: 'escudo', grp: 'Indicadores', mod: 'indicadores', req: indConj, tela: 'SG' },
   // Pessoas: frequência (dados do RH) e, para quem já tem as Fichas de acompanhamento na Gestão, os indicadores das fichas.
   { id: 'fpainel', nome: 'Indicadores da frequência', ic: 'percent', grp: 'Indicadores', mod: 'indicadores', req: indConj, junto: 'ipes' },
@@ -147,7 +149,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', oms: 'OMs' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', oms: 'OMs', ompainel: 'OMs' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
@@ -162,7 +164,7 @@ export const MODS = {
   // A Segurança abre em Anomalias (com o que pede atenção no topo); o painel foi para Indicadores.
   seguranca: { nome: 'Segurança', curto: 'Segurança', sub: 'Interações, anomalias, inspeções, Cartão Amarelo e treinamentos', key: 'seguranca', inicio: 'sganom' },
   rh: { nome: 'RH', curto: 'RH', sub: 'Colaboradores, frequência e férias', key: 'rh', inicio: 'afreq' },
-  indicadores: { nome: 'Indicadores', curto: 'Indicadores', sub: 'Visão geral do contrato, atividades, equipamentos, queda zero, segurança, pessoas e histórico', key: 'indicadores', inicio: 'ivisao' },
+  indicadores: { nome: 'Indicadores', curto: 'Indicadores', sub: 'Visão geral do contrato, atividades, equipamentos, queda zero, OMs, segurança, pessoas e histórico', key: 'indicadores', inicio: 'ivisao' },
   administracao: { nome: 'Administração', curto: 'Administração', sub: 'Configurações, usuários e perfis', key: 'administracao', inicio: 'cfgeral' }
 };
 // Itens do seletor de módulos: os módulos que a pessoa tem.

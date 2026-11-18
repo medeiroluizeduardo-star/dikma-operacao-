@@ -1604,6 +1604,8 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(ref('supPatio', 'om2'), nova('supPatio', { outra: 1 })), 'campo fora da lista');
   await assertSucceeds(getDoc(ref('supPatio')), 'quem tem a Operação no Pátio lê');
   await assertFails(getDoc(ref('rhSo')), 'sem a Operação não lê');
+  await assertSucceeds(getDoc(ref('indPatio')), 'Indicadores no Pátio lê (Indicadores › OMs)');
+  await assertFails(getDoc(ref('indEq')), 'Indicadores só com Equipamentos não lê');
   await assertFails(setDoc0(ref('supPatio'), { status: 'aprovada', ...mk('supPatio') }, { merge: true }), 'quem abriu não aprova');
   await assertSucceeds(setDoc0(ref('supPatio'), { titulo: 'Troca de rolete travado', ...mk('supPatio') }, { merge: true }), 'quem abriu corrige enquanto está com o técnico');
   await assertSucceeds(setDoc0(ref('opGestorSo'), { status: 'aprovada', hAprov: '2026-11-17T08:00', ...mk('opGestorSo') }, { merge: true }), 'gestor da Operação trata');
