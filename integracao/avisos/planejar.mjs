@@ -300,10 +300,11 @@ export function planejar(d) {
     }
   }
   // 11) Operação › Solicitações de OM: solicitação nova → quem trata no conjunto (Técnico de Processo, coordenador, gestor,
-  //     administrador); enviada → o usuário do cliente do conjunto; devolvida e liberada → quem abriu. Na hora (rotina de hora em hora), uma vez por mudança.
+  //     administrador); enviada → o usuário do cliente do conjunto; devolvida e liberada → quem abriu (liberada pelo cliente:
+//     também quem trata); fora do prazo com o cliente → o cliente e quem trata. Na hora (rotina de hora em hora), uma vez por mudança.
   if ((d.oms || []).length) {
     const porPessoa = new Map();
-    for (const x of avisosOms(d.oms, d.usuarios, hoje)) {
+    for (const x of avisosOms(d.oms, d.usuarios, hoje, d.omsCfg || null)) {
       if (d.enviados[x.chave]) continue; marcar.add(x.chave);
       const a = alvo.find(y => y.uid === x.uid); if (!a || !a.prefs.oms) continue;
       const k = x.uid + '|' + x.tipo; if (!porPessoa.has(k)) porPessoa.set(k, { uid: x.uid, tipo: x.tipo, l: [] }); porPessoa.get(k).l.push(x.om);
@@ -312,6 +313,7 @@ export function planejar(d) {
       const n = l.length, s = n > 1 ? 's' : '';
       const titulo = tipo === 'nova' ? (n === 1 ? `OM para aprovar: ${l[0].titulo}` : `${n} solicitações de OM para aprovar`)
         : tipo === 'enviada' ? (n === 1 ? `OM do Dikma para liberar: ${l[0].titulo}` : `${n} OMs do Dikma para liberar`)
+        : tipo === 'prazo' ? (n === 1 ? `OM fora do prazo com o cliente: ${l[0].titulo}` : `${n} OMs fora do prazo com o cliente`)
         : tipo === 'devolvida' ? (n === 1 ? `OM devolvida: ${l[0].titulo}` : `${n} OMs devolvidas para corrigir`) : (n === 1 ? `OM liberada: ${l[0].titulo}` : `${n} OMs liberadas para executar`);
       const corpo = l.slice(0, 3).map(o => [o.equip || o.local, tipo === 'devolvida' ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
       msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms` });

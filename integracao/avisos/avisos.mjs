@@ -153,7 +153,8 @@ const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id
 // Operação › Solicitações de OM em andamento (aviso de nova, devolvida e liberada).
 const oms = []; for (const st of ['solicitada', 'enviada', 'devolvida', 'liberada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, agora: new Date() });
+const omsCfg = (await db.doc('config/oms').get()).data() || null;
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsCfg, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

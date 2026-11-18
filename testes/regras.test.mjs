@@ -66,6 +66,8 @@ const USUARIOS = {
   supBat: { papel: 'supervisor', area: 'BATERIA 1', modulos: ['bateria'], acesso: { operacao: 'supervisor' }, escopos: ['bateria'] },
   tecPatio: { papel: 'leitor', modulos: ['operacao'], acesso: { operacao: 'tecnico' }, escopos: ['patio'] },
   tecBat: { papel: 'leitor', modulos: ['bateria'], acesso: { operacao: 'tecnico' }, escopos: ['bateria'] },
+  // Cliente das OMs do Pátio (Usuário Pátio): Operação só leitura no conjunto.
+  cliPatio: { papel: 'leitor', modulos: ['operacao'], acesso: { operacao: 'leitor' }, escopos: ['patio'] },
   // Supervisor com várias áreas (lista areas; area e area2 guardam as duas primeiras, como a tela grava).
   supVarias: { papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1'], modulos: ['operacao', 'bateria', 'gestao'], acesso: { operacao: 'supervisor', gestao: 'supervisor' }, escopos: ['patio', 'bateria'] },
   liderComLista: { papel: 'lider', area: 'RECEBIMENTO', areas: ['RECEBIMENTO', 'PREPARAÇÃO'], modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'] },
@@ -1630,6 +1632,30 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(ref('supPatio', 'pl1'), { status: 'solicitada', hSol: '2026-11-20T07:00', titulo: 'Mudou o serviço', ...mk('supPatio') }, { merge: true }), 'o líder da área só pede, não muda o serviço');
   await assertSucceeds(setDoc0(ref('supPatio', 'pl1'), { status: 'solicitada', hSol: '2026-11-20T07:00', hist: [], ...mk('supPatio') }, { merge: true }), 'o líder da área transforma a planejada em solicitação');
   await assertFails(setDoc0(ref('supPatio', 'pl1'), { status: 'planejada', ...mk('supPatio') }, { merge: true }), 'solicitada não volta a planejada por quem não trata');
+  // Parte 2: documentação (não obrigatória), o cliente com Ciente e Liberar, e os prazos do cliente.
+  await assertSucceeds(setDoc0(ref('supPatio', 'c1'), nova('supPatio', { docs: { pt: 'ok', apr: 'pend', bloq: 'na' } })), 'documentação na abertura');
+  await assertFails(setDoc0(ref('supPatio', 'c2'), nova('supPatio', { docs: { pt: 'sim' } })), 'documentação com valor fora da lista');
+  await assertFails(setDoc0(ref('supPatio', 'c2'), nova('supPatio', { docs: { epi: 'ok' } })), 'item de documentação que não existe');
+  await assertSucceeds(setDoc0(ref('opGestorSo', 'c1'), { status: 'enviada', clienteUid: 'cliPatio', cliente: 'Usuário Pátio', hEnvio: '2026-11-17T09:00', ...mk('opGestorSo') }, { merge: true }), 'quem trata envia ao cliente');
+  await assertSucceeds(setDoc0(ref('supPatio', 'c1'), { docs: { pt: 'ok', apr: 'ok', bloq: 'na' }, ...mk('supPatio') }, { merge: true }), 'o líder da área marca a documentação com a OM já com o cliente');
+  await assertFails(setDoc0(ref('supPatio', 'c1'), { docs: { pt: 'ok' }, titulo: 'Mudou o serviço', ...mk('supPatio') }, { merge: true }), 'junto com a documentação, nada mais');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { docs: { pt: 'pend' }, ...mk('cliPatio') }, { merge: true }), 'o cliente não mexe na documentação');
+  await assertSucceeds(getDoc(ref('cliPatio', 'c1')), 'o cliente lê a OM');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'c1'), { hCiente: '2026-11-17T09:10', cienteNome: 'Usuário Pátio', hist: [{ s: 'ciente' }], ...mk('cliPatio') }, { merge: true }), 'o cliente toca em Ciente');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { hCiente: '2026-11-17T09:11', prio: 'baixa', ...mk('cliPatio') }, { merge: true }), 'no Ciente, só a hora e o nome');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', ...mk('cliPatio') }, { merge: true }), 'a liberação do cliente vai marcada libCli');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { status: 'finalizada', hFim: '2026-11-17T10:00', ...mk('cliPatio') }, { merge: true }), 'o cliente não finaliza');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, libNome: 'Usuário Pátio', numero: '4500200', hist: [], ...mk('cliPatio') }, { merge: true }), 'o cliente libera');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { hLib: '2026-11-17T11:00', ...mk('cliPatio') }, { merge: true }), 'depois de liberada, o cliente não muda a hora');
+  await assertSucceeds(setDoc0(ref('supPatio', 'c3'), nova('supPatio')), 'outra OM');
+  await assertSucceeds(setDoc0(ref('opGestorSo', 'c3'), { status: 'enviada', clienteUid: 'admin', hEnvio: '2026-11-17T09:00', ...mk('opGestorSo') }, { merge: true }), 'enviada a outro cliente');
+  await assertFails(setDoc0(ref('cliPatio', 'c3'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, ...mk('cliPatio') }, { merge: true }), 'só o cliente da OM libera');
+  await assertSucceeds(setDoc0(ref('tecPatio', 'c3'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: false, libNome: 'Técnico', ...mk('tecPatio') }, { merge: true }), 'o técnico registra se o cliente liberou por fora');
+  await assertSucceeds(setDoc0(cfg('admin'), { prazos: { emergencia: 2, alta: 12, media: 48, baixa: 0 }, atualizadoPor: 'admin' }, { merge: true }), 'administrador muda os prazos');
+  await assertFails(setDoc0(cfg('admin'), { prazos: { alta: 1.5 } }, { merge: true }), 'prazo em horas inteiras');
+  await assertFails(setDoc0(cfg('admin'), { prazos: { alta: 721 } }, { merge: true }), 'prazo até 720 h');
+  await assertFails(setDoc0(cfg('admin'), { prazos: { urgente: 2 } }, { merge: true }), 'só as prioridades');
+  await assertFails(setDoc0(cfg('tecPatio'), { prazos: { alta: 4 } }, { merge: true }), 'só o administrador muda os prazos');
 });
 
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {

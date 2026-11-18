@@ -763,6 +763,11 @@ export function omsClienteSalvar(conj, cliente) {
   cache.omsCfg = { loaded: true, d: { ...(cache.omsCfg.d || {}), clientes: c } }; changed();
   return track(setDoc(doc(db, 'config', 'oms'), { clientes: c, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
 }
+// Prazos de resposta do cliente por prioridade (contas/oms.js › prazosDe): só o administrador muda.
+export function omsPrazosSalvar(prazos) {
+  cache.omsCfg = { loaded: true, d: { ...(cache.omsCfg.d || {}), prazos } }; changed();
+  return track(setDoc(doc(db, 'config', 'oms'), { prazos, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
+}
 export function omApagar(id, conj) {
   const c = cache.oms[conj] || { d: {}, loaded: true }; const d = { ...c.d }; delete d[id];
   cache.oms = { ...cache.oms, [conj]: { ...c, d } }; changed();

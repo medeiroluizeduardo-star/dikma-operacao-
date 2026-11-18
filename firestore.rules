@@ -490,23 +490,41 @@ service cloud.firestore {
     // planejada, com o técnico ou devolvida; o líder da área finaliza a OM liberada. Conjunto e quem abriu não mudam.
     // OM planejada (com a data prevista dPrev): cadastrada por quem abre ou por quem trata; no dia, quem cadastrou, quem trata
     // ou o líder da área a transforma em solicitação (só a situação, a hora e o histórico).
+    // Documentação (docs: PT, APR, bloqueio, isolamento, acompanhamento; cada uma pend/ok/na, não obrigatória): quem trata e
+    // o líder da área marcam enquanto a OM está aberta. Cliente (clienteUid, quem recebeu a OM): com a OM enviada, toca em
+    // Ciente (só a hora e o nome) e em Liberar (vira liberada, marcada libCli).
     function omTrata(e) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['tecnico', 'coordenador', 'gestor']); }
     function omAbre(e, area) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && areaEm(pEm('operacao'), area)); }
     function omOk(d) {
-      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'dPrev', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'clienteUid', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor'])
+      return d.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'numero', 'motivo', 'obsFim', 'hSol', 'dPrev', 'hAprov', 'hEnvio', 'hLib', 'hFim', 'aprovPor', 'aprovNome', 'solPor', 'solNome', 'cliente', 'clienteUid', 'contato', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor', 'docs', 'hCiente', 'cienteNome', 'libNome', 'libCli'])
         && d.conj in ['patio', 'bateria'] && d.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada', 'finalizada', 'cancelada']
         && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 200 && d.area is string && d.area.size() <= 40
         && d.get('tipo', 'corretiva') in ['corretiva', 'preventiva', 'melhoria', 'seguranca'] && d.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
         && tTxt(d, 'local', 120) && tTxt(d, 'equip', 80) && tTxt(d, 'desc', 1000) && tTxt(d, 'numero', 40) && tTxt(d, 'motivo', 400) && tTxt(d, 'obsFim', 600)
         && tTxt(d, 'hSol', 16) && tTxt(d, 'dPrev', 10) && tTxt(d, 'hAprov', 16) && tTxt(d, 'hEnvio', 16) && tTxt(d, 'hLib', 16) && tTxt(d, 'hFim', 16)
         && tTxt(d, 'solNome', 150) && tTxt(d, 'aprovNome', 150) && tTxt(d, 'criadoEm', 40) && tTxt(d, 'cliente', 120) && tTxt(d, 'clienteUid', 128) && tTxt(d, 'contato', 120)
-        && d.get('hist', []) is list && d.get('hist', []).size() <= 60;
+        && d.get('hist', []) is list && d.get('hist', []).size() <= 60
+        && tTxt(d, 'hCiente', 16) && tTxt(d, 'cienteNome', 150) && tTxt(d, 'libNome', 150) && d.get('libCli', false) is bool
+        && omDocsOk(d.get('docs', {}));
     }
-    // Cliente de cada conjunto (usuário do sistema que recebe as OMs enviadas): quem está ativo lê, o administrador escolhe.
+    function omDocV(m, k) { return !(k in m) || m[k] in ['pend', 'ok', 'na']; }
+    function omDocsOk(m) {
+      return m is map && m.keys().hasOnly(['pt', 'apr', 'bloq', 'isol', 'acomp'])
+        && omDocV(m, 'pt') && omDocV(m, 'apr') && omDocV(m, 'bloq') && omDocV(m, 'isol') && omDocV(m, 'acomp');
+    }
+    // Prazo de resposta do cliente por prioridade, em horas inteiras de 0 (sem prazo) a 720.
+    function omPzV(m, k) { return !(k in m) || (m[k] is int && m[k] >= 0 && m[k] <= 720); }
+    function omPrazosOk(m) {
+      return m is map && m.keys().hasOnly(['emergencia', 'alta', 'media', 'baixa'])
+        && omPzV(m, 'emergencia') && omPzV(m, 'alta') && omPzV(m, 'media') && omPzV(m, 'baixa');
+    }
+    // Cliente de cada conjunto (usuário do sistema que recebe as OMs enviadas) e prazos de resposta: quem está ativo lê,
+    // o administrador escolhe.
     match /config/oms {
       allow read: if ativo();
-      allow write: if admin() && request.resource.data.keys().hasOnly(['clientes', 'atualizadoEm', 'atualizadoPor'])
-        && request.resource.data.clientes is map && request.resource.data.clientes.keys().hasOnly(['patio', 'bateria']);
+      allow write: if admin() && request.resource.data.keys().hasOnly(['clientes', 'prazos', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.get('clientes', {}) is map && request.resource.data.get('clientes', {}).keys().hasOnly(['patio', 'bateria'])
+        && omPrazosOk(request.resource.data.get('prazos', {}));
     }
     match /oms/{id} {
       allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
@@ -522,7 +540,15 @@ service cloud.firestore {
           || (resource.data.status == 'planejada' && request.resource.data.status == 'solicitada' && omAbre(resource.data.conj, resource.data.area)
               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hSol', 'hist', 'atualizadoEm', 'atualizadoPor']))
           || (resource.data.status == 'liberada' && request.resource.data.status == 'finalizada' && omAbre(resource.data.conj, resource.data.area)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hFim', 'obsFim', 'hist', 'atualizadoEm', 'atualizadoPor'])));
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hFim', 'obsFim', 'hist', 'atualizadoEm', 'atualizadoPor']))
+          || (resource.data.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'liberada'] && request.resource.data.status == resource.data.status
+              && omAbre(resource.data.conj, resource.data.area)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['docs', 'atualizadoEm', 'atualizadoPor']))
+          || (resource.data.status == 'enviada' && ativo() && resource.data.get('clienteUid', '') == request.auth.uid
+              && ((request.resource.data.status == 'enviada'
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hCiente', 'cienteNome', 'hist', 'atualizadoEm', 'atualizadoPor']))
+                || (request.resource.data.status == 'liberada' && request.resource.data.get('libCli', false) == true
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hLib', 'numero', 'hCiente', 'cienteNome', 'libNome', 'libCli', 'hist', 'atualizadoEm', 'atualizadoPor'])))));
       allow delete: if omTrata(resource.data.conj);
     }
 
