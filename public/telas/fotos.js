@@ -9,9 +9,9 @@ import { I } from '../ui/icones.js';
 import { sheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
-import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../contas/fotos.js';
+import { cfgFotos, contador, exigeFoto, fotosDaCel, metaFoto, validarCfgFotos, estimativaFotos, resumoFotos, FASES_FOTO, SITUACOES_FOTO, MAX_FOTOS, MAX_REFS, FOTOS_DESDE_PADRAO } from '../contas/fotos.js';
 import { gravarApont, diasDe } from '../calc/atividades.js';
-import { statusFoto, STATUS } from '../contas/fotos-arquivo.js';
+import { statusFoto, STATUS, ordemFotos } from '../contas/fotos-arquivo.js';
 
 // Configuração em vigor (config/fotos ou o padrão).
 export const cfgF = () => cfgFotos(DB.cache.fotosCfg);
@@ -38,15 +38,22 @@ export function montarFotos(doc, k, is, imgs, sit) {
 }
 
 /* ---------------- passo de fotos ---------------- */
-// o = { titulo, sub, cfg ({ obrig, min, max }), tem (fotos que já tem), rotuloOk, aoConfirmar(imgs), aoCancelar() }
+// o = { titulo, sub, cfg ({ obrig, min, max }), tem (fotos que já tem), rotuloOk, aoConfirmar(imgs), aoCancelar(),
+//       fase (true, 'antes' ou 'depois': quem tira escolhe se a foto é do Antes ou do Depois, começando pela
+//       indicada; cada img leva img.fase) }
 // A atividade só é marcada no Confirmar; Cancelar (ou fechar) não marca nada.
 export function passoFotos(o) {
   const L = $('layer'); const imgs = []; let ocupado = 0;
   const cfg = o.cfg || cfgF(); const tem = o.tem || 0;
+  // Antes / Depois: começa no Antes quando ainda não há foto e no Depois quando já há; quem tira pode trocar antes
+  // (botões) e depois (tocando na marca da miniatura).
+  let fase = FASES_FOTO[o.fase] ? o.fase : o.fase ? (tem ? 'depois' : 'antes') : '';
+  const escolhaFase = () => `<div class="ffaseesc" role="group" aria-label="A próxima foto é do"><span class="small">A foto é do:</span>${Object.entries(FASES_FOTO).map(([k, t]) => `<button type="button" class="rchip" data-fse="${k}" aria-pressed="${fase === k}">${t}</button>`).join('')}</div>`;
   L.innerHTML = `<div class="scrim" id="scrim"><div class="sheet fotosheet" role="dialog" aria-modal="true" aria-label="${esc(o.titulo)}">
     <h3>${esc(o.titulo)}</h3>${o.sub ? `<div class="sub">${o.sub}</div>` : ''}
     <p class="fcont" id="fCont" role="status" aria-live="polite"></p>
     <div class="sgfotos" id="fLista"></div>
+    ${fase ? `<div id="fFase">${escolhaFase()}</div>` : ''}
     <div class="row-gap"><label class="btn fadd" for="fIn" id="fAdd">${I.cam} Tirar foto / escolher</label><label class="btn ghost sm" for="fInG" id="fAddG">Da galeria</label><span class="muted small" id="fProc" aria-live="polite"></span></div>
     <input type="file" id="fIn" accept="image/*" capture="environment" multiple hidden><input type="file" id="fInG" accept="image/*" multiple hidden>
     <p class="muted small m0">${o.lote ? `As mesmas fotos valem para as ${o.lote} atividades (ficam guardadas uma vez só). ` : ''}A foto é reduzida no aparelho e sobe com o apontamento; sem sinal, sobe quando a conexão voltar.</p>
@@ -58,7 +65,8 @@ export function passoFotos(o) {
     if (!$('fLista')) return;
     const c = contador(cfg, imgs.length, tem);
     const p = $('fCont'); p.textContent = c.txt; p.className = 'fcont ' + c.tom;
-    $('fLista').innerHTML = imgs.map((f, i) => `<div class="sgfth"><img src="${f.thumb}" alt="Foto ${i + 1}"><button type="button" class="btn sm ghost" data-frm="${i}" aria-label="Remover a foto ${i + 1}">✕</button></div>`).join('') || '<p class="muted small m0">Nenhuma foto ainda.</p>';
+    $('fLista').innerHTML = imgs.map((f, i) => `<div class="sgfth"><img src="${f.thumb}" alt="Foto ${i + 1}"><button type="button" class="btn sm ghost" data-frm="${i}" aria-label="Remover a foto ${i + 1}">✕</button>${f.fase ? `<button type="button" class="ffase ${f.fase}" data-ftg="${i}" aria-label="Foto ${i + 1}: ${FASES_FOTO[f.fase]}. Tocar para trocar" title="Tocar para trocar">${FASES_FOTO[f.fase]}</button>` : ''}</div>`).join('') || '<p class="muted small m0">Nenhuma foto ainda.</p>';
+    if ($('fFase')) $('fFase').innerHTML = escolhaFase();
     const cheio = c.cabe <= 0 || ocupado > 0;
     for (const id of ['fAdd', 'fAddG']) { const b = $(id); if (b) { b.classList.toggle('dis', cheio); b.setAttribute('aria-disabled', String(cheio)); } }
     for (const id of ['fIn', 'fInG']) { const b = $(id); if (b) b.disabled = cheio; }
@@ -73,6 +81,8 @@ export function passoFotos(o) {
     e.stopPropagation();
     if (e.target.id === 'scrim' || e.target.closest('[data-close]')) return cancelar();
     const rm = e.target.closest('[data-frm]'); if (rm) { imgs.splice(+rm.dataset.frm, 1); erro(''); pintar(); return; }
+    const fs = e.target.closest('[data-fse]'); if (fs) { fase = fs.dataset.fse; pintar(); return; }
+    const tg = e.target.closest('[data-ftg]'); if (tg) { const f = imgs[+tg.dataset.ftg]; if (f) f.fase = f.fase === 'antes' ? 'depois' : 'antes'; pintar(); return; }
     if (e.target.closest('#fOk')) {
       const c = contador(cfg, imgs.length, tem);
       if (!c.ok) { erro(imgs.length > c.max ? `No máximo ${c.max} foto${c.max > 1 ? 's' : ''}.` : `Falta${c.min - imgs.length > 1 ? 'm' : ''} ${c.min - imgs.length} foto${c.min - imgs.length > 1 ? 's' : ''}.`); return; }
@@ -84,9 +94,11 @@ export function passoFotos(o) {
     const c = contador(cfg, imgs.length, tem); const cabe = Math.max(0, c.cabe - ocupado);
     if (fs.length > cabe) { erro(`No máximo ${c.max} foto${c.max > 1 ? 's' : ''}: ${fs.length - cabe === 1 ? '1 foto não entrou' : `${fs.length - cabe} fotos não entraram`}.`); toast(`No máximo ${c.max} foto${c.max > 1 ? 's' : ''} por apontamento`); }
     else erro('');
-    const usar = fs.slice(0, cabe); ocupado += usar.length; pintar();
+    const usar = fs.slice(0, cabe); ocupado += usar.length;
+    const fx0 = fase; pintar();
     for (const f of usar) {
-      try { const x = await reduzirFotoAtividade(f); if (x.sha && imgs.some(y => y.sha === x.sha)) toast('Esta foto já foi escolhida'); else imgs.push(x); }
+      const fx = fx0; // a escolha no momento em que a foto foi pedida
+      try { const x = await reduzirFotoAtividade(f); if (x.sha && imgs.some(y => y.sha === x.sha)) toast('Esta foto já foi escolhida'); else { if (fx) x.fase = fx; imgs.push(x); } }
       catch (err) { toast(err.message || 'Não foi possível usar esta foto'); }
       ocupado--; if (!$('fLista')) return; pintar();
     }
@@ -98,7 +110,7 @@ export function passoFotos(o) {
 // Passo de fotos de uma atividade (sit = situação que vai receber).
 export function passoFotosCel(doc, i, k, sit, ok, cancelar) {
   const p = PL.get(doc.ids[i]) || {}; const cfg = cfgF(); const tem = fotosDaCel(doc, doc.ids[i], k);
-  passoFotos({ titulo: 'Fotos da atividade', sub: `<b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${{ R: 'Realizada', N: 'Não realizada', E: 'Extra' }[sit] || ''}`, cfg, tem, rotuloOk: { R: 'Marcar como realizada', N: 'Marcar como não realizada', E: 'Registrar' }[sit] || 'Confirmar', aoConfirmar: ok, aoCancelar: cancelar });
+  passoFotos({ titulo: 'Fotos da atividade', sub: `<b>${esc(p.ativ || doc.ids[i])}</b><br>${esc(p.rota || '')} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} · ${{ R: 'Realizada', N: 'Não realizada', E: 'Extra' }[sit] || ''}`, cfg, tem, rotuloOk: { R: 'Marcar como realizada', N: 'Marcar como não realizada', E: 'Registrar' }[sit] || 'Confirmar', fase: true, aoConfirmar: ok, aoCancelar: cancelar });
 }
 
 /* ---------------- selo 📷 e fotos de uma atividade ---------------- */
@@ -172,12 +184,12 @@ async function verFotosGrupo(doc, is, k, local) {
   try {
     const vistos = new Set(); lista = [];
     for (const l of await Promise.all(is.map(j => DB.listarFotosCel(doc.id, doc.ids[j], k, conj)))) for (const x of l) if (!vistos.has(x.id)) { vistos.add(x.id); lista.push(x); }
-    lista.sort((x, y) => x.at - y.at);
+    lista.sort(ordemFotos);
     const v = $('fVer'); if (!v) return;
     // selo da situação da foto (Relatórios e arquivo de fotos): "No banco" só aparece para o administrador
     const selo = x => { const st = statusFoto(x); return st === 'banco' && !isAdmin() ? '' : `<span class="fstat ${st}">${esc(STATUS[st].c)}</span>`; };
     const btApagar = (x, j) => podeApagarFoto(doc, x) ? `<button type="button" class="btn sm danger fapb" data-apagar="${esc(x.id)}" aria-label="Apagar a foto ${j + 1}">${I.lixo} Apagar</button>` : '';
-    v.innerHTML = lista.length ? lista.map((x, j) => `<div class="fcel"><button type="button" class="sgmini fmini${statusFoto(x) === 'arquivada' ? ' arq' : ''}" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1} (${esc(STATUS[statusFoto(x)].t)})" title="${esc(STATUS[statusFoto(x)].d)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}${selo(x)}</button>${btApagar(x, j)}</div>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal) ou estão na lixeira da administração.' : (local ? 'Nenhuma foto neste local.' : 'Nenhuma foto nesta atividade.')}</p>`;
+    v.innerHTML = lista.length ? lista.map((x, j) => `<div class="fcel"><button type="button" class="sgmini fmini${statusFoto(x) === 'arquivada' ? ' arq' : ''}" data-fid="${esc(x.id)}" aria-label="Abrir a foto ${j + 1} (${esc(STATUS[statusFoto(x)].t)})" title="${esc(STATUS[statusFoto(x)].d)}">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}${selo(x)}${FASES_FOTO[x.fase] ? `<span class="ffase ${x.fase}">${FASES_FOTO[x.fase]}</span>` : ''}</button>${btApagar(x, j)}</div>`).join('') : `<p class="muted small m0">${n ? 'As fotos ainda não chegaram a este aparelho (sem sinal) ou estão na lixeira da administração.' : (local ? 'Nenhuma foto neste local.' : 'Nenhuma foto nesta atividade.')}</p>`;
     const comp = lista.filter(x => (x.refs || []).length > 1).length;
     const arq = lista.filter(x => statusFoto(x) === 'arquivada').length;
     $('fVerInfo').textContent = lista.length ? `Toque numa foto para ver grande.${comp ? ` ${comp === 1 ? 'Uma foto vale' : `${comp} fotos valem`} para várias atividades${local ? ' do local' : ' da rota'}.` : ''}${arq ? ` ${arq === 1 ? 'Uma foto foi arquivada' : `${arq} fotos foram arquivadas`} fora do banco (fica a miniatura).` : ''}` : '';
@@ -188,7 +200,7 @@ function juntarFotos(doc, is, k, local) {
   if (!is.length) return;
   const i = is[0]; const cfg = cfgF(); const tem = Math.max(0, ...is.map(j => fotosDaCel(doc, doc.ids[j], k))); const sit = local ? 'R' : doc.d[i][k];
   const nome = local || (PL.get(doc.ids[i]) || {}).ativ || '';
-  passoFotos({ titulo: 'Adicionar foto', sub: `<b>${esc(nome)}</b><br>${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, cfg: { obrig: true, min: Math.max(tem + 1, cfg.min), max: cfg.max }, tem, rotuloOk: 'Salvar as fotos', lote: is.length > 1 ? is.length : 0,
+  passoFotos({ titulo: 'Adicionar foto', sub: `<b>${esc(nome)}</b><br>${DAYS[k]} ${ddmm(diasDe(doc)[k])}`, cfg: { obrig: true, min: Math.max(tem + 1, cfg.min), max: cfg.max }, tem, rotuloOk: 'Salvar as fotos', lote: is.length > 1 ? is.length : 0, fase: true,
     aoConfirmar: imgs => { if (!canEdit(doc.area)) return toast('Seu perfil não pode apontar nesta área'); gravarApont(doc, [], montarFotos(doc, k, is, imgs, sit)); DB.log(`${nome || doc.ids[i]} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])} → ${imgs.length} foto${imgs.length > 1 ? 's' : ''} anexada${imgs.length > 1 ? 's' : ''}`, 'operacao'); toast(imgs.length > 1 ? `${imgs.length} fotos salvas` : 'Foto salva'); render(); } });
 }
 // Fotos da atividade na semana (Programação): abre o primeiro dia com foto; os outros dias ficam no seletor.

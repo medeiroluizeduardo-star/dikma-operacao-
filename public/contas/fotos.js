@@ -93,6 +93,9 @@ export const fotosDaCel = (doc, pid, k) => ((doc && doc.ft && doc.ft[pid + '|' +
 
 // Documento leve (evidencias/{id}) de uma foto: os campos que o aparelho grava.
 // o = { semana, area, conj, rota, dia, k, sit, itens: [{ pid, ativ, local }], img: { thumb, bytes, w, h, sha, nome }, por, porNome }
+// Foto do antes ou do depois do serviço (escolhida por quem tira a foto no Apontar). Sem a marcação (fotos antigas,
+// Queda zero e OMs), o relatório marca pela hora (fotos-arquivo.js › marcaDaFoto).
+export const FASES_FOTO = { antes: 'Antes', depois: 'Depois' };
 export function metaFoto(o) {
   const itens = o.itens.slice(0, MAX_REFS);
   const unicos = l => [...new Set(l.filter(Boolean))];
@@ -103,7 +106,7 @@ export function metaFoto(o) {
     dia: o.dia, mes: o.dia.slice(0, 7), rota: o.rota || '', sit: o.sit || '',
     local: juntar(itens.map(x => x.local), 300), ativ: juntar(itens.map(x => x.ativ), 500),
     nome: String((o.img && o.img.nome) || 'foto.jpg').slice(0, 120), tipo: 'image/jpeg', tamanho: o.img.bytes, bytes: o.img.bytes, w: o.img.w, h: o.img.h, sha: o.img.sha || '',
-    thumb: o.img.thumb, por: o.por, porNome: o.porNome || '',
+    thumb: o.img.thumb, ...(FASES_FOTO[o.img.fase] ? { fase: o.img.fase } : {}), por: o.por, porNome: o.porNome || '',
     exportadoEm: null, exportLote: null, lixeiraEm: null, removidaEm: null
   };
 }

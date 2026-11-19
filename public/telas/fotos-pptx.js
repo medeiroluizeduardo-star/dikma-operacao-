@@ -193,7 +193,7 @@ export async function gerarPptx(o) {
         s.addShape(pptx.ShapeType.roundRect, { x: cx.x, y: cx.y, w: cx.w, h: cx.h, fill: { color: COR.creme }, line: { color: COR.linha, width: 0.5 }, rectRadius: 0.12 });
         s.addText('Foto não encontrada no banco', { x: cx.x, y: cx.y, w: cx.w, h: cx.h, fontFace: FONTE, fontSize: 12, color: COR.cinza, align: 'center', valign: 'middle' });
       }
-      const marca = FA.marcaFoto(gf.fotos.indexOf(f), gf.fotos.length);
+      const marca = FA.marcaDaFoto(f, gf.fotos);
       const extra = st === 'arquivada' ? ' · miniatura (foto completa arquivada)' : !dados || dados === f.thumb ? ' · miniatura' : '';
       const ref = so ? '' : `${pag.grupos.indexOf(gf) + 1}. `;
       s.addText([

@@ -30,6 +30,12 @@ Arquivos:
   justificativa) e junta as **fotos do local**, que valem para todas as atividades do local no dia (`refs` de todas,
   guardadas uma vez só). Com a foto obrigatória, o local só salva com o mínimo de fotos. O número de fotos do local é o
   maior `ft` entre as atividades dele. Execução do local = feitas ÷ previstas (`public/contas/execucao.js`).
+- **Antes e Depois** (desde a v193): no local, os botões **Foto do antes** e **Foto do depois** abrem o passo de fotos
+  já com a escolha; no passo (também na foto de uma atividade e em "Adicionar foto") há "A foto é do: Antes | Depois"
+  (começa em Antes quando ainda não há foto) e a marca na miniatura troca com um toque antes de salvar. Fica no campo
+  `fase` da foto. No relatório em PowerPoint a foto marcada sai com a marca escolhida (Antes primeiro, Depois no fim);
+  grupo sem nenhuma foto marcada continua pela hora (1ª Antes, última Depois, meio Durante). O `indice.csv` ganhou a
+  coluna `antes_depois` (no fim).
 - **Marcar restantes** (saiu da tela com o Apontar por local; o lote abaixo continua valendo para fotos antigas): um passo de fotos só para o lote. As mesmas fotos valem para todas as atividades marcadas naquele
   momento e ficam guardadas **uma vez só**, com `refs` de todas.
 - **Fora da programação**: a atividade incluída pelo supervisor, ao ser marcada como realizada, vale como **Extra**
@@ -108,6 +114,7 @@ antes) também é somado. Uma foto com 20 `refs` soma 1 em cada uma das 20 célu
 | `local`, `ativ` | criação | descrição; com várias atividades, `"N atividades: a; b; …"` (até 400/600 caracteres). Para o texto de cada uma, use `refs` + plano (`PID`) |
 | `sit` | criação | situação no momento da foto (`R`, `N` ou `E`) |
 | `thumb` | criação | miniatura em texto `data:…` (até 40 mil caracteres) |
+| `fase` | criação (opcional) | `'antes'` ou `'depois'`: escolhida por quem tira a foto no Apontar (desde a v193). Sem o campo (fotos antigas, Queda zero, OMs), o relatório marca pela hora |
 | `nome`, `tipo`, `tamanho` | criação | nome do arquivo escolhido, `'image/jpeg'`, `tamanho` = `bytes` |
 | `bytes`, `w`, `h` | criação | tamanho do JPEG completo (até 700 mil) e pixels |
 | `sha` | criação | SHA-256 (hex, 64) dos bytes do JPEG completo, calculado no aparelho; `''` se o navegador não deixou |

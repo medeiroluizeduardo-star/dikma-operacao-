@@ -2045,3 +2045,9 @@ div.lgrp{cursor:default;grid-template-columns:minmax(0,1fr) auto}
 .paper.resumo h4{break-after:avoid}
 .paper.resumo tr{break-inside:avoid}
 @media print{body.indpapel #view>:not(.indpapelbox){display:none!important}body.indpapel .indpapelbox{display:block}.paper.resumo.indpapel .rcols{grid-template-columns:1fr 1fr}}
+/* Antes / Depois nas fotos das atividades (passo de fotos, fotos do local e fotos salvas) */
+.ffaseesc{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ffase{position:absolute;left:3px;top:3px;font-family:inherit;font-size:10.5px;font-weight:700;line-height:1.5;padding:1px 7px;border-radius:10px;border:0;color:#fff;background:#4a5568;cursor:default}
+button.ffase{cursor:pointer;min-height:22px}
+.ffase.antes{background:#9a5b00}
+.ffase.depois{background:#1f6f43}
