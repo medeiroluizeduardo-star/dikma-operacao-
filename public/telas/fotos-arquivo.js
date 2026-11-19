@@ -21,7 +21,7 @@ const SEM = FA.periodoSemana(TODAY, 0), ANT = FA.periodoSemana(TODAY, -1);
 // Estado da tela (só na memória).
 // Quantas fotos aparecem de cada vez (no celular, menos: a lista fica curta).
 const PASSO = () => (matchMedia('(max-width:860px)').matches ? 12 : 48);
-const A = { aba: 'periodo', conj: '', per: 'sem', de: SEM.de, ate: SEM.ate, rota: '', filtro: 'todas', mostrar: PASSO(),
+const A = { aba: 'periodo', tipo: 'ativ', conj: '', per: 'sem', de: SEM.de, ate: SEM.ate, rota: '', filtro: 'todas', mostrar: PASSO(),
   fotos: null, chave: '', lendo: false, erro: '', semanas: null, chaveSem: '',
   incluirExportadas: false, tarefa: null, zip: null, aviso: '',
   lix: null, lixChave: '', lixLendo: false, incluirRecentes: false };
@@ -52,7 +52,9 @@ async function semanasDoPeriodo(k, p) {
   A.semanas = await DB.semanasPeriodo(k, FA.mesesDasSemanas(p.de, p.ate)); A.chaveSem = ch; return A.semanas;
 }
 // Fotos do período na rota escolhida.
-const daRota = l => (A.rota ? l.filter(f => (f.rota || '') === A.rota) : l);
+// Fotos do período do tipo escolhido (Atividades ou Queda zero) e da rota escolhida.
+const daRota = l => { const t = FA.doTipo(l, A.tipo); return A.rota ? t.filter(f => (f.rota || '') === A.rota) : t; };
+const sufixoTipo = () => (A.tipo === 'qz' ? '-queda-zero' : '');
 
 /* ---------------- progresso ---------------- */
 function progresso(feito, total, texto) {
@@ -75,13 +77,13 @@ async function gerarRelatorio() {
     const [semanas, mod] = await Promise.all([semanasDoPeriodo(k, p), import('./fotos-pptx.js')]);
     progresso(0, 0, 'Carregando a biblioteca do PowerPoint…');
     const [logoBranco] = await Promise.all([mod.imagemDoSite('img/dikma-logo-branco.png').catch(() => null), mod.carregarBiblioteca()]);
-    const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: A.fotos, de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota });
+    const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: FA.doTipo(A.fotos, A.tipo), de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota });
     const lim = FA.limitarFotos(rel.grupos, FA.MAX_FOTOS_PPTX);
-    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, fora: lim.fora, nomeConj: SETS[k].nome, autor: ME.nome || ME.login || '', geradoEm: new Date(), logoBranco,
+    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, fora: lim.fora, tipo: A.tipo, nomeConj: SETS[k].nome, autor: ME.nome || ME.login || '', geradoEm: new Date(), logoBranco,
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
-    const nome = `relatorio-fotos-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.pptx`;
+    const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.pptx`;
     mod.baixarBlob(blob, nome);
-    DB.log(`Relatório fotográfico ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`, 'administracao');
+    DB.log(`Relatório fotográfico${A.tipo === 'qz' ? ' da queda zero' : ''} ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`, 'administracao');
     terminar('', `Relatório gerado: ${nome} (${FA.fmtBytes(blob.size)}, ${n0(lim.total - lim.fora)} fotos).${lim.fora ? ` ${plural(lim.fora, 'foto ficou', 'fotos ficaram')} de fora pelo limite de ${FA.MAX_FOTOS_PPTX}: escolha uma rota ou um período menor.` : ''}`);
     toast('Relatório em PowerPoint baixado');
   } catch (e) { terminar(msgErro(e)); toast('Não foi possível gerar o relatório'); }
@@ -100,7 +102,7 @@ async function exportarZip() {
     const [semanas, mod] = await Promise.all([semanasDoPeriodo(k, p), import('./fotos-pptx.js')]);
     const plano = planoDe(k); const lote = FA.idLote(new Date());
     const r = await mod.gerarZip({ fotos: lista, itensDe: f => FA.itensDaFoto(f, { plano, semanas }), de: p.de, ate: p.ate, lote, nomeConj: SETS[k].nome, rota: A.rota, carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
-    const nome = `fotos-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.zip`;
+    const nome = `fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.zip`;
     A.zip = { ...r, nome, lote, conj: k, marcado: false };
     mod.baixarBlob(r.blob, nome);
     terminar('', '');
@@ -202,7 +204,7 @@ function vPeriodo(k) {
   const divergentes = todas.filter(f => FA.statusFoto(f) === 'exportada' && f.exportConf === 'divergente').length;
   const noRel = todas.filter(f => FA.statusFoto(f) !== 'lixeira').length;
   const rotas = rotasDe(k);
-  let h = `<section class="card"><header><h2>Período e filtros</h2><p>${esc(SETS[k].nome)} · ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + esc(A.rota) : ''}</p></header><div class="body stackcol">
+  let h = `<section class="card"><header><h2>Período e filtros</h2><p>${esc(FA.TIPOS_REL[A.tipo])} · ${esc(SETS[k].nome)} · ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + esc(A.rota) : ''}</p></header><div class="body stackcol">
     <div class="form fafiltros">
       <label class="sel"><span>Período</span><select class="in" data-fa="per"><option value="sem" ${A.per === 'sem' ? 'selected' : ''}>Esta semana (${FA.ddmm(SEM.de)} a ${FA.ddmm(SEM.ate)})</option><option value="ant" ${A.per === 'ant' ? 'selected' : ''}>Semana passada (${FA.ddmm(ANT.de)} a ${FA.ddmm(ANT.ate)})</option><option value="datas" ${A.per === 'datas' ? 'selected' : ''}>Escolher as datas</option></select></label>
       ${A.per === 'datas' ? `<label class="sel"><span>De</span><input class="in" type="date" data-fa="de" value="${esc(A.de)}" max="${TODAY}"></label><label class="sel"><span>Até</span><input class="in" type="date" data-fa="ate" value="${esc(A.ate)}"></label>` : ''}
@@ -219,9 +221,9 @@ function vPeriodo(k) {
   const dis = !A.fotos || ocupado() ? 'disabled' : '';
   h += `<section class="card"><header><h2>Ações</h2><p>Na ordem: relatório, exportar e confirmar o arquivo salvo, lixeira e apagar de vez</p></header><div class="body stackcol">
     <div class="fagrid">
-      <div class="faacao"><b>${I.file} Relatório em PowerPoint</b><p class="small muted m0">Capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota e os registros fotográficos (até ${FA.FOTOS_POR_SLIDE} por slide, com legenda). Não muda nada no banco.</p>
+      <div class="faacao"><b>${I.file} Relatório em PowerPoint</b><p class="small muted m0">${A.tipo === 'qz' ? `Só as fotos da queda zero: capa com os lançamentos e as fotos, e um slide por lançamento (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com toneladas, local e motivo na legenda).` : `Só as fotos das atividades: capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota e os registros fotográficos (até ${FA.FOTOS_POR_SLIDE} por slide, com legenda).`} Não muda nada no banco.</p>
         ${noRel > FA.MAX_FOTOS_PPTX ? `<p class="warn-t small m0"><b>${n0(noRel)} fotos no período:</b> entram ${FA.MAX_FOTOS_PPTX}, em rodízio entre as atividades do período. Para todas, escolha uma rota ou um período menor.</p>` : ''}
-        <div class="row-gap"><button class="btn pri" data-act="faPptx" ${dis}>${I.dl} Gerar relatório (.pptx)</button></div></div>
+        <div class="row-gap"><button class="btn pri" data-act="faPptx" ${dis || !noRel ? 'disabled' : ''}>${I.dl} Gerar relatório (.pptx)</button></div></div>
       <div class="faacao"><b>${I.cam} Exportar fotos (.zip)</b><p class="small muted m0">Pastas por período, colaborador e atividade, com <span class="mono">indice.csv</span> e conferência do SHA-256 de cada foto. Depois de salvar, confirme para marcar como exportadas.</p>
         <label class="lpchk"><input type="checkbox" data-fa="incluirExportadas" ${A.incluirExportadas ? 'checked' : ''}><span>Incluir as já exportadas</span></label>
         ${exp.length > FA.MAX_FOTOS_ZIP ? `<p class="warn-t small m0">${n0(exp.length)} fotos: o limite por arquivo é ${n0(FA.MAX_FOTOS_ZIP)}. Escolha um período menor ou uma rota.</p>` : ''}
@@ -266,6 +268,7 @@ export function vArqFotos() {
   const k = conjAtual(); if (A.aba === 'periodo') carregar();
   return `<div class="row-gap fatopo">
       ${ks.length > 1 ? `<div class="seg fasets" role="group" aria-label="Atividades">${ks.map(x => `<button data-act="faConj" data-k="${x}" aria-pressed="${x === k}" aria-selected="${x === k}">${esc(SETS[x].curto)}</button>`).join('')}</div>` : ''}
+      <div class="seg fasets" role="tablist" aria-label="Relatório de">${Object.entries(FA.TIPOS_REL).map(([t, n]) => `<button role="tab" data-act="faTipo" data-t="${t}" aria-selected="${A.aba === 'periodo' && A.tipo === t}">${esc(n)}</button>`).join('')}</div>
       <div class="seg fasets" role="tablist" aria-label="Parte da tela"><button role="tab" data-act="faAba" data-a="periodo" aria-selected="${A.aba === 'periodo'}">Período</button><button role="tab" data-act="faAba" data-a="lixeira" aria-selected="${A.aba === 'lixeira'}">Lixeira${A.lix && A.lix.length ? ` <span class="badge num">${A.lix.length}</span>` : ''}</button></div>
     </div>${A.aba === 'lixeira' ? vLixeira(k) : vPeriodo(k)}`;
 }
@@ -274,6 +277,7 @@ export function vArqFotos() {
 const acharFoto = id => (A.fotos || []).find(f => f.id === id) || (A.lix || []).find(f => f.id === id);
 acoes.faConj = (t, d) => { if (ocupado()) return; A.conj = d.k; A.rota = ''; A.zip = null; A.tarefa = null; A.aviso = ''; A.lixChave = ''; render(); };
 acoes.faAba = (t, d) => { A.aba = d.a; render(); };
+acoes.faTipo = (t, d) => { if (ocupado()) return; A.tipo = d.t === 'qz' ? 'qz' : 'ativ'; A.aba = 'periodo'; A.zip = null; A.tarefa = null; A.aviso = ''; A.filtro = 'todas'; A.mostrar = PASSO(); render(); };
 acoes.faFiltro = (t, d) => { A.filtro = d.s; A.mostrar = PASSO(); render(); };
 acoes.faMais = () => { A.mostrar += PASSO() * 2; render(); };
 acoes.faPptx = () => gerarRelatorio();

@@ -648,7 +648,7 @@ export async function apagarDefinitivo(conj, ids) {
   await gravarLote(b);
 }
 // Configuração das fotos (só o administrador).
-export const salvarCfgFotos = c => track(setDoc(doc(db, 'config', 'fotos'), { obrig: c.obrig, min: c.min, max: c.max, situacoes: c.situacoes, desde: c.desde, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+export const salvarCfgFotos = c => track(setDoc(doc(db, 'config', 'fotos'), { obrig: c.obrig, min: c.min, max: c.max, maxQZ: c.maxQZ, maxOM: c.maxOM, situacoes: c.situacoes, desde: c.desde, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.
 // (A conta interna do Firebase Authentication fica órfã e pode ser apagada no console, se quiser.)
 export async function excluirUsuario(uid) {

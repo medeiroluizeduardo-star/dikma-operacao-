@@ -512,6 +512,9 @@ test('Fotos: config/fotos todos leem; só o administrador grava, dentro dos limi
   await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ min: 4, max: 3 })));
   await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ situacoes: ['X'] })));
   await assertSucceeds(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ obrig: false, min: 0, situacoes: [] })));
+  // Máximo por tela (Queda zero e OMs): de 1 a 10, números inteiros.
+  await assertSucceeds(setDoc(doc(db('admin'), 'config', 'fotos'), cfg({ max: 10, maxQZ: 2, maxOM: 2 })));
+  for (const x of [{ maxQZ: 0 }, { maxQZ: 11 }, { maxOM: 0 }, { maxOM: 11 }, { maxQZ: '2' }, { maxOM: 1.5 }]) await assertFails(setDoc(doc(db('admin'), 'config', 'fotos'), cfg(x)), JSON.stringify(x));
 });
 
 // ---------------- histórico, integração e avisos ----------------

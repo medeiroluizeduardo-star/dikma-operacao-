@@ -238,3 +238,13 @@ test('slides de fotos: atividade com 4 ou mais fotos em slides próprios; as com
   assert.equal(p.reduce((s, x) => s + x.fotos.length, 0), 13, 'nenhuma foto some');
   assert.ok(p.every(x => x.fotos.length <= 4));
 });
+
+test('relatórios separados: fotos da queda zero (atividade QZ-…) e das atividades', () => {
+  const ativ = { id: 'a', refs: ['RECEBIMENTO|2026-11-09|P12|2'] };
+  const qz = { id: 'q', refs: ['RECEBIMENTO|2026-11-09|QZ-P12-2|2'] };
+  const antiga = { id: 'v', ref: 'RECEBIMENTO|2026-11-09#P12|2' };
+  assert.equal(FA.ehQZ(qz), true); assert.equal(FA.ehQZ(ativ), false); assert.equal(FA.ehQZ(antiga), false);
+  assert.deepEqual(FA.doTipo([ativ, qz, antiga], 'ativ').map(f => f.id), ['a', 'v']);
+  assert.deepEqual(FA.doTipo([ativ, qz, antiga], 'qz').map(f => f.id), ['q']);
+  assert.deepEqual(FA.doTipo(null, 'qz'), []);
+});

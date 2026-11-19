@@ -8,7 +8,8 @@ import { add } from './cal.js';
 // desde = a partir de que dia as realizadas sem foto contam como "sem foto" nos indicadores e no Meu dia.
 // As atividades apontadas antes disso não pedem foto (não é retroativo).
 export const FOTOS_DESDE_PADRAO = '2026-11-09';
-export const FOTOS_PADRAO = Object.freeze({ obrig: true, min: 1, max: 3, situacoes: ['R', 'E'], desde: FOTOS_DESDE_PADRAO });
+// Máximo por tela: max = Atividades (Apontar), maxQZ = Queda zero, maxOM = Solicitações de OM (todas de 1 a MAX_FOTOS).
+export const FOTOS_PADRAO = Object.freeze({ obrig: true, min: 1, max: 10, maxQZ: 2, maxOM: 2, situacoes: ['R', 'E'], desde: FOTOS_DESDE_PADRAO });
 export const SITUACOES_FOTO = [['R', 'Realizada'], ['E', 'Extra (fora da programação)'], ['N', 'Não realizada']];
 export const MAX_FOTOS = 10;      // teto do máximo por apontamento (as regras do banco conferem o mesmo)
 export const MAX_REFS = 100;      // atividades que uma foto pode cobrir (Marcar restantes de uma rota)
@@ -27,9 +28,11 @@ export function cfgFotos(raw) {
   let max = Math.min(MAX_FOTOS, Math.max(1, int(r.max, FOTOS_PADRAO.max)));
   let min = Math.max(obrig ? 1 : 0, Math.min(MAX_FOTOS, int(r.min, FOTOS_PADRAO.min)));
   if (max < min) max = min;
+  const maxQZ = Math.min(MAX_FOTOS, Math.max(1, int(r.maxQZ, FOTOS_PADRAO.maxQZ)));
+  const maxOM = Math.min(MAX_FOTOS, Math.max(1, int(r.maxOM, FOTOS_PADRAO.maxOM)));
   const situacoes = Array.isArray(r.situacoes) ? SITUACOES_FOTO.map(s => s[0]).filter(s => r.situacoes.includes(s)) : [...FOTOS_PADRAO.situacoes];
   const desde = typeof r.desde === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.desde) ? r.desde : FOTOS_DESDE_PADRAO;
-  return { obrig, min, max, situacoes, desde };
+  return { obrig, min, max, maxQZ, maxOM, situacoes, desde };
 }
 // Confere o que o administrador digitou. Devolve a mensagem de erro, ou '' quando está tudo certo.
 export function validarCfgFotos(c) {
@@ -41,6 +44,7 @@ export function validarCfgFotos(c) {
   if (c.max < 1) return 'O máximo precisa ser pelo menos 1.';
   if (c.max < c.min) return 'O máximo não pode ser menor que o mínimo.';
   if (c.max > MAX_FOTOS) return `O máximo é de ${MAX_FOTOS} fotos por apontamento.`;
+  for (const [k, nome] of [['maxQZ', 'Queda zero'], ['maxOM', 'OMs']]) if (c[k] != null && (!ok(c[k]) || c[k] < 1 || c[k] > MAX_FOTOS)) return `${nome}: o máximo vai de 1 a ${MAX_FOTOS} fotos.`;
   if (!Array.isArray(c.situacoes) || c.situacoes.some(s => !SITUACOES_FOTO.some(x => x[0] === s))) return 'Situação inválida.';
   if (c.obrig && !c.situacoes.length) return 'Marque pelo menos uma situação que exige foto (ou desligue a obrigação).';
   if (c.desde != null && !/^\d{4}-\d{2}-\d{2}$/.test(c.desde)) return 'Data de início inválida.';

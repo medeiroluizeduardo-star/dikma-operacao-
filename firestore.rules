@@ -395,7 +395,10 @@ service cloud.firestore {
     // Configuração das fotos: todos os ativos leem; só o administrador grava (com os limites conferidos).
     match /config/fotos {
       allow read: if ativo();
-      allow write: if admin() && request.resource.data.keys().hasOnly(['obrig', 'min', 'max', 'situacoes', 'desde', 'atualizadoEm', 'por'])
+      // max = Atividades; maxQZ = Queda zero; maxOM = OMs (opcionais, de 1 a 10).
+      allow write: if admin() && request.resource.data.keys().hasOnly(['obrig', 'min', 'max', 'maxQZ', 'maxOM', 'situacoes', 'desde', 'atualizadoEm', 'por'])
+        && (request.resource.data.get('maxQZ', 1) is int && request.resource.data.get('maxQZ', 1) >= 1 && request.resource.data.get('maxQZ', 1) <= 10)
+        && (request.resource.data.get('maxOM', 1) is int && request.resource.data.get('maxOM', 1) >= 1 && request.resource.data.get('maxOM', 1) <= 10)
         && request.resource.data.obrig is bool && request.resource.data.min is int && request.resource.data.max is int
         && request.resource.data.min >= 0 && (request.resource.data.obrig == false || request.resource.data.min >= 1) && request.resource.data.max >= request.resource.data.min
         && request.resource.data.max >= 1 && request.resource.data.max <= 10
