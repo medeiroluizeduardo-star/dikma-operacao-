@@ -170,7 +170,7 @@ export function caminhoZip(f, itens, de, ate) {
 // ---------- índice (indice.csv) ----------
 // Separador ponto e vírgula (o Excel em português abre direto) e BOM (acentos certos). Uma linha por foto e
 // atividade: a foto que vale para 5 atividades tem 5 linhas apontando para o mesmo arquivo.
-export const CSV_CAB = ['id', 'data', 'area', 'rota', 'local', 'atividade', 'situacao', 'colaborador', 'sha256', 'arquivo', 'conferencia', 'lote'];
+export const CSV_CAB = ['id', 'data', 'area', 'rota', 'local', 'atividade', 'situacao', 'colaborador', 'sha256', 'arquivo', 'conferencia', 'lote', 'antes_depois'];
 export const SIT_TXT = { R: 'Realizada', N: 'Não realizada', E: 'Extra', P: 'Programada', _: '' };
 export function csvCampo(v) {
   let s = String(v ?? '');
@@ -182,7 +182,7 @@ export function linhasIndice(fotos, { itensDe, caminhoDe, confDe = () => '', lot
   for (const f of fotos) {
     const itens = itensDe(f); const arq = caminhoDe(f); const conf = confDe(f);
     const ls = itens.length ? itens : [{ rota: f.rota, local: f.local, ativ: f.ativ, sit: f.sit }];
-    for (const it of ls) out.push([f.id, f.dia, f.area, it.rota || f.rota || '', it.local || '', it.ativ || '', SIT_TXT[it.sit || f.sit] || it.sit || f.sit || '', f.porNome || '', f.sha || '', arq, CONF_TXT[conf] || conf, lote]);
+    for (const it of ls) out.push([f.id, f.dia, f.area, it.rota || f.rota || '', it.local || '', it.ativ || '', SIT_TXT[it.sit || f.sit] || it.sit || f.sit || '', f.porNome || '', f.sha || '', arq, CONF_TXT[conf] || conf, lote, FASE_TXT[f.fase] || '']);
   }
   return out;
 }
@@ -264,7 +264,7 @@ export function montarRelatorio({ semanas, plano, fotos, de, ate, hoje, rota = '
     const g = grupos.get(chave); g.fotos.push(f); if (f.porNome && !g.colabs.includes(f.porNome)) g.colabs.push(f.porNome);
   }
   const lista = [...grupos.values()].sort(ordena);
-  for (const g of lista) g.fotos.sort((a, b) => (ms(a.at) || 0) - (ms(b.at) || 0));
+  for (const g of lista) g.fotos.sort(ordemFotos);
   return {
     de, ate, fim, rota, ind: fechar(ind),
     porRota: [...porRota.values()].map(fechar).sort((a, b) => String(a.area).localeCompare(String(b.area)) || String(a.rota).localeCompare(String(b.rota))),
@@ -295,6 +295,17 @@ export function periodoExtenso(de, ate) {
 export const ehSemanaCheia = (de, ate) => add(de, 6) === ate && new Date(de + 'T12:00:00').getDay() === 1;
 // Antes / Durante / Depois pela hora: as fotos do grupo estão em ordem de hora; com uma só, não há marcação.
 export const marcaFoto = (i, n) => (n < 2 ? '' : i === 0 ? 'Antes' : i === n - 1 ? 'Depois' : 'Durante');
+// Marca de uma foto no relatório: a escolhida no Apontar (campo fase); num grupo em que nenhuma foto foi marcada
+// (fotos antigas), pela hora. Num grupo com marcação, a foto sem marcação fica sem marca.
+const FASE_TXT = { antes: 'Antes', depois: 'Depois' };
+export function marcaDaFoto(f, fotos) {
+  if (FASE_TXT[f.fase]) return FASE_TXT[f.fase];
+  if (fotos.some(x => FASE_TXT[x.fase])) return '';
+  return marcaFoto(fotos.indexOf(f), fotos.length);
+}
+// Ordem das fotos de um grupo: as do antes, as sem marcação e as do depois; dentro de cada parte, pela hora.
+const ORDEM_FASE = { antes: 0, depois: 2 };
+export const ordemFotos = (a, b) => (ORDEM_FASE[a.fase] ?? 1) - (ORDEM_FASE[b.fase] ?? 1) || (ms(a.at) || 0) - (ms(b.at) || 0);
 
 // Limite de fotos do relatório: em rodízio entre as atividades (a 1ª foto de cada uma, depois a 2ª…), para o
 // relatório cobrir o período todo. Com mais atividades que o limite, entram atividades espalhadas pelo período

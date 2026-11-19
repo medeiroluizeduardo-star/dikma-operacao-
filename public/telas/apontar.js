@@ -10,7 +10,7 @@ import { partesRota } from '../contas/mover-rota.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, desenharLogo } from '../ui/shell.js';
 import { precisaFotos, passoFotos, passoFotosCel, montarFotos, verFotosCel, verFotosLocal, cfgF } from './fotos.js';
-import { exigeFoto, fotosDaCel } from '../contas/fotos.js';
+import { exigeFoto, fotosDaCel, FASES_FOTO } from '../contas/fotos.js';
 import { resumoExec, agruparLocais, mesmoLocal, fotosDoLocal, SITUACAO } from '../contas/execucao.js';
 
 /* ---------------- APONTAR ---------------- */
@@ -144,8 +144,8 @@ function vLocal(doc, k, area, g, edit, varias) {
   // Fotos do local: valem para todas as atividades do local no dia (guardadas uma vez só).
   const maxNovas = Math.max(0, cfg.max - nSalvas - r.imgs.length);
   h += `<div class="card"><header><h2>Fotos do local</h2><p>${exig ? `Obrigatória: pelo menos ${exig} foto${exig > 1 ? 's' : ''} do local` : 'Opcional: comprove o local com foto'} · máximo ${cfg.max}</p>${nSalvas ? `<span class="r"><button class="btn sm" data-act="ckVerFotos">${I.cam} Ver as ${nSalvas} salva${nSalvas > 1 ? 's' : ''}</button></span>` : ''}</header><div class="body">
-    ${r.imgs.length ? `<div class="sgfotos">${r.imgs.map((f, j) => `<div class="sgfth"><img src="${f.thumb}" alt="Foto nova ${j + 1}"><button type="button" class="btn sm ghost" data-act="ckFotoRm" data-k="${j}" aria-label="Tirar a foto nova ${j + 1}">✕</button></div>`).join('')}</div>` : ''}
-    ${edit ? `<div class="row-gap">${maxNovas ? `<button type="button" class="btn" data-act="ckFoto">${I.cam} ${r.imgs.length || nSalvas ? 'Mais fotos' : 'Tirar foto do local'}</button>` : `<span class="muted small">Chegou ao máximo de fotos.${nSalvas ? ' Para trocar uma, toque em <b>Ver as salvas</b> e use <b>Apagar</b>.' : ''}</span>`}${r.imgs.length ? `<span class="muted small">${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''} nova${r.imgs.length > 1 ? 's' : ''}: sobe${r.imgs.length > 1 ? 'm' : ''} ao salvar</span>` : ''}</div>` : nSalvas ? '' : '<p class="muted small m0">Nenhuma foto neste local.</p>'}
+    ${r.imgs.length ? `<div class="sgfotos">${r.imgs.map((f, j) => `<div class="sgfth"><img src="${f.thumb}" alt="Foto nova ${j + 1}"><button type="button" class="btn sm ghost" data-act="ckFotoRm" data-k="${j}" aria-label="Tirar a foto nova ${j + 1}">✕</button>${FASES_FOTO[f.fase] ? `<button type="button" class="ffase ${f.fase}" data-act="ckFotoFase" data-k="${j}" aria-label="Foto nova ${j + 1}: ${FASES_FOTO[f.fase]}. Tocar para trocar" title="Tocar para trocar">${FASES_FOTO[f.fase]}</button>` : ''}</div>`).join('')}</div>` : ''}
+    ${edit ? `<div class="row-gap">${maxNovas ? `<button type="button" class="btn" data-act="ckFoto" data-k="antes">${I.cam} Foto do antes</button><button type="button" class="btn" data-act="ckFoto" data-k="depois">${I.cam} Foto do depois</button>` : `<span class="muted small">Chegou ao máximo de fotos.${nSalvas ? ' Para trocar uma, toque em <b>Ver as salvas</b> e use <b>Apagar</b>.' : ''}</span>`}${r.imgs.length ? `<span class="muted small">${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''} nova${r.imgs.length > 1 ? 's' : ''}: sobe${r.imgs.length > 1 ? 'm' : ''} ao salvar</span>` : ''}</div>` : nSalvas ? '' : '<p class="muted small m0">Nenhuma foto neste local.</p>'}
     ${faltaF && edit ? `<p class="fcont falta m0">Falta${faltaF > 1 ? 'm' : ''} ${faltaF} foto${faltaF > 1 ? 's' : ''} do local para salvar.</p>` : ''}</div></div>`;
   if (edit) h += `<div class="lcsalvar"><button type="button" class="btn pri" data-act="ckSalvar"${!dirty || faltaF ? ' disabled' : ''}>Salvar apontamento do local</button><span class="muted small">${dirty ? `${mud.length ? `${mud.length} mudança${mud.length > 1 ? 's' : ''}` : ''}${mud.length && r.imgs.length ? ' e ' : ''}${r.imgs.length ? `${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''}` : ''} para salvar` : 'Tudo salvo'}</span></div>`;
   return h;
@@ -163,9 +163,10 @@ acoes.ckJust = comLocal(({ doc, k }, r, d) => { const i = +d.k; pedirJustificati
 acoes.ckTudo = comLocal(({ doc, k, g }, r) => { let n = 0; for (const x of g.itens) if (doc.d[x.i][k] !== 'E' && efetivo(doc, k, r, x.i) === 'P') { r.v[x.i] = 'R'; n++; } toast(n === 1 ? '1 atividade marcada como feita · falta salvar' : `${n} atividades marcadas como feitas · falta salvar`); render(); });
 acoes.ckFotoRm = comLocal((x, r, d) => { r.imgs.splice(+d.k, 1); render(); });
 acoes.ckVerFotos = () => { const x = localAberto(); if (x) verFotosLocal(x.doc, x.g.itens.map(y => y.i), x.k, x.g.local); };
-acoes.ckFoto = comLocal(({ doc, k, g }, r) => {
+acoes.ckFotoFase = comLocal((x, r, d) => { const f = r.imgs[+d.k]; if (f) f.fase = f.fase === 'antes' ? 'depois' : 'antes'; render(); });
+acoes.ckFoto = comLocal(({ doc, k, g }, r, d) => {
   const cfg = cfgF(); const tem = temFotos(doc, k, g) + r.imgs.length; const exig = fotosExigidas(doc, k, g, r);
-  passoFotos({ titulo: 'Fotos do local', sub: `<b>${esc(g.local)}</b><br>${esc(UI.aRota)} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}`, cfg: { obrig: true, min: Math.max(1, exig - tem), max: cfg.max }, tem, lote: g.itens.length > 1 ? g.itens.length : 0, rotuloOk: 'Juntar ao local',
+  passoFotos({ titulo: 'Fotos do local', sub: `<b>${esc(g.local)}</b><br>${esc(UI.aRota)} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}`, cfg: { obrig: true, min: Math.max(1, exig - tem), max: cfg.max }, tem, lote: g.itens.length > 1 ? g.itens.length : 0, rotuloOk: 'Juntar ao local', fase: d && d.k,
     aoConfirmar: imgs => { if (UI.apRasc === r) r.imgs.push(...imgs); render(); }, aoCancelar: () => render() });
 });
 acoes.ckSalvar = comLocal(({ doc, k, g }, r) => {

@@ -339,6 +339,11 @@ test('Queda zero com fotos: o líder grava o lançamento e as fotos num lote só
   await assertFails(apagar('freqLeitor'));
   await assertSucceeds(apagar('liderRec'));
 });
+test('Fotos: a foto pode levar a marca Antes ou Depois (fase) e nenhuma outra', async () => {
+  await assertSucceeds(gravarFoto('liderRec', 'fz1', { meta: fotoMeta({ fase: 'antes' }), arq: fotoArq() }));
+  await assertSucceeds(gravarFoto('liderRec', 'fz2', { meta: fotoMeta({ fase: 'depois' }), arq: fotoArq() }));
+  await assertFails(gravarFoto('liderRec', 'fz3', { meta: fotoMeta({ fase: 'durante' }), arq: fotoArq() }));
+});
 test('Fotos: ninguém grava foto em outra área, em nome de outro, nem com a área diferente da semana', async () => {
   await assertFails(gravarFoto('liderPrep', 'f2', { meta: fotoMeta({ por: 'liderPrep' }), arq: fotoArq({ por: 'liderPrep' }) }));
   await assertFails(gravarFoto('liderRec', 'f3', { meta: fotoMeta({ por: 'outro' }), arq: fotoArq({ por: 'outro' }) }));

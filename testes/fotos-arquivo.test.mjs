@@ -100,10 +100,10 @@ test('índice CSV: cabeçalho, uma linha por foto e atividade, ponto e vírgula,
   const linhas = FA.linhasIndice([f1, f2], { itensDe: itens, caminhoDe: f => `p/${f.id}.jpg`, confDe: f => (f.id === 'f1' ? 'ok' : FA.conferirSha(f.sha, 'cd'.repeat(32))), lote: 'EXP-1' });
   assert.equal(linhas.length, 3, 'f2 vale para 2 atividades: 2 linhas, mesmo arquivo');
   const csv = FA.gerarCsv(linhas);
-  assert.ok(csv.startsWith('﻿id;data;area;rota;local;atividade;situacao;colaborador;sha256;arquivo;conferencia;lote\r\n'));
+  assert.ok(csv.startsWith('﻿id;data;area;rota;local;atividade;situacao;colaborador;sha256;arquivo;conferencia;lote;antes_depois\r\n'));
   const lido = FA.lerCsv(csv);
   assert.deepEqual(lido[0], FA.CSV_CAB);
-  assert.deepEqual(lido[1], ['f1', '2026-11-10', 'RECEBIMENTO', 'ROTA 1', 'Moega 2', 'Limpeza da moega', 'Realizada', 'LÍDER EXEMPLO', 'ab'.repeat(32), 'p/f1.jpg', 'conferida', 'EXP-1']);
+  assert.deepEqual(lido[1], ['f1', '2026-11-10', 'RECEBIMENTO', 'ROTA 1', 'Moega 2', 'Limpeza da moega', 'Realizada', 'LÍDER EXEMPLO', 'ab'.repeat(32), 'p/f1.jpg', 'conferida', 'EXP-1', '']);
   assert.equal(lido[2][5], "'=SOMA(A1)", 'fórmula vira texto');
   assert.equal(lido[2][7], 'Ana; "Bia"');
   assert.equal(lido[2][10], 'sem SHA gravado (não conferida)');
@@ -221,6 +221,16 @@ test('relatório no modelo da Dikma: semana do ano, período por extenso e Antes
   assert.deepEqual([0].map(i => FA.marcaFoto(i, 1)), ['']);
   assert.deepEqual([0, 1].map(i => FA.marcaFoto(i, 2)), ['Antes', 'Depois']);
   assert.deepEqual([0, 1, 2, 3].map(i => FA.marcaFoto(i, 4)), ['Antes', 'Durante', 'Durante', 'Depois']);
+  // marcação escolhida no Apontar (fase) vale sobre a hora; grupo sem marcação continua pela hora
+  const at = h => new Date(`2026-11-19T${h}:00`);
+  const velhas = [{ at: at('08:00') }, { at: at('09:00') }, { at: at('10:00') }];
+  assert.deepEqual(velhas.map(f => FA.marcaDaFoto(f, velhas)), ['Antes', 'Durante', 'Depois']);
+  const novas = [{ at: at('08:00'), fase: 'depois' }, { at: at('09:00'), fase: 'antes' }, { at: at('10:00') }];
+  novas.sort(FA.ordemFotos);
+  assert.deepEqual(novas.map(f => f.fase || ''), ['antes', '', 'depois'], 'antes primeiro, depois no fim');
+  assert.deepEqual(novas.map(f => FA.marcaDaFoto(f, novas)), ['Antes', '', 'Depois']);
+  const so1 = [{ at: at('08:00'), fase: 'depois' }];
+  assert.equal(FA.marcaDaFoto(so1[0], so1), 'Depois', 'uma foto só, marcada, sai com a marca');
 });
 
 test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo período) e posição das fotos no slide', () => {

@@ -83,6 +83,10 @@ test('refs compartilhadas: uma foto do "Marcar restantes" vale para todas e cont
   assert.equal(meta.mes, '2026-11'); assert.equal(meta.pid, 'REC-001'); assert.equal(meta.local, 'Correia 1');
   assert.match(meta.ativ, /^3 atividades: /);
   for (const c of ['exportadoEm', 'exportLote', 'lixeiraEm', 'removidaEm']) assert.equal(meta[c], null);
+  assert.equal('fase' in meta, false, 'sem escolha, sem o campo fase');
+  const ant = F.metaFoto({ semana: SEM, area: AREA, dia: '2026-11-11', k: 2, itens, img: { thumb: '', bytes: 1, w: 1, h: 1, fase: 'antes' } });
+  assert.equal(ant.fase, 'antes');
+  assert.equal('fase' in F.metaFoto({ semana: SEM, area: AREA, dia: '2026-11-11', k: 2, itens, img: { thumb: '', bytes: 1, w: 1, h: 1, fase: 'outra' } }), false);
   // contagem por célula: 2 fotos para as 3 atividades = 2 em cada uma
   assert.deepEqual(F.incrementosFt(meta.refs, 2), { 'REC-001|2': 2, 'REC-002|2': 2, 'REC-003|2': 2 });
   // até 100 atividades por foto
