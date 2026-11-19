@@ -3,7 +3,7 @@
 // Só leitura. As contas ficam em contas/oms-indicadores.js; os dados são os de Operação › OMs (oms/{id}, uma escuta por conjunto).
 import { painelOms, faixaPct } from '../contas/oms-indicadores.js';
 import { PRIORIDADES, STATUS, COR, duracao, dataBR, docsResumo, diaDe, linhasExcel } from '../contas/oms.js';
-import { registrarExcel } from '../ui/indicadores-acoes.js';
+import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
 import { AREA_S, SETS, MESES_L, DAYS, today, addMonth, pd } from '../contas/cal.js';
 import { conjsInd, areasInd } from '../contas/acessos.js';
 import { indicadores, variacao, etiqueta, tabela, vazio, carregando, recolhido } from '../ui/padrao.js';
@@ -105,12 +105,63 @@ export function topo() {
   return sw + `<label class="sel"><span>Mês</span><select class="in" id="oiMes">${ops.map(m => `<option value="${m}" ${m === u.mes ? 'selected' : ''}>${esc(mesNome(m))}</option>`).join('')}</select></label>`;
 }
 export const renderView = () => vPainel();
-// Exportar para o Excel: além dos quadros da tela, a lista das OMs do mês (previstas, solicitadas ou finalizadas nele).
-registrarExcel('ompainel', () => {
-  const { ok, l } = dados(); if (!ok) return [];
-  const ym = U().mes; const doMes = l.filter(o => [diaDe(o), o.hSol, o.hFim].some(x => String(x || '').startsWith(ym)));
-  return [{ nome: 'OMs do mês', linhas: linhasExcel(doMes, areaNome, cfg()) }];
-});
+// Relatório para os gerentes ("Imprimir resumo" e "Exportar para o Excel"): os mesmos números da tela, em tabelas,
+// com os gráficos no Excel e a lista completa das OMs do mês (previstas, solicitadas ou finalizadas nele).
+const horas = m => (m == null ? null : Math.round(m / 6) / 10);
+function relatorioOM() {
+  const u = U(); const { ok, l, lim } = dados(); if (!ok) return null;
+  const meses = []; for (let i = 5; i >= 0; i--) meses.push(addMonth(u.mes, -i));
+  const p = painelOms(l, { ym: u.mes, meses, hoje: HOJE, cfg: cfg(), anterior: addMonth(u.mes, -1) });
+  const a = p.atual; const atual = u.mes === MES_HOJE;
+  const onde = vista() === 'coq' ? 'Coqueria (Pátio e Bateria)' : SETS[vista()].nome;
+  const prev = atual ? 'Previstas até hoje' : 'Previstas';
+  const docTxt = o => { const r = docsResumo(o); return !r ? '—' : r.completa ? (r.total ? 'Pronta' : 'Não precisa') : `${r.prontos} de ${r.total}`; };
+  const doMes = l.filter(o => [diaDe(o), o.hSol, o.hFim].some(x => String(x || '').startsWith(u.mes)));
+  const lista = linhasExcel(doMes, areaNome, cfg());
+  return {
+    titulo: `Indicadores das OMs · ${mesNome(u.mes)}`, papel: 'RESUMO DO MÊS · OMS',
+    meta: [onde + (lim.length ? ' (só a sua área)' : ''), `Mês: ${mesNome(u.mes)}`, `Gerado em: ${agoraTxt()}`],
+    kpis: [
+      { rot: 'Aderência à programação', v: a.aderencia, fmt: 'pct', det: a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${atual ? ' até hoje' : ''} finalizadas${a.atrasadas ? ` · ${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}` : ''}` : 'Nenhuma OM prevista' },
+      { rot: prev, v: a.previstas, fmt: 'int', det: `${a.atrasadas} atrasada${a.atrasadas === 1 ? '' : 's'}` },
+      { rot: 'Finalizadas', v: a.finalizadas, fmt: 'int', det: 'das previstas no mês' },
+      { rot: 'Liberadas no prazo do cliente', v: a.pctPrazo, fmt: 'pct', det: a.comPrazo ? `${a.noPrazo} de ${a.comPrazo} liberadas${a.respMedia != null ? ` · média ${duracao(a.respMedia)} até liberar` : ''}` : 'Nenhuma liberada no mês' },
+      { rot: 'Recusas e cancelamentos do cliente', v: a.doCliente, fmt: 'int', det: a.envios ? `${pctTxt(a.pctCliente)}% dos ${a.envios} envio${a.envios > 1 ? 's' : ''} · ${a.recusas} recusa${a.recusas === 1 ? '' : 's'} e ${a.cancelamentos} cancelamento${a.cancelamentos === 1 ? '' : 's'}` : 'Nenhum envio no mês' },
+      { rot: 'Documentação pronta', v: a.pctDocs, fmt: 'pct', det: a.comDocs ? `${a.docsProntos} de ${a.comDocs} enviadas com tudo pronto (PT, APR, bloqueio...)` : 'Nenhuma enviada com a lista' }
+    ],
+    tabelas: [
+      { id: 'area', titulo: 'Por área', sub: mesNome(u.mes),
+        cols: [{ t: 'Área' }, { t: prev, fmt: 'int' }, { t: 'Finalizadas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'Atrasadas', fmt: 'int' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }],
+        linhas: p.porArea.map(x => [areaNome(x.area), x.previstas, x.finalizadas, x.aderencia, x.atrasadas, x.pctPrazo, x.doCliente]),
+        total: ['Total', a.previstas, a.finalizadas, a.aderencia, a.atrasadas, a.pctPrazo, a.doCliente], vazio: 'Nenhuma OM no mês.' },
+      { id: 'prio', titulo: 'Por prioridade', sub: 'Prazo do cliente para liberar, contado do envio',
+        cols: [{ t: 'Prioridade' }, { t: 'Prazo do cliente' }, { t: prev, fmt: 'int' }, { t: 'Liberadas', fmt: 'int' }, { t: 'No prazo', fmt: 'pct' }, { t: 'Média até liberar', fmt: 'h' }],
+        linhas: p.porPrio.map(x => [PRIORIDADES[x.prio], x.prazo ? `${x.prazo} h` : 'sem prazo', x.previstas, x.liberadas, x.pctPrazo, horas(x.respMedia)]), vazio: 'Nenhuma OM no mês.' },
+      { id: 'caminho', titulo: 'Do planejado ao finalizado', sub: 'OMs com data prevista no mês', meia: true,
+        cols: [{ t: 'Etapa' }, { t: 'OMs', fmt: 'int' }], linhas: p.caminho[0][1] ? p.caminho.map(([n, v]) => [n, v]) : [], vazio: 'Nenhuma OM prevista no mês.' },
+      { id: 'tempos', titulo: 'Tempos médios', sub: 'Passos concluídos no mês', meia: true,
+        cols: [{ t: 'Passo' }, { t: 'Média', fmt: 'h' }], linhas: p.tempos.map(([n, m]) => [n, horas(m)]) },
+      { id: 'meses', titulo: 'Últimos 6 meses',
+        cols: [{ t: 'Mês' }, { t: 'Previstas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }, { t: 'Documentação pronta', fmt: 'pct' }],
+        linhas: p.serie.map((x, i) => [`${mesCurto(meses[i])}/${meses[i].slice(2, 4)}`, x.previstas, x.aderencia, x.pctPrazo, x.doCliente, x.pctDocs]) },
+      { id: 'prox', titulo: 'Próximos 7 dias', sub: 'Para o cliente se preparar (documentação, bloqueios, acompanhamento)', aba: 'Próximos 7 dias', lista: true,
+        cols: [{ t: 'Dia' }, { t: 'Serviço' }, { t: 'Equipamento ou local' }, { t: 'Área' }, { t: 'Prioridade' }, { t: 'Situação' }, { t: 'Documentação' }],
+        linhas: p.proximas.map(o => [diaNome(diaDe(o)), o.titulo || '', [o.equip, o.local].filter(Boolean).join(' · '), areaNome(o.area), PRIORIDADES[o.prio || 'media'] || '', STATUS[o.status] || o.status, docTxt(o)]), vazio: 'Nada previsto para os próximos 7 dias.' },
+      { id: 'eventos', titulo: 'Recusas e cancelamentos do cliente', sub: mesNome(u.mes), aba: 'Recusas e cancelamentos', lista: true,
+        cols: [{ t: 'Data' }, { t: 'Serviço' }, { t: 'Área' }, { t: 'Tipo' }, { t: 'Motivo' }],
+        linhas: a.eventos.map(e => [dataBR(e.em.slice(0, 10)) + '/' + e.em.slice(0, 4), e.titulo, areaNome(e.area), e.tipo === 'recusa' ? 'Recusa' : 'Cancelamento', e.motivo || 'sem motivo']), vazio: 'Nenhuma recusa ou cancelamento do cliente no mês.' },
+      { id: 'lista', titulo: 'OMs do mês', sub: 'Previstas, solicitadas ou finalizadas no mês', aba: 'OMs do mês', lista: true, papel: false,
+        cols: lista[0].map(t => ({ t })), linhas: lista.slice(1) }
+    ],
+    graficos: [
+      { tipo: 'linha', titulo: 'Aderência e prazo do cliente (6 meses)', tabela: 'meses', series: [2, 3] },
+      { tipo: 'coluna', titulo: 'Previstas e finalizadas por área', tabela: 'area', series: [1, 2], max: 10 },
+      { tipo: 'barra', titulo: 'Do planejado ao finalizado', tabela: 'caminho', series: [1] },
+      { tipo: 'coluna', titulo: 'Recusas e cancelamentos do cliente (6 meses)', tabela: 'meses', series: [4], cores: ['3A3F47'] }
+    ]
+  };
+}
+registrarRelatorio('ompainel', relatorioOM);
 
 acoes.oiVista = (t, d) => { U().vista = d.v; salvarUI(); render(); };
 document.addEventListener('change', e => { if (e.target && e.target.id === 'oiMes') { U().mes = e.target.value; salvarUI(); render(); } });

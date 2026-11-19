@@ -1,7 +1,7 @@
 // Queda zero (telas): aba própria em Operação › Queda zero (separada do Apontar e das fotos), janela para lançar ou
 // corrigir e o formulário com a tabela. As contas ficam em contas/queda-zero.js; a gravação, em data.js ›
 // salvarQuedaZero (mapa qz da semana).
-import { AREA_S, DAYS, ddmm, add, pd, setDaArea, monthLabel } from '../contas/cal.js';
+import { AREA_S, DAYS, ddmm, add, pd, setDaArea, monthLabel, SETS } from '../contas/cal.js';
 import { DB, TODAY, esc, $ } from '../nucleo/base.js';
 import { PL, UI, AREAS, ME, SK, canEdit, areaScope, myArea, myAreas, isAdmin, modsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -13,7 +13,7 @@ import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgF } from './fotos.js';
-import { registrarExcel } from '../ui/indicadores-acoes.js';
+import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
 import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ, pidFotoQZ, fotosQZ, lancamentosMesQZ, resumoQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
@@ -275,12 +275,58 @@ function barrasQZ(l, tot, cor, max = 10) {
   const mx = Math.max(...l.map(x => x[1]), 1e-9); const mais = l.length - max;
   return `<div class="bars">${l.slice(0, max).map(([n, t, q]) => `<div class="barrow qzbar"><span class="n">${esc(n)}<small>${q} lançamento${q > 1 ? 's' : ''} · ${pctTx(t, tot)}</small></span><div class="stack clear"><i style="width:${t / mx * 100}%;background:${cor}"></i></div><span class="p num">${esc(fmtCurto(t))}</span></div>`).join('')}</div>${mais > 0 ? `<p class="muted small m0">E mais ${mais} com valores menores.</p>` : ''}`;
 }
-// Exportar para o Excel (Indicadores › Queda zero): além dos quadros da tela, cada lançamento do mês.
-registrarExcel('qpainel', () => {
-  const l = lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, areaScope()).sort((a, b) => a.dt.localeCompare(b.dt));
-  return [{ nome: 'Lançamentos do mês', linhas: [['Dia', 'Área', 'Rota', 'Local', 'Motivo', 'Toneladas', 'Equipamento e produto', 'Observação', 'Fotos'],
-    ...l.map(({ v, area, dt }) => [ddmm(dt) + '/' + dt.slice(0, 4), AREA_S[area] || area, v.r || '', v.l || '', v.m || '', Number(v.t) || 0, textoQZ(v), v.o || '', fotosQZ(v)])] }];
-});
+// Relatório para os gerentes ("Imprimir resumo" e "Exportar para o Excel" em Indicadores › Queda zero): os números da tela
+// em tabelas (com a parte de cada item no total), os gráficos no Excel e cada lançamento do mês.
+function relatorioQZ() {
+  const area = areaScope(); const ym = UI.mes;
+  const lancs = lancamentosMesQZ(Object.values(DB.cache.semanas), ym, area).sort((a, b) => a.dt.localeCompare(b.dt));
+  const r = resumoQZ(lancs); const datas = diasDoMes(ym);
+  const parte = t => (r.total ? t / r.total * 100 : null);
+  const t3 = t => Math.round(t * 1000) / 1000;
+  const quadro = (id, titulo, sub, nome, l, extra = {}) => ({ id, titulo, sub, cols: [{ t: nome }, { t: 'Lançamentos', fmt: 'int' }, { t: 'Toneladas', fmt: 't' }, { t: '% do total', fmt: 'pct' }],
+    linhas: l.map(([n, t, q]) => [n, q, t3(t), parte(t)]), total: ['Total', l.reduce((s, x) => s + x[2], 0), t3(l.reduce((s, x) => s + x[1], 0)), l.length ? 100 : null], vazio: 'Nada lançado no mês.', ...extra });
+  const nDia = {}; lancs.forEach(x => { nDia[x.dt] = (nDia[x.dt] || 0) + 1; });
+  const diaTxt = d => `${DAYS[(pd(d).getDay() + 6) % 7]} ${ddmm(d)}`;
+  const maior = Object.entries(r.porDia).sort((a, b) => b[1] - a[1])[0];
+  const tabs = [];
+  if (area === 'TODAS') tabs.push(quadro('area', 'Por área', 'Toneladas no mês', 'Área', r.porArea.map(([a, t, q]) => [AREA_S[a] || a, t, q]), { meia: true }));
+  tabs.push(quadro('local', 'Por local', 'Onde mais caiu material', 'Local', r.porLocal, { meia: true }));
+  tabs.push(quadro('motivo', 'Por motivo', 'Por que caiu', 'Motivo', r.porMotivo, { meia: true }));
+  tabs.push(quadro('equip', 'Por equipamento', 'Com que foi recolhido (cada item do lançamento)', 'Equipamento', r.porEquip, { meia: true }));
+  tabs.push({ id: 'prod', titulo: 'Coque e carvão', sub: 'Toneladas por produto', meia: true, cols: [{ t: 'Produto' }, { t: 'Toneladas', fmt: 't' }, { t: '% do total', fmt: 'pct' }],
+    linhas: r.n ? [['Coque', t3(r.coque), parte(r.coque)], ['Carvão', t3(r.carvao), parte(r.carvao)]] : [], vazio: 'Nada lançado no mês.' });
+  tabs.push({ id: 'diap', titulo: 'Dias com queda', sub: 'Só os dias com lançamento', meia: true, excel: false, cols: [{ t: 'Dia' }, { t: 'Lançamentos', fmt: 'int' }, { t: 'Toneladas', fmt: 't' }],
+    linhas: datas.filter(d => nDia[d]).map(d => [diaTxt(d), nDia[d], t3(r.porDia[d] || 0)]), total: ['Total', r.n, t3(r.total)], vazio: 'Nada lançado no mês.' });
+  tabs.push({ id: 'dia', titulo: 'Dia a dia', sub: `Toneladas recolhidas por dia · ${monthLabel(ym)}`, papel: false, cols: [{ t: 'Dia' }, { t: 'Lançamentos', fmt: 'int' }, { t: 'Toneladas', fmt: 't' }],
+    linhas: r.n ? datas.map(d => [ddmm(d), nDia[d] || null, r.porDia[d] ? t3(r.porDia[d]) : null]) : [], total: ['Total', r.n, t3(r.total)], vazio: 'Nada lançado no mês.' });
+  tabs.push({ id: 'lancp', titulo: 'Lançamentos do mês', excel: false, cols: [{ t: 'Dia' }, { t: 'Área' }, { t: 'Rota' }, { t: 'Local' }, { t: 'Motivo' }, { t: 'Equipamento e produto' }, { t: 'Toneladas', fmt: 't' }],
+    linhas: lancs.map(({ v, area: a, dt }) => [ddmm(dt), AREA_S[a] || a, v.r || '', v.l || '', v.m || '', textoQZ(v), t3(Number(v.t) || 0)]), vazio: 'Nada lançado no mês.' });
+  tabs.push({ id: 'lanc', titulo: 'Lançamentos do mês', aba: 'Lançamentos', lista: true, papel: false,
+    cols: [{ t: 'Dia' }, { t: 'Área' }, { t: 'Rota' }, { t: 'Local' }, { t: 'Motivo' }, { t: 'Toneladas', fmt: 't' }, { t: 'Equipamento e produto' }, { t: 'Observação' }, { t: 'Fotos', fmt: 'int' }],
+    linhas: lancs.map(({ v, area: a, dt }) => [ddmm(dt) + '/' + dt.slice(0, 4), AREA_S[a] || a, v.r || '', v.l || '', v.m || '', t3(Number(v.t) || 0), textoQZ(v), v.o || '', fotosQZ(v)]), vazio: 'Nada lançado no mês.' });
+  return {
+    titulo: `Queda zero · ${monthLabel(ym)}`, papel: 'RESUMO DO MÊS · QUEDA ZERO',
+    meta: [(SETS[SK] || {}).nome || '', `Área: ${area === 'TODAS' ? 'Todas' : AREA_S[area]}`, `Mês: ${monthLabel(ym)}`, `Gerado em: ${agoraTxt()}`].filter(Boolean),
+    kpis: [
+      { rot: 'Recolhido no mês (t)', v: t3(r.total), fmt: 't', det: maior ? `Maior dia: ${ddmm(maior[0])} · ${fmtCurto(maior[1])}` : 'Nada lançado no mês' },
+      { rot: 'Lançamentos', v: r.n, fmt: 'int', det: 'no mês' },
+      { rot: 'Dias com queda', v: r.dias, fmt: 'int', det: `de ${datas.length} dias do mês` },
+      { rot: 'Média por dia (t)', v: t3(r.media), fmt: 't', det: 'nos dias com queda' },
+      { rot: 'Coque (t)', v: t3(r.coque), fmt: 't', det: `${pctT(r.coque, r.total)}% do total` },
+      { rot: 'Carvão (t)', v: t3(r.carvao), fmt: 't', det: `${pctT(r.carvao, r.total)}% do total` }
+    ],
+    tabelas: tabs,
+    graficos: [
+      { tipo: 'coluna', titulo: `Toneladas por dia · ${monthLabel(ym)}`, tabela: 'dia', series: [2], largo: true },
+      { tipo: 'barra', titulo: 'Toneladas por local', tabela: 'local', series: [2], max: 10 },
+      { tipo: 'barra', titulo: 'Toneladas por motivo', tabela: 'motivo', series: [2], max: 10, cores: ['3A3F47'] },
+      { tipo: 'rosca', titulo: 'Coque e carvão', tabela: 'prod', series: [1] },
+      ...(area === 'TODAS' ? [{ tipo: 'barra', titulo: 'Toneladas por área', tabela: 'area', series: [2], max: 10, cores: ['8A94A6'] }] : []),
+      { tipo: 'barra', titulo: 'Toneladas por equipamento', tabela: 'equip', series: [2], max: 10, cores: ['F2A65A'] }
+    ]
+  };
+}
+registrarRelatorio('qpainel', relatorioQZ);
 export function vQzPainel() {
   const area = areaScope();
   const r = resumoQZ(lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, area));

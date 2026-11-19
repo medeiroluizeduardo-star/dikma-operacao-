@@ -2036,3 +2036,12 @@ div.lgrp{cursor:default;grid-template-columns:minmax(0,1fr) auto}
 /* Indicadores › Imprimir resumo da própria aba (ui/indicadores-acoes.js): cabeçalho só no papel, sem botões, quadros inteiros. */
 .indcab{display:none}
 @media print{body.indimp .indcab{display:block;margin-bottom:12px}body.indimp #view .btn,body.indimp #view .filters,body.indimp #view select{display:none!important}body.indimp #view .card,body.indimp #view .sgp-card,body.indimp #view .ic-card{break-inside:avoid}}
+/* Indicadores › OMs e Queda zero: "Imprimir resumo" no modelo do Resumo do dia (papel só na impressão, a tela some). */
+.indpapelbox{display:none}
+.paper.resumo .rkpis small{display:block;font-size:9.5px;color:#666;margin-top:2px;line-height:1.25}
+.paper.resumo .rsub{margin:-2px 0 6px;font-size:10.5px}
+.paper.resumo tr.tot td{font-weight:700;background:#F0F1F3}
+.paper.resumo .rcols>div{min-width:0}
+.paper.resumo h4{break-after:avoid}
+.paper.resumo tr{break-inside:avoid}
+@media print{body.indpapel #view>:not(.indpapelbox){display:none!important}body.indpapel .indpapelbox{display:block}.paper.resumo.indpapel .rcols{grid-template-columns:1fr 1fr}}
