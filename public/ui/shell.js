@@ -18,6 +18,7 @@ import { AV, EQ, AD, GE, comModulo, modulo } from '../nucleo/modulos.js';
 import { vHistorico } from '../telas/historico.js';
 import { veHistorico, editaAdm } from '../contas/acessos.js';
 import { aguardandoEf } from '../contas/efetivo-dia.js';
+import './indicadores-acoes.js';
 // Resumos (relatorios.js) e configurações (config.js) chegam só quando abertos (modulos.js: RE, CF).
 const resTipo = () => { const m = modulo('RE'); return m ? m.resTipo() : 'ativ'; };
 const rConj = () => { const m = modulo('RE'); return m ? m.rConj() : 'patio'; };
@@ -130,11 +131,12 @@ function renderTela() {
   if (arq === 'OI') return tela(comModulo('OI', m => m.renderView(v)));
   if (arq === 'FN') return tela(comModulo('FN', m => m.renderView(v)));
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
-  if ((v === 'resumo' || v === 'fresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
+  if ((v === 'resumo' || v === 'fresumo' || v === 'eresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
   // Indicadores › Pessoas: o painel e o resumo da frequência usam a mesma tela do RH (administrativo.js).
   if (v === 'fpainel') return tela(comModulo('AD', m => m.painel()));
   if (v === 'fresumo') return tela(modulo('RE').vResumoOutro());
+  if (v === 'eresumo') return tela(comModulo('EQ', () => modulo('RE').vResumoOutro()));
   if (UI.modulo === 'rh') return tela(comModulo('AD', m => m.render(v)));
   if (arq === 'GE') return tela(comModulo('GE', m => m.render(v)));
   if (arq === 'EQ') return tela(comModulo('EQ', m => m.render(v)));
@@ -332,13 +334,13 @@ function renderTop() {
   }
   if (v.id === 'avisos') { pintarTopo(v.nome, 'Escolha o que receber neste aparelho, mesmo com o sistema fechado'); return; }
   if (v.id === 'historico') { pintarTopo(v.nome, 'Quem mudou o quê e quando, nos módulos em que você é gestor'); return; }
-  if (v.tela === 'IC') { const IC = modulo('IC'); pintarTopo(v.nome, v.id === 'ivisao' ? 'Os 8 indicadores do contrato: resultado, meta e os últimos 6 meses' : 'Os indicadores do contrato mês a mês, nos últimos 12 meses', IC ? IC.topo(v.id) : ''); return; }
-  if (v.tela === 'OI') { const OI = modulo('OI'); pintarTopo(v.nome, 'Programação cumprida, resposta do cliente, recusas e documentação, e o que vem nos próximos 7 dias', OI ? OI.topo() : ''); return; }
+  if (v.tela === 'IC') { const IC = modulo('IC'); pintarTopo(v.nome, v.id === 'ivisao' ? 'Os 8 indicadores do contrato: resultado, meta e os últimos 6 meses' : 'Os indicadores do contrato mês a mês, nos últimos 12 meses', (IC ? IC.topo(v.id) : '') + atalhosDe(v)); return; }
+  if (v.tela === 'OI') { const OI = modulo('OI'); pintarTopo(v.nome, 'Programação cumprida, resposta do cliente, recusas e documentação, e o que vem nos próximos 7 dias', (OI ? OI.topo() : '') + atalhosDe(v)); return; }
   if (v.tela === 'TR') { const TR = modulo('TR'); pintarTopo(v.nome, 'Planos de ação de todas as origens: o que será feito, por quê, quem, até quando e como está', TR ? TR.topo() : ''); return; }
   if (v.tela === 'MD') { const MD = modulo('MD'); pintarTopo(v.nome, 'Faltas, horas extras, horas perdidas e ICCC/ICCP do mês para a medição do contrato', MD ? MD.topo() : ''); return; }
-  if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v)); return; }
+  if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', seletorJuntas(v) + (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
-  if (v.id === 'fresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && conjsRes().length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${conjsRes().map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
+  if (v.id === 'fresumo' || v.id === 'eresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && conjsRes().length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${conjsRes().map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', quedazero: 'Material caído recolhido no dia (coque e carvão), por local e motivo', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Quem está em cada rota, presença e movimentações do dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
@@ -361,12 +363,22 @@ function seletorJuntas(v) {
 // RH: Folha de frequência → Importar planilhas. Indicadores › Pessoas: Indicadores da frequência → Resumo da frequência.
 // Administração: Visão geral → Conferência, Uso do plano, Erros, Histórico e Limpeza; Plano padrão → Gerador de meses.
 const ATALHOS = { prog: [['imprimir', 'Folha do líder', 'print'], ['etiquetas', 'Etiquetas QR', 'qr']], gcolab: [['gimpr', 'Impressão das fichas', 'print']],
-  painel: [['resumo', 'Imprimir resumo', 'print']], epainel: [['resumo', 'Imprimir resumo', 'print']],
-  afreq: [['aimport', 'Importar planilhas', 'planilha']], fpainel: [['fresumo', 'Imprimir resumo', 'print']],
+  afreq: [['aimport', 'Importar planilhas', 'planilha']],
   cfgeral: [['cfconf', 'Conferência do cadastro', 'lupa'], ['cfuso', 'Uso do plano', 'medidor'], ['cferros', 'Erros nos aparelhos', 'celular'], ['cfhist', 'Histórico', 'relogio'], ['cflimpa', 'Limpeza de dados', 'lixo']], plano: [['gerador', 'Gerador de meses', 'gerador']] };
-const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Atividades', 'painel'], afreq: ['Frequência', 'freq'], fpainel: ['Pessoas', 'percent'] };
+const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'users'], cfgeral: ['Visão geral', 'grade'], plano: ['Plano padrão', 'plano'], painel: ['Atividades', 'painel'], epainel: ['Equipamentos', 'equip'], afreq: ['Frequência', 'freq'], fpainel: ['Pessoas', 'percent'] };
+// Indicadores: em cada aba, "Imprimir resumo" (a página do resumo, quando a aba tem uma; senão imprime a própria aba) e
+// "Exportar para o Excel" (ui/indicadores-acoes.js; o Histórico usa a planilha de 12 meses dele).
+const RESUMO_DE = { painel: 'resumo', epainel: 'eresumo', fpainel: 'fresumo' };
+function acoesInd(v, tem) {
+  if (v.mod !== 'indicadores' || v.fora) return '';
+  const r = RESUMO_DE[v.id];
+  const pr = r && tem(r) ? `<button type="button" class="btn sm" data-go="${r}">${I.print} Imprimir resumo</button>` : `<button type="button" class="btn sm" data-act="indPrint">${I.print} Imprimir resumo</button>`;
+  return pr + `<button type="button" class="btn sm" data-act="${v.id === 'ihist' ? 'icExcel' : 'indExcel'}">${I.dl} Exportar para o Excel</button>`;
+}
 function atalhosDe(v) {
   const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);
+  const ind = acoesInd(v, tem);
+  if (ind) return `<div class="row-gap atalhos">${ind}</div>`;
   // Volta: para a aba pai ou, se a pessoa não a vê (Resumos de quem só tem Equipamentos), para o item marcado no menu.
   const p = v.pai && (tem(v.pai) ? v.pai : abaMarcada(v.id));
   const bt = ATALHOS[v.id] ? ATALHOS[v.id].filter(([id]) => tem(id)) : VOLTA[v.pai] && p && tem(p) ? [[p, ...VOLTA[v.pai]]] : [];
