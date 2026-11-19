@@ -13,6 +13,7 @@ import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgF } from './fotos.js';
+import { registrarExcel } from '../ui/indicadores-acoes.js';
 import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ, pidFotoQZ, fotosQZ, lancamentosMesQZ, resumoQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
@@ -274,6 +275,12 @@ function barrasQZ(l, tot, cor, max = 10) {
   const mx = Math.max(...l.map(x => x[1]), 1e-9); const mais = l.length - max;
   return `<div class="bars">${l.slice(0, max).map(([n, t, q]) => `<div class="barrow qzbar"><span class="n">${esc(n)}<small>${q} lançamento${q > 1 ? 's' : ''} · ${pctTx(t, tot)}</small></span><div class="stack clear"><i style="width:${t / mx * 100}%;background:${cor}"></i></div><span class="p num">${esc(fmtCurto(t))}</span></div>`).join('')}</div>${mais > 0 ? `<p class="muted small m0">E mais ${mais} com valores menores.</p>` : ''}`;
 }
+// Exportar para o Excel (Indicadores › Queda zero): além dos quadros da tela, cada lançamento do mês.
+registrarExcel('qpainel', () => {
+  const l = lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, areaScope()).sort((a, b) => a.dt.localeCompare(b.dt));
+  return [{ nome: 'Lançamentos do mês', linhas: [['Dia', 'Área', 'Rota', 'Local', 'Motivo', 'Toneladas', 'Equipamento e produto', 'Observação', 'Fotos'],
+    ...l.map(({ v, area, dt }) => [ddmm(dt) + '/' + dt.slice(0, 4), AREA_S[area] || area, v.r || '', v.l || '', v.m || '', Number(v.t) || 0, textoQZ(v), v.o || '', fotosQZ(v)])] }];
+});
 export function vQzPainel() {
   const area = areaScope();
   const r = resumoQZ(lancamentosMesQZ(Object.values(DB.cache.semanas), UI.mes, area));

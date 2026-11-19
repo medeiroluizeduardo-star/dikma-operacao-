@@ -195,8 +195,7 @@ function vHist() {
   const cols = [{ t: 'Mês' }, ...IND_CONTRATO.map(i => ({ t: `${i.nome} (${textoMeta(cfg(), i.k)})`, n: true })), { t: 'Na meta', n: true }];
   const tb = tabela(cols, linhas.map(x => { const p = placar(cfg(), x.r.vals); return [`<button type="button" class="btn ghost link" data-act="icMes" data-mes="${x.ym}"><b>${esc(nomeMes(x.ym))}</b></button>`, ...IND_CONTRATO.map(i => cel(i, x.r.vals[i.k])), p.comValor ? `${p.dentro}/${p.comValor}` : '—']; }), { rotulo: 'Histórico de 12 meses' });
   const semDado = linhas.filter(x => !x.tem && x.ym <= MES_HOJE).length;
-  let h = `<div class="ic-acoes"><button type="button" class="btn" data-act="icExcel">${I.dl} Exportar para o Excel</button>${viewsDoModulo().some(x => x.id === 'resumo') ? `<button type="button" class="btn" data-go="resumo">${I.print} Resumos para imprimir</button>` : ''}</div>`;
-  h += `<p class="muted small">${esc(nomeVista(v))} · verde = dentro da meta, vermelho = fora. Toque no mês para abrir a Visão geral dele.${semDado ? ` ${semDado} mês${semDado > 1 ? 'es' : ''} ainda sem números guardados: ${gravaHist() ? 'abra o mês na Visão geral para calcular e guardar.' : 'o Gestor dos Indicadores guarda ao abrir o mês na Visão geral.'}` : ''}</p>`;
+  let h = `<p class="muted small">${esc(nomeVista(v))} · verde = dentro da meta, vermelho = fora. Toque no mês para abrir a Visão geral dele.${semDado ? ` ${semDado} mês${semDado > 1 ? 'es' : ''} ainda sem números guardados: ${gravaHist() ? 'abra o mês na Visão geral para calcular e guardar.' : 'o Gestor dos Indicadores guarda ao abrir o mês na Visão geral.'}` : ''}</p>`;
   return h + tb;
 }
 

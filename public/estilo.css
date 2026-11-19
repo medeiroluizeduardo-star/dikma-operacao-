@@ -2030,3 +2030,6 @@ div.lgrp{cursor:default;grid-template-columns:minmax(0,1fr) auto}
 .plano-dias span.on{background:var(--st-real);color:#fff}
 .pparec{margin:0}
 .pparec li{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:4px 0}
+/* Indicadores › Imprimir resumo da própria aba (ui/indicadores-acoes.js): cabeçalho só no papel, sem botões, quadros inteiros. */
+.indcab{display:none}
+@media print{body.indimp .indcab{display:block;margin-bottom:12px}body.indimp #view .btn,body.indimp #view .filters,body.indimp #view select{display:none!important}body.indimp #view .card,body.indimp #view .sgp-card,body.indimp #view .ic-card{break-inside:avoid}}

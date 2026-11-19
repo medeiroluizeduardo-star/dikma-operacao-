@@ -2,7 +2,8 @@
 // mais o que vem nos próximos 7 dias, o caminho do planejado ao finalizado, os tempos médios e os números por área e prioridade.
 // Só leitura. As contas ficam em contas/oms-indicadores.js; os dados são os de Operação › OMs (oms/{id}, uma escuta por conjunto).
 import { painelOms, faixaPct } from '../contas/oms-indicadores.js';
-import { PRIORIDADES, STATUS, COR, duracao, dataBR, docsResumo, diaDe } from '../contas/oms.js';
+import { PRIORIDADES, STATUS, COR, duracao, dataBR, docsResumo, diaDe, linhasExcel } from '../contas/oms.js';
+import { registrarExcel } from '../ui/indicadores-acoes.js';
 import { AREA_S, SETS, MESES_L, DAYS, today, addMonth, pd } from '../contas/cal.js';
 import { conjsInd, areasInd } from '../contas/acessos.js';
 import { indicadores, variacao, etiqueta, tabela, vazio, carregando, recolhido } from '../ui/padrao.js';
@@ -104,6 +105,12 @@ export function topo() {
   return sw + `<label class="sel"><span>Mês</span><select class="in" id="oiMes">${ops.map(m => `<option value="${m}" ${m === u.mes ? 'selected' : ''}>${esc(mesNome(m))}</option>`).join('')}</select></label>`;
 }
 export const renderView = () => vPainel();
+// Exportar para o Excel: além dos quadros da tela, a lista das OMs do mês (previstas, solicitadas ou finalizadas nele).
+registrarExcel('ompainel', () => {
+  const { ok, l } = dados(); if (!ok) return [];
+  const ym = U().mes; const doMes = l.filter(o => [diaDe(o), o.hSol, o.hFim].some(x => String(x || '').startsWith(ym)));
+  return [{ nome: 'OMs do mês', linhas: linhasExcel(doMes, areaNome, cfg()) }];
+});
 
 acoes.oiVista = (t, d) => { U().vista = d.v; salvarUI(); render(); };
 document.addEventListener('change', e => { if (e.target && e.target.id === 'oiMes') { U().mes = e.target.value; salvarUI(); render(); } });

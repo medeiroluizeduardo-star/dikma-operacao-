@@ -21,7 +21,9 @@ import { modulo } from '../nucleo/modulos.js';
 // Resumos ficam no módulo Indicadores: atividades e horas extras com Pátio/Bateria, Equipamentos com o escopo;
 // a Frequência é o Resumo da frequência (aberto pelos Indicadores da frequência).
 const TIPOS_RES = [['ativ', 'Atividades', u => setsDe(u, 'indicadores').length > 0], ['he', 'Horas extras', u => setsDe(u, 'indicadores').length > 0], ['escala', 'Escala das áreas', u => setsDe(u, 'indicadores').length > 0], ['oper', 'Equipamentos', u => temEquipEm(u, 'indicadores')], ['freq', 'Frequência', u => conjsInd(u).length > 0 || modsReais(u).includes('frequencia')]];
-const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (UI.view === 'fresumo' ? t[0] === 'freq' : true));
+// Cada resumo mostra só o da aba de onde veio: Atividades (com Horas extras e Escala), Equipamentos ou Frequência.
+const DA_ABA = { resumo: ['ativ', 'he', 'escala'], eresumo: ['oper'], fresumo: ['freq'] };
+const tiposRes = () => TIPOS_RES.filter(t => ME && t[2](ME) && (DA_ABA[UI.view] || DA_ABA.resumo).includes(t[0]));
 // Conjuntos do resumo: os do escopo nos Indicadores.
 export const conjsRes = () => (UI.modulo === 'indicadores' ? conjsInd(ME) : setsDe(ME));
 export const resTipo = () => { const l = tiposRes(); return l.some(t => t[0] === UI.resTipo) ? UI.resTipo : (l[0] || ['ativ'])[0]; };
