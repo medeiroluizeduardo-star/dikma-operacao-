@@ -5,6 +5,8 @@
 //   As de dias que ainda não chegaram não contam, para o número do mês corrente não começar baixo.
 // - Liberadas no prazo: das liberadas no mês, quantas o cliente liberou dentro do prazo da prioridade (do envio à liberação).
 // - Recusas e cancelamentos do cliente: quantas vezes no mês o cliente recusou ou cancelou, sobre os envios do mês.
+// - Tempo de bloqueio: média, nas OMs em que o eletricista liberou no mês, da OM gerada pelo cliente até o eletricista
+//   avisar a sala de controle que liberou o equipamento (o número que o cliente mais acompanha).
 // - Documentação pronta: das enviadas ao cliente no mês com a lista de documentos, quantas estão com tudo pronto.
 import { PRIORIDADES, ABERTAS, prazoOm, minutosEntre, docsResumo, diaDe, visaoMes, prazosDe } from './oms.js';
 import { add } from './cal.js';
@@ -39,6 +41,7 @@ export function numerosOms(l, ym, hoje, cfg = null) {
   const comPrazo = lib.map(o => prazoOm(o, cfg)).filter(Boolean);
   const noPrazo = comPrazo.filter(p => !p.fora).length;
   const resp = lib.map(o => minutosEntre(o.hEnvio, o.hLib)).filter(m => m != null && m >= 0);
+  const blq = l.filter(o => noMes(o.hEletr, ym)).map(o => minutosEntre(o.hCiente, o.hEletr)).filter(m => m != null && m >= 0);
   // Cliente: envios, recusas e cancelamentos do mês.
   const nEnvios = l.reduce((n, o) => n + envios(o).filter(e => noMes(e, ym)).length, 0);
   const eventos = l.flatMap(o => doCliente(o).filter(e => noMes(e.em, ym)).map(e => ({ ...e, id: o.id, titulo: o.titulo || '', area: o.area || '', conj: o.conj || '' })));
@@ -46,7 +49,7 @@ export function numerosOms(l, ym, hoje, cfg = null) {
   const docs = l.filter(o => envios(o).some(e => noMes(e, ym))).map(docsResumo).filter(Boolean);
   return {
     previstas: v.previstas, finalizadas: v.finalizadas, atrasadas: v.atrasadas, aderencia: v.aderencia,
-    liberadas: lib.length, comPrazo: comPrazo.length, noPrazo, pctPrazo: pct(noPrazo, comPrazo.length), respMedia: media(resp),
+    liberadas: lib.length, comPrazo: comPrazo.length, noPrazo, pctPrazo: pct(noPrazo, comPrazo.length), respMedia: media(resp), bloqueios: blq.length, bloqMedia: media(blq),
     envios: nEnvios, recusas: eventos.filter(e => e.tipo === 'recusa').length, cancelamentos: eventos.filter(e => e.tipo === 'cancelamento').length,
     doCliente: eventos.length, pctCliente: pct(eventos.length, nEnvios), eventos: eventos.sort((a, b) => b.em.localeCompare(a.em)),
     comDocs: docs.length, docsProntos: docs.filter(r => r.completa).length, pctDocs: pct(docs.filter(r => r.completa).length, docs.length)
@@ -67,8 +70,11 @@ export function caminhoOms(l, ym) {
 export function temposOms(l, ym) {
   const t = (a, b) => media(l.filter(o => noMes(o[b], ym)).map(o => minutosEntre(o[a], o[b])).filter(x => x != null && x >= 0));
   return [
-    ['Solicitação até a aprovação do técnico', t('hSol', 'hAprov')], ['Envio até a liberação do cliente', t('hEnvio', 'hLib')],
-    ['Liberação até a finalização', t('hLib', 'hFim')], ['Da solicitação à finalização', t('hSol', 'hFim')]
+    ['Solicitação até a aprovação do técnico', t('hSol', 'hAprov')], ['Envio até a OM gerada pelo cliente', t('hEnvio', 'hCiente')],
+    ['Tempo de bloqueio: OM gerada até o eletricista liberar', t('hCiente', 'hEletr')], ['· OM gerada até a sala passar ao eletricista', t('hCiente', 'hSala')],
+    ['· Sala até o eletricista liberar', t('hSala', 'hEletr')], ['Eletricista liberou até o aviso no sistema', t('hEletr', 'hLib')],
+    ['Envio até a liberação do cliente', t('hEnvio', 'hLib')], ['Liberação até a finalização', t('hLib', 'hFim')],
+    ['Fim do serviço até o desbloqueio', t('hFim', 'hDesb')], ['Da solicitação à finalização', t('hSol', 'hFim')]
   ];
 }
 

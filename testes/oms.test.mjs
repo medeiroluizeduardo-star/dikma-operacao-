@@ -30,7 +30,7 @@ test('botões conforme a situação e a pessoa', () => {
   assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'recusar', 'cancelar', 'obs', 'docs', 'apagar']);
   assert.deepEqual(acoesDe(om({ status: 'liberada' }), U.lider), ['finalizar', 'obs', 'docs'], 'o líder da área finaliza');
   assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.lider), ['obs', 'docs'], 'depois de aprovada, o líder só acompanha e marca a documentação');
-  assert.deepEqual(acoesDe(om({ status: 'finalizada' }), U.tec), ['apagar'], 'quem trata apaga mesmo finalizada');
+  assert.deepEqual(acoesDe(om({ status: 'finalizada', hDesb: '2026-11-17T17:00' }), U.tec), ['apagar'], 'quem trata apaga mesmo finalizada');
   assert.deepEqual(acoesDe(om(), U.leitor), []);
 });
 
@@ -162,10 +162,13 @@ test('cliente: Ciente e Liberar (prioridade do cliente), técnico registra se el
   assert.deepEqual(acoesDe({ ...env, hCiente: '2026-11-17T08:40' }, cli), ['liberar', 'recusar', 'cancelar', 'obs'], 'ciente uma vez só');
   assert.deepEqual(acoesDe({ ...env, status: 'aprovada' }, cli), [], 'só depois de enviada');
   assert.deepEqual(acoesDe(env, U.leitor), [], 'outro leitor só acompanha');
-  const c = mudar(env, 'ciente', cli); assert.equal(c.cienteNome, 'Usuário Pátio'); assert.ok(c.hCiente); assert.equal(c.hist[0].s, 'ciente'); assert.equal(c.status, undefined, 'continua com o cliente');
-  const l = mudar(env, 'liberar', cli, { peloCliente: true, hLib: '2000-01-01T00:00' });
+  assert.throws(() => mudar(env, 'ciente', cli), e => e.campo === 'omNum', 'OM gerada pede o número');
+  const c = mudar(env, 'ciente', cli, { numero: ' 4500777 ' }); assert.equal(c.numero, '4500777'); assert.equal(c.cienteNome, 'Usuário Pátio'); assert.ok(c.hCiente); assert.equal(c.hist[0].s, 'ciente'); assert.equal(c.status, undefined, 'continua com o cliente');
+  assert.throws(() => mudar(env, 'liberar', cli, { peloCliente: true, hCiente: '2026-11-17T08:40' }), e => e.campo === 'omHEletr', 'o cliente informa quando o eletricista liberou');
+  assert.throws(() => mudar(env, 'liberar', cli, { peloCliente: true, hEletr: '2026-11-17T09:00' }), e => e.campo === 'omHOm', 'sem OM gerada antes, pede a hora');
+  const l = mudar(env, 'liberar', cli, { peloCliente: true, hLib: '2000-01-01T00:00', hCiente: '2026-11-17T08:40', hEletr: '2026-11-17T09:00' });
   assert.equal(l.status, 'liberada'); assert.equal(l.libCli, true); assert.equal(l.libNome, 'Usuário Pátio'); assert.notEqual(l.hLib, '2000-01-01T00:00', 'vale a hora do toque');
-  assert.equal(l.hCiente, l.hLib, 'liberar já conta como ciente'); assert.match(l.hist[0].txt, /pelo cliente/);
+  assert.equal(l.hCiente, '2026-11-17T08:40', 'a hora da OM gerada vem junto'); assert.equal(l.hEletr, '2026-11-17T09:00'); assert.match(l.hist[0].txt, /pelo cliente/);
   const t = mudar(env, 'liberar', { uid: 'tec', nome: 'Técnico' }, { hLib: '2026-11-17T10:00' });
   assert.equal(t.libCli, false); assert.equal(t.hLib, '2026-11-17T10:00'); assert.equal(t.hCiente, undefined);
   // Avisos: liberada pelo cliente avisa quem abriu e quem trata.
@@ -240,7 +243,7 @@ test('observações em todos os passos ficam no histórico', () => {
   assert.deepEqual(Object.keys(o), ['hist'], 'observação avulsa não muda a situação');
   const x = { ...om(), hist: [...o.hist, { s: 'aprovada', em: '2026-11-17T08:00' }] };
   assert.deepEqual(observacoes(x).map(y => y.obs), ['Equipamento só para às 14h']);
-  const ex = linhasExcel([x]); assert.equal(ex[0].length, ex[1].length); assert.match(ex[1].at(-1), /14h/);
+  const ex = linhasExcel([x]); assert.equal(ex[0].length, ex[1].length); assert.match(ex[1][ex[0].indexOf('Observações')], /14h/);
 });
 
 // Indicadores › OMs (public/contas/oms-indicadores.js)
@@ -272,7 +275,7 @@ test('Indicadores das OMs: aderência, prazo do cliente, recusas e documentaçã
   // prazo 0 = sem prazo: a liberação não entra no %
   assert.equal(numerosOms(l, '2026-11', '2026-11-25', { prazos: { emergencia: 2, alta: 0, media: 48, baixa: 120 } }).comPrazo, 1);
   assert.deepEqual(caminhoOms(l, '2026-11'), [['Na agenda do mês', 4], ['Solicitadas', 3], ['Enviadas ao cliente', 3], ['Liberadas', 2], ['Finalizadas', 1], ['Canceladas', 1]]);
-  assert.deepEqual(temposOms(l, '2026-11').map(x => x[1]), [30, (180 + 3600) / 2, 240, 480]);
+  assert.deepEqual(temposOms(l, '2026-11').map(x => x[1]), [30, null, null, null, null, null, (180 + 3600) / 2, 240, null, 480]);
   assert.deepEqual(proximasOms(l, '2026-11-18').map(o => o.id), ['d']);
   assert.deepEqual(proximasOms(l, '2026-11-21').map(o => o.id), []);
   const pn = painelOms(l, { ym: '2026-11', meses: ['2026-10', '2026-11'], hoje: '2026-11-25', anterior: '2026-10' });
@@ -281,4 +284,33 @@ test('Indicadores das OMs: aderência, prazo do cliente, recusas e documentaçã
   assert.deepEqual(pn.porPrio.map(x => x.prio), ['alta', 'media']);
   assert.equal(numerosOms([], '2026-11', '2026-11-25').aderencia, null);
   assert.deepEqual([faixaPct(95), faixaPct(75), faixaPct(10), faixaPct(null)], ['ok', 'atencao', 'critico', '']);
+});
+
+test('processo do bloqueio: aprovar e enviar num toque, OM gerada, sala, eletricista, liberado e desbloqueio', () => {
+  const tec = { uid: 'tec', nome: 'Técnico' }; const cli = { uid: 'cliP', nome: 'Usuário Pátio', papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] };
+  let o = om();
+  o = { ...o, ...mudar(o, 'aprovar', tec, { enviar: true, cliente: { uid: 'cliP', nome: 'Usuário Pátio' }, contato: 'Ramal 1' }) };
+  assert.equal(o.status, 'enviada'); assert.equal(o.clienteUid, 'cliP'); assert.ok(o.hAprov && o.hAprov === o.hEnvio); assert.deepEqual(o.hist.map(h => h.s), ['aprovada', 'enviada']);
+  assert.equal(mudar(om(), 'aprovar', tec).status, 'aprovada', 'sem o cliente definido, só aprova');
+  o = { ...o, hEnvio: '2026-11-17T08:00', ...mudar(o, 'ciente', cli, { numero: '4500123' }), hCiente: '2026-11-17T08:20' };
+  assert.equal(STATUS.recusada, 'Não liberada');
+  assert.throws(() => mudar(o, 'liberar', cli, { peloCliente: true, hSala: '2026-11-17T08:10', hEletr: '2026-11-17T09:00' }), e => e.campo === 'omHSala', 'sala antes da OM gerada');
+  assert.throws(() => mudar(o, 'liberar', cli, { peloCliente: true, hSala: '2026-11-17T08:30', hEletr: '2026-11-17T08:25' }), e => e.campo === 'omHEletr', 'eletricista antes da sala');
+  const lib = mudar(o, 'liberar', cli, { peloCliente: true, hSala: '2026-11-17T08:30', hEletr: '2026-11-17T09:10' });
+  o = { ...o, ...lib, hLib: '2026-11-17T09:25' };
+  assert.equal(o.hSala, '2026-11-17T08:30'); assert.match(lib.hist.slice(-1)[0].txt, /eletricista liberou 17\/11 09:10/);
+  assert.throws(() => mudar(o, 'finalizar', { uid: 'lider' }, { hFim: '2026-11-17T12:00', hDesb: '2026-11-17T11:00' }), e => e.campo === 'omHDesb');
+  o = { ...o, ...mudar(o, 'finalizar', { uid: 'lider', nome: 'Líder' }, { hFim: '2026-11-17T12:00' }) };
+  assert.equal(o.hDesb, undefined); assert.deepEqual(acoesDe(o, U.lider), ['desbloqueio'], 'falta o desbloqueio: o líder marca depois');
+  o = { ...o, ...mudar(o, 'desbloqueio', { uid: 'lider', nome: 'Líder' }, { hDesb: '2026-11-17T12:30' }) };
+  assert.deepEqual(acoesDe(o, U.lider), []); assert.equal(o.hist.slice(-1)[0].s, 'desbloqueio');
+  const x = tempos(o);
+  assert.deepEqual([x.bloqueio, x.sala, x.eletricista, x.aviso, x.desbloqueio], [50, 10, 40, 15, 30]);
+  const f = mudar({ ...o, status: 'liberada', hDesb: '' }, 'finalizar', { uid: 'lider' }, { hFim: '2026-11-17T12:00', hDesb: '2026-11-17T12:40' });
+  assert.equal(f.hDesb, '2026-11-17T12:40'); assert.deepEqual(f.hist.slice(-2).map(h => h.s), ['finalizada', 'desbloqueio']);
+  assert.equal(resumo([o], '2026-11').bloqMedia, 50);
+  const xl = linhasExcel([o]); const i = xl[0].indexOf('Tempo de bloqueio (OM gerada até o eletricista liberar)');
+  assert.equal(xl[1][i], '50 min'); assert.equal(xl[1][xl[0].indexOf('Hora do desbloqueio')], '17/11 12:30');
+  const n = numerosOms([o], '2026-11', '2026-11-25'); assert.equal(n.bloqMedia, 50); assert.equal(n.bloqueios, 1);
+  assert.equal(temposOms([o], '2026-11')[2][1], 50);
 });

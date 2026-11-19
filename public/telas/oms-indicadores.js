@@ -53,6 +53,9 @@ function vPainel() {
   const onde = [vista() === 'coq' ? 'Coqueria (Pátio e Bateria)' : SETS[vista()].nome, lim.length ? 'só a sua área' : ''].filter(Boolean).join(' · ');
   let h = `<p class="muted small m0">Contas de ${esc(mesNome(u.mes))} · ${esc(onde)}</p>`;
   h += indicadores([
+    // O número que o cliente mais acompanha: da OM gerada até o eletricista avisar a sala que liberou.
+    { rotulo: 'Tempo de bloqueio', valor: a.bloqMedia == null ? '—' : esc(duracao(a.bloqMedia) || '0 min'), situacao: '', serie: serie('bloqMedia'),
+      variacao: variacao(a.bloqMedia, b.bloqMedia, { maiorMelhor: false, unidade: ' min' }) + pe(a.bloqueios ? `média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}` : 'nenhum bloqueio registrado no mês', 'OM gerada até o eletricista liberar') },
     { rotulo: 'Aderência à programação', valor: pctTxt(a.aderencia), unidade: a.aderencia == null ? '' : '%', situacao: faixaPct(a.aderencia), serie: serie('aderencia'),
       variacao: variacao(a.aderencia, b.aderencia, { unidade: ' p.p.' }) + pe(a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${u.mes === MES_HOJE ? ' até hoje' : ''} finalizadas` : 'nenhuma OM prevista até hoje', a.atrasadas ? `<b class="sgp-c">${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}</b>` : '') },
     { rotulo: 'Liberadas no prazo do cliente', valor: pctTxt(a.pctPrazo), unidade: a.pctPrazo == null ? '' : '%', situacao: faixaPct(a.pctPrazo), serie: serie('pctPrazo'),
@@ -122,6 +125,7 @@ function relatorioOM() {
     titulo: `Indicadores das OMs · ${mesNome(u.mes)}`, papel: 'RESUMO DO MÊS · OMS',
     meta: [onde + (lim.length ? ' (só a sua área)' : ''), `Mês: ${mesNome(u.mes)}`, `Gerado em: ${agoraTxt()}`],
     kpis: [
+      { rot: 'Tempo de bloqueio (h)', v: horas(a.bloqMedia), fmt: 'h', det: a.bloqueios ? `Média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}: da OM gerada pelo cliente até o eletricista liberar (${duracao(a.bloqMedia) || '0 min'})` : 'Nenhum bloqueio registrado no mês' },
       { rot: 'Aderência à programação', v: a.aderencia, fmt: 'pct', det: a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${atual ? ' até hoje' : ''} finalizadas${a.atrasadas ? ` · ${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}` : ''}` : 'Nenhuma OM prevista' },
       { rot: prev, v: a.previstas, fmt: 'int', det: `${a.atrasadas} atrasada${a.atrasadas === 1 ? '' : 's'}` },
       { rot: 'Finalizadas', v: a.finalizadas, fmt: 'int', det: 'das previstas no mês' },
