@@ -4,7 +4,7 @@
 // SHA-256, os lotes de gravação, a confirmação digitada, o espaço ocupado e o conteúdo do relatório em PowerPoint
 // (indicadores, por rota, grupos de fotos e limite de fotos). A tela fica em telas/fotos-arquivo.js e o PowerPoint em
 // telas/fotos-pptx.js. Explicação completa em docs/fotos-atividades.md (Parte 2).
-import { add, weekOf, monthOfWeek } from './cal.js';
+import { add, weekOf, monthOfWeek, MESES_L } from './cal.js';
 import { fotosDaCel } from './fotos.js';
 
 export const LIXEIRA_DIAS = 7;        // a foto fica recuperável na lixeira por 7 dias
@@ -255,6 +255,7 @@ export function montarRelatorio({ semanas, plano, fotos, de, ate, hoje, rota = '
     const itens = itensDaFoto(f, { plano, semanas });
     const r0 = (itens[0] && itens[0].rota) || f.rota || '';
     if (rota && r0 !== rota) continue;
+    if (areas && !areas.includes(f.area)) continue;
     const chave = f.dia + '#' + itens.map(x => x.semana + '|' + x.pid).sort().join(',');
     if (!grupos.has(chave)) {
       const um = itens.length === 1 ? itens[0] : null;
@@ -271,6 +272,30 @@ export function montarRelatorio({ semanas, plano, fotos, de, ate, hoje, rota = '
     nFotos: lista.reduce((s, g) => s + g.fotos.length, 0)
   };
 }
+// ---------- textos do relatório no modelo da Dikma ----------
+// Semana do ano (ISO 8601: começa na segunda; a semana 1 tem a primeira quinta do ano).
+export function semanaISO(s) {
+  const d = new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)));
+  const dia = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - dia + 3);
+  const ano = d.getUTCFullYear(); const q1 = new Date(Date.UTC(ano, 0, 4));
+  return 1 + Math.round(((d - q1) / 864e5 - 3 + ((q1.getUTCDay() + 6) % 7)) / 7);
+}
+// "Semana: 47" ou "Semanas: 46 a 47".
+export function textoSemanas(de, ate) { const a = semanaISO(de), b = semanaISO(ate); return a === b ? `Semana: ${a}` : `Semanas: ${a} a ${b}`; }
+// "16 a 22 de novembro de 2026", "28 de outubro a 3 de novembro de 2026", "29 de dezembro de 2026 a 4 de janeiro de 2027".
+export function periodoExtenso(de, ate) {
+  const p = s => ({ d: +s.slice(8, 10), m: MESES_L[+s.slice(5, 7) - 1].toLowerCase(), a: s.slice(0, 4) });
+  const x = p(de), y = p(ate);
+  if (de === ate) return `${x.d} de ${x.m} de ${x.a}`;
+  if (x.a !== y.a) return `${x.d} de ${x.m} de ${x.a} a ${y.d} de ${y.m} de ${y.a}`;
+  if (x.m !== y.m) return `${x.d} de ${x.m} a ${y.d} de ${y.m} de ${y.a}`;
+  return `${x.d} a ${y.d} de ${y.m} de ${y.a}`;
+}
+// Período de segunda a domingo (uma semana inteira)?
+export const ehSemanaCheia = (de, ate) => add(de, 6) === ate && new Date(de + 'T12:00:00').getDay() === 1;
+// Antes / Durante / Depois pela hora: as fotos do grupo estão em ordem de hora; com uma só, não há marcação.
+export const marcaFoto = (i, n) => (n < 2 ? '' : i === 0 ? 'Antes' : i === n - 1 ? 'Depois' : 'Durante');
+
 // Limite de fotos do relatório: em rodízio entre as atividades (a 1ª foto de cada uma, depois a 2ª…), para o
 // relatório cobrir o período todo. Com mais atividades que o limite, entram atividades espalhadas pelo período
 // (uma foto cada). Devolve os grupos com as fotos que entram e quantas ficaram de fora.
