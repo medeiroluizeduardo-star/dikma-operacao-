@@ -603,6 +603,15 @@ export async function apagarFotoAtividade(f, conj = setDaArea(f.area || '') || c
   if (args.length) b.update(doc(db, C('semanas', conj), f.semana), ...args, 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
   await gravarLote(b);
 }
+// Fotos das OMs: gravadas como as das atividades (contas/oms.js › pidFotoOM), na semana atual da área da OM.
+export async function listarFotosOM(conj, omId) {
+  const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('pid', '==', 'OM-' + omId)));
+  return qs.docs.map(comoFoto).filter(f => !f.lixeiraEm || f.removidaEm).sort((x, y) => x.at - y.at);
+}
+export function salvarFotosOM(conj, fotos) { const b = writeBatch(db); for (const f of fotos) fotoNoLote(b, conj, f); return gravarLote(b); }
+export async function apagarFotoOM(conj, f) {
+  const b = writeBatch(db); b.delete(doc(db, C('evidencias', conj), f.id)); if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', conj), f.id)); await gravarLote(b);
+}
 // ---------- Relatórios e arquivo de fotos (Parte 2; só o administrador; contas em fotos-arquivo.js) ----------
 // Fotos (leves) de um período: lidas por mês e filtradas pelo dia. Todas as situações (a tela separa).
 export async function listarEvidenciasPeriodo(conj, de, ate) {

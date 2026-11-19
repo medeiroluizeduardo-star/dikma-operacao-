@@ -48,8 +48,8 @@ const nomeProprio = s => String(s || '').toLowerCase().replace(/(^|\s)(\S)/g, (m
 // Devolve o Blob do .pptx.
 export async function gerarPptx(o) {
   await carregarBiblioteca();
-  // tipo 'qz' (Queda zero): capa com os lançamentos e as fotos, sem os indicadores e as tabelas das atividades.
-  const { rel } = o; const qz = o.tipo === 'qz'; const nomeTipo = qz ? 'Queda zero' : ''; const pptx = new globalThis.PptxGenJS();
+  // tipo 'qz' (Queda zero) e 'om' (OMs): capa com os lançamentos (ou OMs) e as fotos, sem os indicadores e as tabelas das atividades.
+  const { rel } = o; const qz = o.tipo === 'qz' || o.tipo === 'om'; const nomeTipo = o.tipo === 'qz' ? 'Queda zero' : o.tipo === 'om' ? 'Solicitações de OM' : ''; const pptx = new globalThis.PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE'; pptx.author = o.autor || 'Dikma Gestão'; pptx.company = 'Dikma'; pptx.title = `Relatório fotográfico${qz ? ' · ' + nomeTipo : ''} · ${o.nomeConj}`;
   pptx.subject = `Período ${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
   const periodo = `${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
@@ -78,7 +78,7 @@ export async function gerarPptx(o) {
     s.addShape(pptx.ShapeType.rect, { x: 7.9, y: 0, w: W - 7.9, h: H, fill: { color: COR.navy }, line: { color: COR.navy } });
     if (o.logoBranco) s.addImage({ data: o.logoBranco, x: 0.9, y: 0.75, w: 3.02, h: 1.0 });
     s.addText('RELATÓRIO FOTOGRÁFICO', { x: 0.9, y: 2.35, w: 6.8, h: 0.4, fontFace: FONTE, fontSize: 14, bold: true, color: COR.laranja, charSpacing: 3, margin: 0 });
-    s.addText(qz ? 'Queda zero: material recolhido' : 'Atividades programadas e realizadas', { x: 0.9, y: 2.8, w: 6.8, h: 1.2, fontFace: FONTE, fontSize: 34, bold: true, color: COR.branco, valign: 'top', margin: 0 });
+    s.addText(o.tipo === 'om' ? 'Solicitações de OM: fotos do líder' : qz ? 'Queda zero: material recolhido' : 'Atividades programadas e realizadas', { x: 0.9, y: 2.8, w: 6.8, h: 1.2, fontFace: FONTE, fontSize: 34, bold: true, color: COR.branco, valign: 'top', margin: 0 });
     s.addText([
       { text: o.nomeConj, options: { bold: true, breakLine: true } },
       { text: `Período: ${periodo}`, options: { breakLine: true } },
@@ -87,7 +87,7 @@ export async function gerarPptx(o) {
     const g = o.geradoEm || new Date();
     s.addText(`Gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)}${o.autor ? ` por ${nomeProprio(o.autor)}` : ''} · Dikma Gestão`, { x: 0.9, y: 6.65, w: 6.8, h: 0.3, fontFace: FONTE, fontSize: 10, color: '8E8FB8', margin: 0 });
     // resumo na faixa da direita
-    const i = rel.ind; const linhas = qz ? [['Lançamentos com foto', nTxt(rel.grupos.length)], ['Registros fotográficos', nTxt(rel.nFotos)]] : [['% de cumprimento', pctTxt(i.cumpr)], ['% com foto', pctTxt(i.pctFoto)], ['Realizadas', nTxt(i.R)], ['Registros fotográficos', nTxt(rel.nFotos)]];
+    const i = rel.ind; const linhas = qz ? [[o.tipo === 'om' ? 'OMs com foto' : 'Lançamentos com foto', nTxt(rel.grupos.length)], ['Registros fotográficos', nTxt(rel.nFotos)]] : [['% de cumprimento', pctTxt(i.cumpr)], ['% com foto', pctTxt(i.pctFoto)], ['Realizadas', nTxt(i.R)], ['Registros fotográficos', nTxt(rel.nFotos)]];
     linhas.forEach(([t, v], j) => {
       const y = 1.3 + j * 1.35;
       s.addText(v, { x: 8.5, y, w: 4.3, h: 0.75, fontFace: FONTE, fontSize: 40, bold: true, color: j < 2 ? COR.laranja : COR.branco, margin: 0 });

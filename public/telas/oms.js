@@ -3,7 +3,11 @@
 // aprova ou devolve e envia ao cliente; o cliente toca em Ciente e em Liberar (o técnico registra só se ele liberou por fora);
 // quem executou registra a hora da finalização. Cada OM tem a lista de documentação (não obrigatória) e o prazo do cliente.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes } from '../contas/oms.js';
+import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes, pidFotoOM } from '../contas/oms.js';
+import { metaFoto } from '../contas/fotos.js';
+import { statusFoto } from '../contas/fotos-arquivo.js';
+import { verFotoGrande } from '../ui/fotos.js';
+import { passoFotos, cfgF } from './fotos.js';
 import { AREA_S, SETS, DAYS, today, add, weekOf, addMonth, monthLabel, ddmm, pd } from '../contas/cal.js';
 import { etiqueta, vazio, carregando, abas } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
@@ -200,8 +204,13 @@ function editar(id) {
     if (!o) {
       const st = planejar ? 'planejada' : 'solicitada';
       const h0 = planejar ? passo('planejada', quem(), 'prevista para ' + dataBR(y.dPrev), agoraLocal(), v$('omObs')) : passo('solicitada', quem(), '', y.hSol, v$('omObs'));
-      await DB.omSalvar(DB.omNovoId(), SK, { ...y, status: st, hist: [h0] }, true);
-      DB.log(`OMs: ${planejar ? 'planejada para ' + dataBR(y.dPrev) : 'solicitação aberta'} (${y.titulo}, ${areaNome(y.area)})`, 'operacao'); toast(planejar ? 'OM planejada para ' + dataBR(y.dPrev) : 'Solicitação enviada ao técnico'); render(); return;
+      const novoId = DB.omNovoId();
+      await DB.omSalvar(novoId, SK, { ...y, status: st, hist: [h0] }, true);
+      DB.log(`OMs: ${planejar ? 'planejada para ' + dataBR(y.dPrev) : 'solicitação aberta'} (${y.titulo}, ${areaNome(y.area)})`, 'operacao'); toast(planejar ? 'OM planejada para ' + dataBR(y.dPrev) : 'Solicitação enviada ao técnico'); render();
+      // Quem abriu pode pôr fotos logo em seguida (opcional); a janela abre depois que esta fecha.
+      const nova = { ...y, id: novoId, status: st };
+      if (poeFotoOm(nova)) { FOTOS_OM[novoId] = []; setTimeout(() => fotosOm(nova), 0); }
+      return;
     }
     if (planejar) delete y.hSol;
     const extra = o.status === 'devolvida' ? mudar(o, 'reenviar', quem(), { obs: v$('omObs') }) : {};
@@ -252,6 +261,53 @@ function agir(id, acao) {
     DB.log(`OMs: ${STATUS[y.status].toLowerCase()}${peloCli && acao !== 'recusar' ? ' pelo cliente' : ''} (${o.titulo}${y.numero || o.numero ? ', OM ' + (y.numero || o.numero) : ''})`, 'operacao'); toast(STATUS[y.status]); render();
   }, { cancelarTxt: 'Voltar' });
 }
+/* ---------- fotos da OM (opcionais): só quem abre a solicitação na área (o líder) e o administrador põem;
+   o técnico e o cliente veem. Ficam com as fotos das atividades (data.js › salvarFotosOM), na semana atual da área. ---------- */
+const FIM_FOTO = ['finalizada', 'cancelada'];
+const areaGeral = a => !!(SETS[SK] && (SETS[SK].gerais || []).includes(a));
+const poeFotoOm = o => !!o && !FIM_FOTO.includes(o.status) && !areaGeral(o.area) && (isAdmin() || abreOmU(ME, SK, o.area));
+const apagaFotoOm = (o, f) => isAdmin() || (abreOmU(ME, SK, o.area) && statusFoto(f) === 'banco');
+const FOTOS_OM = {};
+async function carregarFotosOm(id) { try { FOTOS_OM[id] = await DB.listarFotosOM(SK, id); } catch (e) { FOTOS_OM[id] = FOTOS_OM[id] || []; } return FOTOS_OM[id]; }
+const legFotoOm = f => [f.porNome || '', f.at && f.at.toLocaleString ? f.at.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''].filter(Boolean).join(' · ');
+function pintarFotosOm(o) {
+  const box = document.getElementById('omFotos'); if (!box) return;
+  const l = FOTOS_OM[o.id]; const max = cfgF().maxOM;
+  if (!l) { box.innerHTML = '<p class="muted small m0">Carregando as fotos…</p>'; return; }
+  const pode = poeFotoOm(o) && l.length < max;
+  box.innerHTML = (l.length ? `<div class="sgfotos">${l.map((f, i) => `<div class="sgfth"><img src="${f.thumb || ''}" alt="Foto ${i + 1} da OM" data-omft="${i}" tabindex="0" role="button">${apagaFotoOm(o, f) ? `<button type="button" class="btn sm ghost" data-omftx="${i}" aria-label="Apagar a foto ${i + 1}">✕</button>` : ''}</div>`).join('')}</div>` : `<p class="muted small m0">${poeFotoOm(o) ? 'Nenhuma foto ainda (opcional).' : 'Nenhuma foto.'}</p>`)
+    + (pode ? `<div class="row-gap"><button type="button" class="btn sm" data-omfadd="1">${I.cam} Adicionar foto</button><span class="muted small">${l.length} de até ${max}</span></div>` : '');
+  box.onclick = async e => {
+    const v = e.target.closest('[data-omft]');
+    if (v) { const f = l[+v.dataset.omft]; if (f) verFotoGrande(statusFoto(f) === 'arquivada' ? async () => f.thumb : () => DB.abrirEvidencia(f.id, SK), f.thumb, 'Foto da OM', legFotoOm(f)); return; }
+    const x = e.target.closest('[data-omftx]');
+    if (x) {
+      if (x.dataset.certo !== '1') { x.dataset.certo = '1'; x.textContent = 'Apagar?'; return; }
+      const f = l[+x.dataset.omftx]; if (!f) return; x.disabled = true;
+      try { await DB.apagarFotoOM(SK, f); DB.log(`OMs: foto apagada (${o.titulo})`, 'operacao'); toast('Foto apagada'); } catch (err) { toast('Não foi possível apagar a foto agora'); }
+      await carregarFotosOm(o.id); pintarFotosOm(o); return;
+    }
+    if (e.target.closest('[data-omfadd]')) fotosOm(o, () => abrir(o.id));
+  };
+}
+// Passo de fotos da OM (opcional, até o máximo das OMs em Administração › Fotos). depois() roda ao salvar ou cancelar.
+function fotosOm(o, depois = () => {}) {
+  const tem = (FOTOS_OM[o.id] || []).length; const max = cfgF().maxOM;
+  if (tem >= max) { toast(`A OM já tem ${max} foto${max > 1 ? 's' : ''}`); depois(); return; }
+  passoFotos({ titulo: 'Fotos da OM', sub: `<b>${esc(o.titulo)}</b><br>Opcional: até ${max} foto${max > 1 ? 's' : ''} por OM. Para seguir sem foto, toque em Cancelar.`, cfg: { obrig: false, min: 0, max }, tem, rotuloOk: 'Salvar as fotos',
+    aoCancelar: depois,
+    aoConfirmar: async imgs => {
+      if (!imgs.length) { depois(); return; }
+      const hoje = today(); const semana = `${o.area}|${weekOf(hoje)}`; const k = (pd(hoje).getDay() + 6) % 7;
+      const fotos = imgs.map(img => {
+        const meta = metaFoto({ semana, area: o.area, conj: SK, rota: '', dia: hoje, k, sit: '', itens: [{ pid: pidFotoOM(o.id), ativ: `OM: ${o.titulo}`, local: [o.equip, o.local].filter(Boolean).join(' · ') }], img, por: ME.uid, porNome: ME.nome || ME.login || '' });
+        delete meta.por; delete meta.porNome; return { meta, dados: img.dados };
+      });
+      try { await DB.salvarFotosOM(SK, fotos); DB.log(`OMs: ${fotos.length} foto${fotos.length > 1 ? 's' : ''} (${o.titulo})`, 'operacao'); toast(`${fotos.length} foto${fotos.length > 1 ? 's' : ''} na OM`); }
+      catch (e) { toast('Não foi possível salvar as fotos agora'); }
+      delete FOTOS_OM[o.id]; depois();
+    } });
+}
 function abrir(id) {
   const o = achar(id); if (!o) return;
   const ac = acoesDe(o, ME); const x = tempos(o); const pz = prazoOm(o, cfg()); const dr = docsResumo(o); const souCli = ehClienteDa(o, ME);
@@ -270,6 +326,7 @@ function abrir(id) {
       ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}
       ${dr ? `<div class="dc-full"><dt>Documentação (${dr.prontos} de ${dr.total} pronta${dr.total === 1 ? '' : 's'})</dt><dd>${dr.total ? docsChips(o) : 'Nada a preparar'}</dd></div>` : ''}</dl>
     ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || PASSOS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}${p.obs ? `<span class="om-obs">${esc(p.obs)}</span>` : ''}</li>`).join('')}</ol>` : ''}
+    <p class="dc-sec">Fotos</p><div id="omFotos" class="om-fotos"></div>
     <div class="row-gap om-acoes"><button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button></div>
     ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['solicitar', 'aprovar', 'enviar', 'finalizar'].includes(a) || (a === 'liberar' && (souCli || !o.clienteUid)) ? ' pri' : a === 'cancelar' || a === 'apagar' || a === 'recusar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Recusar' : 'Registrar recusa do cliente', obs: '+ Observação', ciente: 'Ciente', docs: 'Documentação', liberar: souCli ? 'Liberar' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Finalizar', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
   formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))}`, html, 'Fechar', async () => {}, {});
@@ -279,11 +336,14 @@ function abrir(id) {
   // A janela não deixa o clique subir até a página: os botões das ações são ligados aqui.
   f.querySelectorAll('[data-act="omAcao"]').forEach(b => b.addEventListener('click', () => acoes.omAcao(b, b.dataset)));
   f.querySelectorAll('[data-act="omImprimir"]').forEach(b => b.addEventListener('click', () => imprimir(b.dataset.id)));
+  pintarFotosOm(o); carregarFotosOm(o.id).then(() => pintarFotosOm(o));
 }
 
 /* ---------- impressão (ou "Salvar como PDF" na janela de impressão) para enviar ao cliente ---------- */
 function imprimir(id) {
   const o = achar(id); if (!o) return;
+  // Fotos já lidas ao abrir a OM (sem esperar o servidor: o celular só imprime logo depois do toque).
+  const fotos = (FOTOS_OM[id] || []).filter(f => f.thumb);
   const x = tempos(o); const cli = o.cliente ? { nome: o.cliente } : cliente();
   const lin = (r, v) => `<tr><th>${esc(r)}</th><td>${v ? esc(v) : '—'}</td></tr>`;
   const html = `<header class="omi-top"><img src="img/dikma-logo.png" alt="Dikma"><div><h1>${o.status === 'planejada' ? 'OM planejada' : 'Solicitação de OM'}</h1><p>${esc(conjNome())}${o.numero ? ' · OM ' + esc(o.numero) : ''} · ${esc(STATUS[o.status] || o.status)}</p></div></header>
@@ -302,6 +362,7 @@ function imprimir(id) {
     ${o.motivo && ['recusada', 'cancelada', 'devolvida'].includes(o.status) ? `<h3>${o.status === 'recusada' ? 'Motivo da recusa' : o.status === 'cancelada' ? 'Motivo do cancelamento' : 'O que corrigir'}</h3><p class="omi-txt">${esc(o.motivo)}</p>` : ''}
     ${o.obsFim ? `<h3>Como ficou</h3><p class="omi-txt">${esc(o.obsFim)}</p>` : ''}
     ${observacoes(o).length ? `<h3>Observações</h3><table class="omi-tab"><tbody>${observacoes(o).map(x => `<tr><th>${esc(horaBR(x.em))}<br><small>${esc(STATUS[x.s] || PASSOS[x.s] || x.s)}${x.nome ? ' · ' + esc(x.nome) : ''}</small></th><td>${esc(x.obs)}</td></tr>`).join('')}</tbody></table>` : ''}
+    ${fotos.length ? `<h3>Fotos</h3><div class="omi-fotos">${fotos.map(f => `<figure><img src="${f.thumb}" alt=""><figcaption>${esc(legFotoOm(f))}</figcaption></figure>`).join('')}</div>` : ''}
     <div class="omi-ass">${['Solicitante (Dikma)', 'Técnico de Processo (Dikma)', 'Cliente'].map(t => `<div><span></span><small>${t}</small></div>`).join('')}</div>
     <footer class="omi-pe">Impresso em ${esc(horaBR(agoraLocal()))} pelo Dikma Gestão</footer>`;
   let box = document.getElementById('omImp');

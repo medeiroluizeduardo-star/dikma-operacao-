@@ -248,6 +248,8 @@ export function resumo(l, mes) {
 }
 /* ---------- planejamento: Hoje, Semana e Mês ---------- */
 // Dia da OM na agenda: a data prevista; nas antigas (sem data prevista), o dia da solicitação.
+// Fotos da OM (só quem abre a solicitação): na coleção das fotos das atividades, com a "atividade" OM-<id>.
+export const pidFotoOM = id => 'OM-' + id;
 export const diaDe = o => (ehData(o.dPrev) ? o.dPrev : String(o.hSol || '').slice(0, 10));
 // Atrasada: ainda aberta e a data prevista já passou.
 export const atrasada = (o, hoje) => ABERTAS.includes(o.status) && !!diaDe(o) && diaDe(o) < hoje;

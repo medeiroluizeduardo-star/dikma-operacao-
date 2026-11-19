@@ -1977,7 +1977,10 @@ button.tr-it:hover{border-color:var(--marca)}
   .omi-ass{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:48px;break-inside:avoid}
   .omi-ass span{display:block;border-top:1px solid #000;height:1px}.omi-ass small{display:block;text-align:center;margin-top:4px}
   .omi-pe{margin-top:24px;font-size:9pt;color:#555}
+  .omi-fotos{display:flex;flex-wrap:wrap;gap:10px;break-inside:avoid}.omi-fotos figure{margin:0;width:48%}.omi-fotos img{width:100%;height:auto;border:1px solid #999}.omi-fotos figcaption{font-size:9pt;color:#333}
 }
+/* Fotos da OM no detalhe (telas/oms.js). */
+.om-fotos{display:flex;flex-direction:column;gap:8px}.om-fotos img[data-omft]{cursor:zoom-in}
 
 /* Apontar por local/equipamento: lista de locais da rota e checklist do local */
 .aplead{margin:4px 2px 0}

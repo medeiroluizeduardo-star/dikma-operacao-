@@ -248,3 +248,11 @@ test('relatórios separados: fotos da queda zero (atividade QZ-…) e das ativid
   assert.deepEqual(FA.doTipo([ativ, qz, antiga], 'qz').map(f => f.id), ['q']);
   assert.deepEqual(FA.doTipo(null, 'qz'), []);
 });
+
+test('relatórios separados: fotos das OMs (atividade OM-…)', () => {
+  const om = { id: 'o', refs: ['RECEBIMENTO|2026-11-16|OM-abc|3'] };
+  const ativ = { id: 'a', refs: ['RECEBIMENTO|2026-11-16|P12|3'] };
+  assert.equal(FA.ehOM(om), true); assert.equal(FA.tipoFoto(om), 'om'); assert.equal(FA.tipoFoto(ativ), 'ativ');
+  assert.deepEqual(FA.doTipo([om, ativ], 'om').map(f => f.id), ['o']);
+  assert.deepEqual(FA.doTipo([om, ativ], 'ativ').map(f => f.id), ['a'], 'as fotos das OMs não entram no relatório das atividades');
+});

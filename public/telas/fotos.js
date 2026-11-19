@@ -211,6 +211,7 @@ function lerForm() {
   if ($('cfFtObrig')) R.obrig = v('cfFtObrig').checked;
   if ($('cfFtMin')) R.min = v('cfFtMin').value === '' ? NaN : Number(v('cfFtMin').value);
   if ($('cfFtMax')) R.max = v('cfFtMax').value === '' ? NaN : Number(v('cfFtMax').value);
+  if ($('cfFtMaxOM')) R.maxOM = v('cfFtMaxOM').value === '' ? NaN : Number(v('cfFtMaxOM').value);
   if ($('cfFtMaxQZ')) R.maxQZ = v('cfFtMaxQZ').value === '' ? NaN : Number(v('cfFtMaxQZ').value);
   if ($('cfFtDesde')) R.desde = v('cfFtDesde').value || R.desde;
   R.situacoes = SITUACOES_FOTO.map(s => s[0]).filter(s => { const c = $('cfFtSit' + s); return c ? c.checked : R.situacoes.includes(s); });
@@ -227,7 +228,7 @@ function textoEstimativa(R) {
 export function vCfFotos() {
   if (!isAdmin()) return '<div class="card"><div class="empty">Só o administrador altera a configuração das fotos.</div></div>';
   const R = rascF(); const salvo = cfgF(); const raw = DB.cache.fotosCfg;
-  const mudou = JSON.stringify([R.obrig, R.min, R.max, R.maxQZ, R.situacoes, R.desde]) !== JSON.stringify([salvo.obrig, salvo.min, salvo.max, salvo.maxQZ, salvo.situacoes, salvo.desde]);
+  const mudou = JSON.stringify([R.obrig, R.min, R.max, R.maxQZ, R.maxOM, R.situacoes, R.desde]) !== JSON.stringify([salvo.obrig, salvo.min, salvo.max, salvo.maxQZ, salvo.maxOM, salvo.situacoes, salvo.desde]);
   const erro = validarCfgFotos(R);
   return `<div class="card" id="cfFotos"><header><h2>Fotos das atividades</h2><p>Foto tirada no Apontar para comprovar a atividade. Vale para Pátio e Bateria.</p></header><div class="body stackcol">
     <label class="mchip"><input type="checkbox" id="cfFtObrig" ${R.obrig ? 'checked' : ''}><span><b>Foto obrigatória</b> ao apontar nas situações marcadas abaixo</span></label>
@@ -238,11 +239,12 @@ export function vCfFotos() {
     <fieldset class="cfsit"><legend>Quantidade máxima de fotos por tela</legend><div class="form cffotos">
       <label class="sel"><span>Atividades (Apontar)</span><input class="in num" type="number" id="cfFtMax" min="1" max="${MAX_FOTOS}" step="1" value="${Number.isFinite(R.max) ? R.max : ''}"></label>
       <label class="sel"><span>Queda zero</span><input class="in num" type="number" id="cfFtMaxQZ" min="1" max="${MAX_FOTOS}" step="1" value="${Number.isFinite(R.maxQZ) ? R.maxQZ : ''}"></label>
-    </div><p class="muted small m0">De 1 a ${MAX_FOTOS} fotos em cada tela. Na queda zero a foto é sempre opcional.</p></fieldset>
+      <label class="sel"><span>OMs (solicitação do líder)</span><input class="in num" type="number" id="cfFtMaxOM" min="1" max="${MAX_FOTOS}" step="1" value="${Number.isFinite(R.maxOM) ? R.maxOM : ''}"></label>
+    </div><p class="muted small m0">De 1 a ${MAX_FOTOS} fotos em cada tela. Na queda zero e nas OMs a foto é sempre opcional.</p></fieldset>
     <fieldset class="cfsit"><legend>Situações que exigem foto</legend>${SITUACOES_FOTO.map(([s, t]) => `<label class="mchip"><input type="checkbox" id="cfFtSit${s}" ${R.situacoes.includes(s) ? 'checked' : ''}><span>${esc(t)}</span></label>`).join('')}</fieldset>
     <p class="err m0" id="cfFtErr" role="alert"${erro ? '' : ' hidden'}>${esc(erro)}</p>
     <div class="cfest"><b>Efeito previsto no armazenamento</b><p class="m0 small" id="cfFtEst">${esc(textoEstimativa(R))}</p></div>
-    <p class="muted small m0">As atividades apontadas antes da regra não pedem foto (aparecem com “sem foto” discreto). Uma foto pode valer para várias atividades do mesmo dia e rota (“Marcar restantes”). ${raw && raw.por ? `Última alteração: ${esc(title(raw.por))}.` : 'Ainda no padrão do sistema (obrigatória, 1 a 10 fotos nas atividades e até 2 na queda zero, Realizada e Extra).'}</p>
+    <p class="muted small m0">As atividades apontadas antes da regra não pedem foto (aparecem com “sem foto” discreto). Uma foto pode valer para várias atividades do mesmo dia e rota (“Marcar restantes”). ${raw && raw.por ? `Última alteração: ${esc(title(raw.por))}.` : 'Ainda no padrão do sistema (obrigatória, 1 a 10 fotos nas atividades e até 2 na queda zero e nas OMs, Realizada e Extra).'}</p>
     <div class="row-gap"><button class="btn pri" data-act="cfFotosSalvar" ${mudou && !erro ? '' : 'disabled'}>Salvar</button>${mudou ? '<button class="btn" data-act="cfFotosDesfazer">Desfazer</button>' : ''}<button class="btn ghost" data-act="cfFotosPadrao">Voltar ao padrão</button></div>
   </div></div>`;
 }
@@ -252,7 +254,7 @@ function aoMexer(e) {
   const R = lerForm(); const er = validarCfgFotos(R); const p = $('cfFtErr'); if (p) { p.textContent = er; p.hidden = !er; }
   const est = $('cfFtEst'); if (est) est.textContent = textoEstimativa(R);
   const mn = $('cfFtMin'); if (mn) mn.min = R.obrig ? 1 : 0;
-  const s = cfgF(); const mudou = JSON.stringify([R.obrig, R.min, R.max, R.maxQZ, R.situacoes, R.desde]) !== JSON.stringify([s.obrig, s.min, s.max, s.maxQZ, s.situacoes, s.desde]);
+  const s = cfgF(); const mudou = JSON.stringify([R.obrig, R.min, R.max, R.maxQZ, R.maxOM, R.situacoes, R.desde]) !== JSON.stringify([s.obrig, s.min, s.max, s.maxQZ, s.maxOM, s.situacoes, s.desde]);
   const b = document.querySelector('[data-act="cfFotosSalvar"]'); if (b) b.disabled = !mudou || !!er;
 }
 document.addEventListener('input', aoMexer); document.addEventListener('change', aoMexer);
@@ -260,7 +262,7 @@ acoes.cfFotosSalvar = async () => {
   if (!isAdmin()) return toast('Só o administrador altera a configuração das fotos');
   const R = lerForm(); const er = validarCfgFotos(R); if (er) return toast(er);
   await DB.salvarCfgFotos(R);
-  DB.log(`Fotos das atividades: ${R.obrig ? `obrigatória, ${R.min} a ${R.max} fotos (${R.situacoes.map(s => SITUACOES_FOTO.find(x => x[0] === s)[1]).join(', ')})` : `opcional, até ${R.max} fotos`} · queda zero até ${R.maxQZ}`, 'administracao');
+  DB.log(`Fotos das atividades: ${R.obrig ? `obrigatória, ${R.min} a ${R.max} fotos (${R.situacoes.map(s => SITUACOES_FOTO.find(x => x[0] === s)[1]).join(', ')})` : `opcional, até ${R.max} fotos`} · queda zero até ${R.maxQZ} · OMs até ${R.maxOM}`, 'administracao');
   UI.fotoR = null; toast('Configuração das fotos salva'); render();
 };
 acoes.cfFotosDesfazer = () => { UI.fotoR = null; render(); };
