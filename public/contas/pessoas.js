@@ -43,7 +43,15 @@ export function criarPessoas(DB) {
   // Onde a pessoa está no conjunto: "Pátio · Recebimento · Rota 1" ou só "Coqueria Pátio" (área sem rota).
   const txtAtiv = y => (ehAreaGeral(y.x.area) ? AREA_S[y.x.area] : `${SETS[y.set].curto} · ${AREA_S[y.x.area] || y.x.area} · ${y.x.rota}`);
   // ativ = { set, x } onde x é o item em colaboradores/{ÁREA} do conjunto
-  function vinculo(c) { const a = ativ().find(y => casa(y.x, c)) || null; return { ativ: a, patio: a ? a.x : null, op: ops().find(x => casa(x, c)) || null }; }
+  // outros = a mesma pessoa repetida em outra lista (ex.: Coqueria Geral no Pátio e uma rota na Bateria). Ninguém deveria
+  // estar em dois lugares; a repetição aparece na ficha e some quando a ficha é salva (aplicar).
+  // Na repetição vale a matrícula quando as duas têm (homônimo com outra matrícula não é a mesma pessoa).
+  const mesma = (x, c) => (x.mat && c.mat ? String(x.mat) === String(c.mat) : casa(x, c));
+  function vinculo(c) {
+    const a = ativ().find(y => casa(y.x, c)) || null;
+    const outros = a ? ativ().filter(y => y !== a && y.x.id !== a.x.id && mesma(y.x, c)) : [];
+    return { ativ: a, outros, patio: a ? a.x : null, op: ops().find(x => casa(x, c)) || null };
+  }
 
   // Onde a pessoa está hoje, lido dos próprios módulos.
   function lotacao(c) {
@@ -51,6 +59,7 @@ export function criarPessoas(DB) {
     const area = v.ativ ? v.ativ.x.area : v.op ? AREA_OP : (c.area && c.area !== AREA_GERAL ? c.area : AREA_GERAL);
     const partes = [];
     if (v.ativ) partes.push(txtAtiv(v.ativ));
+    for (const y of v.outros) partes.push(txtAtiv(y));
     if (v.op) partes.push('Equipamentos');
     return { ...v, area, txt: partes.join(' + ') || areaNome(area) };
   }
@@ -113,9 +122,10 @@ export function criarPessoas(DB) {
         const h = anotarTroca({ ...v.ativ.x, turma: efT(v.ativ.x, antes || c) }, { ...novo, turma: efT(novo, c) }, ['regime', 'turma'], desde);
         if (h.length) novo.escHist = h; else delete novo.escHist;
       }
-      if (v.ativ) {
-        const k = v.ativ.set, a = v.ativ.x.area;
-        st(k).colabs[a] = (st(k).colabs[a] || []).filter(x => x.id !== v.ativ.x.id); sujo.add(k + '|' + a);
+      // tira o cadastro atual e as repetições (a pessoa fica só na área escolhida)
+      for (const y of v.ativ ? [v.ativ, ...v.outros] : []) {
+        const k = y.set, a = y.x.area;
+        st(k).colabs[a] = (st(k).colabs[a] || []).filter(x => x.id !== y.x.id); sujo.add(k + '|' + a);
       }
       if (novo) {
         const l = (st(kNovo).colabs[o.area] || []).concat([novo]).sort((x, y) => x.nome.localeCompare(y.nome));

@@ -136,6 +136,7 @@ function vFicha(c) {
       ${botoes ? `<div class="row-gap">${botoes}</div>` : ''}</div>
     ${abas([['dados', 'Dados'], ['lot', 'Lotação e liderança'], ['fer', 'Férias']], aba, 'co-aba', 'Ficha do colaborador')}
     ${corpo}
+    ${aba === 'lot' && lot.outros && lot.outros.length ? `<div class="aviso small">Esta pessoa está cadastrada em ${lot.outros.length + 1} lugares das Atividades (${esc(lot.txt.replace(/ \+ Equipamentos$/, ''))}) e por isso aparece em mais de uma Escala do dia.${completo() ? ' Toque em Editar, escolha a área de atuação certa e salve: ela fica só nesse lugar.' : ' Peça ao administrador para abrir Editar e salvar a ficha: ela fica só na área escolhida.'}</div>` : ''}
     ${aba === 'lot' ? '<p class="muted small m0">O supervisor imediato é o líder da ficha do líder (o mesmo que agrupa a Frequência). Área de atuação e rota vêm das Atividades e dos Equipamentos.</p>' : ''}
   </div></div>`;
 }
