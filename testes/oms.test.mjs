@@ -247,7 +247,7 @@ test('observações em todos os passos ficam no histórico', () => {
 });
 
 // Indicadores › OMs (public/contas/oms-indicadores.js)
-import { numerosOms, caminhoOms, temposOms, proximasOms, painelOms, faixaPct } from '../public/contas/oms-indicadores.js';
+import { numerosOms, caminhoOms, temposOms, proximasOms, painelOms, faixaPct, faixa, porDiaOms, porSemanaOms } from '../public/contas/oms-indicadores.js';
 test('Indicadores das OMs: aderência, prazo do cliente, recusas e documentação do mês', () => {
   const p = (s, em, txt) => ({ s, em, ...(txt ? { txt } : {}) });
   const l = [
@@ -284,6 +284,32 @@ test('Indicadores das OMs: aderência, prazo do cliente, recusas e documentaçã
   assert.deepEqual(pn.porPrio.map(x => x.prio), ['alta', 'media']);
   assert.equal(numerosOms([], '2026-11', '2026-11-25').aderencia, null);
   assert.deepEqual([faixaPct(95), faixaPct(75), faixaPct(10), faixaPct(null)], ['ok', 'atencao', 'critico', '']);
+});
+
+test('Indicadores das OMs por dia, por semana e pelo mês (resumos impressos e Excel)', () => {
+  const l = [
+    om({ id: 'a', status: 'finalizada', dPrev: '2026-11-10', hSol: '2026-11-10T07:00', hEnvio: '2026-11-10T08:00', hLib: '2026-11-10T11:00', hFim: '2026-11-10T15:00' }),
+    om({ id: 'b', status: 'liberada', dPrev: '2026-11-12', hSol: '2026-11-11T07:00', hEnvio: '2026-11-11T08:00', hLib: '2026-11-13T20:00' }),
+    om({ id: 'd', status: 'planejada', dPrev: '2026-11-20', hSol: '' }),
+    om({ id: 'e', status: 'finalizada', dPrev: '2026-10-31', hFim: '2026-10-31T10:00' })
+  ];
+  assert.deepEqual(faixa('2026-11'), { ini: '2026-11-01', fim: '2026-11-30' });
+  assert.deepEqual(faixa('2026-02'), { ini: '2026-02-01', fim: '2026-02-28' });
+  assert.deepEqual(faixa('2026-11-10'), { ini: '2026-11-10', fim: '2026-11-10' });
+  // o mês continua igual; o dia e a semana contam só as datas dentro deles
+  assert.equal(numerosOms(l, '2026-11', '2026-11-25').previstas, 3);
+  assert.deepEqual((({ previstas, finalizadas, aderencia, liberadas }) => [previstas, finalizadas, aderencia, liberadas])(numerosOms(l, '2026-11-10', '2026-11-25')), [1, 1, 100, 1]);
+  const sem = numerosOms(l, { ini: '2026-11-09', fim: '2026-11-15' }, '2026-11-25');
+  assert.deepEqual([sem.previstas, sem.finalizadas, sem.liberadas, sem.atrasadas], [2, 1, 2, 1]);
+  // por dia: só os dias com algo (ou os 7, na semana); por semana: segunda a domingo, cortada no mês
+  assert.deepEqual(porDiaOms(l, '2026-11', '2026-11-25').map(x => x.dia), ['2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13', '2026-11-20']);
+  assert.equal(porDiaOms(l, { ini: '2026-11-09', fim: '2026-11-15' }, '2026-11-25', null, { todos: true }).length, 7);
+  const ss = porSemanaOms(l, '2026-11', '2026-11-25');
+  assert.deepEqual(ss.map(x => [x.ini, x.fim]), [['2026-11-01', '2026-11-01'], ['2026-11-02', '2026-11-08'], ['2026-11-09', '2026-11-15'], ['2026-11-16', '2026-11-22'], ['2026-11-23', '2026-11-29'], ['2026-11-30', '2026-11-30']]);
+  assert.deepEqual(ss.map(x => x.previstas), [0, 0, 2, 1, 0, 0]);
+  // painel de um período (semana): por área e caminho só da semana
+  const pn = painelOms(l, { ym: { ini: '2026-11-09', fim: '2026-11-15' }, hoje: '2026-11-25' });
+  assert.equal(pn.caminho[0][1], 2); assert.equal(pn.serie.length, 1);
 });
 
 test('processo do bloqueio: aprovar e enviar num toque, OM gerada, sala, eletricista, liberado e desbloqueio', () => {

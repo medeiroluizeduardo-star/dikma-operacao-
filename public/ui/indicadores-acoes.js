@@ -14,8 +14,26 @@ const EXTRAS = {};
 export const registrarExcel = (id, fn) => { EXTRAS[id] = fn; };
 // Relatório próprio da aba (OMs, Queda zero): id → () => rel (ver ui/excel-relatorio.js) ou null enquanto carrega.
 // Com ele, "Imprimir resumo" sai no modelo do Resumo do dia e o Excel sai formatado, com gráficos.
-const RELATORIOS = {};
-export const registrarRelatorio = (id, fn) => { RELATORIOS[id] = fn; };
+// Com { periodo: () => ({ tipo, data }) }, os dois botões perguntam antes o período (dia, semana ou mês) e a data;
+// a função recebe { tipo: 'dia'|'semana'|'mes', data: 'AAAA-MM-DD' }.
+const RELATORIOS = {}; const PERIODO = {};
+export const registrarRelatorio = (id, fn, o = {}) => { RELATORIOS[id] = fn; if (o.periodo) PERIODO[id] = o.periodo; };
+const TIPOS_PER = [['dia', 'Dia'], ['semana', 'Semana (segunda a domingo)'], ['mes', 'Mês']];
+const ultimaEscolha = {};
+async function comPeriodo(oque, faz) {
+  const id = UI.view;
+  if (!PERIODO[id]) { faz(RELATORIOS[id]()); return; }
+  const { formSheet } = await import('./janelas.js');
+  const p = { ...PERIODO[id](), ...(ultimaEscolha[id] || {}) };
+  formSheet(oque, 'Escolha o período do resumo', `<label class="sel"><span>Período</span><select class="in" id="indPerTipo">${TIPOS_PER.map(([k, t]) => `<option value="${k}" ${k === p.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+    <label class="sel"><span>Data (o dia, um dia da semana ou um dia do mês)</span><input class="in" type="date" id="indPerData" value="${esc(p.data)}" required></label>`, oque, async () => {
+    const tipo = $('indPerTipo').value, data = $('indPerData').value;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Escolha a data.');
+    ultimaEscolha[id] = { tipo, data };
+    // Depois de fechar a janela: a impressão para a tela até terminar.
+    setTimeout(() => faz(RELATORIOS[id]({ tipo, data })), 60);
+  });
+}
 export const agoraTxt = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
 const limpo = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
@@ -76,9 +94,10 @@ acoes.indExcel = async () => {
   const { toast } = await import('./janelas.js');
   const view = $('view'); if (!view) return;
   if (RELATORIOS[UI.view]) {
-    const rel = RELATORIOS[UI.view]();
-    if (!rel) { toast('Os dados ainda estão carregando. Tente de novo em instantes.'); return; }
-    try { const { baixarRelatorioExcel } = await import('./excel-relatorio.js'); baixarRelatorioExcel(nomeArquivo(tituloTela(), filtrosTopo()), rel); toast('Planilha baixada'); } catch (e) { toast('Não foi possível exportar: ' + (e.message || e)); }
+    comPeriodo('Exportar para o Excel', async rel => {
+      if (!rel) { toast('Os dados ainda estão carregando. Tente de novo em instantes.'); return; }
+      try { const { baixarRelatorioExcel } = await import('./excel-relatorio.js'); baixarRelatorioExcel(nomeArquivo(tituloTela(), rel.arquivo || filtrosTopo()), rel); toast('Planilha baixada'); } catch (e) { toast('Não foi possível exportar: ' + (e.message || e)); }
+    });
     return;
   }
   const extra = EXTRAS[UI.view] ? EXTRAS[UI.view]() : [];
@@ -119,9 +138,11 @@ function imprimirRelatorio(view, rel) {
 acoes.indPrint = async () => {
   const view = $('view'); if (!view) return;
   if (RELATORIOS[UI.view]) {
-    const rel = RELATORIOS[UI.view]();
-    if (rel) { imprimirRelatorio(view, rel); return; }
-    const { toast } = await import('./janelas.js'); toast('Os dados ainda estão carregando. Tente de novo em instantes.'); return;
+    comPeriodo('Imprimir resumo', async rel => {
+      if (rel) { imprimirRelatorio(view, rel); return; }
+      const { toast } = await import('./janelas.js'); toast('Os dados ainda estão carregando. Tente de novo em instantes.');
+    });
+    return;
   }
   const agora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const cab = document.createElement('div');
