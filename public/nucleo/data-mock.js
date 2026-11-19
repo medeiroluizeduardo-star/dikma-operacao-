@@ -390,7 +390,7 @@ export async function importar() { /* a demonstração já começa com os dados 
 const EV = [];
 export async function saveConfig(patch) { Object.assign(cache.config, patch); changed(); }
 const cfgFotosDemo = () => ({ ...cfgFotos(null), desde: add(today(), -5) });
-export async function salvarCfgFotos(c) { cache.fotosCfg = { obrig: c.obrig, min: c.min, max: c.max, situacoes: [...c.situacoes], desde: c.desde, atualizadoEm: new Date().toISOString(), por: me.nome }; changed(); }
+export async function salvarCfgFotos(c) { cache.fotosCfg = { obrig: c.obrig, min: c.min, max: c.max, maxQZ: c.maxQZ, maxOM: c.maxOM, situacoes: [...c.situacoes], desde: c.desde, atualizadoEm: new Date().toISOString(), por: me.nome }; changed(); }
 // Fotos de exemplo: parte das realizadas dos últimos 5 dias. Numa parte das rotas uma foto vale para a rota toda
 // (como o "Marcar restantes"); noutra, cada atividade tem a própria; o resto fica sem foto (aparece no indicador).
 // Só os dados leves são criados aqui; a imagem é desenhada (canvas) quando alguém abre.

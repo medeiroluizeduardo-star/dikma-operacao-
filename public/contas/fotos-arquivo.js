@@ -42,6 +42,12 @@ export function partesRef(ref) {
   const k = +p.pop(); const pid = p.pop(); return { semana: p.join('|'), pid, k };
 }
 
+// Relatórios separados: as fotos da Queda zero ficam na mesma coleção das atividades, com a "atividade" QZ-…
+// (telas/queda-zero.js › pidFotoQZ). tipo: 'ativ' (atividades) ou 'qz' (queda zero).
+export const ehQZ = f => refsDe(f).some(r => { const p = partesRef(r); return !!p && String(p.pid).startsWith('QZ-'); });
+export const doTipo = (fotos, tipo = 'ativ') => (fotos || []).filter(f => ehQZ(f) === (tipo === 'qz'));
+export const TIPOS_REL = Object.freeze({ ativ: 'Atividades', qz: 'Queda zero' });
+
 // ---------- o que cada ação pode fazer ----------
 // Exportar: precisa da foto completa no banco (no banco ou já exportada; a lixeira e as arquivadas não).
 export const podeExportar = f => ['banco', 'exportada'].includes(statusFoto(f));

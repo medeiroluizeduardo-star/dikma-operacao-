@@ -76,7 +76,7 @@ const conjDe = doc => setDaArea(doc.area) || SK;
 const legFoto = x => `${x.porNome || ''}${x.at ? ' · ' + x.at.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : ''}`;
 const abrirFoto = (doc, x) => (statusFoto(x) === 'arquivada' ? verFotoGrande(async () => x.thumb, x.thumb, 'Foto da queda zero (miniatura)', legFoto(x) + ' · arquivada fora do banco')
   : verFotoGrande(() => DB.abrirEvidencia(x.id, conjDe(doc)), x.thumb, 'Foto da queda zero', legFoto(x)));
-// Bloco de fotos do formulário (opcional, até o máximo da configuração das fotos das atividades).
+// Bloco de fotos do formulário (opcional, até o máximo da Queda zero em Administração › Fotos › Regras das fotos).
 const blocoFotosQZ = () => `<div class="qzfotos" id="qzFotos"><div class="row-between"><b>Fotos (opcional)</b><span class="muted small" id="qzFCont" aria-live="polite"></span></div>
   <div class="sgfotos" id="qzFLista"></div>
   <div class="row-gap"><label class="btn sm fadd" for="qzFIn" id="qzFAdd">${I.cam} Tirar foto / escolher</label><label class="btn ghost sm" for="qzFInG" id="qzFAddG">Da galeria</label><span class="muted small" id="qzFProc" aria-live="polite"></span></div>
@@ -84,7 +84,7 @@ const blocoFotosQZ = () => `<div class="qzfotos" id="qzFotos"><div class="row-be
 // Liga o bloco: mostra as fotos que o lançamento já tem (com apagar para quem pode) e as novas escolhidas.
 // Devolve { novas: () => imgs, tem: () => quantas já tem, salvas: () => lista das já gravadas, pronto: () => sem foto preparando }.
 function ligarFotosQZ(doc, k, key) {
-  const max = cfgF().max; const novas = []; let salvas = []; let tem = key ? fotosQZ((doc.qz || {})[key]) : 0; let ocupado = 0; let carregou = !tem;
+  const max = cfgF().maxQZ; const novas = []; let salvas = []; let tem = key ? fotosQZ((doc.qz || {})[key]) : 0; let ocupado = 0; let carregou = !tem;
   const pintar = () => {
     const l = $('qzFLista'); if (!l) return;
     const velhas = salvas.map(x => `<div class="sgfth"><button type="button" class="sgmini" data-qzfv="${esc(x.id)}" aria-label="Ver a foto">${x.thumb ? `<img src="${x.thumb}" alt="">` : 'Ver'}</button>${podeApagarFotoQZ(doc, x) ? `<button type="button" class="btn sm ghost" data-qzfa="${esc(x.id)}" aria-label="Apagar esta foto">${I.lixo}</button>` : ''}</div>`).join('');

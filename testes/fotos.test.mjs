@@ -10,9 +10,11 @@ const HOJE = '2026-11-12'; // quinta-feira
 const AREA = 'RECEBIMENTO';
 const SEM = `${AREA}|2026-11-09`;
 
-test('configuração: sem documento vale o padrão (obrigatória, 1 a 3, Realizada e Extra)', () => {
+test('configuração: sem documento vale o padrão (obrigatória, 1 a 10 nas atividades, até 2 na queda zero e nas OMs, Realizada e Extra)', () => {
   const c = F.cfgFotos(null);
-  assert.deepEqual({ obrig: c.obrig, min: c.min, max: c.max, situacoes: c.situacoes }, { obrig: true, min: 1, max: 3, situacoes: ['R', 'E'] });
+  assert.deepEqual({ obrig: c.obrig, min: c.min, max: c.max, maxQZ: c.maxQZ, maxOM: c.maxOM, situacoes: c.situacoes }, { obrig: true, min: 1, max: 10, maxQZ: 2, maxOM: 2, situacoes: ['R', 'E'] });
+  assert.deepEqual([F.cfgFotos({ maxQZ: 0, maxOM: 50 }).maxQZ, F.cfgFotos({ maxQZ: 0, maxOM: 50 }).maxOM], [1, 10], 'máximo por tela fica entre 1 e 10');
+  assert.equal(F.cfgFotos({ max: 3 }).maxQZ, 2, 'configuração antiga (sem maxQZ) usa o padrão da queda zero');
   assert.equal(c.desde, F.FOTOS_DESDE_PADRAO);
   // valores estranhos gravados viram algo válido
   const x = F.cfgFotos({ obrig: true, min: 0, max: 50, situacoes: ['N', 'X', 'R'] });
@@ -28,6 +30,9 @@ test('validação do administrador: mínimo ≥ 1 quando obrigatória, máximo �
   assert.equal(F.validarCfgFotos({ ...ok, obrig: false, min: 0 }), '');
   assert.match(F.validarCfgFotos({ ...ok, min: 4, max: 3 }), /menor que o mínimo/);
   assert.match(F.validarCfgFotos({ ...ok, max: 11 }), /máximo é de 10/);
+  assert.match(F.validarCfgFotos({ ...ok, maxQZ: 0 }), /Queda zero/);
+  assert.match(F.validarCfgFotos({ ...ok, maxOM: 11 }), /OMs/);
+  assert.equal(F.validarCfgFotos({ ...ok, maxQZ: 2, maxOM: 2 }), '');
   assert.match(F.validarCfgFotos({ ...ok, min: 1.5 }), /inteiros/);
   assert.match(F.validarCfgFotos({ ...ok, min: NaN }), /inteiros/);
   assert.match(F.validarCfgFotos({ ...ok, situacoes: [] }), /pelo menos uma situação/);
@@ -53,7 +58,7 @@ test('situação que exige foto: padrão R e E; fora da programação conta como
 });
 
 test('contador do passo de fotos: texto e cor (falta, parcial, ok, acima)', () => {
-  const c = F.cfgFotos(null);
+  const c = F.cfgFotos({ max: 3 });
   assert.deepEqual(F.contador(c, 0), { min: 1, max: 3, tom: 'falta', ok: false, txt: 'Fotos: 0 de 1 obrigatória · máximo 3', cabe: 3 });
   assert.equal(F.contador(c, 1).txt, 'Fotos: 1 de 1 obrigatória · máximo 3');
   assert.equal(F.contador(c, 1).tom, 'ok'); assert.equal(F.contador(c, 1).ok, true);

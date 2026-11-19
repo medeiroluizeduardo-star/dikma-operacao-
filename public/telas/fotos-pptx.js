@@ -48,11 +48,12 @@ const nomeProprio = s => String(s || '').toLowerCase().replace(/(^|\s)(\S)/g, (m
 // Devolve o Blob do .pptx.
 export async function gerarPptx(o) {
   await carregarBiblioteca();
-  const { rel } = o; const pptx = new globalThis.PptxGenJS();
-  pptx.layout = 'LAYOUT_WIDE'; pptx.author = o.autor || 'Dikma Gestão'; pptx.company = 'Dikma'; pptx.title = `Relatório fotográfico · ${o.nomeConj}`;
+  // tipo 'qz' (Queda zero): capa com os lançamentos e as fotos, sem os indicadores e as tabelas das atividades.
+  const { rel } = o; const qz = o.tipo === 'qz'; const nomeTipo = qz ? 'Queda zero' : ''; const pptx = new globalThis.PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; pptx.author = o.autor || 'Dikma Gestão'; pptx.company = 'Dikma'; pptx.title = `Relatório fotográfico${qz ? ' · ' + nomeTipo : ''} · ${o.nomeConj}`;
   pptx.subject = `Período ${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
   const periodo = `${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
-  const rodape = `Dikma · Relatório fotográfico · ${o.nomeConj}${rel.rota ? ' · ' + rel.rota : ''} · ${periodo}`;
+  const rodape = `Dikma · Relatório fotográfico${qz ? ' · ' + nomeTipo : ''} · ${o.nomeConj}${rel.rota ? ' · ' + rel.rota : ''} · ${periodo}`;
   pptx.defineSlideMaster({
     title: 'DIKMA', background: { color: COR.branco },
     objects: [
@@ -77,7 +78,7 @@ export async function gerarPptx(o) {
     s.addShape(pptx.ShapeType.rect, { x: 7.9, y: 0, w: W - 7.9, h: H, fill: { color: COR.navy }, line: { color: COR.navy } });
     if (o.logoBranco) s.addImage({ data: o.logoBranco, x: 0.9, y: 0.75, w: 3.02, h: 1.0 });
     s.addText('RELATÓRIO FOTOGRÁFICO', { x: 0.9, y: 2.35, w: 6.8, h: 0.4, fontFace: FONTE, fontSize: 14, bold: true, color: COR.laranja, charSpacing: 3, margin: 0 });
-    s.addText('Atividades programadas e realizadas', { x: 0.9, y: 2.8, w: 6.8, h: 1.2, fontFace: FONTE, fontSize: 34, bold: true, color: COR.branco, valign: 'top', margin: 0 });
+    s.addText(qz ? 'Queda zero: material recolhido' : 'Atividades programadas e realizadas', { x: 0.9, y: 2.8, w: 6.8, h: 1.2, fontFace: FONTE, fontSize: 34, bold: true, color: COR.branco, valign: 'top', margin: 0 });
     s.addText([
       { text: o.nomeConj, options: { bold: true, breakLine: true } },
       { text: `Período: ${periodo}`, options: { breakLine: true } },
@@ -86,7 +87,7 @@ export async function gerarPptx(o) {
     const g = o.geradoEm || new Date();
     s.addText(`Gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)}${o.autor ? ` por ${nomeProprio(o.autor)}` : ''} · Dikma Gestão`, { x: 0.9, y: 6.65, w: 6.8, h: 0.3, fontFace: FONTE, fontSize: 10, color: '8E8FB8', margin: 0 });
     // resumo na faixa da direita
-    const i = rel.ind; const linhas = [['% de cumprimento', pctTxt(i.cumpr)], ['% com foto', pctTxt(i.pctFoto)], ['Realizadas', nTxt(i.R)], ['Registros fotográficos', nTxt(rel.nFotos)]];
+    const i = rel.ind; const linhas = qz ? [['Lançamentos com foto', nTxt(rel.grupos.length)], ['Registros fotográficos', nTxt(rel.nFotos)]] : [['% de cumprimento', pctTxt(i.cumpr)], ['% com foto', pctTxt(i.pctFoto)], ['Realizadas', nTxt(i.R)], ['Registros fotográficos', nTxt(rel.nFotos)]];
     linhas.forEach(([t, v], j) => {
       const y = 1.3 + j * 1.35;
       s.addText(v, { x: 8.5, y, w: 4.3, h: 0.75, fontFace: FONTE, fontSize: 40, bold: true, color: j < 2 ? COR.laranja : COR.branco, margin: 0 });
@@ -95,7 +96,7 @@ export async function gerarPptx(o) {
   }
 
   // ---- indicadores ----
-  {
+  if (!qz) {
     const s = pptx.addSlide({ masterName: 'DIKMA' });
     titulo(s, 'Indicadores do período', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${rel.rota ? ' · ' + rel.rota : ''}`);
     const i = rel.ind;
@@ -126,7 +127,7 @@ export async function gerarPptx(o) {
   const cab = (t, opt = {}) => ({ text: t, options: { bold: true, color: COR.branco, fill: { color: COR.navy }, fontSize: 10, align: opt.align || 'left', valign: 'middle' } });
   const cel = (t, opt = {}) => ({ text: String(t ?? ''), options: { fontSize: 10, color: opt.cor || COR.tinta, align: opt.align || 'left', bold: !!opt.bold, valign: 'middle', fill: opt.fill ? { color: opt.fill } : undefined } });
   const tabOpts = (colW, y = 1.3) => ({ x: 0.5, y, w: W - 1, colW, fontFace: FONTE, border: { type: 'solid', pt: 0.5, color: COR.linha }, rowH: 0.34, margin: [2, 6, 2, 6], autoPage: false });
-  if (rel.porRota.length) {
+  if (!qz && rel.porRota.length) {
     const pags = FA.paginar(rel.porRota, 14);
     pags.forEach((pg, n) => {
       const s = pptx.addSlide({ masterName: 'DIKMA' });
@@ -208,8 +209,8 @@ export async function gerarPptx(o) {
       s.addTable(rows, tabOpts(cols.map(c => c[1])));
     });
   };
-  tabela(rel.naoReal, 'Atividades não realizadas', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.0], ['Atividade', 3.2], ['Motivo', 2.43]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 40), corta(x.ativ, 70), corta(x.motivo || '—', 60)]);
-  tabela(rel.semFoto, 'Realizadas sem registro fotográfico', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.3], ['Atividade', 4.13], ['Situação', 1.2]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 44), corta(x.ativ, 80), SIT[x.sit] || x.sit], 3);
+  if (!qz) tabela(rel.naoReal, 'Atividades não realizadas', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.0], ['Atividade', 3.2], ['Motivo', 2.43]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 40), corta(x.ativ, 70), corta(x.motivo || '—', 60)]);
+  if (!qz) tabela(rel.semFoto, 'Realizadas sem registro fotográfico', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.3], ['Atividade', 4.13], ['Situação', 1.2]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 44), corta(x.ativ, 80), SIT[x.sit] || x.sit], 3);
 
   o.progresso && o.progresso(total, total, 'Montando o arquivo…');
   return pptx.write({ outputType: 'blob' });
