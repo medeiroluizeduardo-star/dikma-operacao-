@@ -494,6 +494,10 @@ export async function apagarFotosQZ(docId, area, key, fotos, apagarLanc = false)
   if (w && w.qz && w.qz[key]) { if (apagarLanc) delete w.qz[key]; else w.qz[key].f = Math.max(0, (w.qz[key].f || 0) - fotos.length); Object.assign(w, toLocal(docId, w)); }
   changed();
 }
+// Fotos das OMs (como no data.js).
+export async function listarFotosOM(conj, omId) { return EV.filter(e => e.pid === 'OM-' + omId && (!e.lixeiraEm || e.removidaEm)).map(leve).sort((a, b) => a.at - b.at); }
+export async function salvarFotosOM(conj, fotos) { await pausa(); for (const f of fotos) EV.push({ ...f.meta, id: 'ev' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), por: me.uid, porNome: me.nome, at: new Date(), dados: f.dados }); changed(); }
+export async function apagarFotoOM(conj, f) { await pausa(); const i = EV.findIndex(x => x.id === f.id); if (i >= 0) EV.splice(i, 1); changed(); }
 export async function apagarFotoAtividade(f) {
   await pausa(); const i = EV.findIndex(x => x.id === f.id); if (i < 0) throw new Error('Foto não encontrada');
   const e = EV[i]; EV.splice(i, 1);

@@ -54,7 +54,7 @@ async function semanasDoPeriodo(k, p) {
 // Fotos do período na rota escolhida.
 // Fotos do período do tipo escolhido (Atividades ou Queda zero) e da rota escolhida.
 const daRota = l => { const t = FA.doTipo(l, A.tipo); return A.rota ? t.filter(f => (f.rota || '') === A.rota) : t; };
-const sufixoTipo = () => (A.tipo === 'qz' ? '-queda-zero' : '');
+const sufixoTipo = () => (A.tipo === 'qz' ? '-queda-zero' : A.tipo === 'om' ? '-oms' : '');
 
 /* ---------------- progresso ---------------- */
 function progresso(feito, total, texto) {
@@ -83,7 +83,7 @@ async function gerarRelatorio() {
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${A.rota ? '-' + FA.limparNome(A.rota, 30).replace(/ /g, '-').toLowerCase() : ''}.pptx`;
     mod.baixarBlob(blob, nome);
-    DB.log(`Relatório fotográfico${A.tipo === 'qz' ? ' da queda zero' : ''} ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`, 'administracao');
+    DB.log(`Relatório fotográfico${A.tipo === 'qz' ? ' da queda zero' : A.tipo === 'om' ? ' das OMs' : ''} ${SETS[k].curto} ${FA.dBR(p.de)} a ${FA.dBR(p.ate)}${A.rota ? ' · ' + A.rota : ''} (${lim.total - lim.fora} fotos)`, 'administracao');
     terminar('', `Relatório gerado: ${nome} (${FA.fmtBytes(blob.size)}, ${n0(lim.total - lim.fora)} fotos).${lim.fora ? ` ${plural(lim.fora, 'foto ficou', 'fotos ficaram')} de fora pelo limite de ${FA.MAX_FOTOS_PPTX}: escolha uma rota ou um período menor.` : ''}`);
     toast('Relatório em PowerPoint baixado');
   } catch (e) { terminar(msgErro(e)); toast('Não foi possível gerar o relatório'); }
@@ -221,7 +221,7 @@ function vPeriodo(k) {
   const dis = !A.fotos || ocupado() ? 'disabled' : '';
   h += `<section class="card"><header><h2>Ações</h2><p>Na ordem: relatório, exportar e confirmar o arquivo salvo, lixeira e apagar de vez</p></header><div class="body stackcol">
     <div class="fagrid">
-      <div class="faacao"><b>${I.file} Relatório em PowerPoint</b><p class="small muted m0">${A.tipo === 'qz' ? `Só as fotos da queda zero: capa com os lançamentos e as fotos, e um slide por lançamento (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com toneladas, local e motivo na legenda).` : `Só as fotos das atividades: capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota e os registros fotográficos (até ${FA.FOTOS_POR_SLIDE} por slide, com legenda).`} Não muda nada no banco.</p>
+      <div class="faacao"><b>${I.file} Relatório em PowerPoint</b><p class="small muted m0">${A.tipo === 'om' ? `Só as fotos das OMs: capa com as OMs e as fotos, e um slide por OM (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com o serviço e o local na legenda).` : A.tipo === 'qz' ? `Só as fotos da queda zero: capa com os lançamentos e as fotos, e um slide por lançamento (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com toneladas, local e motivo na legenda).` : `Só as fotos das atividades: capa, indicadores (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), resultado por rota e os registros fotográficos (até ${FA.FOTOS_POR_SLIDE} por slide, com legenda).`} Não muda nada no banco.</p>
         ${noRel > FA.MAX_FOTOS_PPTX ? `<p class="warn-t small m0"><b>${n0(noRel)} fotos no período:</b> entram ${FA.MAX_FOTOS_PPTX}, em rodízio entre as atividades do período. Para todas, escolha uma rota ou um período menor.</p>` : ''}
         <div class="row-gap"><button class="btn pri" data-act="faPptx" ${dis || !noRel ? 'disabled' : ''}>${I.dl} Gerar relatório (.pptx)</button></div></div>
       <div class="faacao"><b>${I.cam} Exportar fotos (.zip)</b><p class="small muted m0">Pastas por período, colaborador e atividade, com <span class="mono">indice.csv</span> e conferência do SHA-256 de cada foto. Depois de salvar, confirme para marcar como exportadas.</p>
@@ -277,7 +277,7 @@ export function vArqFotos() {
 const acharFoto = id => (A.fotos || []).find(f => f.id === id) || (A.lix || []).find(f => f.id === id);
 acoes.faConj = (t, d) => { if (ocupado()) return; A.conj = d.k; A.rota = ''; A.zip = null; A.tarefa = null; A.aviso = ''; A.lixChave = ''; render(); };
 acoes.faAba = (t, d) => { A.aba = d.a; render(); };
-acoes.faTipo = (t, d) => { if (ocupado()) return; A.tipo = d.t === 'qz' ? 'qz' : 'ativ'; A.aba = 'periodo'; A.zip = null; A.tarefa = null; A.aviso = ''; A.filtro = 'todas'; A.mostrar = PASSO(); render(); };
+acoes.faTipo = (t, d) => { if (ocupado()) return; A.tipo = FA.TIPOS_REL[d.t] ? d.t : 'ativ'; A.aba = 'periodo'; A.zip = null; A.tarefa = null; A.aviso = ''; A.filtro = 'todas'; A.mostrar = PASSO(); render(); };
 acoes.faFiltro = (t, d) => { A.filtro = d.s; A.mostrar = PASSO(); render(); };
 acoes.faMais = () => { A.mostrar += PASSO() * 2; render(); };
 acoes.faPptx = () => gerarRelatorio();

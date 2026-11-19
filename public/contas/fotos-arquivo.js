@@ -44,9 +44,13 @@ export function partesRef(ref) {
 
 // Relatórios separados: as fotos da Queda zero ficam na mesma coleção das atividades, com a "atividade" QZ-…
 // (telas/queda-zero.js › pidFotoQZ). tipo: 'ativ' (atividades) ou 'qz' (queda zero).
-export const ehQZ = f => refsDe(f).some(r => { const p = partesRef(r); return !!p && String(p.pid).startsWith('QZ-'); });
-export const doTipo = (fotos, tipo = 'ativ') => (fotos || []).filter(f => ehQZ(f) === (tipo === 'qz'));
-export const TIPOS_REL = Object.freeze({ ativ: 'Atividades', qz: 'Queda zero' });
+// As fotos das OMs (o líder anexa ao abrir a solicitação) ficam igual, com a "atividade" OM-<id da OM>.
+const comPrefixo = (f, pre) => refsDe(f).some(r => { const p = partesRef(r); return !!p && String(p.pid).startsWith(pre); });
+export const ehQZ = f => comPrefixo(f, 'QZ-');
+export const ehOM = f => comPrefixo(f, 'OM-');
+export const tipoFoto = f => (ehQZ(f) ? 'qz' : ehOM(f) ? 'om' : 'ativ');
+export const doTipo = (fotos, tipo = 'ativ') => (fotos || []).filter(f => tipoFoto(f) === tipo);
+export const TIPOS_REL = Object.freeze({ ativ: 'Atividades', qz: 'Queda zero', om: 'OMs' });
 
 // ---------- o que cada ação pode fazer ----------
 // Exportar: precisa da foto completa no banco (no banco ou já exportada; a lixeira e as arquivadas não).
