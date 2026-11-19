@@ -5,7 +5,7 @@
 // rel = {
 //   titulo, meta: ['Coqueria', 'Mês: Novembro/2026', ...],
 //   kpis: [{ rot, v, fmt, det }],                       // números do topo (aba Painel)
-//   tabelas: [{ id, titulo, sub, aba, cols: [{ t, fmt }], linhas: [[...]], total: [...], lista, papel, excel }],
+//   tabelas: [{ id, titulo, sub, aba, cols: [{ t, fmt }], linhas: [[...]], total: [...], lista, filtro, papel, excel }],
 //   graficos: [{ tipo: 'barra'|'coluna'|'linha'|'rosca', titulo, tabela: id, series: [índice da coluna], max, largo }]
 // }
 // fmt: 'txt' (padrão) | 'int' | 'pct' (0 a 100) | 't' (toneladas) | 'h' (horas). Valor null fica em branco.
@@ -176,7 +176,9 @@ export function arquivosXlsx(rel) {
     let rr = cabecalho(A, S, rel, ncols);
     for (const t of ts) {
       const x = tabelaNaAba(A, S, t, rr); pos[t.id] = x.pos; rr = x.prox;
-      if (t.lista && ts.length === 1) { A.congela = x.pos.cab + 1; if (t.linhas.length) A.filtro = `${ref(0, x.pos.cab)}:${ref(t.cols.length - 1, x.pos.fim)}`; }
+      // Lista sozinha na aba: cabeçalho fixo e filtro. Lista com filtro: true embaixo de outras tabelas: só o filtro.
+      if (t.lista && ts.length === 1) A.congela = x.pos.cab + 1;
+      if (t.lista && (ts.length === 1 || t.filtro) && t.linhas.length) A.filtro = `${ref(0, x.pos.cab)}:${ref(t.cols.length - 1, x.pos.fim)}`;
     }
   }
   // Gráficos do Painel: a fonte é a tabela (sem a linha de total); limite de itens por gráfico (os maiores primeiro).

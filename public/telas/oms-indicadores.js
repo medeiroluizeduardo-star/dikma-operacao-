@@ -1,10 +1,10 @@
 // Indicadores › OMs: aderência à programação, liberação no prazo do cliente, recusas e cancelamentos e documentação pronta,
 // mais o que vem nos próximos 7 dias, o caminho do planejado ao finalizado, os tempos médios e os números por área e prioridade.
 // Só leitura. As contas ficam em contas/oms-indicadores.js; os dados são os de Operação › OMs (oms/{id}, uma escuta por conjunto).
-import { painelOms, faixaPct } from '../contas/oms-indicadores.js';
+import { painelOms, faixaPct, faixa, porDiaOms, porSemanaOms } from '../contas/oms-indicadores.js';
 import { PRIORIDADES, STATUS, COR, duracao, dataBR, docsResumo, diaDe, linhasExcel } from '../contas/oms.js';
 import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
-import { AREA_S, SETS, MESES_L, DAYS, today, addMonth, pd } from '../contas/cal.js';
+import { AREA_S, SETS, MESES_L, DAYS, today, addMonth, pd, add, weekOf } from '../contas/cal.js';
 import { conjsInd, areasInd } from '../contas/acessos.js';
 import { indicadores, variacao, etiqueta, tabela, vazio, carregando, recolhido } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
@@ -108,64 +108,116 @@ export function topo() {
   return sw + `<label class="sel"><span>Mês</span><select class="in" id="oiMes">${ops.map(m => `<option value="${m}" ${m === u.mes ? 'selected' : ''}>${esc(mesNome(m))}</option>`).join('')}</select></label>`;
 }
 export const renderView = () => vPainel();
-// Relatório para os gerentes ("Imprimir resumo" e "Exportar para o Excel"): os mesmos números da tela, em tabelas,
-// com os gráficos no Excel e a lista completa das OMs do mês (previstas, solicitadas ou finalizadas nele).
+// Relatório para os gerentes ("Imprimir resumo" e "Exportar para o Excel"): os mesmos números da tela, em tabelas, com os
+// gráficos no Excel. Antes, a pessoa escolhe o período: o dia, a semana (segunda a domingo) ou o mês.
+// No Excel, a aba da lista (OMs do dia, da semana ou do mês) traz o resumo por mês, por semana e por dia e, embaixo,
+// a lista completa com as colunas Dia, Semana e Mês, com filtro para ver um dia ou uma semana só.
 const horas = m => (m == null ? null : Math.round(m / 6) / 10);
-function relatorioOM() {
-  const u = U(); const { ok, l, lim } = dados(); if (!ok) return null;
-  const meses = []; for (let i = 5; i >= 0; i--) meses.push(addMonth(u.mes, -i));
-  const p = painelOms(l, { ym: u.mes, meses, hoje: HOJE, cfg: cfg(), anterior: addMonth(u.mes, -1) });
-  const a = p.atual; const atual = u.mes === MES_HOJE;
+const ddmmaa = d => `${dataBR(d)}/${d.slice(0, 4)}`;
+const semanaTxt = (ini, fim) => (ini === fim ? ddmmaa(ini) : `${dataBR(ini)} a ${ddmmaa(fim)}`);
+const diaLongo = d => `${diaNome(d)}/${d.slice(0, 4)}`;
+// Período escolhido: faixa de datas, nomes e o período anterior (para o caso de um dia ou uma semana).
+function periodoOM(per) {
+  if (!per || per.tipo === 'mes') {
+    const ym = per ? per.data.slice(0, 7) : U().mes; const f = faixa(ym);
+    return { tipo: 'mes', ym, f, nome: mesNome(ym), papel: 'RESUMO DO MÊS · OMS', aba: 'OMs do mês', rot: `Mês: ${mesNome(ym)}`, curto: mesNome(ym) };
+  }
+  if (per.tipo === 'semana') {
+    const ini = weekOf(per.data); const f = { ini, fim: add(ini, 6) };
+    return { tipo: 'semana', ym: ini.slice(0, 7), f, nome: `semana de ${semanaTxt(f.ini, f.fim)}`, papel: 'RESUMO DA SEMANA · OMS', aba: 'OMs da semana', rot: `Semana: ${semanaTxt(f.ini, f.fim)}`, curto: `Semana ${dataBR(f.ini)} a ${dataBR(f.fim)}` };
+  }
+  const d = per.data;
+  return { tipo: 'dia', ym: d.slice(0, 7), f: { ini: d, fim: d }, nome: diaLongo(d), papel: 'RESUMO DO DIA · OMS', aba: 'OMs do dia', rot: `Dia: ${diaLongo(d)}`, curto: `Dia ${dataBR(d)}` };
+}
+// Colunas dos resumos por período (mês, semana, dia), as mesmas no papel e no Excel.
+const COLS_PER = prev => [{ t: prev, fmt: 'int' }, { t: 'Finalizadas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'Atrasadas', fmt: 'int' }, { t: 'Liberadas', fmt: 'int' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }, { t: 'Tempo de bloqueio', fmt: 'h' }];
+const linhaPer = x => [x.previstas, x.finalizadas, x.aderencia, x.atrasadas, x.liberadas, x.pctPrazo, x.doCliente, horas(x.bloqMedia)];
+function relatorioOM(per) {
+  const { ok, l, lim } = dados(); if (!ok) return null;
+  const P = periodoOM(per); const f = P.f; const ehMes = P.tipo === 'mes';
+  const meses = []; for (let i = 5; i >= 0; i--) meses.push(addMonth(P.ym, -i));
+  const p = painelOms(l, { ym: ehMes ? P.ym : f, meses: ehMes ? meses : [], hoje: HOJE, cfg: cfg() });
+  const a = p.atual; const ateHoje = f.ini <= HOJE && HOJE <= f.fim;
   const onde = vista() === 'coq' ? 'Coqueria (Pátio e Bateria)' : SETS[vista()].nome;
-  const prev = atual ? 'Previstas até hoje' : 'Previstas';
+  const prev = ateHoje ? 'Previstas até hoje' : 'Previstas';
+  const noPer = 'no ' + (P.tipo === 'mes' ? 'mês' : P.tipo === 'semana' ? 'período' : 'dia');
   const docTxt = o => { const r = docsResumo(o); return !r ? '—' : r.completa ? (r.total ? 'Pronta' : 'Não precisa') : `${r.prontos} de ${r.total}`; };
-  const doMes = l.filter(o => [diaDe(o), o.hSol, o.hFim].some(x => String(x || '').startsWith(u.mes)));
-  const lista = linhasExcel(doMes, areaNome, cfg());
+  // As OMs do período: previstas, solicitadas ou finalizadas nele.
+  const dentro = x => { const d = String(x || '').slice(0, 10); return !!d && d >= f.ini && d <= f.fim; };
+  const doPer = l.filter(o => [diaDe(o), o.hSol, o.hFim].some(dentro));
+  const ref = o => [diaDe(o), String(o.hSol || '').slice(0, 10), String(o.hFim || '').slice(0, 10)].find(dentro) || diaDe(o);
+  // Em ordem de dia; cada linha do Excel começa com o dia, a semana e o mês (para o filtro).
+  const ordem = [...doPer].sort((x, y) => ref(x).localeCompare(ref(y)) || String(x.hSol || '').localeCompare(String(y.hSol || '')));
+  const cabLista = linhasExcel([], areaNome, cfg())[0];
+  const linhasLista = ordem.map(o => { const d = ref(o); const s = weekOf(d); return [diaLongo(d), semanaTxt(s, add(s, 6)), mesNome(d.slice(0, 7)), ...linhasExcel([o], areaNome, cfg())[1]]; });
+  // Resumos por período.
+  const semanas = P.tipo === 'dia' ? [] : porSemanaOms(l, f, HOJE, cfg());
+  const dias = P.tipo === 'dia' ? [] : porDiaOms(l, f, HOJE, cfg(), { todos: P.tipo === 'semana' });
+  const tabelas = [];
+  const tPer = (id, titulo, sub, col0, linhas, extra = {}) => tabelas.push({ id, titulo, sub, cols: [{ t: col0 }, ...COLS_PER(prev)], linhas, vazio: `Nenhuma OM ${noPer}.`, ...extra });
+  if (P.tipo === 'semana') tPer('dias', 'Dia a dia', P.curto, 'Dia', dias.map(x => [diaNome(x.dia), ...linhaPer(x)]), { total: ['Semana', ...linhaPer(a)] });
+  if (ehMes) tPer('semanas', 'Por semana', `${P.nome} · semanas de segunda a domingo (só os dias do mês contam)`, 'Semana', semanas.map(x => [semanaTxt(x.ini, x.fim), ...linhaPer(x)]), { total: ['Mês', ...linhaPer(a)] });
+  tabelas.push(
+    { id: 'area', titulo: 'Por área', sub: P.curto,
+      cols: [{ t: 'Área' }, { t: prev, fmt: 'int' }, { t: 'Finalizadas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'Atrasadas', fmt: 'int' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }],
+      linhas: p.porArea.map(x => [areaNome(x.area), x.previstas, x.finalizadas, x.aderencia, x.atrasadas, x.pctPrazo, x.doCliente]),
+      total: ['Total', a.previstas, a.finalizadas, a.aderencia, a.atrasadas, a.pctPrazo, a.doCliente], vazio: `Nenhuma OM ${noPer}.` },
+    { id: 'prio', titulo: 'Por prioridade', sub: 'Prazo do cliente para liberar, contado do envio',
+      cols: [{ t: 'Prioridade' }, { t: 'Prazo do cliente' }, { t: prev, fmt: 'int' }, { t: 'Liberadas', fmt: 'int' }, { t: 'No prazo', fmt: 'pct' }, { t: 'Média até liberar', fmt: 'h' }],
+      linhas: p.porPrio.map(x => [PRIORIDADES[x.prio], x.prazo ? `${x.prazo} h` : 'sem prazo', x.previstas, x.liberadas, x.pctPrazo, horas(x.respMedia)]), vazio: `Nenhuma OM ${noPer}.` },
+    { id: 'caminho', titulo: 'Do planejado ao finalizado', sub: `OMs com data prevista ${noPer}`, meia: true,
+      cols: [{ t: 'Etapa' }, { t: 'OMs', fmt: 'int' }], linhas: p.caminho[0][1] ? p.caminho.map(([n, v]) => [n === 'Na agenda do mês' ? 'Na agenda' : n, v]) : [], vazio: `Nenhuma OM prevista ${noPer}.` },
+    { id: 'tempos', titulo: 'Tempos médios', sub: `Passos concluídos ${noPer}`, meia: true,
+      cols: [{ t: 'Passo' }, { t: 'Média', fmt: 'h' }], linhas: p.tempos.map(([n, m]) => [n, horas(m)]) });
+  if (ehMes) tabelas.push({ id: 'meses', titulo: 'Últimos 6 meses',
+    cols: [{ t: 'Mês' }, { t: 'Previstas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }, { t: 'Documentação pronta', fmt: 'pct' }],
+    linhas: p.serie.map((x, i) => [`${mesCurto(meses[i])}/${meses[i].slice(2, 4)}`, x.previstas, x.aderencia, x.pctPrazo, x.doCliente, x.pctDocs]) });
+  // No papel do dia e da semana: as OMs do período, em poucas colunas (o mês fica só no Excel, a lista é longa).
+  if (!ehMes) tabelas.push({ id: 'omsper', titulo: P.tipo === 'dia' ? 'OMs do dia' : 'OMs da semana', sub: 'Previstas, solicitadas ou finalizadas no período', excel: false,
+    cols: [{ t: 'Dia' }, { t: 'Nº OM' }, { t: 'Serviço' }, { t: 'Área' }, { t: 'Prioridade' }, { t: 'Situação' }, { t: 'Documentação' }],
+    linhas: ordem.map(o => [diaNome(ref(o)), o.numero || '', [o.titulo, [o.equip, o.local].filter(Boolean).join(' · ')].filter(Boolean).join(' — '), areaNome(o.area), PRIORIDADES[o.prio || 'media'] || '', STATUS[o.status] || o.status, docTxt(o)]), vazio: `Nenhuma OM ${noPer}.` });
+  if (ehMes || ateHoje) tabelas.push({ id: 'prox', titulo: 'Próximos 7 dias', sub: 'Para o cliente se preparar (documentação, bloqueios, acompanhamento)', aba: 'Próximos 7 dias', lista: true,
+    cols: [{ t: 'Dia' }, { t: 'Serviço' }, { t: 'Equipamento ou local' }, { t: 'Área' }, { t: 'Prioridade' }, { t: 'Situação' }, { t: 'Documentação' }],
+    linhas: p.proximas.map(o => [diaNome(diaDe(o)), o.titulo || '', [o.equip, o.local].filter(Boolean).join(' · '), areaNome(o.area), PRIORIDADES[o.prio || 'media'] || '', STATUS[o.status] || o.status, docTxt(o)]), vazio: 'Nada previsto para os próximos 7 dias.' });
+  tabelas.push({ id: 'eventos', titulo: 'Recusas e cancelamentos do cliente', sub: P.curto, aba: 'Recusas e cancelamentos', lista: true,
+    cols: [{ t: 'Data' }, { t: 'Serviço' }, { t: 'Área' }, { t: 'Tipo' }, { t: 'Motivo' }],
+    linhas: a.eventos.map(e => [ddmmaa(e.em.slice(0, 10)), e.titulo, areaNome(e.area), e.tipo === 'recusa' ? 'Recusa' : 'Cancelamento', e.motivo || 'sem motivo']), vazio: `Nenhuma recusa ou cancelamento do cliente ${noPer}.` });
+  // Aba da lista no Excel: resumo por mês, por semana e por dia e, embaixo, todas as OMs com filtro por dia, semana e mês.
+  const ab = P.aba;
+  tabelas.push({ id: 'xmes', titulo: 'Por mês', sub: P.tipo === 'mes' ? P.nome : `Só os dias ${P.tipo === 'dia' ? 'do dia escolhido' : 'da semana'}`, aba: ab, papel: false, cols: [{ t: 'Mês' }, ...COLS_PER(prev)], linhas: [[mesNome(P.ym) + (ehMes ? '' : ` (${P.curto.toLowerCase()})`), ...linhaPer(a)]] });
+  if (!ehMes || semanas.length) tabelas.push({ id: 'xsem', titulo: 'Por semana', sub: 'Segunda a domingo (só os dias do período contam)', aba: ab, papel: false, cols: [{ t: 'Semana' }, ...COLS_PER(prev)],
+    linhas: (P.tipo === 'dia' ? [{ ini: f.ini, fim: f.fim, ...a }] : semanas).map(x => [semanaTxt(x.ini, x.fim), ...linhaPer(x)]) });
+  tabelas.push({ id: 'xdia', titulo: 'Por dia', sub: P.tipo === 'mes' ? 'Os dias com OM prevista, liberada, enviada ou recusada' : '', aba: ab, papel: false, cols: [{ t: 'Dia' }, ...COLS_PER(prev)],
+    linhas: (P.tipo === 'dia' ? [{ dia: f.ini, ...a }] : dias).map(x => [diaNome(x.dia) + '/' + x.dia.slice(0, 4), ...linhaPer(x)]), vazio: `Nenhuma OM ${noPer}.` });
+  tabelas.push({ id: 'lista', titulo: P.aba, sub: 'Previstas, solicitadas ou finalizadas no período · use o filtro nas colunas Dia, Semana ou Mês', aba: ab, lista: true, filtro: true, papel: false,
+    cols: ['Dia', 'Semana', 'Mês', ...cabLista].map(t => ({ t })), linhas: linhasLista });
+  const graficos = ehMes ? [
+    { tipo: 'linha', titulo: 'Aderência e prazo do cliente (6 meses)', tabela: 'meses', series: [2, 3] },
+    { tipo: 'coluna', titulo: 'Previstas e finalizadas por semana', tabela: 'semanas', series: [1, 2] },
+    { tipo: 'coluna', titulo: 'Previstas e finalizadas por área', tabela: 'area', series: [1, 2], max: 10 },
+    { tipo: 'barra', titulo: 'Do planejado ao finalizado', tabela: 'caminho', series: [1] }
+  ] : [
+    ...(P.tipo === 'semana' ? [{ tipo: 'coluna', titulo: 'Previstas e finalizadas por dia', tabela: 'dias', series: [1, 2] }] : []),
+    { tipo: 'coluna', titulo: 'Previstas e finalizadas por área', tabela: 'area', series: [1, 2], max: 10 },
+    { tipo: 'barra', titulo: 'Do planejado ao finalizado', tabela: 'caminho', series: [1] }
+  ];
   return {
-    titulo: `Indicadores das OMs · ${mesNome(u.mes)}`, papel: 'RESUMO DO MÊS · OMS',
-    meta: [onde + (lim.length ? ' (só a sua área)' : ''), `Mês: ${mesNome(u.mes)}`, `Gerado em: ${agoraTxt()}`],
+    titulo: `Indicadores das OMs · ${P.curto}`, papel: P.papel, arquivo: [vista() === 'coq' ? 'Coqueria' : SETS[vista()].curto, P.curto],
+    meta: [onde + (lim.length ? ' (só a sua área)' : ''), P.rot, `Gerado em: ${agoraTxt()}`],
     kpis: [
-      { rot: 'Tempo de bloqueio (h)', v: horas(a.bloqMedia), fmt: 'h', det: a.bloqueios ? `Média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}: da OM gerada pelo cliente até o eletricista liberar (${duracao(a.bloqMedia) || '0 min'})` : 'Nenhum bloqueio registrado no mês' },
-      { rot: 'Aderência à programação', v: a.aderencia, fmt: 'pct', det: a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${atual ? ' até hoje' : ''} finalizadas${a.atrasadas ? ` · ${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}` : ''}` : 'Nenhuma OM prevista' },
+      { rot: 'Tempo de bloqueio (h)', v: horas(a.bloqMedia), fmt: 'h', det: a.bloqueios ? `Média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}: da OM gerada pelo cliente até o eletricista liberar (${duracao(a.bloqMedia) || '0 min'})` : `Nenhum bloqueio registrado ${noPer}` },
+      { rot: 'Aderência à programação', v: a.aderencia, fmt: 'pct', det: a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${ateHoje ? ' até hoje' : ''} finalizadas${a.atrasadas ? ` · ${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}` : ''}` : 'Nenhuma OM prevista' },
       { rot: prev, v: a.previstas, fmt: 'int', det: `${a.atrasadas} atrasada${a.atrasadas === 1 ? '' : 's'}` },
-      { rot: 'Finalizadas', v: a.finalizadas, fmt: 'int', det: 'das previstas no mês' },
-      { rot: 'Liberadas no prazo do cliente', v: a.pctPrazo, fmt: 'pct', det: a.comPrazo ? `${a.noPrazo} de ${a.comPrazo} liberadas${a.respMedia != null ? ` · média ${duracao(a.respMedia)} até liberar` : ''}` : 'Nenhuma liberada no mês' },
-      { rot: 'Recusas e cancelamentos do cliente', v: a.doCliente, fmt: 'int', det: a.envios ? `${pctTxt(a.pctCliente)}% dos ${a.envios} envio${a.envios > 1 ? 's' : ''} · ${a.recusas} recusa${a.recusas === 1 ? '' : 's'} e ${a.cancelamentos} cancelamento${a.cancelamentos === 1 ? '' : 's'}` : 'Nenhum envio no mês' },
+      { rot: 'Finalizadas', v: a.finalizadas, fmt: 'int', det: `das previstas ${noPer}` },
+      { rot: 'Liberadas no prazo do cliente', v: a.pctPrazo, fmt: 'pct', det: a.comPrazo ? `${a.noPrazo} de ${a.comPrazo} liberadas${a.respMedia != null ? ` · média ${duracao(a.respMedia)} até liberar` : ''}` : `Nenhuma liberada ${noPer}` },
+      { rot: 'Recusas e cancelamentos do cliente', v: a.doCliente, fmt: 'int', det: a.envios ? `${pctTxt(a.pctCliente)}% dos ${a.envios} envio${a.envios > 1 ? 's' : ''} · ${a.recusas} recusa${a.recusas === 1 ? '' : 's'} e ${a.cancelamentos} cancelamento${a.cancelamentos === 1 ? '' : 's'}` : `Nenhum envio ${noPer}` },
       { rot: 'Documentação pronta', v: a.pctDocs, fmt: 'pct', det: a.comDocs ? `${a.docsProntos} de ${a.comDocs} enviadas com tudo pronto (PT, APR, bloqueio...)` : 'Nenhuma enviada com a lista' }
     ],
-    tabelas: [
-      { id: 'area', titulo: 'Por área', sub: mesNome(u.mes),
-        cols: [{ t: 'Área' }, { t: prev, fmt: 'int' }, { t: 'Finalizadas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'Atrasadas', fmt: 'int' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }],
-        linhas: p.porArea.map(x => [areaNome(x.area), x.previstas, x.finalizadas, x.aderencia, x.atrasadas, x.pctPrazo, x.doCliente]),
-        total: ['Total', a.previstas, a.finalizadas, a.aderencia, a.atrasadas, a.pctPrazo, a.doCliente], vazio: 'Nenhuma OM no mês.' },
-      { id: 'prio', titulo: 'Por prioridade', sub: 'Prazo do cliente para liberar, contado do envio',
-        cols: [{ t: 'Prioridade' }, { t: 'Prazo do cliente' }, { t: prev, fmt: 'int' }, { t: 'Liberadas', fmt: 'int' }, { t: 'No prazo', fmt: 'pct' }, { t: 'Média até liberar', fmt: 'h' }],
-        linhas: p.porPrio.map(x => [PRIORIDADES[x.prio], x.prazo ? `${x.prazo} h` : 'sem prazo', x.previstas, x.liberadas, x.pctPrazo, horas(x.respMedia)]), vazio: 'Nenhuma OM no mês.' },
-      { id: 'caminho', titulo: 'Do planejado ao finalizado', sub: 'OMs com data prevista no mês', meia: true,
-        cols: [{ t: 'Etapa' }, { t: 'OMs', fmt: 'int' }], linhas: p.caminho[0][1] ? p.caminho.map(([n, v]) => [n, v]) : [], vazio: 'Nenhuma OM prevista no mês.' },
-      { id: 'tempos', titulo: 'Tempos médios', sub: 'Passos concluídos no mês', meia: true,
-        cols: [{ t: 'Passo' }, { t: 'Média', fmt: 'h' }], linhas: p.tempos.map(([n, m]) => [n, horas(m)]) },
-      { id: 'meses', titulo: 'Últimos 6 meses',
-        cols: [{ t: 'Mês' }, { t: 'Previstas', fmt: 'int' }, { t: 'Aderência', fmt: 'pct' }, { t: 'No prazo do cliente', fmt: 'pct' }, { t: 'Recusas e cancel.', fmt: 'int' }, { t: 'Documentação pronta', fmt: 'pct' }],
-        linhas: p.serie.map((x, i) => [`${mesCurto(meses[i])}/${meses[i].slice(2, 4)}`, x.previstas, x.aderencia, x.pctPrazo, x.doCliente, x.pctDocs]) },
-      { id: 'prox', titulo: 'Próximos 7 dias', sub: 'Para o cliente se preparar (documentação, bloqueios, acompanhamento)', aba: 'Próximos 7 dias', lista: true,
-        cols: [{ t: 'Dia' }, { t: 'Serviço' }, { t: 'Equipamento ou local' }, { t: 'Área' }, { t: 'Prioridade' }, { t: 'Situação' }, { t: 'Documentação' }],
-        linhas: p.proximas.map(o => [diaNome(diaDe(o)), o.titulo || '', [o.equip, o.local].filter(Boolean).join(' · '), areaNome(o.area), PRIORIDADES[o.prio || 'media'] || '', STATUS[o.status] || o.status, docTxt(o)]), vazio: 'Nada previsto para os próximos 7 dias.' },
-      { id: 'eventos', titulo: 'Recusas e cancelamentos do cliente', sub: mesNome(u.mes), aba: 'Recusas e cancelamentos', lista: true,
-        cols: [{ t: 'Data' }, { t: 'Serviço' }, { t: 'Área' }, { t: 'Tipo' }, { t: 'Motivo' }],
-        linhas: a.eventos.map(e => [dataBR(e.em.slice(0, 10)) + '/' + e.em.slice(0, 4), e.titulo, areaNome(e.area), e.tipo === 'recusa' ? 'Recusa' : 'Cancelamento', e.motivo || 'sem motivo']), vazio: 'Nenhuma recusa ou cancelamento do cliente no mês.' },
-      { id: 'lista', titulo: 'OMs do mês', sub: 'Previstas, solicitadas ou finalizadas no mês', aba: 'OMs do mês', lista: true, papel: false,
-        cols: lista[0].map(t => ({ t })), linhas: lista.slice(1) }
-    ],
-    graficos: [
-      { tipo: 'linha', titulo: 'Aderência e prazo do cliente (6 meses)', tabela: 'meses', series: [2, 3] },
-      { tipo: 'coluna', titulo: 'Previstas e finalizadas por área', tabela: 'area', series: [1, 2], max: 10 },
-      { tipo: 'barra', titulo: 'Do planejado ao finalizado', tabela: 'caminho', series: [1] },
-      { tipo: 'coluna', titulo: 'Recusas e cancelamentos do cliente (6 meses)', tabela: 'meses', series: [4], cores: ['3A3F47'] }
-    ]
+    tabelas, graficos
   };
 }
-registrarRelatorio('ompainel', relatorioOM);
+// Período sugerido na janela: o mês escolhido no topo (hoje, se for o mês corrente; senão, o dia 1 dele).
+registrarRelatorio('ompainel', relatorioOM, { periodo: () => ({ tipo: 'mes', data: U().mes === MES_HOJE ? HOJE : U().mes + '-01' }) });
 
 acoes.oiVista = (t, d) => { U().vista = d.v; salvarUI(); render(); };
 document.addEventListener('change', e => { if (e.target && e.target.id === 'oiMes') { U().mes = e.target.value; salvarUI(); render(); } });

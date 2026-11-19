@@ -8,10 +8,15 @@
 // - Tempo de bloqueio: média, nas OMs em que o eletricista liberou no mês, da OM gerada pelo cliente até o eletricista
 //   avisar a sala de controle que liberou o equipamento (o número que o cliente mais acompanha).
 // - Documentação pronta: das enviadas ao cliente no mês com a lista de documentos, quantas estão com tudo pronto.
-import { PRIORIDADES, ABERTAS, prazoOm, minutosEntre, docsResumo, diaDe, visaoMes, prazosDe } from './oms.js';
-import { add } from './cal.js';
+// O período pode ser o mês ('AAAA-MM'), um dia ('AAAA-MM-DD') ou uma faixa { ini, fim } (a semana, de segunda a domingo):
+// os resumos impressos e o Excel saem por dia, por semana ou pelo mês.
+import { PRIORIDADES, ABERTAS, prazoOm, minutosEntre, docsResumo, diaDe, atrasada, prazosDe } from './oms.js';
+import { add, weekOf } from './cal.js';
 
-const noMes = (s, ym) => typeof s === 'string' && s.startsWith(ym);
+// Faixa de datas do período (o mês vai do dia 01 ao último dia dele).
+const ultimoDia = ym => `${ym}-${String(new Date(+ym.slice(0, 4), +ym.slice(5, 7), 0).getDate()).padStart(2, '0')}`;
+export const faixa = p => (p && typeof p === 'object' ? p : String(p).length === 7 ? { ini: p + '-01', fim: ultimoDia(p) } : { ini: p, fim: p });
+const noMes = (s, per) => { if (typeof s !== 'string' || !s) return false; const f = faixa(per); const d = s.slice(0, 10); return d >= f.ini && d <= f.fim; };
 const media = v => (v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : null);
 const pct = (n, d) => (d ? Math.round(n / d * 100) : null);
 const hist = o => (Array.isArray(o.hist) ? o.hist.filter(p => p && typeof p.em === 'string') : []);
@@ -35,7 +40,10 @@ function envios(o) {
 
 // Números de uma lista de OMs no mês.
 export function numerosOms(l, ym, hoje, cfg = null) {
-  const v = visaoMes(l.filter(o => diaDe(o) <= hoje), ym, hoje);
+  // Previstas: as OMs da agenda no período até hoje (sem as canceladas); aderência = quantas delas já foram finalizadas.
+  const ag = l.filter(o => o.status !== 'cancelada' && diaDe(o) <= hoje && noMes(diaDe(o), ym));
+  const fin = ag.filter(o => o.status === 'finalizada').length;
+  const v = { previstas: ag.length, finalizadas: fin, atrasadas: ag.filter(o => atrasada(o, hoje)).length, aderencia: pct(fin, ag.length) };
   // Liberação: as liberadas no mês, dentro ou fora do prazo do cliente (as prioridades sem prazo ficam fora do %).
   const lib = l.filter(o => noMes(o.hLib, ym));
   const comPrazo = lib.map(o => prazoOm(o, cfg)).filter(Boolean);
@@ -100,4 +108,23 @@ export function painelOms(l, { ym, meses = [ym], hoje, cfg = null, anterior = ''
   return { atual, ant, serie, porArea, porPrio, caminho: caminhoOms(l, ym), tempos: temposOms(l, ym), proximas: proximasOms(l, hoje) };
 }
 // Faixas das porcentagens (as mesmas da Execução): 90% ou mais ok, 70% ou mais atenção, abaixo crítico.
+// Os números de cada dia e de cada semana (segunda a domingo) de um período, para os resumos por dia e por semana.
+// Os dias sem nada acontecendo ficam de fora (todos: true mantém, para a semana mostrar os 7 dias).
+const temAlgo = x => x.previstas || x.liberadas || x.envios || x.doCliente || x.bloqueios;
+export function porDiaOms(l, per, hoje, cfg = null, { todos = false } = {}) {
+  const f = faixa(per); const out = [];
+  for (let d = f.ini; d <= f.fim && out.length < 62; d = add(d, 1)) {
+    const x = { dia: d, ...numerosOms(l, d, hoje, cfg) }; if (todos || temAlgo(x)) out.push(x);
+  }
+  return out;
+}
+export function porSemanaOms(l, per, hoje, cfg = null) {
+  const f = faixa(per); const out = [];
+  // Semanas do calendário que tocam o período; só os dias dentro dele contam.
+  for (let ini = weekOf(f.ini); ini <= f.fim; ini = add(ini, 7)) {
+    const fim = add(ini, 6); const r = { ini: ini < f.ini ? f.ini : ini, fim: fim > f.fim ? f.fim : fim };
+    out.push({ semana: ini, ...r, ...numerosOms(l, r, hoje, cfg) });
+  }
+  return out;
+}
 export const faixaPct = p => (p == null ? '' : p >= 90 ? 'ok' : p >= 70 ? 'atencao' : 'critico');

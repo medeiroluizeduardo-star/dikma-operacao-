@@ -33,6 +33,17 @@ test('abas, gráficos e referências', () => {
   assert.match(f['xl/worksheets/sheet1.xml'], /<drawing r:id="rId1"\/>/);
 });
 
+test('lista com filtro embaixo de outras tabelas na mesma aba (OMs do mês: por mês, semana e dia)', () => {
+  const r2 = { titulo: 'OMs', meta: [], kpis: [], tabelas: [
+    { id: 'xmes', titulo: 'Por mês', aba: 'OMs do mês', cols: [{ t: 'Mês' }, { t: 'Previstas', fmt: 'int' }], linhas: [['Novembro/2026', 3]] },
+    { id: 'lista', titulo: 'OMs do mês', aba: 'OMs do mês', lista: true, filtro: true, cols: [{ t: 'Dia' }, { t: 'Semana' }, { t: 'Mês' }], linhas: [['seg 10/11/2026', '09/11 a 15/11/2026', 'Novembro/2026']] }
+  ] };
+  const f = arquivosXlsx(r2);
+  assert.match(f['xl/worksheets/sheet2.xml'], /<autoFilter ref="A\d+:C\d+"\/>/);
+  assert.ok(!f['xl/worksheets/sheet2.xml'].includes('state="frozen"'));
+  assert.match(f['xl/workbook.xml'], /_FilterDatabase/);
+});
+
 test('zip válido (assinaturas e quantidade de arquivos)', () => {
   const z = montarXlsx(rel); const dv = new DataView(z.buffer);
   assert.equal(dv.getUint32(0, true), 0x04034b50);
