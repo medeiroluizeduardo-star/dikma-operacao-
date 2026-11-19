@@ -4,6 +4,7 @@
 // - Exportar para o Excel: lê os quadros que estão na tela (números do topo, tabelas, barras e colunas por dia), uma folha
 //   por quadro; a aba pode juntar folhas com a lista completa (registrarExcel: OMs do mês, lançamentos da queda zero).
 import { baixarExcel } from './exportar.js';
+import { fmtTexto } from './excel-relatorio.js';
 import { $, esc, TODAY } from '../nucleo/base.js';
 import { acoes } from '../nucleo/acoes.js';
 import { UI } from '../nucleo/estado.js';
@@ -11,6 +12,11 @@ import { UI } from '../nucleo/estado.js';
 // Folhas extras por aba: id da aba → () => [{ nome, linhas }]
 const EXTRAS = {};
 export const registrarExcel = (id, fn) => { EXTRAS[id] = fn; };
+// Relatório próprio da aba (OMs, Queda zero): id → () => rel (ver ui/excel-relatorio.js) ou null enquanto carrega.
+// Com ele, "Imprimir resumo" sai no modelo do Resumo do dia e o Excel sai formatado, com gráficos.
+const RELATORIOS = {};
+export const registrarRelatorio = (id, fn) => { RELATORIOS[id] = fn; };
+export const agoraTxt = () => new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
 const limpo = s => String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
 const txt = e => (e ? limpo(e.innerText || e.textContent) : '');
@@ -69,15 +75,54 @@ const nomeArquivo = (t, f) => [t, ...f].join(' - ').normalize('NFD').replace(/[\
 acoes.indExcel = async () => {
   const { toast } = await import('./janelas.js');
   const view = $('view'); if (!view) return;
+  if (RELATORIOS[UI.view]) {
+    const rel = RELATORIOS[UI.view]();
+    if (!rel) { toast('Os dados ainda estão carregando. Tente de novo em instantes.'); return; }
+    try { const { baixarRelatorioExcel } = await import('./excel-relatorio.js'); baixarRelatorioExcel(nomeArquivo(tituloTela(), filtrosTopo()), rel); toast('Planilha baixada'); } catch (e) { toast('Não foi possível exportar: ' + (e.message || e)); }
+    return;
+  }
   const extra = EXTRAS[UI.view] ? EXTRAS[UI.view]() : [];
   const folhas = [...folhasDaTela(view), ...(extra || [])];
   if (!folhas.length) { toast('Nada para exportar nesta tela'); return; }
   try { await baixarExcel(nomeArquivo(tituloTela(), filtrosTopo()), folhas); toast('Planilha baixada'); } catch (e) { toast('Não foi possível exportar: ' + (e.message || e)); }
 };
 
+// Papel do relatório no modelo do Resumo do dia: título, linha de filtros, números do topo e tabelas em grade.
+// Duas tabelas seguidas marcadas com meia: true ficam lado a lado.
+const metaSpan = m => { const i = String(m).indexOf(': '); return i > 0 ? `<span><b>${esc(m.slice(0, i))}:</b> ${esc(m.slice(i + 2))}</span>` : `<span><b>${esc(m)}</b></span>`; };
+const ehNum = f => f && f !== 'txt';
+function tabelaPapel(t) {
+  const corpo = t.linhas.length
+    ? `<table><thead><tr>${t.cols.map(c => `<th${ehNum(c.fmt) ? ' class="r"' : ''}>${esc(c.t)}</th>`).join('')}</tr></thead><tbody>${t.linhas.map(l => `<tr>${t.cols.map((c, i) => `<td${ehNum(c.fmt) ? ' class="r"' : ''}>${esc(fmtTexto(l[i], c.fmt))}</td>`).join('')}</tr>`).join('')}${t.total ? `<tr class="tot">${t.cols.map((c, i) => `<td${ehNum(c.fmt) ? ' class="r"' : ''}>${esc(fmtTexto(t.total[i], c.fmt))}</td>`).join('')}</tr>` : ''}</tbody></table>`
+    : `<p class="muted">${esc(t.vazio || 'Nada no período.')}</p>`;
+  return `<div><h4>${esc(t.titulo)}</h4>${t.sub ? `<p class="muted small rsub">${esc(t.sub)}</p>` : ''}${corpo}</div>`;
+}
+export function papelRelatorio(rel) {
+  const ts = (rel.tabelas || []).filter(t => t.papel !== false); let corpo = '';
+  for (let i = 0; i < ts.length; i++) {
+    if (ts[i].meia && ts[i + 1] && ts[i + 1].meia) { corpo += `<div class="rcols">${tabelaPapel(ts[i])}${tabelaPapel(ts[i + 1])}</div>`; i++; } else corpo += tabelaPapel(ts[i]);
+  }
+  const kp = (rel.kpis || []).slice(0, 6);
+  return `<div class="paper resumo indpapel"><div class="hd"><div><h3>${esc(rel.papel || rel.titulo)}</h3><div class="meta">${(rel.meta || []).map(metaSpan).join('')}</div></div><div class="brandp">DIKMA</div></div>
+  ${kp.length ? `<div class="rkpis">${kp.map(k => `<div><b>${esc(k.v == null ? '—' : fmtTexto(k.v, k.fmt || 'int'))}</b><span>${esc(k.rot)}</span>${k.det ? `<small>${esc(k.det)}</small>` : ''}</div>`).join('')}</div>` : ''}${corpo}</div>`;
+}
+function imprimirRelatorio(view, rel) {
+  const box = document.createElement('div'); box.className = 'indpapelbox'; box.innerHTML = papelRelatorio(rel);
+  view.prepend(box); document.body.classList.add('indpapel');
+  let feito = false;
+  const volta = () => { if (feito) return; feito = true; box.remove(); document.body.classList.remove('indpapel'); window.removeEventListener('afterprint', volta); };
+  window.addEventListener('afterprint', volta);
+  window.print();
+}
+
 // Imprimir a própria aba: cabeçalho de papel no topo, quadros recolhidos abertos e, depois, tudo volta como estava.
-acoes.indPrint = () => {
+acoes.indPrint = async () => {
   const view = $('view'); if (!view) return;
+  if (RELATORIOS[UI.view]) {
+    const rel = RELATORIOS[UI.view]();
+    if (rel) { imprimirRelatorio(view, rel); return; }
+    const { toast } = await import('./janelas.js'); toast('Os dados ainda estão carregando. Tente de novo em instantes.'); return;
+  }
   const agora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const cab = document.createElement('div');
   cab.className = 'paper resumo indcab';
