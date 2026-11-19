@@ -200,6 +200,27 @@ test('relatório: fotos agrupadas por atividade e dia (foto de várias atividade
   assert.deepEqual(FA.itensDaFoto(fotos[0], { plano: PLANO, semanas: semana() }).map(x => x.local), ['Moega 2']);
   // rota filtra os grupos
   assert.deepEqual(FA.montarRelatorio({ semanas: semana(), plano: PLANO, fotos, de: '2026-11-09', ate: '2026-11-15', hoje: HOJE, rota: 'ROTA 2' }).grupos.length, 1);
+  // área filtra os grupos e os indicadores
+  const outra = FA.montarRelatorio({ semanas: semana(), plano: PLANO, fotos, de: '2026-11-09', ate: '2026-11-15', hoje: HOJE, areas: ['PREPARAÇÃO'] });
+  assert.equal(outra.grupos.length, 0); assert.equal(outra.ind.prog, 0);
+  assert.equal(FA.montarRelatorio({ semanas: semana(), plano: PLANO, fotos, de: '2026-11-09', ate: '2026-11-15', hoje: HOJE, areas: ['RECEBIMENTO'] }).grupos.length, 3);
+});
+
+test('relatório no modelo da Dikma: semana do ano, período por extenso e Antes/Depois pela hora', () => {
+  assert.equal(FA.semanaISO('2026-11-16'), 47); assert.equal(FA.semanaISO('2026-11-22'), 47);
+  assert.equal(FA.semanaISO('2026-01-01'), 1); assert.equal(FA.semanaISO('2027-01-03'), 53);
+  assert.equal(FA.textoSemanas('2026-11-16', '2026-11-22'), 'Semana: 47');
+  assert.equal(FA.textoSemanas('2026-11-09', '2026-11-22'), 'Semanas: 46 a 47');
+  assert.equal(FA.periodoExtenso('2026-11-16', '2026-11-22'), '16 a 22 de novembro de 2026');
+  assert.equal(FA.periodoExtenso('2026-10-26', '2026-11-01'), '26 de outubro a 1 de novembro de 2026');
+  assert.equal(FA.periodoExtenso('2026-12-28', '2027-01-03'), '28 de dezembro de 2026 a 3 de janeiro de 2027');
+  assert.equal(FA.periodoExtenso('2026-11-16', '2026-11-16'), '16 de novembro de 2026');
+  assert.equal(FA.ehSemanaCheia('2026-11-16', '2026-11-22'), true);
+  assert.equal(FA.ehSemanaCheia('2026-11-17', '2026-11-23'), false);
+  assert.equal(FA.ehSemanaCheia('2026-11-16', '2026-11-20'), false);
+  assert.deepEqual([0].map(i => FA.marcaFoto(i, 1)), ['']);
+  assert.deepEqual([0, 1].map(i => FA.marcaFoto(i, 2)), ['Antes', 'Depois']);
+  assert.deepEqual([0, 1, 2, 3].map(i => FA.marcaFoto(i, 4)), ['Antes', 'Durante', 'Durante', 'Depois']);
 });
 
 test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo período) e posição das fotos no slide', () => {
