@@ -1703,6 +1703,26 @@ test('OMs: o cliente recusa ou cancela com motivo; observações no histórico',
   await assertSucceeds(setDoc0(ref('supPatio', 'r4'), { status: 'cancelada', motivo: 'Aberta em dobro', hCanc: '2026-11-17T08:00', cancNome: 'X', cancCli: false, ...mk('supPatio') }, { merge: true }), 'quem abriu cancela');
 });
 
+test('OMs: processo do bloqueio (OM gerada com número, horas da sala e do eletricista, desbloqueio)', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const ref = (u, id) => doc(db(u), 'oms', id);
+  const nova = (u, x = {}) => ({ conj: 'patio', area: 'PREPARAÇÃO', titulo: 'Troca de rolete', local: 'Correia 3', tipo: 'corretiva', prio: 'alta', status: 'solicitada', solPor: u, solNome: 'X', hSol: '2026-11-17T07:40', hist: [], ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('supPatio', 'b1'), nova('supPatio')), 'abre');
+  await assertSucceeds(setDoc0(ref('tecPatio', 'b1'), { status: 'enviada', hAprov: '2026-11-17T08:00', hEnvio: '2026-11-17T08:00', clienteUid: 'cliPatio', cliente: 'Usuário Pátio', ...mk('tecPatio') }, { merge: true }), 'o técnico aprova e envia num toque');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'b1'), { hCiente: '2026-11-17T08:20', cienteNome: 'Usuário Pátio', numero: '4500300', ...mk('cliPatio') }, { merge: true }), 'o cliente marca OM gerada com o número');
+  await assertFails(setDoc0(ref('cliPatio', 'b1'), { hSala: '2026-11-17T08:30', ...mk('cliPatio') }, { merge: true }), 'as horas da sala vão junto com a liberação');
+  await assertFails(setDoc0(ref('cliPatio', 'b1'), { status: 'liberada', hLib: '2026-11-17T09:30', libCli: true, hEletr: '2026-11-17T09:10 e mais texto', ...mk('cliPatio') }, { merge: true }), 'hora no tamanho certo');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'b1'), { status: 'liberada', hLib: '2026-11-17T09:30', libCli: true, libNome: 'Usuário Pátio', hSala: '2026-11-17T08:30', hEletr: '2026-11-17T09:10', ...mk('cliPatio') }, { merge: true }), 'o cliente libera com as horas da sala e do eletricista');
+  await assertFails(setDoc0(ref('cliPatio', 'b1'), { hDesb: '2026-11-17T12:30', ...mk('cliPatio') }, { merge: true }), 'o cliente não marca o desbloqueio');
+  await assertSucceeds(setDoc0(ref('supPatio', 'b1'), { status: 'finalizada', hFim: '2026-11-17T12:00', obsFim: '', ...mk('supPatio') }, { merge: true }), 'o líder finaliza sem o desbloqueio');
+  await assertFails(setDoc0(ref('supPatio', 'b1'), { hDesb: '2026-11-17T12:30', hFim: '2026-11-17T11:00', ...mk('supPatio') }, { merge: true }), 'depois de finalizada, só a hora do desbloqueio');
+  await assertSucceeds(setDoc0(ref('supPatio', 'b1'), { hDesb: '2026-11-17T12:30', hist: [{ s: 'desbloqueio', em: '2026-11-17T12:30' }], ...mk('supPatio') }, { merge: true }), 'o líder marca o desbloqueio depois');
+  await assertFails(setDoc0(ref('supPatio', 'b1'), { hDesb: '2026-11-17T12:40', ...mk('supPatio') }, { merge: true }), 'desbloqueio marcado uma vez só');
+  await assertSucceeds(setDoc0(ref('supPatio', 'b2'), nova('supPatio')), 'outra OM');
+  await assertSucceeds(setDoc0(ref('tecPatio', 'b2'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: false, ...mk('tecPatio') }, { merge: true }), 'liberada');
+  await assertSucceeds(setDoc0(ref('supPatio', 'b2'), { status: 'finalizada', hFim: '2026-11-17T12:00', hDesb: '2026-11-17T12:20', ...mk('supPatio') }, { merge: true }), 'o líder finaliza já com o desbloqueio');
+});
+
 test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {
   const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
   const ref = (u, id = 'dc1') => doc(db(u), 'documentos', id);
