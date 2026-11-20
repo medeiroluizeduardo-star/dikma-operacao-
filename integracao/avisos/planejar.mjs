@@ -10,6 +10,7 @@ import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
 import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 import { avisosOms } from './lib/oms.mjs';
+import { avisosProgramacao } from './lib/oms-programacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
 const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true };
@@ -319,6 +320,23 @@ export function planejar(d) {
         : tipo === 'devolvida' ? (n === 1 ? `OM devolvida: ${l[0].titulo}` : `${n} OMs devolvidas para corrigir`) : (n === 1 ? `OM liberada: ${l[0].titulo}` : `${n} OMs liberadas para executar`);
       const corpo = l.slice(0, 3).map(o => [o.equip || o.local, ['devolvida', 'recusada', 'cancelada'].includes(tipo) ? o.motivo : o.numero ? 'OM ' + o.numero : ''].filter(Boolean).join(' · ')).join('\n') || 'Toque para abrir.';
       msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms` });
+    }
+  }
+  // 12) Programação das OMs da próxima semana: na sexta, a partir das 14h, ao cliente do conjunto e a quem trata as OMs
+  //     (só quando há OM na semana). O link abre a semana em Operação › OMs, com o botão do PDF. d.omsProx = OMs com data
+  //     prevista na próxima semana (a rotina só lê na sexta).
+  if ((d.omsProx || []).length) {
+    const porPessoa = new Map();
+    for (const x of avisosProgramacao(d.omsProx, d.usuarios, hoje, hora, d.omsCfg || null)) {
+      if (d.enviados[x.chave]) continue; marcar.add(x.chave);
+      const a = alvo.find(y => y.uid === x.uid); if (!a || !a.prefs.oms) continue;
+      if (!porPessoa.has(x.uid)) porPessoa.set(x.uid, []); porPessoa.get(x.uid).push(x);
+    }
+    for (const [uid, l] of porPessoa) {
+      const n = l.reduce((s, x) => s + x.n, 0); const ini = l[0].ini;
+      const titulo = `Programação das OMs: ${n} OM${n > 1 ? 's' : ''} na semana de ${ini.slice(8, 10)}/${ini.slice(5, 7)}`;
+      const corpo = [...l.map(x => `${SETS[x.conj] ? SETS[x.conj].curto : x.conj}: ${x.n}${x.urgentes ? ` (${x.urgentes} alta ou emergência)` : ''}${x.docsPend ? ` · ${x.docsPend} com documentação pendente` : ''}`), 'Toque para ver e salvar o PDF.'].join('\n');
+      msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms&conj=${l[0].conj}&omsem=${ini}` });
     }
   }
   return { msgs, marcar: [...marcar] };
