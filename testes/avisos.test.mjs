@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -333,4 +333,20 @@ test('solicitações de OM: enviada ao cliente avisa o usuário do cliente do co
   assert.deepEqual(m.map(x => x.uid), ['cli']);
   assert.match(m[0].titulo, /OM do Dikma para liberar: Troca de rolete/);
   assert.match(m[0].corpo, /OM 4500123/);
+});
+
+test('programação das OMs: na sexta às 14h, um aviso por pessoa com o link da semana', () => {
+  const us = conv({ tec: { papel: 'leitor', nome: 'Técnico', acesso: { operacao: 'tecnico' }, escopos: ['patio'] }, cli: { papel: 'leitor', nome: 'Usuário Pátio', acesso: { operacao: 'leitor' }, escopos: ['patio'] } });
+  const omsProx = [{ id: 'p1', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Troca de rolete', status: 'planejada', dPrev: '2026-11-24', prio: 'alta' },
+    { id: 'p2', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Limpeza do chute', status: 'planejada', dPrev: '2026-11-25', docs: { pt: 'pend' } }];
+  const base = { usuarios: us, avisos: { tec: tok, cli: tok }, paradas: [], ocorr: [], sets: {}, enviados: {}, omsProx, omsCfg: { clientes: { patio: { uid: 'cli', nome: 'Usuário Pátio' } } }, hoje: '2026-11-20' };
+  assert.equal(planejar({ ...base, agora: new Date('2026-11-20T13:05:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'antes das 14h');
+  const r = planejar({ ...base, agora: new Date('2026-11-20T14:05:00') });
+  const m = r.msgs.filter(x => x.tag === 'oms');
+  assert.deepEqual(m.map(x => x.uid).sort(), ['cli', 'tec']);
+  assert.match(m[0].titulo, /Programação das OMs: 2 OMs na semana de 23\/11/);
+  assert.match(m[0].corpo, /Pátio: 2 \(1 alta ou emergência\) · 1 com documentação pendente/);
+  assert.equal(m[0].url, '/?m=operacao&v=oms&conj=patio&omsem=2026-11-23');
+  const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-11-20']));
+  assert.equal(planejar({ ...base, enviados, agora: new Date('2026-11-20T15:05:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez');
 });

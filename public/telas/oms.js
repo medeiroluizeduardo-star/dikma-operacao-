@@ -18,11 +18,19 @@ import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { baixarExcel } from '../ui/exportar.js';
+import { imprimirProgramacao, excelProgramacao } from './oms-programacao.js';
+import { semanaDaProgramacao } from '../contas/oms-programacao.js';
 
 const MES = today().slice(0, 7);
 // A aba fica guardada; o dia escolhido volta para hoje a cada vez que o app abre.
 let diaPronto = false;
-const U = () => { const u = (UI.om ||= { status: 'abertas', area: '', q: '' }); u.aba ||= 'hoje'; if (!diaPronto || !u.dia) { u.dia = today(); diaPronto = true; } return u; };
+const U = () => {
+  const u = (UI.om ||= { status: 'abertas', area: '', q: '' }); u.aba ||= 'hoje';
+  // Link do aviso da programação (sexta): abre a semana pedida.
+  if (UI.omLink) { u.aba = 'semana'; u.dia = UI.omLink; delete UI.omLink; diaPronto = true; }
+  if (!diaPronto || !u.dia) { u.dia = today(); diaPronto = true; }
+  return u;
+};
 const v$ = id => (document.getElementById(id) || {}).value || '';
 const areaNome = a => AREA_S[a] || a || '';
 
@@ -92,6 +100,8 @@ function vSemana(l) {
   const dias = visaoSemana(l, u.dia);
   const sel = dias.some(d => d.dia === u.dia) ? u.dia : ini;
   let h = nav('om-sem', 'Semana', `${ddmm(ini)} a ${ddmm(add(ini, 6))}`, ini !== weekOf(hj) ? '<button type="button" class="btn ghost sm" data-om-hoje="1">Esta semana</button>' : '');
+  // Programação da semana para o cliente: PDF (imprimir) e Excel, no padrão dos resumos.
+  h += `<div class="row-gap om-prog noprint"><button type="button" class="btn sm" data-act="omProg">${I.dl} Programação da semana (PDF)</button><button type="button" class="btn sm ghost" data-act="omProgXls">${I.dl} Excel</button>${ini === weekOf(hj) && semanaDaProgramacao(hj) !== ini ? '<button type="button" class="btn sm ghost" data-om-sem="1">Ver a próxima semana</button>' : ''}</div>`;
   // No celular, um dia por vez: os botões dos dias trocam o dia mostrado.
   h += `<div class="om-dias" role="tablist" aria-label="Dias da semana">${dias.map(d => `<button type="button" role="tab" data-om-dia="${d.dia}" aria-selected="${d.dia === sel}" class="${d.dia === hj ? 'hj' : ''}">${esc(DAYS[(pd(d.dia).getDay() + 6) % 7])}<small>${ddmm(d.dia)}</small><i>${d.oms.length || ''}</i></button>`).join('')}</div>`;
   h += `<div class="om-sem">${dias.map(d => `<section class="om-dia${d.dia === sel ? ' on' : ''}${d.dia === hj ? ' hj' : ''}" aria-label="${esc(diaNome(d.dia))}"><h3>${esc(diaNome(d.dia))}<span>${d.oms.length || ''}</span></h3>${d.oms.length ? d.oms.map(cartao).join('') : '<p class="om-nada">—</p>'}</section>`).join('')}</div>`;
@@ -414,6 +424,10 @@ function mudarPrazos() {
   });
 }
 
+// Programação da semana mostrada (com a área escolhida no topo).
+const progDados = () => { const u = U(); const l = u.area ? lista().filter(o => o.area === u.area) : lista(); return [l, weekOf(u.dia), { hoje: today(), cfg: cfg(), onde: conjNome(), area: u.area, areaNome }]; };
+acoes.omProg = () => imprimirProgramacao(...progDados());
+acoes.omProgXls = () => excelProgramacao(...progDados());
 acoes.omNova = () => editar('');
 acoes.omPrazos = () => mudarPrazos();
 acoes.omCliente = () => escolherCliente();
