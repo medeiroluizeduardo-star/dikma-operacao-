@@ -340,3 +340,47 @@ test('processo do bloqueio: aprovar e enviar num toque, OM gerada, sala, eletric
   const n = numerosOms([o], '2026-11', '2026-11-25'); assert.equal(n.bloqMedia, 50); assert.equal(n.bloqueios, 1);
   assert.equal(temposOms([o], '2026-11')[2][1], 50);
 });
+
+// Programação da semana (contas/oms-programacao.js): o PDF que vai ao cliente e o aviso da sexta.
+import { programacaoSemana, semanaDaProgramacao, avisosProgramacao, docsFalta, PROG_HORA } from '../public/contas/oms-programacao.js';
+
+test('programação da semana: OMs dia a dia, em aberto de antes e semana anterior', () => {
+  const l = [
+    om({ id: 'a', status: 'planejada', dPrev: '2026-11-24', prio: 'media', docs: { pt: 'ok', apr: 'pend', bloq: 'ok', isol: 'na', acomp: 'pend' } }),
+    om({ id: 'b', status: 'planejada', dPrev: '2026-11-23', prio: 'alta' }),
+    om({ id: 'c', status: 'cancelada', dPrev: '2026-11-25' }),
+    om({ id: 'd', status: 'aprovada', dPrev: '2026-11-19' }),
+    om({ id: 'e', status: 'finalizada', dPrev: '2026-11-18', hFim: '2026-11-18T15:00' }),
+    om({ id: 'f', conj: 'bateria', status: 'planejada', dPrev: '2026-11-29', area: 'BATERIA 1', prio: 'emergencia', docs: { pt: 'ok', apr: 'ok', bloq: 'ok', isol: 'ok', acomp: 'na' } })
+  ];
+  const p = programacaoSemana(l, '2026-11-23', '2026-11-20');
+  assert.deepEqual(p.oms.map(o => o.id), ['b', 'a', 'f'], 'por dia, sem a cancelada');
+  assert.equal(p.dias.length, 7); assert.equal(p.dias[0].oms.length, 1); assert.equal(p.dias[6].oms[0].id, 'f');
+  assert.deepEqual(p.pendentes.map(o => o.id), ['d'], 'aberta de antes da semana');
+  assert.equal(p.total, 3); assert.equal(p.urgentes, 2); assert.equal(p.docsPend, 1); assert.equal(p.semLista, 1); assert.equal(p.planejadas, 3);
+  assert.equal(p.anterior.ini, '2026-11-16'); assert.equal(p.anterior.previstas, 2); assert.equal(p.anterior.finalizadas, 1); assert.equal(p.anterior.aderencia, 50);
+  assert.equal(programacaoSemana(l, '2026-12-07', '2026-11-20').anterior, null, 'semana anterior ainda não começou');
+  assert.equal(docsFalta(l[0]), 'Falta: APR, Acompanhamento do cliente');
+  assert.equal(docsFalta(l[1]), 'Sem a lista'); assert.equal(docsFalta(l[5]), 'Pronta');
+  assert.equal(docsFalta(om({ docs: { pt: 'na', apr: 'na', bloq: 'na', isol: 'na', acomp: 'na' } })), 'Não precisa');
+});
+
+test('programação da semana: sexta em diante mostra a próxima semana', () => {
+  assert.equal(semanaDaProgramacao('2026-11-19'), '2026-11-16', 'quinta: a semana corrente');
+  assert.equal(semanaDaProgramacao('2026-11-20'), '2026-11-23', 'sexta: a próxima');
+  assert.equal(semanaDaProgramacao('2026-11-22'), '2026-11-23', 'domingo: a próxima');
+  assert.equal(semanaDaProgramacao('2026-11-23'), '2026-11-23');
+});
+
+test('programação da semana: aviso da sexta ao cliente e a quem trata, por conjunto, uma vez', () => {
+  const us = { tec: U.tec, tecBat: U.tecBat, lider: U.lider, cli: { papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] } };
+  const cfg = { clientes: { patio: { uid: 'cli', nome: 'Usuário Pátio' } } };
+  const l = [om({ id: 'a', status: 'planejada', dPrev: '2026-11-24', prio: 'alta' }), om({ id: 'b', status: 'planejada', dPrev: '2026-11-29' }), om({ id: 'c', status: 'planejada', dPrev: '2026-11-30' })];
+  assert.deepEqual(avisosProgramacao(l, us, '2026-11-19', 15, cfg), [], 'quinta não');
+  assert.deepEqual(avisosProgramacao(l, us, '2026-11-20', PROG_HORA - 1, cfg), [], 'antes das 14h não');
+  const r = avisosProgramacao(l, us, '2026-11-20', PROG_HORA, cfg);
+  assert.deepEqual(r.map(x => x.uid).sort(), ['cli', 'tec'], 'cliente e técnico do Pátio (não o da Bateria nem o líder)');
+  assert.equal(r[0].n, 2); assert.equal(r[0].urgentes, 1); assert.equal(r[0].ini, '2026-11-23');
+  assert.equal(r.find(x => x.uid === 'cli').chave, 'omprog|cli|patio|2026-11-23');
+  assert.deepEqual(avisosProgramacao([om({ dPrev: '2026-12-01', status: 'planejada' })], us, '2026-11-20', 15, cfg), [], 'nada na próxima semana: sem aviso');
+});

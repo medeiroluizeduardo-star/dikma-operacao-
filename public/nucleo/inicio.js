@@ -1,5 +1,5 @@
 // Entrada: cria as partes, abre o link recebido (avisos, QR), liga o banco de dados e o service worker.
-import { weekOf, monthOfWeek, setDaArea } from '../contas/cal.js';
+import { weekOf, monthOfWeek, setDaArea, SET_KEYS } from '../contas/cal.js';
 import * as M from '../ui/movimento.js';
 import { DEMO, DB, CUR_WEEK, CUR_MONTH, $ } from './base.js';
 import { AUTH, ME, mudouDados, definirAuth, UI, salvarUI, myArea, aplicarSet, moduloNovo } from './estado.js';
@@ -22,6 +22,8 @@ function abrirLink(busca) {
   if (v) UI.view = v;
   // QR Code da rota: ?r=ÁREA|ROTA abre o Apontar de hoje já nessa rota
   const sem = p.get('s'); if (sem && /^\d{4}-\d{2}-\d{2}$/.test(sem)) { UI.ini = weekOf(sem); UI.mes = monthOfWeek(UI.ini); }
+  // Aviso da programação das OMs (sexta): ?omsem=AAAA-MM-DD&conj=patio abre a semana em Operação › OMs.
+  const oms = p.get('omsem'); if (oms && /^\d{4}-\d{2}-\d{2}$/.test(oms)) { UI.omLink = oms; const c = p.get('conj'); if (SET_KEYS.includes(c)) UI.esSet = c; }
   const r = p.get('r'); if (r && r.includes('|')) { const [a, rota] = r.split('|'); const k = setDaArea(a); if (k) UI.esSet = k; UI.modulo = 'operacao'; if (!v) UI.view = 'apontar'; UI.apArea = a; UI.aRotaPor = { ...(UI.aRotaPor || {}), [a]: rota }; UI.aRota = rota; UI.dia = null; UI.ini = CUR_WEEK; UI.mes = CUR_MONTH; if (UI.area !== 'TODAS' && UI.area !== a) UI.area = 'TODAS'; }
   if (m || v) { UI.confirm = null; salvarUI(); }
   return !!(m || v);

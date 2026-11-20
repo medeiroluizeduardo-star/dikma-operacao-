@@ -11,13 +11,14 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
 const { situacaoDoDia, criarTurmaFicha, feriadosOperacao } = await import('./lib/situacao.mjs');
 const { indiceFerias, indiceDesligados, resumoFerias, resumoDesligados, ehAdminU } = await import('./lib/acessos.mjs');
 const { tarefasParaAviso } = await import('./lib/processos.mjs');
+const { PROG_DIA, PROG_HORA } = await import('./lib/oms-programacao.mjs');
 
 const soTestar = process.env.AVISOS_SO_TESTAR === '1' || process.argv.includes('--testar');
 const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -154,9 +155,13 @@ const treinos = (await db.collection('treinos').get()).docs.map(x => ({ id: x.id
 const oms = []; for (const st of ['solicitada', 'enviada', 'recusada', 'devolvida', 'liberada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
 // Canceladas pelo cliente (só estas: as canceladas pelo Dikma não geram aviso).
 (await db.collection('oms').where('status', '==', 'cancelada').where('cancCli', '==', true).get()).forEach(x => oms.push({ id: x.id, ...x.data() }));
+// Sexta, das 14h em diante: as OMs com data prevista na próxima semana (aviso da programação da semana).
+const omsProx = [];
+{ const ag = new Date(); const hj = today();
+  if (ag.getDay() === PROG_DIA && ag.getHours() >= PROG_HORA) { const ini = add(weekOf(hj), 7); (await db.collection('oms').where('dPrev', '>=', ini).where('dPrev', '<=', add(ini, 6)).get()).forEach(x => omsProx.push({ id: x.id, ...x.data() })); } }
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
 const omsCfg = (await db.doc('config/oms').get()).data() || null;
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsCfg, agora: new Date() });
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, omsCfg, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

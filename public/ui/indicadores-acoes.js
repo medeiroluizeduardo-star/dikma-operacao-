@@ -122,10 +122,12 @@ export function papelRelatorio(rel) {
     if (ts[i].meia && ts[i + 1] && ts[i + 1].meia) { corpo += `<div class="rcols">${tabelaPapel(ts[i])}${tabelaPapel(ts[i + 1])}</div>`; i++; } else corpo += tabelaPapel(ts[i]);
   }
   const kp = (rel.kpis || []).slice(0, 6);
+  // Linhas de assinatura no fim (ex.: a programação das OMs, assinada pelo técnico e pelo cliente).
+  if (rel.assinaturas && rel.assinaturas.length) corpo += `<div class="rass">${rel.assinaturas.map(t => `<div><span></span><small>${esc(t)}</small></div>`).join('')}</div>`;
   return `<div class="paper resumo indpapel"><div class="hd"><div><h3>${esc(rel.papel || rel.titulo)}</h3><div class="meta">${(rel.meta || []).map(metaSpan).join('')}</div></div>${MARCA_PAPEL}</div>
   ${kp.length ? `<div class="rkpis">${kp.map(k => `<div><b>${esc(k.v == null ? '—' : fmtTexto(k.v, k.fmt || 'int'))}</b><span>${esc(k.rot)}</span>${k.det ? `<small>${esc(k.det)}</small>` : ''}</div>`).join('')}</div>` : ''}${corpo}</div>`;
 }
-function imprimirRelatorio(view, rel) {
+export function imprimirRelatorio(view, rel) {
   const box = document.createElement('div'); box.className = 'indpapelbox'; box.innerHTML = papelRelatorio(rel);
   view.prepend(box); document.body.classList.add('indpapel');
   let feito = false;
