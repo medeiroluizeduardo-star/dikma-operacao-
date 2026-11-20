@@ -10,8 +10,9 @@
 // }
 // fmt: 'txt' (padrão) | 'int' | 'pct' (0 a 100) | 't' (toneladas) | 'h' (horas). Valor null fica em branco.
 
-const COR = { marca: 'E8582B', escuro: '3A3F47', tinta: '1F2328', cinza: '6B7280', linha: 'D0D4DA', zebra: 'F6F7F9', total: 'E9EBEE', claro: 'FDF0EB' };
-export const PALETA = ['E8582B', '3A3F47', '8A94A6', 'F2A65A', '2F7D6D', 'B4BAC5'];
+// Cores da marca, as mesmas do site (estilo.css: --accent e --navy).
+const COR = { marca: 'F05A26', escuro: '272662', tinta: '1F2328', cinza: '6B7280', linha: 'D0D4DA', zebra: 'F6F7F9', total: 'E9EBEE', claro: 'FDF0EB' };
+export const PALETA = ['272662', 'F05A26', '8A94A6', 'F2A65A', '2F7D6D', 'B4BAC5'];
 const COLS_PAINEL = 12; // a aba Painel tem 12 colunas iguais: os gráficos ficam alinhados, dois por linha
 
 const xe = s => String(s == null ? '' : s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -33,7 +34,7 @@ function Estilos() {
   const lado = (n, w, c) => (w ? `<${n} style="${w}"><color rgb="FF${c}"/></${n}>` : `<${n}/>`);
   const borda = b => (b ? add(bordas, `<border>${lado('left', b.l, b.c)}${lado('right', b.r, b.c)}${lado('top', b.t, b.c)}${lado('bottom', b.b, b.c)}<diagonal/></border>`) : 0);
   fonte(); // fonte 0 = padrão
-  const fmtId = f => ({ int: 3, pct: 9, t: 164, h: 165 }[f] || 0);
+  const fmtId = f => ({ int: 3, pct: 9, t: 164, h: 165 }[f] || 0); // 'num' (número com ou sem casas) fica no Geral
   // s = { fonte, fundo, borda, fmt, h: 'left'|'center'|'right', v, quebra }
   const xf = s => {
     const k = JSON.stringify(s); if (idx.has(k)) return idx.get(k);
@@ -94,7 +95,7 @@ function cabecalho(A, S, rel, ncols) {
 
 // Uma tabela a partir da linha r; devolve a próxima linha livre e onde ficaram os dados (para os gráficos).
 function tabelaNaAba(A, S, t, r) {
-  A.put(0, r, t.titulo, S.secao); A.alturas[r] = 20; r++;
+  if (t.titulo) { A.put(0, r, t.titulo, S.secao); A.alturas[r] = 20; r++; }
   if (t.sub) { A.put(0, r, t.sub, S.sub); r++; }
   const cab = r; t.cols.forEach((c, i) => A.put(i, r, c.t, S.cab(c.fmt))); A.alturas[r] = 30; r++;
   const ini = r;
@@ -145,7 +146,7 @@ function abaXml(A, rel, temDesenho) {
   const cols = A.larguras.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
   const pane = A.congela ? `<pane ySplit="${A.congela}" topLeftCell="A${A.congela + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${A.congela + 1}" sqref="A${A.congela + 1}"/>` : '';
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" workbookViewId="0"${A.primeira ? ' tabSelected="1"' : ''}>${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${A.xmlDados()}</sheetData>${A.filtro ? `<autoFilter ref="${A.filtro}"/>` : ''}${A.mescla.length ? `<mergeCells count="${A.mescla.length}">${A.mescla.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : ''}<printOptions horizontalCentered="1"/><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><headerFooter><oddFooter>${xe(`&L&8DIKMA · ${rel.titulo}&R&8Página &P de &N`)}</oddFooter></headerFooter>${(A.quebras || []).length ? `<rowBreaks count="${A.quebras.length}" manualBreakCount="${A.quebras.length}">${A.quebras.map(q => `<brk id="${q}" max="16383" man="1"/>`).join('')}</rowBreaks>` : ''}${temDesenho ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" workbookViewId="0"${A.primeira ? ' tabSelected="1"' : ''}>${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${A.xmlDados()}</sheetData>${A.filtro ? `<autoFilter ref="${A.filtro}"/>` : ''}${A.mescla.length ? `<mergeCells count="${A.mescla.length}">${A.mescla.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : ''}<printOptions horizontalCentered="1"/><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><headerFooter><oddFooter>${xe(`&L&8Dikma Gestão · ArcelorMittal · Coqueria · ${rel.titulo}&R&8Página &P de &N`)}</oddFooter></headerFooter>${(A.quebras || []).length ? `<rowBreaks count="${A.quebras.length}" manualBreakCount="${A.quebras.length}">${A.quebras.map(q => `<brk id="${q}" max="16383" man="1"/>`).join('')}</rowBreaks>` : ''}${temDesenho ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
 }
 
 // Monta o .xlsx: { nome do arquivo no zip: texto }.
@@ -153,7 +154,8 @@ export function arquivosXlsx(rel) {
   const E = Estilos(); const S = estilosPadrao(E);
   const abas = []; const pos = {};
   // Painel: números do topo e os gráficos, dois por linha, todos do mesmo tamanho.
-  const P = Aba('Painel'); P.primeira = true; abas.push(P);
+  // rel.semPainel (listas dos botões Exportar): sem a aba Painel: a primeira aba já é a lista.
+  const P = Aba('Painel'); if (!rel.semPainel || !(rel.tabelas || []).length) abas.push(P);
   P.larguras = Array(COLS_PAINEL).fill(12.7);
   let r = cabecalho(P, S, rel, COLS_PAINEL);
   if ((rel.kpis || []).length) {
@@ -202,6 +204,7 @@ export function arquivosXlsx(rel) {
     // Na impressão: os gráficos começam numa página nova, duas faixas por página, sem cortar nenhum ao meio.
     P.quebras = [iniGraf - 1, ...faixas.filter((_, i) => i && i % 2 === 0).map(x => x)];
   }
+  abas[0].primeira = true;
   // Arquivos do zip.
   const f = {};
   const ct = ['<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>', '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>', '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>', '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'];
@@ -280,4 +283,24 @@ export function baixarRelatorioExcel(arquivo, rel) {
   const blob = new Blob([montarXlsx(rel)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = arquivo.endsWith('.xlsx') ? arquivo : arquivo + '.xlsx';
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// Listas dos botões "Exportar" (ui/exportar.js › baixarExcel) no mesmo modelo dos relatórios: título, contrato e data no topo,
+// cabeçalho colorido, linhas listradas, cabeçalho fixo e filtro. abas: [{ nome, linhas: [[cabeçalho...], [valores...]] }]
+export function relDeListas(arquivo, abas, agora = new Date()) {
+  const cel = v => (v == null ? '' : typeof v === 'number' ? (Number.isFinite(v) ? v : '') : typeof v === 'boolean' ? (v ? 'Sim' : 'Não')
+    : v instanceof Date ? v.toLocaleDateString('pt-BR') : String(v));
+  const titulo = abas.length === 1 ? String(abas[0].nome || 'Planilha') : String(arquivo || 'Planilha').replace(/\.xlsx$/i, '').replace(/[-_]+/g, ' ').trim();
+  const quando = agora.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const tabelas = abas.map((a, i) => {
+    const [cab = [], ...resto] = a.linhas || []; const linhas = resto.map(l => (l || []).map(cel));
+    const n = Math.max(cab.length, ...linhas.map(l => l.length));
+    const cols = Array.from({ length: n }, (_, c) => {
+      const vs = linhas.map(l => l[c]).filter(v => v !== '' && v != null);
+      const fmt = vs.length && vs.every(v => typeof v === 'number') ? (vs.every(Number.isInteger) ? 'int' : 'num') : 'txt';
+      return { t: String(cab[c] == null ? '' : cab[c]), fmt };
+    });
+    return { id: 't' + i, titulo: abas.length === 1 ? '' : String(a.nome || ''), aba: a.nome, cols, linhas: linhas.map(l => cols.map((c, j) => (l[j] === '' && c.fmt !== 'txt' ? null : l[j]))), lista: true };
+  });
+  return { titulo: titulo.charAt(0).toUpperCase() + titulo.slice(1), meta: ['ArcelorMittal · Coqueria', `Gerado em ${quando}`], tabelas, semPainel: true };
 }
