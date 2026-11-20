@@ -56,6 +56,10 @@ test('textos do papel e letras das colunas', () => {
   assert.equal(fmtTexto(0.4, 'pct'), '< 1%');
   assert.equal(fmtTexto(66.6, 'pct'), '67%');
   assert.equal(fmtTexto(null, 'int'), '');
+  assert.equal(fmtTexto(880 / 60, 'h'), '14h 40');
+  assert.equal(fmtTexto(28 / 60, 'h'), '28 min');
+  assert.equal(fmtTexto(2220 / 60, 'h'), '1d 13h');
+  assert.equal(fmtTexto(3, 'h'), '3h');
   assert.equal(fmtTexto(1234, 'int'), '1.234');
   assert.equal(letra(0), 'A'); assert.equal(letra(25), 'Z'); assert.equal(letra(26), 'AA');
 });
