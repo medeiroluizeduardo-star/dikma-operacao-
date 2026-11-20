@@ -112,7 +112,8 @@ export const renderView = () => vPainel();
 // gráficos no Excel. Antes, a pessoa escolhe o período: o dia, a semana (segunda a domingo) ou o mês.
 // No Excel, a aba da lista (OMs do dia, da semana ou do mês) traz o resumo por mês, por semana e por dia e, embaixo,
 // a lista completa com as colunas Dia, Semana e Mês, com filtro para ver um dia ou uma semana só.
-const horas = m => (m == null ? null : Math.round(m / 6) / 10);
+// Minutos em horas sem arredondar: o Excel mostra 0,0 h e o papel volta a "14h 40" igual à tela (ui/excel-relatorio.js › fmtTexto).
+const horas = m => (m == null ? null : m / 60);
 const ddmmaa = d => `${dataBR(d)}/${d.slice(0, 4)}`;
 const semanaTxt = (ini, fim) => (ini === fim ? ddmmaa(ini) : `${dataBR(ini)} a ${ddmmaa(fim)}`);
 const diaLongo = d => `${diaNome(d)}/${d.slice(0, 4)}`;
@@ -205,7 +206,7 @@ function relatorioOM(per) {
     titulo: `Indicadores das OMs · ${P.curto}`, papel: P.papel, arquivo: [vista() === 'coq' ? 'Coqueria' : SETS[vista()].curto, P.curto],
     meta: [onde + (lim.length ? ' (só a sua área)' : ''), P.rot, `Gerado em: ${agoraTxt()}`],
     kpis: [
-      { rot: 'Tempo de bloqueio (h)', v: horas(a.bloqMedia), fmt: 'h', det: a.bloqueios ? `Média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}: da OM gerada pelo cliente até o eletricista liberar (${duracao(a.bloqMedia) || '0 min'})` : `Nenhum bloqueio registrado ${noPer}` },
+      { rot: 'Tempo de bloqueio', v: horas(a.bloqMedia), fmt: 'h', det: a.bloqueios ? `Média de ${a.bloqueios} OM${a.bloqueios > 1 ? 's' : ''}: da OM gerada pelo cliente até o eletricista liberar (${duracao(a.bloqMedia) || '0 min'})` : `Nenhum bloqueio registrado ${noPer}` },
       { rot: 'Aderência à programação', v: a.aderencia, fmt: 'pct', det: a.previstas ? `${a.finalizadas} de ${a.previstas} previstas${ateHoje ? ' até hoje' : ''} finalizadas${a.atrasadas ? ` · ${a.atrasadas} atrasada${a.atrasadas > 1 ? 's' : ''}` : ''}` : 'Nenhuma OM prevista' },
       { rot: prev, v: a.previstas, fmt: 'int', det: `${a.atrasadas} atrasada${a.atrasadas === 1 ? '' : 's'}` },
       { rot: 'Finalizadas', v: a.finalizadas, fmt: 'int', det: `das previstas ${noPer}` },
