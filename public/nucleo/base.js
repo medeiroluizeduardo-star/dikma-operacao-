@@ -16,6 +16,8 @@ export const CUR_WEEK = weekOf(TODAY);
 export const CUR_MONTH = monthOfWeek(CUR_WEEK);
 export const framed = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Marca dos resumos impressos (canto direito do cabeçalho do papel): logo da Dikma e o contrato.
+export const MARCA_PAPEL = '<div class="brandp"><img src="img/dikma-logo.png" alt="Dikma" width="91" height="30"><small>ArcelorMittal · Coqueria</small></div>';
 export const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
 export const title = s => String(s || '').toLowerCase().replace(/(^|\s)(\S)/g, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Da|Do|Dos|Das|E)\b/g, w => w.toLowerCase());
 export const fmtAt = d => { if (!(d instanceof Date) || isNaN(d)) return ''; return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
