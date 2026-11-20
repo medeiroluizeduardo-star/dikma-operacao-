@@ -2051,6 +2051,13 @@ div.lgrp{cursor:default;grid-template-columns:minmax(0,1fr) auto}
 button.ffase{cursor:pointer;min-height:22px}
 .ffase.antes{background:#9a5b00}
 .ffase.depois{background:#1f6f43}
+/* Listas de OMs, Tratativas e Processos: etiquetas empilhadas numa coluna de largura fixa, títulos alinhados. */
+@media (min-width:641px){.tr-it-s{flex:0 0 170px;display:flex;flex-direction:column;align-items:flex-start;gap:4px}.tr-it-s .p-etq+.p-etq{margin-left:0}}
+/* Ajuda recolhida ("Como funciona") no topo das OMs. */
+.omajuda{margin:-8px 0 var(--s3);font-size:13px;color:var(--ink-2)}.omajuda>summary{width:max-content}
+.omajuda p{margin:0;max-width:80ch}
+/* Visão geral no celular: dois cartões por linha, gráfico mais baixo. */
+@media (max-width:640px){.ic-grade{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ic-card.p-ind{padding:12px}.ic-topo{flex-direction:column;align-items:flex-start;gap:4px}.ic-card .p-ind-v{font-size:30px}.ic-card p,.ic-card .p-ind-pe{font-size:12px}}
 /* Impressão com padrão de documento: margens da folha e rodapé com o contrato e "Página X de Y" em toda impressão.
    Ctrl+P de uma tela comum sai sem botões, filtros e campos (o papel dos resumos, .paper, fica como está). */
 @page{margin:12mm 10mm 14mm;@bottom-left{content:"Dikma Gestão · ArcelorMittal · Coqueria";font:8pt Arial,sans-serif;color:#666}@bottom-right{content:"Página " counter(page) " de " counter(pages);font:8pt Arial,sans-serif;color:#666}}
