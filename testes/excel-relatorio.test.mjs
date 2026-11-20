@@ -63,3 +63,22 @@ test('textos do papel e letras das colunas', () => {
   assert.equal(fmtTexto(1234, 'int'), '1.234');
   assert.equal(letra(0), 'A'); assert.equal(letra(25), 'Z'); assert.equal(letra(26), 'AA');
 });
+
+// Listas dos botões "Exportar": mesmo modelo, sem a aba Painel, números como número.
+import { relDeListas } from '../public/ui/excel-relatorio.js';
+test('listas do Exportar no modelo dos relatórios', () => {
+  const rel = relDeListas('ocorrencias', [{ nome: 'Ocorrências', linhas: [['Data', 'Pessoa', 'Horas', 'Qtd', 'Ok'], ['01/11/2026', 'A', 1.5, 2, true], ['02/11/2026', 'B', 3, null, false]] }], new Date(2026, 10, 20, 14, 30));
+  assert.equal(rel.titulo, 'Ocorrências');
+  assert.deepEqual(rel.meta, ['ArcelorMittal · Coqueria', 'Gerado em 20/11/2026, 14:30']);
+  assert.deepEqual(rel.tabelas[0].cols.map(c => c.fmt), ['txt', 'txt', 'num', 'int', 'txt']);
+  assert.deepEqual(rel.tabelas[0].linhas[1], ['02/11/2026', 'B', 3, null, 'Não']);
+  const f = arquivosXlsx(rel);
+  assert.doesNotMatch(f['xl/workbook.xml'], /name="Painel"/);
+  assert.match(f['xl/workbook.xml'], /name="Ocorrências"/);
+  assert.match(f['xl/worksheets/sheet1.xml'], /tabSelected="1"/);
+  assert.match(f['xl/worksheets/sheet1.xml'], /<autoFilter ref="A5:E7"\/>/);
+  assert.match(f['xl/worksheets/sheet1.xml'], /<v>1.5<\/v>/);
+  const dois = relDeListas('horas-extras-patio', [{ nome: 'Registros', linhas: [['X']] }, { nome: 'Por pessoa', linhas: [['Y']] }]);
+  assert.equal(dois.titulo, 'Horas extras patio');
+  assert.equal(Object.keys(arquivosXlsx(dois)).filter(k => k.startsWith('xl/worksheets/sheet')).length, 2);
+});
