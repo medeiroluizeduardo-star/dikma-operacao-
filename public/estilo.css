@@ -2071,3 +2071,17 @@ button.ffase{cursor:pointer;min-height:22px}
   :root:not(#_){--bg:#FFFFFF;--surface:#FFFFFF;--surface-2:#F5F5F9;--line:#D9DAE4;--line-2:#E7E8EF;--ink:#16172E;--ink-2:#4A4B66;--ink-3:#666880;
     --accent:#F05A26;--st-prog:#5F6385;--st-real:#1E8A4C;--st-nreal:#D23B3B;--st-extra:#7A4FD6;--st-atr:#B98200;--shadow:none;color-scheme:light}
 }
+/* Números do topo nos Indicadores: cartões separados, no mesmo estilo dos cartões de indicador (ui/padrao.css › .p-ind),
+   como na Visão geral, OMs e Segurança. A faixa antiga (.kpis, .mini, .kpis5) continua nos outros módulos. */
+#view[data-mod="indicadores"] :is(.kpis,.mini,.kpis5){display:grid!important;grid-template-columns:repeat(auto-fit,minmax(140px,1fr))!important;gap:var(--s3);background:none;border:0;border-radius:0;box-shadow:none;overflow:visible}
+#view[data-mod="indicadores"] :is(.kpis>.kpi,.mini>div,.kpis5>div){background:var(--surface);border:1px solid var(--line-2);border-radius:10px;padding:var(--s4);gap:var(--s1);box-shadow:var(--e1,none)}
+#view[data-mod="indicadores"] .kpis>.kpi.hero{grid-column:auto}
+#view[data-mod="indicadores"] :is(.kpis .kpi .v,.kpis .kpi.hero .v,.mini>div>b,.kpis5>div>b){font-size:36px;line-height:1}
+#view[data-mod="indicadores"] .kpis .kpi .v.vsm{font-size:22px;line-height:1.15}
+#view[data-mod="indicadores"] .kmais{border:1px dashed var(--line);border-radius:10px;background:none;min-height:56px}
+#view[data-mod="indicadores"] .card .body>:is(.mini,.kpis){box-shadow:none}
+@media (max-width:860px){
+  #view[data-mod="indicadores"] :is(.kpis,.mini,.kpis5){grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px}
+  #view[data-mod="indicadores"] :is(.kpis>.kpi,.mini>div,.kpis5>div){padding:12px}
+  #view[data-mod="indicadores"] :is(.kpis .kpi .v,.kpis .kpi.hero .v,.mini>div>b,.kpis5>div>b){font-size:28px}
+}

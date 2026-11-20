@@ -97,6 +97,8 @@ export function render() {
   const nav = k !== ULT || !!view.querySelector('.skel');
   const pos = nav ? null : M.guardarRolagem(view), foco = nav ? null : M.guardarFoco(view);
   VIEW_MUDOU = false;
+  // Módulo da tela na marcação (estilo.css › números do topo em cartões nos Indicadores).
+  if (view.dataset.mod !== (UI.modulo || '')) view.dataset.mod = UI.modulo || '';
   if (nav && AUTH.status === 'ready') M.prepararEntrada(view);
   renderTela();
   if (AUTH.status !== 'ready') { ULT = ''; M.cancelarEntrada(view); return; }
