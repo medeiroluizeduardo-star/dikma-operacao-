@@ -342,7 +342,7 @@ table.calesc th.fds{color:var(--ink-3)}
 .paper.resumo .rkpis{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:12px 0}
 .paper.resumo .rkpis div{border:1px solid #ccc;border-radius:6px;padding:8px}.paper.resumo .rkpis b{display:block;font-size:20px}.paper.resumo .rkpis span{font-size:10.5px;color:#555}
 .paper.resumo .rcols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.paper.resumo .brandp{font-weight:800;letter-spacing:.08em;color:#e8582b}
+.paper.resumo .brandp{display:flex;flex-direction:column;align-items:flex-end;gap:3px;text-align:right}.paper.resumo .brandp img{height:30px;width:auto}.paper.resumo .brandp small{font-size:10px;color:#555;letter-spacing:.04em;white-space:nowrap}
 @media (max-width:860px){.paper.resumo .rkpis{grid-template-columns:repeat(3,1fr)}.paper.resumo .rcols{grid-template-columns:1fr}}
 tr.acima td{background:color-mix(in srgb,var(--st-nreal) 7%,transparent)}
 .checkin .ckg{display:flex;flex-direction:column;gap:8px;padding-bottom:12px;border-bottom:1px solid var(--line-2)}.checkin .ckg:last-child{border-bottom:0}
@@ -2058,3 +2058,16 @@ button.ffase{cursor:pointer;min-height:22px}
 .omajuda p{margin:0;max-width:80ch}
 /* Visão geral no celular: dois cartões por linha, gráfico mais baixo. */
 @media (max-width:640px){.ic-grade{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.ic-card.p-ind{padding:12px}.ic-topo{flex-direction:column;align-items:flex-start;gap:4px}.ic-card .p-ind-v{font-size:30px}.ic-card p,.ic-card .p-ind-pe{font-size:12px}}
+/* Impressão com padrão de documento: margens da folha e rodapé com o contrato e "Página X de Y" em toda impressão.
+   Ctrl+P de uma tela comum sai sem botões, filtros e campos (o papel dos resumos, .paper, fica como está). */
+@page{margin:12mm 10mm 14mm;@bottom-left{content:"Dikma Gestão · ArcelorMittal · Coqueria";font:8pt Arial,sans-serif;color:#666}@bottom-right{content:"Página " counter(page) " de " counter(pages);font:8pt Arial,sans-serif;color:#666}}
+@media print{
+  #view :is(.btn,.seg,.filters,.sel:has(select),.sel:has(input),select,input,textarea):not(.paper *){display:none!important}
+  #view .kpi,#view .kpis{break-inside:avoid}
+  /* Tela comum (sem papel de resumo): o título da aba vai para o papel; busca e etiquetas do topo, não. */
+  body:not(.om-imprimindo):not(:has(#view .paper)) .top{display:flex!important;position:static;background:none;backdrop-filter:none;border:0;border-bottom:2px solid #000;padding:0 0 8px;margin-bottom:12px}
+  body:not(:has(#view .paper)) .top>:not(h1){display:none!important}
+  /* Quem usa o tema escuro imprime com as cores claras (senão o texto claro some no papel branco). */
+  :root:not(#_){--bg:#FFFFFF;--surface:#FFFFFF;--surface-2:#F5F5F9;--line:#D9DAE4;--line-2:#E7E8EF;--ink:#16172E;--ink-2:#4A4B66;--ink-3:#666880;
+    --accent:#F05A26;--st-prog:#5F6385;--st-real:#1E8A4C;--st-nreal:#D23B3B;--st-extra:#7A4FD6;--st-atr:#B98200;--shadow:none;color-scheme:light}
+}

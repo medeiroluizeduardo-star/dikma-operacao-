@@ -181,7 +181,7 @@ function vVisao() {
   let h = `<p class="ic-placar">${pl.comValor ? `<b>${pl.dentro} de ${pl.comValor}</b> indicadores dentro da meta em ${esc(nomeMes(ym))}` : `Sem números em ${esc(nomeMes(ym))} ainda`} · ${esc(nomeVista(v))}${ym === MES_HOJE ? ' · até hoje' : ''}${guardado ? ' · números guardados no histórico' : ''}</p>`;
   // No celular, os 4 primeiros aparecem e o resto fica num toque.
   h += isMobile() ? `<div class="ic-grade">${cards.slice(0, 4).join('')}</div>${recolhido('Mais 4 indicadores', `<div class="ic-grade">${cards.slice(4).join('')}</div>`)}` : `<div class="ic-grade">${cards.join('')}</div>`;
-  h += `<p class="muted small ic-nota">Competência pelo mês civil (1º ao último dia). Absenteísmo = faltas e atestados ÷ dias escalados (Escala do dia). Horas extras pela Escala do dia. Horas perdidas = paradas dos equipamentos. Eficiência = realizadas ÷ programadas até hoje. Queda Zero = quedas lançadas. 5S = média das inspeções dos equipamentos. ICCC e ICCP: valores informados no mês. Toque num cartão para ver o detalhe.</p>`;
+  h += `<p class="muted small ic-nota">Competência pelo mês civil (1º ao último dia). Absenteísmo = faltas e atestados ÷ dias escalados (Escala do dia). Horas extras pela Escala do dia. Horas perdidas = paradas dos equipamentos. Eficiência = realizadas ÷ programadas até hoje. Queda Zero = quedas lançadas. 5S = média das inspeções dos equipamentos. ICCC e ICCP: valores informados no mês.<span class="noprint"> Toque num cartão para ver o detalhe.</span></p>`;
   return h;
 }
 function linhaHist(ym, v) {

@@ -8,7 +8,7 @@
 //   tabelas: [{ id, titulo, sub, aba, cols: [{ t, fmt }], linhas: [[...]], total: [...], lista, filtro, papel, excel }],
 //   graficos: [{ tipo: 'barra'|'coluna'|'linha'|'rosca', titulo, tabela: id, series: [índice da coluna], max, largo }]
 // }
-// fmt: 'txt' (padrão) | 'int' | 'pct' (0 a 100) | 't' (toneladas) | 'h' (horas). Valor null fica em branco.
+// fmt: 'txt' (padrão) | 'int' | 'pct' (0 a 100) | 't' (toneladas) | 'h' (horas: número no Excel, "14h 40" no papel). Valor null fica em branco.
 
 const COR = { marca: 'E8582B', escuro: '3A3F47', tinta: '1F2328', cinza: '6B7280', linha: 'D0D4DA', zebra: 'F6F7F9', total: 'E9EBEE', claro: 'FDF0EB' };
 export const PALETA = ['E8582B', '3A3F47', '8A94A6', 'F2A65A', '2F7D6D', 'B4BAC5'];
@@ -241,7 +241,11 @@ export function fmtTexto(v, fmt) {
   if (typeof v !== 'number') return String(v);
   if (fmt === 'pct') return v > 0 && v < 1 ? '< 1%' : Math.round(v) + '%';
   if (fmt === 't') return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (fmt === 'h') return v.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' h';
+  if (fmt === 'h') { // no papel, igual à tela (contas/oms.js › duracao): 28 min, 14h 40, 1d 13h
+    const m = Math.round(v * 60); if (m < 0) return '';
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+    return d ? `${d}d ${h}h` : h ? `${h}h${mm ? ' ' + String(mm).padStart(2, '0') : ''}` : `${mm} min`;
+  }
   return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 }
 

@@ -5,7 +5,7 @@
 //   por quadro; a aba pode juntar folhas com a lista completa (registrarExcel: OMs do mês, lançamentos da queda zero).
 import { baixarExcel } from './exportar.js';
 import { fmtTexto } from './excel-relatorio.js';
-import { $, esc, TODAY } from '../nucleo/base.js';
+import { $, esc, TODAY, MARCA_PAPEL } from '../nucleo/base.js';
 import { acoes } from '../nucleo/acoes.js';
 import { UI } from '../nucleo/estado.js';
 
@@ -122,7 +122,7 @@ export function papelRelatorio(rel) {
     if (ts[i].meia && ts[i + 1] && ts[i + 1].meia) { corpo += `<div class="rcols">${tabelaPapel(ts[i])}${tabelaPapel(ts[i + 1])}</div>`; i++; } else corpo += tabelaPapel(ts[i]);
   }
   const kp = (rel.kpis || []).slice(0, 6);
-  return `<div class="paper resumo indpapel"><div class="hd"><div><h3>${esc(rel.papel || rel.titulo)}</h3><div class="meta">${(rel.meta || []).map(metaSpan).join('')}</div></div><div class="brandp">DIKMA</div></div>
+  return `<div class="paper resumo indpapel"><div class="hd"><div><h3>${esc(rel.papel || rel.titulo)}</h3><div class="meta">${(rel.meta || []).map(metaSpan).join('')}</div></div>${MARCA_PAPEL}</div>
   ${kp.length ? `<div class="rkpis">${kp.map(k => `<div><b>${esc(k.v == null ? '—' : fmtTexto(k.v, k.fmt || 'int'))}</b><span>${esc(k.rot)}</span>${k.det ? `<small>${esc(k.det)}</small>` : ''}</div>`).join('')}</div>` : ''}${corpo}</div>`;
 }
 function imprimirRelatorio(view, rel) {
@@ -147,7 +147,7 @@ acoes.indPrint = async () => {
   const agora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   const cab = document.createElement('div');
   cab.className = 'paper resumo indcab';
-  cab.innerHTML = `<div class="hd"><div><h3>RESUMO · ${esc(tituloTela().toUpperCase())}</h3><div class="meta">${filtrosTopo().map(f => `<span>${esc(f)}</span>`).join('')}<span><b>Gerado em:</b> ${esc(agora || TODAY)}</span></div></div><div class="brandp">DIKMA</div></div>`;
+  cab.innerHTML = `<div class="hd"><div><h3>RESUMO · ${esc(tituloTela().toUpperCase())}</h3><div class="meta">${filtrosTopo().map(f => `<span>${esc(f)}</span>`).join('')}<span><b>Gerado em:</b> ${esc(agora || TODAY)}</span></div></div>${MARCA_PAPEL}</div>`;
   const fechados = [...view.querySelectorAll('details:not([open])')];
   fechados.forEach(d => { d.open = true; });
   view.prepend(cab); document.body.classList.add('indimp');
