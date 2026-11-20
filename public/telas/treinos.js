@@ -243,7 +243,7 @@ function criarTreinos() {
         botoes, o => { if (o.v === 'ok') gravar('')(); else if (SETS[o.v]) gravar(o.v)(); });
     } catch (e) { toast('Não foi possível ler a planilha: ' + ((e && e.message) || e)); }
   }
-  const baixarModelo = () => baixarExcel('modelo-treinamentos', [{ nome: 'Treinamentos', linhas: MODELO_TREINOS }]).catch(e => toast('Não foi possível baixar: ' + e.message));
+  const baixarModelo = () => baixarExcel('modelo-treinamentos', [{ nome: 'Treinamentos', linhas: MODELO_TREINOS }], { simples: true }).catch(e => toast('Não foi possível baixar: ' + e.message));
 
   document.addEventListener('click', e => {
     const t = e.target.closest('[data-tr]'); if (!t || t.closest('#layer') || !aqui()) return;
