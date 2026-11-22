@@ -124,6 +124,7 @@ function renderTela() {
   aplicarSet(); rebuild();
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo, sem recarregar.
   if (UI.modulo === 'administracao' && DB.iniciarAdministracao) DB.iniciarAdministracao();
+  if (DB.ligarModulo) DB.ligarModulo(UI.modulo); // dados dos outros módulos que ficaram para depois (data.js › PRIO)
   const v = UI.view, arq = aba(v).tela; // arquivo que desenha a aba (campo tela em VIEWS, navegacao.js)
   const tela = html => { renderNav(); renderTop(); pintar('view', html); afterRender(); };
   if (v === 'avisos') return tela(AV.view());
@@ -162,7 +163,11 @@ function renderTela() {
 }
 let raf = 0;
 // Atualizações de dados chegam em rajadas (várias coleções de uma vez): junta tudo num só desenho.
-export const schedule = () => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; const a = document.activeElement; const keep = a && a.id && a.matches('input[type=search],input[type=text],input:not([type])') ? [a.id, a.selectionStart] : null; render(); if (keep) { const n = $(keep[0]); if (n && document.activeElement !== n) { n.focus(); try { n.setSelectionRange(keep[1], keep[1]); } catch (e) { /* ignora */ } } } }), 40); };
+// No máximo uns 4 desenhos por segundo enquanto os dados chegam: no celular, ao abrir, chegam dezenas de lotes do banco
+// em sequência (medidor de velocidade, 21/11: até 182) e cada um redesenhava a tela inteira. O toque da pessoa não passa
+// por aqui (desenha na hora).
+let ultDesenho = 0;
+export const schedule = (dados = false) => { if (raf) return; raf = setTimeout(() => requestAnimationFrame(() => { raf = 0; ultDesenho = performance.now(); const a = document.activeElement; const keep = a && a.id && a.matches('input[type=search],input[type=text],input:not([type])') ? [a.id, a.selectionStart] : null; render(); if (keep) { const n = $(keep[0]); if (n && document.activeElement !== n) { n.focus(); try { n.setSelectionRange(keep[1], keep[1]); } catch (e) { /* ignora */ } } } }), dados ? Math.max(40, 250 - (performance.now() - ultDesenho)) : 40); };
 
 // Histórico de alterações do gestor do módulo (o administrador abre pela Administração › Visão geral).
 const histBtn = () => (veHistorico(ME) && !isAdmin() ? `<button class="btn rail-btn" data-go="historico">${I.relogio} Histórico de alterações</button>` : '');

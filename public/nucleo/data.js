@@ -286,15 +286,30 @@ const ouvirIncremental = (col, fn, onErr) => ouvirInc({ onSnapshot, collection, 
 // Marca como apagado (os outros aparelhos ficam sabendo pelo atualizadoEm).
 const marcaApagado = () => ({ apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
 
+// Prioridade ao abrir (velocidade no celular): liga primeiro os dados do módulo aberto. Os outros grupos entram
+// 8 s depois ou assim que a pessoa troca de módulo (ligarModulo). Tudo continua chegando; só muda a ordem, para a
+// tela aberta não disputar a rede fraca com dados que ela não usa. Módulo fora da lista (Indicadores, Administração): tudo junto.
+const PRIO = {
+  operacao: ['set', 'log', 'gestao', 'equip', 'adm'],
+  gestao: ['set', 'log', 'gestao', 'equip', 'adm'],
+  rh: ['adm', 'gestao', 'equip', 'treinos'],
+  seguranca: ['seg', 'treinos', 'gestao', 'adm']
+};
+let adiados = [], adiarT = 0, modInicial = '';
+function grupo(nome, fn) { const p = PRIO[modInicial]; if (!p || p.includes(nome)) fn(); else adiados.push(fn); }
+function soltarAdiados() { clearTimeout(adiarT); adiarT = 0; const l = adiados; adiados = []; l.forEach(f => f()); }
+export function ligarModulo(mod) { if (adiados.length && mod !== modInicial) soltarAdiados(); }
+
 function startData() {
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
+  modInicial = (cb.modulo && cb.modulo()) || ''; adiados = [];
   // Todos: férias de agora e dos próximos meses (marca FE sozinho no Efetivo diário).
   on(doc(db, 'adm', 'feriasAtivas'), s => { cache.feriasAtivas = (s.exists() && s.data().itens) || []; changed(); });
   // Desligamentos (data de demissão das fichas), refeitos todo dia pela rotina do GitHub: DS automático para quem não lê as fichas.
   on(doc(db, 'adm', 'desligados'), s => { cache.desligados = (s.exists() && s.data().itens) || []; changed(); });
   if (ehAdminU(me)) on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
   // RH (Frequência e férias): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
-  if (temFreq(me) || conjsInd(me).length) startAdm(on);
+  if (temFreq(me) || conjsInd(me).length) grupo('adm', () => startAdm(on));
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo (iniciarAdministracao).
   for (const k of SET_KEYS) {
     const st = S[k];
@@ -313,18 +328,18 @@ function startData() {
   }
   // Últimos registros das Atividades (painel da Operação): só quem lê o histórico da Operação (administrador e Gestor).
   cache.log = [];
-  if (modsHistorico(me).includes('operacao')) on(query(collection(db, 'historico'), where('mod', '==', 'operacao'), orderBy('at', 'desc'), limit(40)), qs => {
+  if (modsHistorico(me).includes('operacao')) grupo('log', () => on(query(collection(db, 'historico'), where('mod', '==', 'operacao'), orderBy('at', 'desc'), limit(40)), qs => {
     cache.log = qs.docs.map(d => { const x = d.data({ serverTimestamps: 'estimate' }); return { ...x, at: x.at ? x.at.toDate() : new Date() }; });
     changed();
-  });
-  if (temGestao(me)) startGestao();
-  if (temEquip(me)) startEquip();
-  if (temSeg(me) || conjsInd(me).length) startSeg();
+  }));
+  if (temGestao(me)) grupo('gestao', startGestao);
+  if (temEquip(me)) grupo('equip', startEquip);
+  if (temSeg(me) || conjsInd(me).length) grupo('seg', startSeg);
   // Treinamentos, NRs e ASO: RH e Segurança (contas/treinos.js) e os Indicadores (números do painel).
   // Indicadores do contrato (Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses (contas/contrato.js).
   cache.ind = { cfg: {}, loaded: false };
-  if (temIndU(me)) on(doc(db, 'config', 'indicadores'), s => { cache.ind = { cfg: s.exists() ? s.data() : {}, loaded: true }; changed(); });
-  if (veTreinos(me) || temIndU(me)) dataSubs.push(ouvirIncremental('treinos', (l, ok) => { cache.treinos = l; cache.tLoaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
+  if (temIndU(me)) grupo('ind', () => on(doc(db, 'config', 'indicadores'), s => { cache.ind = { cfg: s.exists() ? s.data() : {}, loaded: true }; changed(); }));
+  if (veTreinos(me) || temIndU(me)) grupo('treinos', () => dataSubs.push(ouvirIncremental('treinos', (l, ok) => { cache.treinos = l; cache.tLoaded = ok; changed(); }, e => cb.onError && cb.onError(e))));
   // Avisos no celular: chave pública (config/avisos) e as preferências deste usuário (avisos/{uid}).
   // Escala de turno (fonte única: regimes, turmas e feriados) — Configurações › Escalas e turnos.
   on(doc(db, 'config', 'escalas'), s => { cache.escalas = s.exists() ? s.data() : null; cache.escalasLoaded = true; changed(); });
@@ -343,7 +358,8 @@ function startData() {
   if (ehAdminU(me)) on(collection(db, 'usuarios'), qs => { cache.usuarios = qs.docs.map(d => ({ uid: d.id, ...d.data() })); changed(); });
   const keep = [...monthSubs.keys()]; monthSubs.clear();
   // já liga os meses de todos os conjuntos da pessoa: trocar de módulo ou abrir o Meu dia não espera o servidor
-  for (const k of SET_KEYS) watchSet(k, keep.filter(x => x.startsWith(k + '|')).map(x => x.slice(k.length + 1)));
+  for (const k of SET_KEYS) grupo('set', () => watchSet(k, keep.filter(x => x.startsWith(k + '|')).map(x => x.slice(k.length + 1))));
+  if (adiados.length) adiarT = setTimeout(soltarAdiados, 8000);
 }
 // Módulo Administração (só o administrador): a Conferência do cadastro olha também as férias completas e a folha da
 // competência atual. Liga ao abrir o módulo, sem recarregar a página; quem tem o RH já tem as férias.
@@ -373,6 +389,7 @@ export async function apagarErros(ids) {
 // Alguma coisa para abrir: perfil em algum módulo.
 const temAlgumModulo = u => ehAdminU(u) || marcasDe(u).length > 0 || temSeg(u) || (temIndU(u) && (conjsInd(u).length > 0 || eqInd(u))) || !!(u.acesso && (u.acesso.seguranca || u.acesso.administracao));
 function stopData() {
+  clearTimeout(adiarT); adiarT = 0; adiados = [];
   dataSubs.forEach(f => f()); dataSubs = []; gestaoOn = false; eqOn = false; admSisOn = false;
   for (const fs of eMonthSubs.values()) fs.forEach(f => f()); eMonthSubs.clear();
   for (const fs of monthSubs.values()) fs.forEach(f => f());
