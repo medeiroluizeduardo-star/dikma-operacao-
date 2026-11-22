@@ -105,7 +105,7 @@ export function indicadoresSeg({ inter = [], anom = [], mes, meses = [], hoje, a
 }
 
 // Dia (AAAA-MM-DD, hora local) em que a anomalia foi concluída.
-const diaLocal = iso => { const d = new Date(Date.parse(iso)); return isNaN(d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const diaLocal = iso => { const d = new Date(Date.parse(iso)); return isNaN(+d) ? '' : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 // Concluída dentro do prazo? null quando não tinha prazo (não entra na conta).
 export const noPrazoSeg = a => (a && a.status === 'concluida' && a.trat && a.trat.prazo && a.conclEm ? diaLocal(a.conclEm) <= a.trat.prazo : null);
 

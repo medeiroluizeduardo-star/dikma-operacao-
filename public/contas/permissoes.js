@@ -78,6 +78,7 @@ export function resumoExcecao(u, views, cfg) {
 // (i_exportar, i_imprimir) continua valendo como exceção da pessoa em todos os módulos.
 const EXP = ['i_exportar', 'Exportar para o Excel', 'Botões de exportar das abas'], IMP = ['i_imprimir', 'Imprimir e salvar em PDF', 'Folha do líder, resumos, etiquetas e fichas'];
 const comunsDe = (mod, quem) => [EXP, IMP].map(([id, nome, d]) => ({ id: `${id}_${mod}`, base: id, mod, nome, d, quem }));
+/** @type {{ id: string, mod: string, nome: string, d: string, quem: string[], base?: string }[]} */
 export const ITENS = [
   { id: 'i_apontar', mod: 'operacao', nome: 'Apontar atividades', d: 'Marcar realizada ou não realizada, com justificativa', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   { id: 'i_foraprog', mod: 'operacao', nome: 'Incluir atividade fora da programação', d: 'Programar no dia uma atividade que não estava prevista', quem: ['coordenador', 'supervisor'] },

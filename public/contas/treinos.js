@@ -73,7 +73,7 @@ export function situacaoTreino(t, hoje, vig) {
   if (t.validade <= addDias(hoje, ANTECEDENCIA)) return 'vence';
   return 'ok';
 }
-export const diasAte = (hoje, data) => Math.round((new Date(data + 'T12:00:00Z') - new Date(hoje + 'T12:00:00Z')) / 864e5);
+export const diasAte = (hoje, data) => Math.round((+new Date(data + 'T12:00:00Z') - +new Date(hoje + 'T12:00:00Z')) / 864e5);
 
 // Contagem dos registros que valem hoje.
 export function resumoTreinos(lista, hoje) {
@@ -153,7 +153,7 @@ const txt = v => String(v ?? '').replace(/\s+/g, ' ').trim();
 // Data da célula: objeto Date, número do Excel, 'dd/mm/aaaa' ou 'aaaa-mm-dd' → 'AAAA-MM-DD' (ou null).
 export function dataCelula(v) {
   if (v == null || v === '') return null;
-  if (v instanceof Date && !isNaN(v)) return new Date(v.getTime() - v.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+  if (v instanceof Date && !isNaN(+v)) return new Date(v.getTime() - v.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
   if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10);
   const t = String(v).trim();
   let m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
@@ -221,6 +221,7 @@ function lerMatriz(abas, arquivo) {
           const anos = resto.map(x => txt(x).match(/^(\d+)\s*(ANO|NAO)/i)).find(Boolean);
           const perm = !venc && resto.some(x => chaveTipo(x) === 'PERMANENTE');
           const m = anos ? Number(anos[1]) * 12 : meses.get(g.tipo) || mesesSugeridos(g.tipo);
+          /** @type {Record<string, any>} */
           const it = { ...pessoa, tipo: g.tipo, realizado, validade: venc || (perm ? null : addMeses(realizado, m)), obs: '' };
           if (perm) it.permanente = true;
           itens.push(it);

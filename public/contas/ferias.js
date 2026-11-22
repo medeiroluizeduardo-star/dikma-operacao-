@@ -27,7 +27,7 @@ export function situacaoPeriodo(f, hoje) {
   if (!f.inicio) return { t: 'Sem data', s: 'neutro' };
   if (f.termino && f.termino < hoje) return { t: 'Gozada', s: 'ok' };
   if (f.inicio <= hoje) return { t: 'Em férias', s: 'atencao' };
-  const n = Math.round((new Date(f.inicio + 'T12:00:00') - new Date(hoje + 'T12:00:00')) / 864e5);
+  const n = Math.round((+new Date(f.inicio + 'T12:00:00') - +new Date(hoje + 'T12:00:00')) / 864e5);
   return { t: n === 1 ? 'Começa amanhã' : `Começa em ${n} dias`, s: n <= 15 ? 'atencao' : 'info' };
 }
 

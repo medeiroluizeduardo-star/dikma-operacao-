@@ -138,6 +138,8 @@ export function andamento(procs, docs, hoje, desde, dias = JANELA) {
   return r;
 }
 // O que vai para rotina/{id} quando a pessoa marca (o resto do doc continua). Devolve só os campos da tarefa.
+/** @param {any} t
+ * @param {{ status?: string, passos?: any, obs?: string }} [opc] */
 export function marcar(t, { status, passos, obs } = {}) {
   const st = status && ESTADO[status] ? status : t.status;
   const ps = (passos || t.passos.map(x => x.ok)).slice(0, LIMITES.passos).map(Boolean);

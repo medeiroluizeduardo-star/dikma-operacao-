@@ -8,7 +8,7 @@ const pdate = s => { const [y, m, d] = s.split('-').map(Number); return new Date
 const isoD = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const addD = (s, n) => { const d = pdate(s); d.setDate(d.getDate() + n); return isoD(d); };
 const dow = s => pdate(s).getDay(); // 0 dom … 5 sex 6 sáb
-const diffD = (a, b) => Math.round((pdate(b) - pdate(a)) / 864e5);
+const diffD = (a, b) => Math.round((+pdate(b) - +pdate(a)) / 864e5);
 const r2 = x => Math.round(x * 100) / 100;
 export const fimMes = ym => { const [y, m] = ym.split('-').map(Number); return isoD(new Date(y, m, 0)); };
 export const STATUS_FORA = ['FORA DE OPERAÇÃO', 'EM MANUTENÇÃO'];

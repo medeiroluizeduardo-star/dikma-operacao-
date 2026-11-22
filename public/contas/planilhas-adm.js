@@ -85,6 +85,7 @@ export function lerFrequencia(abas, conjunto) {
   const comps = []; let ano = null, mesAnt = null;
   const avisos = [];
   for (const aba of abas) {
+    /** @type {{ ano?: number, mes: number } | null} */
     let cp = competencia(aba.nome, ano, mesAnt);
     const L = expandir(aba);
     // ano pelas datas, quando houver

@@ -177,7 +177,7 @@ export function csvCampo(v) {
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // evita fórmula ao abrir no Excel
   return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
-export function linhasIndice(fotos, { itensDe, caminhoDe, confDe = () => '', lote = '' }) {
+export function linhasIndice(fotos, { itensDe, caminhoDe, confDe = _f => '', lote = '' }) {
   const out = [];
   for (const f of fotos) {
     const itens = itensDe(f); const arq = caminhoDe(f); const conf = confDe(f);
@@ -278,7 +278,7 @@ export function semanaISO(s) {
   const d = new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)));
   const dia = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - dia + 3);
   const ano = d.getUTCFullYear(); const q1 = new Date(Date.UTC(ano, 0, 4));
-  return 1 + Math.round(((d - q1) / 864e5 - 3 + ((q1.getUTCDay() + 6) % 7)) / 7);
+  return 1 + Math.round(((+d - +q1) / 864e5 - 3 + ((q1.getUTCDay() + 6) % 7)) / 7);
 }
 // "Semana: 47" ou "Semanas: 46 a 47".
 export function textoSemanas(de, ate) { const a = semanaISO(de), b = semanaISO(ate); return a === b ? `Semana: ${a}` : `Semanas: ${a} a ${b}`; }

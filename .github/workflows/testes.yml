@@ -35,6 +35,10 @@ jobs:
           npm install --no-audit --no-fund --prefix integracao/admin
           npm install --no-audit --no-fund --prefix testes
 
+      - name: Checagem de tipos (contas/)
+        working-directory: testes
+        run: npm run tipos
+
       - name: Regras de segurança e rotinas (emulador do Firebase)
         working-directory: testes
         run: npx firebase emulators:exec --only firestore,auth --project demo-dikma --config ../firebase.json "npm test"

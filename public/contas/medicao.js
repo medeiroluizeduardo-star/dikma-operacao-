@@ -58,7 +58,7 @@ export function catParada(causa, resp) {
 }
 // Horas perdidas do mês a partir das paradas: [{ id, eq, data, ini, fim, causa, desc, os, subst, conj }].
 // Paradas com substituição não contam (o operador seguiu em outro equipamento), como na Visão geral.
-export function registrosParadas(paradas, ym, hoje, respDe = () => '') {
+export function registrosParadas(paradas, ym, hoje, respDe = _causa => '') {
   const out = [];
   for (const p of paradas || []) {
     if (!p || !p.ini || !p.fim || p.subst || !p.data || p.data.slice(0, 7) !== ym || p.data > hoje) continue;
