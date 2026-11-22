@@ -56,7 +56,7 @@ export function criarGrupoDaFicha(fichas) {
 // Volta [{ nome, turno, auto: true, pessoas: [...] }] na ordem do nome, com "sem líder" e "sem ficha" no fim.
 // Cada pessoa: { k, nome, mat, turma, obs, notas, ativ, desligado, turno, semFicha }. k é a chave dos lançamentos
 // antigos da folha (quando a pessoa estava nela), para nada do histórico se perder.
-export function gruposPelaFicha({ fichas = [], colabs = [], outros = [], folha = [], ini = '', desligadoEm = () => '', letra = s => s || '' }) {
+export function gruposPelaFicha({ fichas = [], colabs = [], outros = [], folha = [], ini = '', desligadoEm = _p => '', letra = s => s || '' }) {
   const fichaDe = indice(fichas), grupoDe = criarGrupoDaFicha(fichas);
   const daFolha = []; for (const g of folha || []) for (const p of g.pessoas || []) daFolha.push({ p, turno: !!g.turno });
   const ids = new Map((colabs || []).map(c => [c.id, c]));

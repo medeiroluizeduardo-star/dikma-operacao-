@@ -113,7 +113,7 @@ export function resumoAtividades(d) {
 export function paradasAbertas(par, agora = new Date()) {
   return par.filter(p => !p.fim && p.data && p.ini).map(p => {
     const inicio = new Date(`${p.data}T${p.ini}:00`);
-    return { ...p, horas: Math.max(0, (agora - inicio) / 36e5) };
+    return { ...p, horas: Math.max(0, (+agora - +inicio) / 36e5) };
   }).sort((a, b) => b.horas - a.horas);
 }
 

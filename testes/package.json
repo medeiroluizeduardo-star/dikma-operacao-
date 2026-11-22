@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test --test-concurrency=1 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap regras.test.mjs rotinas.test.mjs avisos.test.mjs planilhas.test.mjs situacao.test.mjs acessos.test.mjs limpeza.test.mjs feriados.test.mjs fotos.test.mjs fotos-arquivo.test.mjs queda-zero.test.mjs plano.test.mjs treinos.test.mjs escala-troca.test.mjs folha-ficha.test.mjs padrao.test.mjs ferias.test.mjs efetivo-dia.test.mjs filtro-freq.test.mjs mover-rota.test.mjs contrato.test.mjs medicao.test.mjs tratativas.test.mjs processos.test.mjs inspecoes.test.mjs funcoes.test.mjs oms.test.mjs excel-relatorio.test.mjs incremental.test.mjs execucao.test.mjs pessoas.test.mjs alarme.test.mjs",
     "telas": "node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=resultado.tap telas.test.mjs",
+    "tipos": "tsc -p ../ferramentas/tipos/tsconfig.json --pretty false",
     "emulador": "firebase emulators:exec --only firestore,auth --project demo-dikma --config ../firebase.json \"npm test\""
   },
   "engines": { "node": ">=20" },
@@ -14,6 +15,7 @@
     "firebase": "^13.2.0",
     "firebase-admin": "^12.7.0",
     "firebase-tools": "^15.35.0",
-    "playwright": "1.63.0"
+    "playwright": "1.63.0",
+    "typescript": "6.0.2"
   }
 }

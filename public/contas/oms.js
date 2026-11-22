@@ -115,7 +115,7 @@ export const tempos = om => ({
 
 /* ---------- conferência e mudanças ---------- */
 const t = (v, n) => String(v == null ? '' : v).trim().slice(0, n);
-const erro = (m, campo) => { const e = new Error(m); e.campo = campo; throw e; };
+const erro = (m, campo) => { const e = /** @type {Error & { campo?: string }} */ (new Error(m)); e.campo = campo; throw e; };
 // Dados da solicitação (abrir ou corrigir). areasOk = áreas que a pessoa pode escolher (null = todas).
 // planejar = a OM é só um plano (pede a data prevista; a hora da solicitação fica para o dia em que for pedida).
 export function conferirSolicitacao(x, areasOk = null, planejar = false) {
@@ -305,7 +305,7 @@ export function visaoHoje(l, hoje, cfg = null, agora = agoraLocal()) {
   const atr = l.filter(o => atrasada(o, hoje));
   const doDia = l.filter(o => (ABERTAS.includes(o.status) && !(o.status === 'planejada' && diaDe(o) > hoje)) || String(o.hFim || '').startsWith(hoje));
   const urg = o => (atrasada(o, hoje) ? 0 : 1);
-  const lista = doDia.sort((a, b) => (ABERTAS.includes(b.status) - ABERTAS.includes(a.status)) || urg(a) - urg(b) || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status] || diaDe(a).localeCompare(diaDe(b)));
+  const lista = doDia.sort((a, b) => (+ABERTAS.includes(b.status) - +ABERTAS.includes(a.status)) || urg(a) - urg(b) || PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status] || diaDe(a).localeCompare(diaDe(b)));
   return { pedir: pedir.length, comCliente: cli.length, recusadas: l.filter(o => o.status === 'recusada').length, foraPrazo: cli.filter(o => foraDoPrazo(o, cfg, agora)).length, liberadas: lib.length, atrasadas: atr.length, lista };
 }
 const doDiaOrd = l => [...l].sort((a, b) => PRIO_ORD[a.prio || 'media'] - PRIO_ORD[b.prio || 'media'] || ORDEM[a.status] - ORDEM[b.status]);

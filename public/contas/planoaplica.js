@@ -15,6 +15,9 @@ const temNaSemana = (doc, pid) => (doc.ids || []).includes(pid) || !!(doc.s && d
 // docs: semanas da área no formato do banco ({ id, area, ini, ids, s, fe, dx, fp }).
 // item: atividade do plano ({ id, dias: '1111100', ativo }). opc: { hoje: 'AAAA-MM-DD', fer: Map data → descrição }.
 // Devolve uma alteração por semana que muda: { id, area, ini, pid, linha, novo, n } (novo = a atividade ainda não estava na semana).
+/** @param {any[]} docs
+ * @param {any} item
+ * @param {{ hoje?: string, fer?: Map<string, string> }} [opc] */
 export function planoNasSemanas(docs, item, { hoje, fer = new Map() } = {}) {
   const out = [];
   const dias = item.ativo === false ? '0000000' : String(item.dias || '0000000').padEnd(7, '0');

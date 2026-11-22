@@ -44,6 +44,8 @@ export function regimeDe(p, regimes) {
 
 // Todas as funções em uso e as da lista oficial, com quantas pessoas têm cada uma.
 // lista = config/funcoes.lista · eqFuncoes = eq/config.funcoes
+/** @param {any} f
+ * @param {{ lista?: any[], eqFuncoes?: any[], regimes?: any }} [opc] */
 export function resumoFuncoes(f, { lista = [], eqFuncoes = [], regimes } = {}) {
   const M = new Map();
   const item = nome => { const k = chaveFuncao(nome); if (!k) return null; if (!M.has(k)) M.set(k, { nome: normFuncao(nome), chave: k, pessoas: 0, adm: 0, turno: 0, fichas: 0, ativ: 0, ops: 0, naLista: false, naListaEq: false }); return M.get(k); };
@@ -77,6 +79,10 @@ export function regraValida(de, regra) {
 //   lista: lista oficial nova · eqFuncoes: lista nova do formulário dos Equipamentos (ou null se não muda)
 // tirarDaLista: a função antiga sai da lista oficial (juntar e renomear: sim).
 // fontes completas: f.ativPorArea = Map 'conjunto|ÁREA' → itens (para regravar a área inteira).
+/** @param {any} f
+ * @param {string} de
+ * @param {any} regra
+ * @param {{ lista?: any[], eqFuncoes?: any[], regimes?: any, tirarDaLista?: boolean }} [opc] */
 export function planoTroca(f, de, regra, { lista = [], eqFuncoes = [], regimes, tirarDaLista = true } = {}) {
   const kDe = chaveFuncao(de);
   const ehDe = x => chaveFuncao(x) === kDe;
