@@ -25,6 +25,8 @@ import { agruparLocais, chaveParecida, locaisParecidos } from '../contas/execuca
 import { vLimpeza } from './limpeza.js';
 import { vHistorico } from './historico.js';
 import { vCfFotos } from './fotos.js';
+import { saudeDoSistema } from '../contas/saude.js';
+import { etiqueta, tabela, recolhido } from '../ui/padrao.js';
 import { vArqFotos } from './fotos-arquivo.js';
 import * as FE from '../contas/feriados.js';
 
@@ -36,6 +38,8 @@ function vCfGeral() {
   const ir = (view, txt, set) => `<button class="btn sm" data-cfgo="${view}${set ? '|' + set : ''}">${txt}</button>`;
   const kv = l => `<dl class="cfkv">${l.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>`;
   let h = '<div class="cfgrid">';
+  // Saúde do sistema (cópia, cota, erros): o pior estado de todos, com atalho para o detalhe.
+  if (isAdmin()) { const sd = saudeDoSistema({ saude: DB.cache.saude, uso: DB.cache.uso, erros: DB.cache.erros }); h += card(I.ok, 'Saúde do sistema', 'Cópia de segurança, cota do banco e erros da semana', (l => `<p class="m0">${etiqueta(SIT_SAUDE[sd.geral], sd.geral)}</p>${l.length ? kv(l.map(i => [esc(i.titulo), esc(i.resumo)])) : '<p class="small muted m0">Cópia de segurança em dia e nenhum erro na semana.</p>'}`)(sd.itens.filter(i => i.situacao === 'atencao' || i.situacao === 'critico')), ir('cfsaude', 'Abrir a saúde do sistema')); }
   // Escalas
   const semT = setsDe(ME).reduce((n, k) => n + areasDoSet(k).flatMap(a => (DB.dados(k).colabs || {})[a] || []).filter(c => { const r = E.regimes[normRegime(c.regime, E.regimes)]; return r && r.tipo === 'ciclo' && !turmaDe(c); }).length, 0);
   const hoje = Object.entries(E.regimes).filter(([, r]) => r.tipo === 'ciclo').map(([k]) => { const l = E.turmasDoDia(k, TODAY); return `<span class="tchip">${esc(k)} · ${l.length ? l.join(' ') : '—'}</span>`; }).join('');
@@ -166,6 +170,19 @@ function vCfUso() {
     <div class="tw"><table><thead><tr><th>Coleção</th><th class="r">Documentos</th></tr></thead><tbody>${cols.map(([c, n]) => `<tr><td class="mono">${esc(c)}</td><td class="r num">${n.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody></table></div>
   </div></div>${lim}`;
 }
+// Saúde do sistema: cópia de segurança, ensaio de restauração, cópia mensal, cota e erros da semana (contas/saude.js).
+// Os dados vêm de sistema/saude (Alarme do backup, 7h30 e 18h), sistema/uso (cópia das 3h) e erros/ (últimos 100).
+const SIT_SAUDE = { ok: 'Em dia', atencao: 'Atenção', critico: 'Problema', info: 'Informação' };
+const IR_SAUDE = { erros: ['cferros', 'Ver os erros'], cota: ['cfuso', 'Ver o uso do plano'] };
+function vCfSaude() {
+  const sd = saudeDoSistema({ saude: DB.cache.saude, uso: DB.cache.uso, erros: DB.cache.erros });
+  const topo = { ok: 'Tudo em dia. Nada para fazer agora.', atencao: 'Tem item pedindo atenção. Veja os marcados abaixo.', critico: 'Tem problema. Veja os marcados em vermelho abaixo.' }[sd.geral];
+  const cards = sd.itens.map(i => `<div class="card cfc"><header><div class="minw"><h2>${esc(i.titulo)}</h2><p>${etiqueta(SIT_SAUDE[i.situacao], i.situacao)}</p></div></header><div class="body"><p class="m0"><b>${esc(i.resumo)}</b></p><p class="small muted">${esc(i.detalhe)}</p>${IR_SAUDE[i.id] ? `<div class="row-gap cfb"><button class="btn sm" data-cfgo="${IR_SAUDE[i.id][0]}">${IR_SAUDE[i.id][1]}</button></div>` : ''}</div></div>`).join('');
+  const g = sd.erros.grupos.slice(0, 10);
+  const tabErros = g.length ? `<div class="card"><header><h2>Erros da semana</h2><p>Últimos 7 dias, o mais repetido primeiro</p></header><div class="body">${tabela([{ t: 'Erro' }, { t: 'Telas' }, { t: 'Pessoas', n: true }, { t: 'Vezes', n: true }], g.map(x => [esc(x.msg), esc(x.telas.map(t => (VIEWS.find(v => v.id === t) || {}).nome || t).join(', ')), String(x.pessoas), String(x.vezes)]), { rotulo: 'Erros da semana' })}</div></div>` : '';
+  const ajuda = recolhido('O que esta tela não consegue mostrar', `<p class="small">O sistema está no plano grátis do Firebase. Nele, o Google não deixa as rotinas lerem quantas leituras e gravações o banco fez no dia (isso só é liberado no plano pago, Blaze). Por isso a cota aparece só como estimativa: o espaço guardado e quanto a cópia diária gasta.</p><p class="small m0">Para ver o uso do dia de verdade: console do Firebase › Firestore › Uso. Se a cota estourar, o banco para de responder até umas 5h (Brasília) e nada é cobrado.</p>`);
+  return `<div class="card"><div class="body"><p class="m0">${etiqueta(SIT_SAUDE[sd.geral], sd.geral)} ${esc(topo)}</p>${DB.cache.saude ? '' : '<p class="small muted m0">O alarme ainda não gravou o resumo: os dados aparecem depois da próxima conferência (7h30 ou 18h).</p>'}</div></div><div class="cfgrid">${cards}</div>${tabErros}${ajuda}`;
+}
 // Erros nos aparelhos (nucleo/erros.js): os 100 mais recentes, agrupados pela mensagem.
 function vCfErros() {
   const lista = DB.cache.erros || [];
@@ -186,6 +203,7 @@ acoes.errApagar = async () => {
   });
 };
 export function vConfigModulo(view) {
+  if (view === 'cfsaude') return vCfSaude();
   if (view === 'cfconf') return vCfConf();
   if (view === 'cfuso') return vCfUso();
   if (view === 'cferros') return vCfErros();
