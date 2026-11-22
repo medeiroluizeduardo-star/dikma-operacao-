@@ -541,6 +541,26 @@ test('histórico: cada um registra só em nome próprio (nome do cadastro, hora 
   for (const u of ['liderRec', 'gestorP', 'gestorG', 'coord', 'sup', 'admModulo', 'segGestor']) await assertFails(deleteDoc(doc(db(u), 'historico', 'h1')), u);
   await assertSucceeds(deleteDoc(doc(db('admin'), 'historico', 'h1')));
 });
+test('LGPD (acessosFicha): cada um registra só o próprio acesso à ficha, ninguém altera e só o administrador lê e apaga', async () => {
+  const a = (uid, x = {}) => ({ at: serverTimestamp(), uid, nome: uid, mat: '3844', pessoa: 'FULANO', ficha: 'rh', dia: '2026-11-22', ...x });
+  const id = (uid, x = {}) => { const v = a(uid, x); return `${v.uid}|${v.mat}|${v.ficha}|${v.dia}`; };
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec')), a('liderRec')));
+  await assertSucceeds(setDoc(doc(db('gestorG'), 'acessosFicha', id('gestorG', { ficha: 'gestao' })), a('gestorG', { ficha: 'gestao' })));
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec')), a('liderRec', { pessoa: 'OUTRO' })), 'alterar a linha do dia');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('admin')), a('admin')), 'em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', 'outro-id'), a('liderRec', { dia: '2026-11-21' })), 'id que não bate');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-20' })), a('liderRec', { dia: '2026-11-20', nome: 'Outro Nome' })), 'com outro nome');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { ficha: 'x' })), a('liderRec', { ficha: 'x' })), 'ficha que não existe');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-19' })), a('liderRec', { dia: '2026-11-19', at: Timestamp.fromMillis(Date.now() - 864e5) })), 'com a hora do aparelho');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-18' })), { ...a('liderRec', { dia: '2026-11-18' }), extra: 1 }), 'campo a mais');
+  await assertFails(setDoc(doc(db('bloq'), 'acessosFicha', id('bloq')), a('bloq')), 'bloqueado');
+  for (const u of ['liderRec', 'gestorG', 'coord', 'admModulo']) {
+    await assertFails(getDoc(doc(db(u), 'acessosFicha', id('liderRec'))), 'ler: ' + u);
+    await assertFails(deleteDoc(doc(db(u), 'acessosFicha', id('liderRec'))), 'apagar: ' + u);
+  }
+  await assertSucceeds(getDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
+});
 test('histórico: só o administrador (tudo, também os antigos sem módulo) e o gestor de cada módulo (só o do módulo dele) leem', async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     const d = ctx.firestore(); const at = Timestamp.now();

@@ -830,6 +830,21 @@ export function log(t, mod) {
   addDoc(collection(db, 'historico'), { at: serverTimestamp(), uid: me.uid, nome: me.nome || '', t: String(t || '').slice(0, 1000), mod: MODS_HIST.includes(mod) ? mod : 'administracao' }).catch(() => {});
 }
 
+// LGPD: quem abriu a ficha de quem. acessosFicha/{uid|mat|ficha|dia} { at, uid, nome, mat, pessoa, ficha, dia }: uma linha
+// por usuário, pessoa, ficha e dia (a 2ª abertura no dia não grava). ficha = 'rh' (RH › Colaboradores) | 'gestao' (ficha
+// de acompanhamento). Só o administrador lê; ninguém altera; apagar só o administrador (firestore.rules › acessosFicha).
+const acessosVistos = new Set();
+export function acessoFicha(mat, pessoa, ficha) {
+  if (!me || !mat || String(mat).includes('/') || !['rh', 'gestao'].includes(ficha)) return;
+  const dia = today(), id = [me.uid, mat, ficha, dia].join('|');
+  if (acessosVistos.has(id)) return; acessosVistos.add(id);
+  setDoc(doc(db, 'acessosFicha', id), { at: serverTimestamp(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || '').slice(0, 120), ficha, dia }).catch(() => {});
+}
+export async function acessosFichaDe(mat) {
+  const qs = await getDocs(query(collection(db, 'acessosFicha'), where('mat', '==', String(mat)), limit(500)));
+  return qs.docs.map(deHist).sort((a, b) => b.at - a.at);
+}
+
 // Feriados sem operação lidos do servidor: Escalas e turnos (config/escalas) e os da Operação (eq/config).
 // completo = false quando não deu para ler os da Operação (aí quem aplica não desfaz nada; feriados.js).
 export async function feriadosAtuais() {

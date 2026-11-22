@@ -378,6 +378,14 @@ export async function excluirUsuario(uid) { if (uid === me.uid) throw new Error(
 export async function setUsuario(uid, patch) { Object.assign(cache.usuarios.find(u => u.uid === uid), patch); if (uid === me.uid) emitAuth(); changed(); }
 // O mesmo filtro das regras: o administrador vê tudo; o gestor, só os registros dos módulos dele.
 export async function historicoLer(n = 500) { const ms = modsHistorico(me); return cache.log.filter(x => ehAdminU(me) || ms.includes(x.mod)).slice(0, n).map(x => ({ ...x, at: x.at instanceof Date ? x.at : new Date(x.at) })); }
+// LGPD: quem abriu a ficha de quem (no ?demo fica só na memória). Igual ao data.js: uma linha por usuário, pessoa, ficha e dia.
+const acessosMock = new Map();
+export function acessoFicha(mat, pessoa, ficha) {
+  if (!me || !mat || !['rh', 'gestao'].includes(ficha)) return;
+  const dia = today(), id = [me.uid, mat, ficha, dia].join('|');
+  if (!acessosMock.has(id)) acessosMock.set(id, { id, at: new Date(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || ''), ficha, dia });
+}
+export async function acessosFichaDe(mat) { return [...acessosMock.values()].filter(x => x.mat === String(mat)).sort((a, b) => b.at - a.at); }
 export function log(t, mod) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t, mod: MODS_HIST.includes(mod) ? mod : 'administracao' }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;

@@ -10,6 +10,7 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from '../contas/lideres.js';
 import { canonLideres } from '../contas/planilhas-adm.js';
 import { modsDe, ME as EU } from '../nucleo/estado.js';
+import { registrarAcesso, botaoQuemAbriu } from '../ui/acessos-ficha.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
 
@@ -191,10 +192,11 @@ export function criarGestao(X) {
   function vFicha(mat) {
     const x = indice().get(mat); if (!x) { U.mat = null; return vColab(); }
     const c = x.c; const f1 = tiposF1();
+    registrarAcesso(c, 'gestao');
     let h = `<div class="row-gap"><button class="btn" data-g="voltar">← Colaboradores</button></div>
     <div class="card"><div class="body ficha-hd"><div class="minw"><h2 class="disp">${esc(title(c.nome))}</h2><p class="muted m0">Matrícula Dikma <b class="mono">${c.mat}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}${c.subsetor || c.setor ? ' · ' + esc(c.subsetor || c.setor) : ''} · ${esc(PES.lotacao(c).txt)}${c.funcao ? ' · ' + esc(c.funcao) : ''}${c.turma ? ' · Turma ' + esc(c.turma) : ''}${c.lider ? ' · Líder: ' + esc(title(c.lider)) : ''}</p>
       <p class="muted m0">Admissão ${dBR(c.adm) || '—'} · ${x.tempo}${c.dem ? ' · Demissão ' + dBR(c.dem) : ''}</p><div class="row-gap" style="margin-top:8px">${pillSt(x.status)}${x.exp ? `<span class="pill ext">Experiência · ${x.dc} dias</span>` : ''}${c.intAnt ? '<span class="pill neu">Integração anterior</span>' : ''}</div></div>
-      <div class="row-gap">${podeEditar() && x.ativo ? `<button class="btn pri" data-g="novaOc" data-mat="${c.mat}">${I.plus} Nova ocorrência</button>` : ''}${podeEditar() && x.pend.length ? `<button class="btn" data-g="assinar" data-mat="${c.mat}">✍ Assinar pendentes (${x.pend.length})</button>` : ''}<button class="btn" data-g="imprimir" data-mat="${c.mat}">${I.print} Imprimir</button>${modsDe(EU).includes('rh') ? `<button class="btn" data-act="irCadastro" data-mat="${c.mat}">Cadastro</button>` : ''}${isAdmin() ? `<button class="btn ghost danger" data-g="excluirColab" data-mat="${c.mat}">Excluir</button>` : ''}</div></div></div>
+      <div class="row-gap">${podeEditar() && x.ativo ? `<button class="btn pri" data-g="novaOc" data-mat="${c.mat}">${I.plus} Nova ocorrência</button>` : ''}${podeEditar() && x.pend.length ? `<button class="btn" data-g="assinar" data-mat="${c.mat}">✍ Assinar pendentes (${x.pend.length})</button>` : ''}<button class="btn" data-g="imprimir" data-mat="${c.mat}">${I.print} Imprimir</button>${modsDe(EU).includes('rh') ? `<button class="btn" data-act="irCadastro" data-mat="${c.mat}">Cadastro</button>` : ''}${botaoQuemAbriu(c)}${isAdmin() ? `<button class="btn ghost danger" data-g="excluirColab" data-mat="${c.mat}">Excluir</button>` : ''}</div></div></div>
     <div class="grid2"><div class="card"><header><h2>Folha 1 · Integração</h2><p>${x.nInt} de ${f1.length}</p></header><div class="body"><div class="plist">${f1.map((t, i) => `<div class="pitem"><div class="minw"><div class="t">${esc(t.tipo)}</div><div class="l">${esc(t.texto)}</div></div><span class="${x.integ[i] ? 'pill ok' : 'pill warn'}">${x.integ[i] === 'Anterior' ? 'Anterior' : x.integ[i] ? dBR(x.integ[i]) : 'Pendente'}</span></div>`).join('')}</div></div></div>
     <div class="card"><header><h2>Folha 2 · Ocorrências</h2><p>${x.f2.length} de 33 linhas</p></header><div class="body">${ocLista(x.oc.slice().reverse())}</div></div></div>`;
     return h;
