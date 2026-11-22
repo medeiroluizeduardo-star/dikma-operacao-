@@ -4,6 +4,7 @@ Rodam sozinhos no GitHub (workflow **Testes automáticos**) em toda proposta de 
 
 - `regras.test.mjs`: regras de segurança do Firestore, perfil por perfil (quem lê e quem altera cada coleção).
 - `rotinas.test.mjs`: rotinas de `integracao/admin` (dados de importação, administrador, cópia de segurança e restauração).
+- `alarme.test.mjs`: contas do alarme do backup e da cota (`integracao/admin/alarme-contas.mjs`).
 - `limpeza.test.mjs`: contas da Limpeza de dados (dispensa das pendências antigas, meses protegidos, lotes) — `node --test testes/limpeza.test.mjs`.
 - `feriados.test.mjs`: atividades em feriado sem operação (saem da conta com a marca `fe`, voltam quando o feriado sai; R, N e E não mudam) — `node --test testes/feriados.test.mjs`.
 - `fotos.test.mjs`: fotos das atividades (configuração e validação, situação que exige foto, contador, refs compartilhadas, contagem por célula `ft`, indicador e estimativa de armazenamento) — `node --test testes/fotos.test.mjs`.
