@@ -386,6 +386,24 @@ export function acessoFicha(mat, pessoa, ficha) {
   if (!acessosMock.has(id)) acessosMock.set(id, { id, at: new Date(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || ''), ficha, dia });
 }
 export async function acessosFichaDe(mat) { return [...acessosMock.values()].filter(x => x.mat === String(mat)).sort((a, b) => b.at - a.at); }
+// LGPD › descarte por prazo (demonstração): as mesmas leituras e gravações de data.js, sobre o que está em memória.
+export async function lgpdLer(limAcesso) {
+  const sit = []; for (const k of SET_KEYS) for (const [m, v] of Object.entries(S[k].sitByMonth || {})) sit.push({ id: m, col: (k === 'bateria' ? 'b_' : '') + 'situacao', v, jus: ((S[k].sitExtra || {})[m] || {}).jus || {} });
+  const comps = Object.entries((cache.adm && cache.adm.comps) || {}).filter(([, c]) => c).map(([id, c]) => ({ id, ...c }));
+  return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), fichas: (cache.g && cache.g.colabs) || [] }));
+}
+export async function lgpdGravar(ops) {
+  for (const o of ops) {
+    if (o.tipo === 'acesso') acessosMock.delete(o.id);
+    else if (o.tipo === 'aso') cache.treinos = cache.treinos.filter(t => t.id !== o.id);
+    else if (o.tipo === 'obs') {
+      const k = o.col.startsWith('b_') ? 'bateria' : 'patio';
+      const alvo = o.col.endsWith('situacao') ? ((S[k].sitExtra || {})[o.id] || {}) : (cache.adm.comps[o.id] || {});
+      let x = alvo; for (const p of o.caminho.slice(0, -1)) x = x && x[p]; if (x) delete x[o.caminho[o.caminho.length - 1]];
+    }
+  }
+  changed();
+}
 export function log(t, mod) { cache.log.unshift({ id: 'h' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date(), uid: me.uid, nome: me.nome, t, mod: MODS_HIST.includes(mod) ? mod : 'administracao' }); cache.log = cache.log.slice(0, 40); changed(); }
 export async function gerarMes(ym, planoPorArea, aPartirDe) {
   let n = 0;

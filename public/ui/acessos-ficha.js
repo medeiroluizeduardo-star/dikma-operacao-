@@ -18,5 +18,5 @@ acoes.quemAbriu = async (t, d) => {
   try { l = await DB.acessosFichaDe(d.mat); } catch (e) { toast('Não deu para ler o registro agora. Tente de novo.'); return; }
   const opts = l.length ? l.slice(0, 200).map(x => ({ t: title(x.nome || 'Sem nome'), d: `${FICHA[x.ficha] || x.ficha} · ${dhBR(x.at)}` }))
     : [{ t: 'Ninguém abriu ainda', d: 'O registro começou com o pacote LGPD.' }];
-  sheet(`Quem abriu a ficha de ${title(d.nome || d.mat)}`, 'Uma linha por pessoa, ficha e dia. Só o administrador vê esta lista. Guardado por tempo limitado (Administração › LGPD).', opts, () => {}, { fechar: 'Fechar' });
+  sheet(`Quem abriu a ficha de ${title(d.nome || d.mat)}`, 'Uma linha por pessoa, ficha e dia. Só o administrador vê esta lista. Guardado por 1 ano (Administração › LGPD).', opts, () => {}, { fechar: 'Fechar' });
 };

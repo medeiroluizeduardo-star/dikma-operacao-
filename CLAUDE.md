@@ -23,7 +23,7 @@
 ## Estrutura (resumo)
 - Página estática sem build, JavaScript puro (módulos ES) em `public/`: `nucleo/` (inclui `navegacao.js`, `eventos.js`, `data.js` = Firestore e `data-mock.js` = modo `?demo`), `contas/` (contas sem tela, as mesmas do site, testes e rotinas), `calc/`, `ui/` e `telas/`. Na raiz ficam só `index.html`, `app.js`, `tema.js`, `estilo.css`, `sw.js` e o manifest.
 - 6 módulos: Operação, Gestão, Segurança, RH, Indicadores (só leitura, escolhido por pessoa) e Administração; acesso por módulo em `usuarios/{uid}.acesso` (ver `public/contas/acessos.js`).
-- Fotos das atividades: ver `docs/fotos-atividades.md`.
+- Fotos das atividades: ver `docs/fotos-atividades.md`. LGPD (registro de acesso às fichas e prazos de descarte): `docs/lgpd.md`.
 - Rotinas no GitHub Actions (`.github/workflows/`): publicar, prévia, testes, avisos, backup, feriados, trocar líder etc.
 
 ## Testes (proporcionais ao tamanho da mudança)
