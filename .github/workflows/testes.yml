@@ -39,6 +39,11 @@ jobs:
         working-directory: testes
         run: npm run tipos
 
+      - name: ESLint (só avisos, não trava)
+        working-directory: testes
+        continue-on-error: true
+        run: npm run estilo
+
       - name: Regras de segurança e rotinas (emulador do Firebase)
         working-directory: testes
         run: npx firebase emulators:exec --only firestore,auth --project demo-dikma --config ../firebase.json "npm test"
