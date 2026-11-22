@@ -7,6 +7,7 @@
 //   - nada passa da largura da tela (sem rolagem lateral).
 // Não usa o banco de verdade: o modo demonstração tem dados inventados e não grava nada.
 // Para rodar no computador: cd testes && npm install && npx playwright install chromium && npm run telas
+// Simulando uma máquina lenta (processador 6 vezes mais lento): LENTO=6 npm run telas
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -43,20 +44,47 @@ before(async () => {
 });
 after(async () => { await navegador?.close(); await new Promise(r => servidor ? servidor.close(r) : r()); });
 
-// Espera a tela terminar de desenhar: rede parada e sem o esqueleto de "Carregando".
-async function esperar(page) {
-  // O clique só agenda o desenho (shell.js › schedule: 40 ms + um quadro). Sem esta pausa, a conferência abaixo via
-  // ainda a aba anterior e seguia; logo depois a aba nova aparecia com o esqueleto (sem texto), enquanto o arquivo
-  // dela chegava, e o teste acusava "tela em branco" à toa (aconteceu na publicação do #145, em Tratativas e Medição).
-  await page.waitForTimeout(100);
-  await page.waitForLoadState('networkidle');
-  await page.waitForFunction(() => !document.querySelector('#view [aria-busy="true"], #view .skel'), null, { timeout: 8000 }).catch(() => {});
-  // A aba carregada sob demanda pode levar mais que um instante para desenhar numa máquina lenta (CI): espera ter
-  // conteúdo (até 5 s). Se continuar vazia, o teste acusa "tela em branco" do mesmo jeito.
-  await page.waitForFunction(() => (document.getElementById('view')?.innerText || '').trim().length > 0, null, { timeout: 5000 }).catch(() => {});
-  await page.waitForTimeout(120);
+// Espera a tela terminar de desenhar olhando a própria tela, em vez de pausas de tempo fixo (item 3.3 do plano de ação).
+// Antes: 100 ms depois do clique e mais 120 ms no fim. Numa máquina lenta (CI) às vezes não bastava e o teste acusava
+// "tela em branco" ou "aba sumiu do menu" à toa (#145, #173); numa rápida, sobrava espera.
+// Agora:
+//   1) clicar() espera o desenho que o próprio clique agendou: o site troca de tela dois quadros depois do toque
+//      (shell.js › trocarTela) e os outros botões desenham 40 ms + um quadro depois (shell.js › schedule). A conta é pela
+//      ordem dos quadros e relógios do navegador, não pela velocidade da máquina;
+//   2) nenhum arquivo do site a caminho (o arquivo da aba aberta sob demanda já chegou);
+//   3) a tela pronta e quieta: sem esqueleto de "Carregando", com texto e sem conteúdo novo há QUIETO ms. Um vigia na
+//      página (ESPIAO) anota a hora da última mudança de conteúdo (elementos e textos; não as classes e estilos que a
+//      animação de entrada vai trocando). Os dados de exemplo chegam em lotes e cada lote redesenha.
+// Cada espera tem limite (10 s); passado o limite, segue e as conferências acusam o problema (tela em branco etc.).
+const QUIETO = 150;
+const ESPIAO = () => {
+  window.__mudou = performance.now();
+  new MutationObserver(() => { window.__mudou = performance.now(); }).observe(document, { subtree: true, childList: true, characterData: true });
+};
+// Arquivos do site pedidos e ainda não chegados, por página.
+const A_CAMINHO = new WeakMap();
+function vigiarRede(page) {
+  const s = new Set(); A_CAMINHO.set(page, s);
+  page.on('request', r => { if (r.url().startsWith(base)) s.add(r); });
+  page.on('requestfinished', r => s.delete(r)); page.on('requestfailed', r => s.delete(r));
 }
-const clicar = (page, sel) => page.evaluate(s => { const b = document.querySelector(s); if (!b) return false; b.click(); return true; }, sel);
+async function esperar(page) {
+  for (let i = 0; A_CAMINHO.get(page)?.size && i < 200; i++) await new Promise(r => setTimeout(r, 50));
+  await page.waitForFunction(q => {
+    const v = document.getElementById('view');
+    return !!v && !v.querySelector('[aria-busy="true"], .skel') && v.innerText.trim().length > 0 && performance.now() - window.__mudou >= q;
+  }, QUIETO, { timeout: 10000, polling: 50 }).catch(() => {});
+}
+// Clica pelo seletor e espera o desenho agendado pelo clique (passo 1 acima); false se o botão não existe.
+// Os relógios do navegador disparam em ordem e os quadros também: um relógio de 45 ms seguido de dois quadros termina
+// sempre depois do "40 ms + um quadro" e do "dois quadros" que o clique pediu, por mais lenta que seja a máquina.
+const clicar = (page, sel) => page.evaluate(async s => {
+  const b = document.querySelector(s); if (!b) return false;
+  b.click();
+  const quadro = () => new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => setTimeout(r, 45)); await quadro(); await quadro();
+  return true;
+}, sel);
 const fecharJanelas = page => page.evaluate(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
 
 for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celular', { width: 390, height: 844 }]]) {
@@ -64,7 +92,11 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
     const ctx = await navegador.newContext({ viewport: tela, serviceWorkers: 'block', locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', ...(nome === 'celular' ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}) });
     // Sem internet: só o próprio site (as fontes do Google ficam de fora, a tela usa as do sistema).
     await ctx.route(u => !u.href.startsWith(base), r => r.abort());
+    await ctx.addInitScript(ESPIAO);
     const page = await ctx.newPage();
+    // LENTO=4 npm run telas: simula uma máquina 4x mais lenta (como a da CI em dia ruim) para conferir que o teste aguenta.
+    if (Number(process.env.LENTO) > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.LENTO) });
+    vigiarRede(page);
     const erros = [];
     page.on('pageerror', e => erros.push('Erro de JavaScript: ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/net::ERR_FAILED|ERR_BLOCKED_BY_CLIENT|fonts\.googleapis/.test(m.text())) erros.push('Console: ' + m.text()); });
