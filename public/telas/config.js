@@ -23,6 +23,7 @@ import { listasSeg } from '../contas/segcalc.js';
 import { planoNaProgramacao } from './plano-prog.js';
 import { agruparLocais, chaveParecida, locaisParecidos } from '../contas/execucao.js';
 import { vLimpeza } from './limpeza.js';
+import { vLgpd } from './lgpd.js';
 import { vHistorico } from './historico.js';
 import { vCfFotos } from './fotos.js';
 import { saudeDoSistema } from '../contas/saude.js';
@@ -208,6 +209,7 @@ export function vConfigModulo(view) {
   if (view === 'cfuso') return vCfUso();
   if (view === 'cferros') return vCfErros();
   if (view === 'cflimpa') return vLimpeza();
+  if (view === 'cflgpd') return vLgpd();
   if (view === 'cfhist') return vHistorico();
   if (view === 'cffotos') return vCfFotos();
   if (view === 'cfarqfotos') return vArqFotos();

@@ -1042,6 +1042,21 @@ service cloud.firestore {
       return admin() || (ativo() && ((m == 'operacao' && pEm('operacao') == 'gestor') || (m == 'gestao' && pEm('gestao') == 'gestor')
         || (m == 'seguranca' && pEm('seguranca') == 'gestor') || (m == 'rh' && pEm('rh') == 'administrativo')));
     }
+    // LGPD: quem abriu a ficha de quem (ui/acessos-ficha.js). Id = uid|mat|ficha|dia: uma linha por dia. Cada um grava só
+    // o próprio acesso, com a hora do servidor; ninguém altera; só o administrador lê e apaga (descarte por prazo).
+    match /acessosFicha/{id} {
+      allow read, delete: if admin();
+      allow create: if ativo()
+        && request.resource.data.keys().hasOnly(['at', 'uid', 'nome', 'mat', 'pessoa', 'ficha', 'dia'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.at == request.time
+        && request.resource.data.nome == perfil().get('nome', '')
+        && request.resource.data.ficha in ['rh', 'gestao']
+        && request.resource.data.mat is string && request.resource.data.mat.size() > 0 && request.resource.data.mat.size() <= 30
+        && request.resource.data.pessoa is string && request.resource.data.pessoa.size() <= 120
+        && request.resource.data.dia is string && request.resource.data.dia.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && id == request.auth.uid + '|' + request.resource.data.mat + '|' + request.resource.data.ficha + '|' + request.resource.data.dia;
+    }
     match /historico/{id} {
       allow read: if veHist(resource.data.get('mod', ''));
       allow create: if ativo()

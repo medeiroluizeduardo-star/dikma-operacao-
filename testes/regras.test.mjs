@@ -541,6 +541,49 @@ test('histórico: cada um registra só em nome próprio (nome do cadastro, hora 
   for (const u of ['liderRec', 'gestorP', 'gestorG', 'coord', 'sup', 'admModulo', 'segGestor']) await assertFails(deleteDoc(doc(db(u), 'historico', 'h1')), u);
   await assertSucceeds(deleteDoc(doc(db('admin'), 'historico', 'h1')));
 });
+test('LGPD (acessosFicha): cada um registra só o próprio acesso à ficha, ninguém altera e só o administrador lê e apaga', async () => {
+  const a = (uid, x = {}) => ({ at: serverTimestamp(), uid, nome: uid, mat: '3844', pessoa: 'FULANO', ficha: 'rh', dia: '2026-11-22', ...x });
+  const id = (uid, x = {}) => { const v = a(uid, x); return `${v.uid}|${v.mat}|${v.ficha}|${v.dia}`; };
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec')), a('liderRec')));
+  await assertSucceeds(setDoc(doc(db('gestorG'), 'acessosFicha', id('gestorG', { ficha: 'gestao' })), a('gestorG', { ficha: 'gestao' })));
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec')), a('liderRec', { pessoa: 'OUTRO' })), 'alterar a linha do dia');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('admin')), a('admin')), 'em nome de outra pessoa');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', 'outro-id'), a('liderRec', { dia: '2026-11-21' })), 'id que não bate');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-20' })), a('liderRec', { dia: '2026-11-20', nome: 'Outro Nome' })), 'com outro nome');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { ficha: 'x' })), a('liderRec', { ficha: 'x' })), 'ficha que não existe');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-19' })), a('liderRec', { dia: '2026-11-19', at: Timestamp.fromMillis(Date.now() - 864e5) })), 'com a hora do aparelho');
+  await assertFails(setDoc(doc(db('liderRec'), 'acessosFicha', id('liderRec', { dia: '2026-11-18' })), { ...a('liderRec', { dia: '2026-11-18' }), extra: 1 }), 'campo a mais');
+  await assertFails(setDoc(doc(db('bloq'), 'acessosFicha', id('bloq')), a('bloq')), 'bloqueado');
+  for (const u of ['liderRec', 'gestorG', 'coord', 'admModulo']) {
+    await assertFails(getDoc(doc(db(u), 'acessosFicha', id('liderRec'))), 'ler: ' + u);
+    await assertFails(deleteDoc(doc(db(u), 'acessosFicha', id('liderRec'))), 'apagar: ' + u);
+  }
+  await assertSucceeds(getDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
+});
+test('LGPD › descarte por prazo: o administrador apaga a observação do atestado (presença e folha) e o ASO antigo; outros não', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const f = ctx.firestore();
+    await setDoc0(doc(f, 'situacao', '2025-01'), { v: { 'C001|2025-01-10': 'AT' }, jus: { 'C001|2025-01-10': { cod: 'AT', mot: 'Atestado médico', obs: '3 dias' } }, trv: { 'C001|2025-01-10': 'RECEBIMENTO' } });
+    await setDoc0(doc(f, 'freqcomp', 'patio|2025-01'), { conj: 'patio', competencia: '2025-01', grupos: [], d: { k1: { '2025-01-05': 'AF' } }, jus: { k1: { '2025-01-05': { cod: 'AF', obs: 'INSS' } } } });
+    await setDoc0(doc(f, 'treinos', 'aso-velho'), { nome: 'PESSOA TESTE', mat: '10', tipo: 'ASO', realizado: '2022-01-01', validade: '2023-01-01', obs: 'x' });
+  });
+  const obsSit = d => updateDoc0(doc(d, 'situacao', '2025-01'), new FieldPath('jus', 'C001|2025-01-10', 'obs'), deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', UID.get(d));
+  const obsFolha = d => updateDoc0(doc(d, 'freqcomp', 'patio|2025-01'), new FieldPath('jus', 'k1', '2025-01-05', 'obs'), deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', UID.get(d));
+  const aso = d => setDoc0(doc(d, 'treinos', 'aso-velho'), { apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: UID.get(d), realizado: null, validade: null, obs: null }, { merge: true });
+  for (const u of ['liderRec', 'coord']) { await assertFails(obsFolha(db(u)), 'folha: ' + u); await assertFails(aso(db(u)), 'ASO: ' + u); }
+  await assertFails(obsSit(db('liderRec')), 'presença travada: líder');
+  await assertSucceeds(obsSit(db('admin')));
+  await assertSucceeds(obsFolha(db('admin')));
+  await assertSucceeds(aso(db('admin')));
+  await env.withSecurityRulesDisabled(async ctx => {
+    const f = ctx.firestore();
+    const s = (await getDoc(doc(f, 'situacao', '2025-01'))).data();
+    assert.equal(s.v['C001|2025-01-10'], 'AT', 'o código fica'); assert.equal(s.jus['C001|2025-01-10'].obs, undefined); assert.equal(s.jus['C001|2025-01-10'].mot, 'Atestado médico');
+    const t = (await getDoc(doc(f, 'treinos', 'aso-velho'))).data();
+    assert.equal(t.apagado, true); assert.equal(t.realizado, null);
+  });
+});
 test('histórico: só o administrador (tudo, também os antigos sem módulo) e o gestor de cada módulo (só o do módulo dele) leem', async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     const d = ctx.firestore(); const at = Timestamp.now();

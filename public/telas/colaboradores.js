@@ -21,6 +21,7 @@ import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
+import { registrarAcesso, botaoQuemAbriu } from '../ui/acessos-ficha.js';
 
 const C = UI.co;
 const $ = id => document.getElementById(id);
@@ -111,6 +112,7 @@ function vLista() {
 }
 
 function vFicha(c) {
+  registrarAcesso(c, 'rh');
   const L = lista(); const lot = PES.lotacao(c); const ld = criarLiderancaDaFicha(L)(c);
   const at = lot.ativ ? lot.ativ.x : null, op = lot.op;
   const aba = ['dados', 'lot', 'fer'].includes(C.aba) ? C.aba : 'dados';
@@ -126,7 +128,8 @@ function vFicha(c) {
       ['Líder imediato', ld.lider ? esc(title(ld.lider)) : ''], ['Supervisor imediato', ld.sup ? `${esc(title(ld.sup))} <span class="muted small">· líder do líder</span>` : '']]);
   const botoes = [
     podeEditar() ? botaoAcao('Editar', `data-act="coEditar" data-mat="${esc(c.mat)}"`) : '',
-    temFichas(ME) && modsDe(ME).includes('gestao') ? `<button class="btn" data-act="irFicha" data-mat="${esc(c.mat)}">${I.ficha} Ficha de acompanhamento</button>` : ''
+    temFichas(ME) && modsDe(ME).includes('gestao') ? `<button class="btn" data-act="irFicha" data-mat="${esc(c.mat)}">${I.ficha} Ficha de acompanhamento</button>` : '',
+    botaoQuemAbriu(c)
   ].join('');
   return `<div class="row-gap"><button class="btn" data-act="coVoltar">← Colaboradores</button></div>
   <div class="card"><div class="body stackcol">
