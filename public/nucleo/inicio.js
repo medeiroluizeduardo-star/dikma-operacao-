@@ -1,6 +1,7 @@
 // Entrada: cria as partes, abre o link recebido (avisos, QR), liga o banco de dados e o service worker.
 import { weekOf, monthOfWeek, setDaArea, SET_KEYS } from '../contas/cal.js';
 import * as M from '../ui/movimento.js';
+import * as VEL from './medidor.js';
 import { DEMO, DB, CUR_WEEK, CUR_MONTH, $ } from './base.js';
 import { AUTH, ME, mudouDados, definirAuth, UI, salvarUI, myArea, aplicarSet, moduloNovo } from './estado.js';
 import { ensureModulo } from './navegacao.js';
@@ -38,7 +39,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
 M.iniciarJanelas(); M.iniciarTopo();
 DB.start({
   onAuth: a => { definirAuth(a); if (ME && a.status === 'ready') { precarregarModulos(ME); enviarErros(); } if (ME && myArea()) UI.area = myArea(); render(); },
-  onData: () => { mudouDados(); if (AUTH.status === 'ready') schedule(); },
+  onData: () => { VEL.marcarDados(); mudouDados(); if (AUTH.status === 'ready') schedule(); },
   onSync: () => { const e = $('sync'); if (e && AUTH.status === 'ready') e.innerHTML = syncPill(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });

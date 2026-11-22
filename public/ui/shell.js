@@ -1,6 +1,7 @@
 // Moldura da tela: entrada (login), desenho da tela (render), menu lateral, barra de baixo, topo, filtros, busca e tema.
 import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
 import * as M from './movimento.js';
+import * as VEL from '../nucleo/medidor.js';
 import { semAcento, filtrarLista } from './busca.js';
 import { DEMO, DB, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
 import { AUTH, ME, SK, AREAS, UI, ultimoLogin, salvarUI, gravarUI, meses, isAdmin, perfil, myAreas, myArea, selMinhaArea, papelNome, rebuild, ensurePeriod, temFichas, modsDe, modsReais, setsDe, temEquipEm, aplicarSet } from '../nucleo/estado.js';
@@ -95,6 +96,8 @@ export function render() {
   { const ev = window.event; if (ev && ev.type === 'change' && ev.target && view && view.contains(ev.target) && AUTH.status === 'ready') { schedule(); return; } }
   const k = AUTH.status === 'ready' ? `${UI.modulo}|${UI.view}|${(UI.g && UI.g.mat) || ''}` : '';
   const nav = k !== ULT || !!view.querySelector('.skel');
+  const a0 = performance.now(); // medidor de velocidade (nucleo/medidor.js)
+  if (nav && k && k !== ULT) VEL.navegou(k);
   const pos = nav ? null : M.guardarRolagem(view), foco = nav ? null : M.guardarFoco(view);
   VIEW_MUDOU = false;
   // Módulo da tela na marcação (estilo.css › números do topo em cartões nos Indicadores).
@@ -103,6 +106,7 @@ export function render() {
   renderTela();
   if (AUTH.status !== 'ready') { ULT = ''; M.cancelarEntrada(view); return; }
   ULT = k;
+  { const pronta = !view.querySelector('.skel'); VEL.medirDesenho(k, performance.now() - a0); if (pronta) VEL.telaPronta(k); }
   if (nav && view.querySelector('.skel')) M.cancelarEntrada(view);
   if (nav && !view.querySelector('.skel')) M.entrarTela(view); else if (!nav && VIEW_MUDOU) { M.semRepetir(view); M.restaurarRolagem(view, pos); M.restaurarFoco(view, foco); }
   M.moverIndicador();
@@ -193,8 +197,8 @@ function renderNav() {
   }
   pintar('nav', h);
   pintar('who', DEMO
-    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button>${histBtn()}<button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button><a class="btn rail-btn" href="guia.html">Guia visual</a>`
-    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos no celular</button>${histBtn()}<div class="row-gap"><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
+    ? `${mockSwitcher()}<div class="row-gap"><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos</button>${histBtn()}<button class="btn rail-btn" data-act="velocidade">${I.relogio} Velocidade</button><button class="btn rail-btn" data-act="senha">${I.key} Senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div><button class="btn rail-btn" data-act="mockReset">Restaurar demonstração</button><a class="btn rail-btn" href="guia.html">Guia visual</a>`
+    : `<div class="me"><span class="av">${esc((ME.nome || '?')[0].toUpperCase())}</span><div><b>${esc(title(ME.nome || ME.login || ''))}</b><small>${ME.login ? esc(ME.login) + ' · ' : ''}${papelNome(ME.papel)}${ME.area ? ' · ' + AREA_S[ME.area] : ''}</small></div></div><button class="btn rail-btn" data-go="avisos">${I.celular} Avisos no celular</button>${histBtn()}<div class="row-gap"><button class="btn rail-btn" data-act="velocidade">${I.relogio} Velocidade deste aparelho</button><button class="btn rail-btn" data-act="senha">${I.key} Alterar senha</button><button class="btn rail-btn" data-act="logout">${I.out} Sair</button></div>`);
   { const w = $('who'); if (w && !w.querySelector('[data-act="tema"]')) { const t = temaAtual(); w.insertAdjacentHTML('beforeend', `<button class="btn rail-btn temab" data-act="tema" title="Trocar o tema da tela">${IC_TEMA[t]} Tema: ${TEMAS[t].toLowerCase()}</button>`); } }
   pintarBarra(barraDe());
 }
@@ -467,6 +471,7 @@ export function trocarTela(id = UI.view) {
   document.querySelectorAll('#nav [data-go], #tabbar [data-go]').forEach(b => { if (b.dataset.go === id || b.dataset.go === pai) b.setAttribute('aria-current', 'page'); else if (b.dataset.go !== '__more') b.removeAttribute('aria-current'); });
   M.moverIndicador();
   const v = $('view'); if (v) v.classList.add('saindo');
+  VEL.toque();
   cancelAnimationFrame(trocaRaf);
   trocaRaf = requestAnimationFrame(() => { trocaRaf = requestAnimationFrame(() => { trocaRaf = 0; if (v) v.classList.remove('saindo'); render(); scrollTo(0, 0); }); });
 }
