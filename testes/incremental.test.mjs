@@ -39,3 +39,26 @@ test('aparelho sem cópia: espera o servidor', async () => {
   await espera(30);
   assert.equal(pronta, true);
 });
+
+test('lançamentos de um mês: lê só o mês e, com cópia recente, pede ao servidor só o que mudou depois do lançamento mais novo', async () => {
+  const pedidos = [];
+  const fb = fbFalso([{ id: 'a', mes: '2026-11', em: { toMillis: () => 5 } }, { id: 'b', mes: '2026-11', em: { toMillis: () => 9 }, apagado: true, atualizadoEm: { toMillis: () => 7 } }]);
+  const on = fb.onSnapshot; fb.onSnapshot = (ref, ...r) => { pedidos.push(ref); return on(ref, ...r); };
+  const marcas = new Map([['k', Date.now()]]), guarda = { ler: k => marcas.get(k) || 0, gravar: (k, v) => marcas.set(k, v) };
+  let lista = null, pronta = null;
+  ouvirIncremental(fb, {}, { col: 'eqlanc', filtro: ['mes', '==', '2026-11'], marcas: ['atualizadoEm', 'em'] }, 'k', (l, ok) => { lista = l; pronta = ok; }, e => { throw e; }, guarda);
+  assert.deepEqual(pedidos[0], { c: 'eqlanc', w: ['mes', '==', '2026-11'] }, 'a cópia do aparelho é só do mês');
+  assert.equal(pedidos[1].w[0], 'atualizadoEm');
+  assert.equal(pedidos[1].w[2].toMillis(), 9, 'desde o mais novo entre atualizadoEm e em');
+  assert.equal(pronta, true, 'com cópia, mostra na hora');
+  assert.deepEqual(lista.map(x => x.id), ['a'], 'sem os apagados');
+  await espera(30);
+});
+
+test('lançamentos sem cópia recente: relê o mês inteiro', () => {
+  const pedidos = [];
+  const fb = fbFalso([{ id: 'a', mes: '2026-11', em: { toMillis: () => 5 } }]);
+  const on = fb.onSnapshot; fb.onSnapshot = (ref, ...r) => { pedidos.push(ref); return on(ref, ...r); };
+  ouvirIncremental(fb, {}, { col: 'eqlanc', filtro: ['mes', '==', '2026-11'], marcas: ['atualizadoEm', 'em'] }, 'k', () => {}, e => { throw e; }, { ler: () => 0, gravar: () => {} });
+  assert.deepEqual(pedidos[1], { c: 'eqlanc', w: ['mes', '==', '2026-11'] });
+});

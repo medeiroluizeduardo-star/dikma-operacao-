@@ -48,10 +48,10 @@ let fichas = null;
     if (!soTestar) {
       await db.doc('adm/feriasAtivas').set({ itens: fer, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() }, { merge: true });
       await db.doc('adm/desligados').set({ itens: des, dia: hoje, atualizadoEm: FieldValue.serverTimestamp() });
-      // Treinamentos e Férias excluídos no sistema ficam marcados "apagado" (os aparelhos só recebem o que mudou e
+      // Treinamentos, Férias e lançamentos de equipamento excluídos no sistema ficam marcados "apagado" (os aparelhos só recebem o que mudou e
       // precisam saber da exclusão); passados APAGADO_DIAS, apaga de vez. Lê só os marcados.
       const limite = Date.now() - APAGADO_DIAS * 864e5;
-      for (const c of ['treinos', 'ferias']) {
+      for (const c of ['treinos', 'ferias', 'eqlanc']) {
         const velhos = (await db.collection(c).where('apagado', '==', true).get()).docs.filter(x => { const t = x.get('atualizadoEm'); return !t || t.toMillis() < limite; });
         for (let i = 0; i < velhos.length; i += 400) { const b = db.batch(); velhos.slice(i, i + 400).forEach(x => b.delete(x.ref)); await b.commit(); }
         if (velhos.length) console.log(`${c}: ${velhos.length} registro(s) excluído(s) há mais de ${APAGADO_DIAS} dias apagado(s) de vez.`);

@@ -1,0 +1,61 @@
+name: Apagar documentos antigos
+
+# Uso único, só manual (Run workflow): apaga a coleção antiga "documentos" (Administração › Documentos e OMs, que
+# saiu do sistema em 17/11/2026). Autorizado pelo Eduardo. Só apaga se a Cópia de segurança deu certo nas últimas
+# 26 horas, e guarda antes uma cópia da coleção no arquivo desta execução (90 dias).
+#   simular (padrão): só conta quantos registros há.   apagar: guarda a cópia e apaga.
+# Depois de usada, esta rotina pode sair do repositório.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'simular (só conta) ou apagar'
+        type: choice
+        options: [simular, apagar]
+        default: simular
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  apagar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Contar e guardar a cópia da coleção
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_PASTA: copia-documentos
+          DOCS_MODO: simular
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/apagar-documentos.mjs
+
+      - name: Guardar a cópia no arquivo da execução
+        uses: actions/upload-artifact@v4
+        with:
+          name: antes-de-apagar-documentos-${{ github.run_id }}
+          path: copia-documentos/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Apagar
+        if: inputs.modo == 'apagar'
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_PASTA: copia-documentos-2
+          DOCS_MODO: apagar
+        run: node integracao/admin/apagar-documentos.mjs
