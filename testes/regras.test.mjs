@@ -1826,7 +1826,7 @@ test('Coleção antiga documentos (tela saiu em 17/11/2026): ninguém lê nem gr
   for (const u of ['admin', 'geGestorSo', 'geCoord']) {
     await assertFails(getDoc(doc(db(u), 'documentos', 'velho1')), `${u} não lê`);
     await assertFails(setDoc(doc(db(u), 'documentos', 'novo1'), { tipo: 'POP' }), `${u} não grava`);
-    await assertFails(deleteDoc(doc(db(u), 'documentos', 'velho1')), `${u} não apaga (só a rotina Apagar documentos antigos)`);
+    await assertFails(deleteDoc(doc(db(u), 'documentos', 'velho1')), `${u} não apaga`);
   }
 });
 
