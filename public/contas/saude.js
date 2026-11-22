@@ -17,7 +17,7 @@ const valida = d => (d && !isNaN(d.getTime()) ? d : null);
 export const quando = (v, agora = new Date()) => {
   const d = valida(data(v));
   if (!d) return '—';
-  const h = (agora - d) / 36e5;
+  const h = (agora.getTime() - d.getTime()) / 36e5;
   if (h < 1) return 'há menos de 1 hora';
   if (h < 24) return `há ${Math.floor(h)} hora${Math.floor(h) > 1 ? 's' : ''}`;
   const dias = Math.floor(h / 24);
@@ -48,7 +48,7 @@ export function saudeDoSistema({ saude = null, uso = null, erros = [], agora = n
   // 1) Cópia de segurança diária: vale o que o alarme viu no GitHub; sem ele, a medição gravada pela própria cópia.
   const b = s.backup || {};
   const ultCopia = valida(data(b.ultima)) || valida(data(uso && uso.em));
-  const hCopia = ultCopia ? (agora - ultCopia) / 36e5 : Infinity;
+  const hCopia = ultCopia ? (agora.getTime() - ultCopia.getTime()) / 36e5 : Infinity;
   const tam = b.bytes ? ` · ${(b.bytes / 1048576).toFixed(1).replace('.', ',')} MB` : '';
   itens.push({
     id: 'copia', titulo: 'Cópia de segurança',
@@ -62,7 +62,7 @@ export function saudeDoSistema({ saude = null, uso = null, erros = [], agora = n
   const ultEnsaio = valida(data(en.ultima));
   itens.push({
     id: 'ensaio', titulo: 'Ensaio de restauração',
-    situacao: !ultEnsaio ? 'atencao' : en.ok === false ? 'critico' : (agora - ultEnsaio) / DIA > ENSAIO_MAX_D ? 'atencao' : 'ok',
+    situacao: !ultEnsaio ? 'atencao' : en.ok === false ? 'critico' : (agora.getTime() - ultEnsaio.getTime()) / DIA > ENSAIO_MAX_D ? 'atencao' : 'ok',
     resumo: ultEnsaio ? `${en.ok === false ? 'Falhou' : 'Deu certo'} ${quando(ultEnsaio, agora)}` : 'Ainda sem ensaio registrado',
     detalhe: en.ok === false ? 'A cópia não voltou inteira no teste. Veja GitHub › Actions › Ensaio de restauração da cópia.' : 'Todo dia 1º a cópia é restaurada num banco de teste e conferida documento por documento.'
   });
@@ -108,9 +108,9 @@ export function saudeDoSistema({ saude = null, uso = null, erros = [], agora = n
   const ultAlarme = valida(data(s.em));
   itens.push({
     id: 'alarme', titulo: 'Alarme do backup',
-    situacao: !ultAlarme ? 'atencao' : (agora - ultAlarme) / 36e5 > ALARME_MAX_H ? 'atencao' : (s.problemas || []).length ? 'critico' : 'ok',
+    situacao: !ultAlarme ? 'atencao' : (agora.getTime() - ultAlarme.getTime()) / 36e5 > ALARME_MAX_H ? 'atencao' : (s.problemas || []).length ? 'critico' : 'ok',
     resumo: ultAlarme ? `Conferiu ${quando(ultAlarme, agora)}${(s.problemas || []).length ? ' e achou problema' : ''}` : 'Ainda não conferiu',
-    detalhe: (s.problemas || []).length ? s.problemas.join(' ') : !ultAlarme || (agora - ultAlarme) / 36e5 > ALARME_MAX_H ? 'O alarme roda às 7h30 e às 18h. Se parou, veja GitHub › Actions › Alarme do backup e da cota.' : 'Confere às 7h30 e às 18h e manda e-mail se algo der errado.'
+    detalhe: (s.problemas || []).length ? s.problemas.join(' ') : !ultAlarme || (agora.getTime() - ultAlarme.getTime()) / 36e5 > ALARME_MAX_H ? 'O alarme roda às 7h30 e às 18h. Se parou, veja GitHub › Actions › Alarme do backup e da cota.' : 'Confere às 7h30 e às 18h e manda e-mail se algo der errado.'
   });
 
   const ordem = { critico: 0, atencao: 1, info: 2, ok: 3 };
