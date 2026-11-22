@@ -2,8 +2,9 @@
 // Não lê nenhum documento do banco (não gasta cota): olha só o GitHub e o painel de uso do Google (Cloud Monitoring).
 //   1) A cópia de segurança (backup.yml) deu certo nas últimas 26 horas e o pacote tem o tamanho de costume?
 //   2) O uso de leituras, gravações e exclusões do Firestore passou de 70% da cota grátis (hoje e ontem)?
-// Se algo estiver errado, a rotina falha e o GitHub manda e-mail. Se o Google não deixar ler o uso
-// (falta de permissão da conta de serviço), fica um aviso e só a parte da cópia vale.
+// Se algo estiver errado, a rotina falha e o GitHub manda e-mail.
+// ATENÇÃO (22/11/2026): no plano grátis (Spark) o Google recusa ler o uso ("requires billing"); aí a parte 2
+// fica de fora sem aviso e só a cópia vale. Passa a funcionar sozinha se o projeto for para o plano Blaze.
 //   GH_TOKEN, GITHUB_REPOSITORY        para ler as execuções da cópia
 //   FIREBASE_SERVICE_ACCOUNT           para ler o uso no Google (opcional; sem ela, só a cópia)
 //   ALARME_TESTE=1                     falha de propósito, para conferir que o e-mail chega
@@ -75,8 +76,7 @@ else {
     const hoje = inicioDiaCota(agora);
     const ontem = inicioDiaCota(new Date(hoje.getTime() - 3600e3));
     const dias = [['Hoje (até agora)', hoje, agora], ['Ontem (dia inteiro)', ontem, hoje]];
-    md.push('### Uso da cota grátis do Firestore', `Dia da cota começa ~${hoje.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', timeStyle: 'short' })} de Brasília. Alarme acima de ${LIMITE * 100}%.`, '',
-      '| Dia | Leituras | Gravações | Exclusões |', '|---|---|---|---|');
+    const tabela = [];
     for (const [rotulo, ini, fim] of dias) {
       const usos = {};
       for (const [k, nomes] of Object.entries(METRICAS)) {
@@ -86,13 +86,17 @@ else {
       }
       const c = avaliarCota(usos, rotulo);
       problemas.push(...c.problemas);
-      md.push(`| ${rotulo} | ${c.linhas.map(l => `${l.n.toLocaleString('pt-BR')} (${Math.round(l.pct * 100)}%)`).join(' | ')} |`);
+      tabela.push(`| ${rotulo} | ${c.linhas.map(l => `${l.n.toLocaleString('pt-BR')} (${Math.round(l.pct * 100)}%)`).join(' | ')} |`);
     }
-    md.push('');
+    md.push('### Uso da cota grátis do Firestore', `Dia da cota começa ~${hoje.toLocaleTimeString('pt-BR', { timeZone: 'America/Sao_Paulo', timeStyle: 'short' })} de Brasília. Alarme acima de ${LIMITE * 100}%.`, '',
+      '| Dia | Leituras | Gravações | Exclusões |', '|---|---|---|---|', ...tabela, '');
   } catch (e) {
-    const semPermissao = e.status === 403;
-    avisos.push(`Não deu para ler o uso da cota no Google${semPermissao ? ' (a conta de serviço não tem permissão de ler o Monitoring)' : ''}: ${e.message}`);
-    md.push('### Uso da cota grátis do Firestore', 'Não conferido (ver aviso abaixo). A parte da cópia de segurança continua valendo.', '');
+    // No plano grátis (Spark) o Google só entrega o uso com faturamento ativo: não é erro, só fica de fora.
+    const semFaturamento = /billing/i.test(e.message);
+    md.push('### Uso da cota grátis do Firestore', semFaturamento
+      ? 'Não conferido: no plano grátis o Google só mostra o uso para rotinas com o faturamento ativo (plano Blaze). Vale só a parte da cópia de segurança. O uso do dia continua no console do Firebase › Firestore › Uso.'
+      : 'Não conferido (ver aviso abaixo). A parte da cópia de segurança continua valendo.', '');
+    if (!semFaturamento) avisos.push(`Não deu para ler o uso da cota no Google${e.status === 403 ? ' (falta permissão da conta de serviço)' : ''}: ${e.message}`);
   }
 }
 
