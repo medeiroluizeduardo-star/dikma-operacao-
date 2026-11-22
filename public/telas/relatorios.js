@@ -10,7 +10,7 @@ import { ME, PL, COLABS, SK, AREAS, UI, areaScope, myAreas, modsReais, setsDe, t
 import { conjsInd, areasInd } from '../contas/acessos.js';
 import { I } from '../ui/icones.js';
 import { docsFor, stats, listaAprov, rotasDa } from '../calc/atividades.js';
-import { desligadoNoDia, cobDoDia, nomeDe, regimeNome, turmaDe } from '../calc/presenca.js';
+import { desligadoNoDia, cobDoDia, nomeDe, regimeNome, turmaDe, HE_ORIG } from '../calc/presenca.js';
 import { contarCausas } from './atividades.js';
 import { MOTIVOS_HE, fmtH, textoHE, heCfg, registrosHE } from './horas-justificativas.js';
 import { modulo } from '../nucleo/modulos.js';
