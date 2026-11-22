@@ -26,7 +26,8 @@ if (faltam.length) { console.error(`::error::Não estão nesta cópia: ${faltam.
 if (soDocs.size && colecoes.length !== 1) { console.error('::error::Para escolher documentos, informe uma coleção só.'); process.exit(1); }
 
 const { db, F, projeto } = await conectar();
-if (man.projeto && man.projeto !== projeto) { console.error(`::error::A cópia é do projeto ${man.projeto} e a chave é do projeto ${projeto}.`); process.exit(1); }
+// No emulador (ensaio de restauração), a cópia do banco real volta no projeto de teste.
+if (man.projeto && man.projeto !== projeto && !process.env.FIRESTORE_EMULATOR_HOST) { console.error(`::error::A cópia é do projeto ${man.projeto} e a chave é do projeto ${projeto}.`); process.exit(1); }
 
 // JSON com as chaves em ordem, para comparar o conteúdo sem depender da ordem dos campos.
 const estavel = v => (v && typeof v === 'object' ? (Array.isArray(v) ? '[' + v.map(estavel).join(',') + ']' : '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + estavel(v[k])).join(',') + '}') : JSON.stringify(v));
