@@ -1,0 +1,94 @@
+name: Cópia mensal para guardar fora do GitHub
+
+# Todo dia 1º, às 7h (Brasília), depois do ensaio de restauração.
+# Junta num pacote só: a cópia semanal mais recente do banco (com o histórico) + o código do sistema
+# + o guia de como restaurar sem o GitHub. Depois abre um aviso (Issue) para o Eduardo, que manda e-mail
+# com o link de download. Ele baixa e guarda no Drive da empresa (guia: docs/copia-fora-do-github.md)
+# e fecha o aviso. O pacote fica 90 dias no GitHub.
+# Não lê nem grava o banco (não gasta cota): esta rotina nem recebe a chave dele.
+on:
+  schedule:
+    - cron: '0 10 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  pacote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Achar a cópia semanal mais recente
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          achar() {
+            gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+              --jq "[.artifacts[] | select(.expired | not) | select(.name | startswith(\"$1\"))] | sort_by(.created_at) | last // empty | \"\(.workflow_run.id) \(.name) \(.created_at)\""
+          }
+          L=$(achar copia-semanal-)
+          if [ -z "$L" ]; then
+            echo "::warning::Nenhuma cópia semanal encontrada; usando a diária mais recente (sem o histórico)."
+            L=$(achar copia-diaria-)
+          fi
+          if [ -z "$L" ]; then echo "::error::Nenhuma cópia de segurança encontrada no GitHub."; exit 1; fi
+          read -r ID NOME CRIADA <<< "$L"
+          DIAS=$(( ( $(date +%s) - $(date -d "$CRIADA" +%s) ) / 86400 ))
+          echo "Cópia: $NOME (execução $ID, de $DIAS dia(s) atrás)"
+          if [ "$DIAS" -gt 8 ]; then echo "::error::A cópia mais recente tem $DIAS dias. Confira a rotina Cópia de segurança."; exit 1; fi
+          { echo "EXECUCAO=$ID"; echo "ORIGEM=$NOME"; echo "MES=$(TZ=America/Sao_Paulo date +%Y-%m)"; } >> "$GITHUB_ENV"
+
+      - name: Baixar a cópia
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ env.EXECUCAO }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: pacote/copia
+          merge-multiple: true
+
+      - name: Montar o pacote
+        run: |
+          test -f pacote/copia/manifesto.json || { echo "::error::A cópia baixada não tem manifesto.json."; exit 1; }
+          mkdir -p pacote/sistema
+          git archive HEAD | tar -x -C pacote/sistema
+          cp docs/copia-fora-do-github.md pacote/LEIA-ME.md
+          printf 'Pacote: copia-mensal-%s\nCópia do banco: %s\nCódigo: commit %s\nMontado em: %s (Brasília)\n' \
+            "$MES" "$ORIGEM" "$GITHUB_SHA" "$(TZ=America/Sao_Paulo date '+%d/%m/%Y %H:%M')" > pacote/SOBRE.txt
+          DOCS=$(jq '[.colecoes[].documentos] | add' pacote/copia/manifesto.json)
+          echo "DOCS=$DOCS" >> "$GITHUB_ENV"
+          du -sh pacote/copia pacote/sistema
+
+      - name: Guardar o pacote (90 dias)
+        id: guardar
+        uses: actions/upload-artifact@v4
+        with:
+          name: copia-mensal-${{ env.MES }}
+          path: pacote/
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Avisar o Eduardo
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINK: ${{ steps.guardar.outputs.artifact-url }}
+        run: |
+          ABERTOS=$(gh issue list --state open --search "in:title \"Guardar a cópia mensal\"" --json number --jq 'map("#\(.number)") | join(", ")')
+          {
+            echo "Chegou a cópia do mês **$MES** para guardar fora do GitHub ($DOCS documentos do banco + o código do sistema)."
+            echo
+            echo "1. **Baixe o pacote:** [copia-mensal-$MES.zip]($LINK) (precisa estar entrando no GitHub; o link vale 90 dias)."
+            echo "2. **Não abra nem mexa** no arquivo: guarde o .zip do jeito que veio."
+            echo "3. **Guarde no Drive da empresa**, na pasta restrita \`Dikma Gestão - Cópias de segurança\` (só você e quem você confiar). Tem dados pessoais dos colaboradores."
+            echo "4. **Apague do Drive** os pacotes com mais de 12 meses (fica um por mês)."
+            echo "5. **Feche este aviso** (botão *Close issue* aqui embaixo). É assim que fica registrado que a cópia está guardada."
+            echo
+            echo "Como restaurar sem o GitHub: arquivo \`LEIA-ME.md\` dentro do pacote (ou [docs/copia-fora-do-github.md](https://github.com/$GITHUB_REPOSITORY/blob/main/docs/copia-fora-do-github.md))."
+            if [ -n "$ABERTOS" ]; then echo; echo "⚠️ Ainda abertos de meses anteriores: $ABERTOS. Se já guardou, pode fechar."; fi
+          } > aviso.md
+          gh issue create --title "Guardar a cópia mensal $MES fora do GitHub" --body-file aviso.md --assignee "$GITHUB_REPOSITORY_OWNER"
+          cat aviso.md >> "$GITHUB_STEP_SUMMARY"
