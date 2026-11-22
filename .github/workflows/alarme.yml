@@ -1,0 +1,43 @@
+name: Alarme do backup e da cota
+
+# Todo dia às 7h30 e às 18h (Brasília). Não lê o banco (não gasta cota).
+# Falha (e o GitHub manda e-mail) se:
+#   - a cópia de segurança não deu certo nas últimas 26 horas, ou saiu bem menor que o costume;
+#   - leituras, gravações ou exclusões do Firestore passaram de 70% da cota grátis (hoje ou ontem).
+# O uso da cota vem do painel do Google (Cloud Monitoring). Se a conta de serviço não tiver permissão
+# de ler, fica um aviso no resumo e só a parte da cópia vale.
+# Manual (Run workflow): marque "teste" para a rotina falhar de propósito e conferir que o e-mail chega.
+on:
+  schedule:
+    - cron: '30 10 * * *'
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      teste:
+        description: 'Falhar de propósito para testar o e-mail'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  alarme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Conferir cópia e cota
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          ALARME_TESTE: ${{ inputs.teste && '1' || '0' }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/alarme.mjs
