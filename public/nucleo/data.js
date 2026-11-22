@@ -308,6 +308,8 @@ function startData() {
   // Desligamentos (data de demissão das fichas), refeitos todo dia pela rotina do GitHub: DS automático para quem não lê as fichas.
   on(doc(db, 'adm', 'desligados'), s => { cache.desligados = (s.exists() && s.data().itens) || []; changed(); });
   if (ehAdminU(me)) on(doc(db, 'sistema', 'uso'), s => { cache.uso = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
+  // Saúde do sistema: resumo gravado pelo Alarme do backup (GitHub, 7h30 e 18h).
+  if (ehAdminU(me)) on(doc(db, 'sistema', 'saude'), s => { cache.saude = s.exists() ? s.data({ serverTimestamps: 'estimate' }) : null; changed(); });
   // RH (Frequência e férias): férias, cadastro do RH e pessoas das Atividades; as folhas chegam por admWatch.
   if (temFreq(me) || conjsInd(me).length) grupo('adm', () => startAdm(on));
   // Administração: férias completas e a folha da competência (Conferência) chegam ao abrir o módulo (iniciarAdministracao).

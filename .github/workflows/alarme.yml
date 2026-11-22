@@ -6,6 +6,7 @@ name: Alarme do backup e da cota
 #   - leituras, gravações ou exclusões do Firestore passaram de 70% da cota grátis (hoje ou ontem).
 # O uso da cota vem do painel do Google (Cloud Monitoring), que no plano grátis (Spark) exige faturamento ativo:
 # por isso hoje só a parte da cópia vale (a da cota passa a valer sozinha no plano Blaze).
+# No fim grava o resumo em sistema/saude (1 gravação), mostrado em Administração › Visão geral › Saúde do sistema.
 # Manual (Run workflow): marque "teste" para a rotina falhar de propósito e conferir que o e-mail chega.
 on:
   schedule:
@@ -21,6 +22,7 @@ on:
 permissions:
   contents: read
   actions: read
+  issues: read   # avisos abertos da cópia mensal (tela Saúde do sistema)
 
 jobs:
   alarme:

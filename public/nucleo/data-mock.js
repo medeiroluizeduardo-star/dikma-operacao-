@@ -572,6 +572,10 @@ export async function eImportar() { /* a demonstração já começa com a planil
 const LSA = 'coqueria-demo-adm-v1';
 cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
 cache.feriasAtivas = []; cache.desligados = []; cache.uso = null;
+// Saúde do sistema (exemplo): cópia de hoje, ensaio do dia 1º e uma cópia do mês esperando ser guardada no Drive.
+{ const ha = h => new Date(Date.now() - h * 36e5).toISOString();
+  cache.saude = { em: new Date(Date.now() - 2 * 36e5), problemas: [], avisos: [], backup: { ultima: ha(9), nome: 'copia-diaria-demonstracao', bytes: 3.2 * 1048576, problemas: [] },
+    ensaio: { ultima: ha(24 * 21), ok: true, id: 1 }, mensal: { ultima: ha(24 * 21), ok: true, id: 2, pendentes: 1 }, cota: { lida: false, dias: [], motivo: 'plano grátis' } }; }
 let admPronto = false;
 const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
 const jusProxy = k => new Proxy({}, { get: (_, m) => ((S[k].sitExtra || {})[m] || {}).jus || {} });

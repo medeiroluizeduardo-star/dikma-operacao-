@@ -58,3 +58,10 @@ export function inicioDiaCota(agora = new Date()) {
   const q = Object.fromEntries(fmt.formatToParts(new Date(meiaNoite)).map(x => [x.type, x.value]));
   return new Date(meiaNoite - (+q.hour ? (+q.hour > 12 ? (+q.hour - 24) : +q.hour) * 36e5 : 0));
 }
+
+// Última execução terminada de uma rotina do GitHub (lista mais nova primeiro): { ultima: ISO, ok, id } ou null.
+// Execuções puladas ou canceladas não contam (não dizem se a rotina funciona).
+export function ultimaRotina(execucoes = []) {
+  const e = execucoes.find(x => x.status === 'completed' && !['skipped', 'cancelled'].includes(x.conclusion));
+  return e ? { ultima: e.created_at, ok: e.conclusion === 'success', id: e.id } : null;
+}
