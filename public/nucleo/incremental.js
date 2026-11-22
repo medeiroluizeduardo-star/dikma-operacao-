@@ -17,21 +17,28 @@ const guardaPadrao = {
 
 // fb: { onSnapshot, collection, query, where } do Firebase · chave: onde guardar quando foi a última leitura completa.
 // fn(lista, pronta): pronta = já tem a resposta do servidor ou uma cópia do aparelho para mostrar.
+// col: o nome da coleção, ou { col, filtro: [campo, '==', valor], marcas } para ler só uma parte (ex.: um mês dos
+// lançamentos de equipamento). marcas: campos com a hora do servidor usados para achar a cópia mais nova (padrão
+// atualizadoEm); o que mudou depois é pedido à coleção inteira só por atualizadoEm (índice simples, sem índice novo):
+// vem pouca coisa e o que for de outro mês fica guardado no aparelho para quando a tela pedir.
 // Devolve a função que desliga as escutas.
 export function ouvirIncremental(fb, db, col, chave, fn, onErr = () => {}, guarda = guardaPadrao) {
-  const ref = fb.collection(db, col);
+  const o = typeof col === 'string' ? { col } : col;
+  const marcas = o.marcas || ['atualizadoEm'];
+  const ref = fb.collection(db, o.col);
+  const base = o.filtro ? fb.query(ref, fb.where(...o.filtro)) : ref;
   const recente = Date.now() - guarda.ler(chave) < INC_DIAS * 864e5;
   let servidor = false, temCopia = false, srv = null, vivo = true, primeira = true, ult = [];
-  const local = fb.onSnapshot(ref, { source: 'cache' }, qs => {
+  const local = fb.onSnapshot(base, { source: 'cache' }, qs => {
     if (!vivo) return;
     if (primeira) {
       primeira = false;
       let desde = null;
-      if (recente) for (const d of qs.docs) { const t = d.get('atualizadoEm'); if (ms(t) > ms(desde)) desde = t; }
+      if (recente) for (const d of qs.docs) for (const m of marcas) { const t = d.get(m); if (ms(t) > ms(desde)) desde = t; }
       temCopia = !!desde;
       // includeMetadataChanges: sem ele, quando o servidor só confirma o que o aparelho já tem (nada mudou), o Firebase
       // não avisa (só muda o fromCache), e a tela ficava carregando para sempre (aparelho com cópia mas sem a marca).
-      srv = fb.onSnapshot(desde ? fb.query(ref, fb.where('atualizadoEm', '>', desde)) : ref, { includeMetadataChanges: true }, s => {
+      srv = fb.onSnapshot(desde ? fb.query(ref, fb.where('atualizadoEm', '>', desde)) : base, { includeMetadataChanges: true }, s => {
         if (s.metadata.fromCache || servidor || !vivo) return;
         servidor = true; if (!desde) guarda.gravar(chave, Date.now()); fn(ult, true);
       }, e => { servidor = true; if (vivo) fn(ult, true); onErr(e); });

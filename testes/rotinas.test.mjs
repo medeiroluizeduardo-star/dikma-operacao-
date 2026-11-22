@@ -345,3 +345,23 @@ test('trocar função: simular só conta; gravar faz a cópia e troca fichas, At
   assert.ok(fs.readdirSync(path.join(tmp, 'copia-funcao')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
   assert.match(rodar('trocar-funcao.mjs', env), /0 pessoa\(s\) mudariam/, 'rodar de novo não muda ninguém');
 });
+
+test('apagar documentos antigos: simular só conta e guarda a cópia; apagar tira a coleção e mais nada', async () => {
+  await limpar();
+  await db.doc('documentos/d1').set({ tipo: 'POP', titulo: 'x', em: Timestamp.fromMillis(1000) });
+  await db.doc('documentos/d2').set({ tipo: 'OM' });
+  await db.doc('documentos/d2/sub/s1').set({ a: 1 });
+  await db.doc('oms/o1').set({ status: 'planejada' });
+  const pasta = path.join(tmp, 'copia-docs');
+  const s1 = rodar('apagar-documentos.mjs', { DOCS_MODO: 'simular', BACKUP_PASTA: pasta });
+  assert.match(s1, /2 registro/);
+  assert.equal((await db.collection('documentos').get()).size, 2, 'simular não apaga');
+  const copia = JSON.parse(fs.readFileSync(path.join(pasta, 'documentos.json'), 'utf8'));
+  assert.deepEqual(Object.keys(copia).sort(), ['d1', 'd2']);
+  assert.equal(copia.d1.em.__tipo, 'data', 'cópia com os tipos do Firestore');
+  const s2 = rodar('apagar-documentos.mjs', { DOCS_MODO: 'apagar', BACKUP_PASTA: pasta + '2' });
+  assert.match(s2, /Apagados/);
+  assert.equal((await db.collection('documentos').get()).size, 0);
+  assert.equal((await db.doc('documentos/d2/sub/s1').get()).exists, false, 'subcoleção também');
+  assert.equal((await db.doc('oms/o1').get()).exists, true, 'o resto do banco fica');
+});

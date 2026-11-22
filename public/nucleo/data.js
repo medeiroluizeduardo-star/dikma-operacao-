@@ -281,8 +281,11 @@ export async function alterarSenha(atual, nova) {
   await updatePassword(u, nova);
 }
 
-// Coleções grandes que quase não mudam (Treinamentos e Férias): só o que mudou vem do servidor (nucleo/incremental.js).
-const ouvirIncremental = (col, fn, onErr) => ouvirInc({ onSnapshot, collection, query, where }, db, col, `dikma-inc|${cfg && cfg.projectId}|${me && me.uid}|${col}`, fn, onErr);
+// Coleções grandes que quase não mudam (Treinamentos, Férias e lançamentos de equipamento): só o que mudou vem do servidor (nucleo/incremental.js).
+const ouvirIncremental = (col, fn, onErr, parte = '') => ouvirInc({ onSnapshot, collection, query, where }, db, col, `dikma-inc|${cfg && cfg.projectId}|${me && me.uid}|${col.col || col}${parte && '|' + parte}`, fn, onErr);
+// Lançamentos de equipamento de um mês (são os mais numerosos da Operação): cópia do aparelho + só o que mudou.
+// em (hora do lançamento) também serve de marca, porque os lançamentos antigos não têm atualizadoEm.
+const ouvirLancMes = (m, fn, onErr) => ouvirIncremental({ col: 'eqlanc', filtro: ['mes', '==', m], marcas: ['atualizadoEm', 'em'] }, fn, onErr, m);
 // Marca como apagado (os outros aparelhos ficam sabendo pelo atualizadoEm).
 const marcaApagado = () => ({ apagado: true, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
 
@@ -1207,7 +1210,8 @@ export function eWatch(meses) {
     const sub = (col, key, f) => onSnapshot(query(collection(db, col), where('mes', '==', m)), qs => {
       cache.e[key] = cache.e[key].filter(x => x.mes !== m).concat(qs.docs.map(d => ({ id: d.id, ...d.data() }))); st[f] = true; done();
     }, err);
-    eMonthSubs.set(m, [sub('eqlanc', 'lanc', 'l'), sub('eqpar', 'par', 'p'), sub('eqinsp', 'insp', 'i'),
+    const lanc = ouvirLancMes(m, (l, ok) => { cache.e.lanc = cache.e.lanc.filter(x => x.mes !== m).concat(l); if (ok) st.l = true; done(); }, err);
+    eMonthSubs.set(m, [lanc, sub('eqpar', 'par', 'p'), sub('eqinsp', 'insp', 'i'),
       onSnapshot(doc(db, 'eqaval', m), s => { cache.e.aval[m] = (s.exists() && s.data().itens) || {}; st.a = true; done(); }, err)]);
   }
 }
@@ -1221,8 +1225,8 @@ const heOpSubs = new Set();
 export function heOpWatch(ym) {
   if (!db || !me || !ym || heOpSubs.has(ym)) return; heOpSubs.add(ym);
   cache.heOp = cache.heOp || {};
-  dataSubs.push(onSnapshot(query(collection(db, 'eqlanc'), where('mes', '==', ym)), qs => {
-    cache.heOp[ym] = qs.docs.map(d => d.data()).filter(l => ['HORA EXTRA', 'HE NOTURNA'].includes(l.status) && l.op && l.data)
+  dataSubs.push(ouvirLancMes(ym, lista => {
+    cache.heOp[ym] = lista.filter(l => ['HORA EXTRA', 'HE NOTURNA'].includes(l.status) && l.op && l.data)
       .map(l => ({ data: l.data, op: l.op, eq: l.eq || '', status: l.status, he: +l.he || 0, ini: l.ini || '', fim: l.fim || '' }));
     cache.heOpV = (cache.heOpV || 0) + 1; changed();
   }, () => { cache.heOp[ym] = []; })); // sem permissão: nada da Operação
@@ -1241,14 +1245,20 @@ export function eqFreqWatch(ym) {
     dataSubs.push(onSnapshot(doc(db, C('situacao', k), ym), s => { cache.eqFreq.sit[k][ym] = (s.exists() && s.data().v) || {}; ch(); }, err));
   }
 }
-export function eAdd(tipo, o) { const r = doc(collection(db, EQCOL[tipo])); track(setDoc(r, { ...o, mes: o.data.slice(0, 7), por: me.uid, em: serverTimestamp() })); return r.id; }
-export function eUpd(tipo, id, patch) { const p = { ...patch }; if (p.data) p.mes = p.data.slice(0, 7); return track(updateDoc(doc(db, EQCOL[tipo], id), p)); }
-export function eDel(tipo, id) { const b = writeBatch(db); b.delete(doc(db, EQCOL[tipo], id)); return track(b.commit()); }
+// Lançamentos levam atualizadoEm (os aparelhos só recebem o que mudou) e excluir vira "apagado: true", para os outros
+// aparelhos saberem; a rotina dos avisos apaga de vez depois de 45 dias.
+const marcaLanc = tipo => (tipo === 'lanc' ? { atualizadoEm: serverTimestamp() } : {});
+export function eAdd(tipo, o) { const r = doc(collection(db, EQCOL[tipo])); track(setDoc(r, { ...o, mes: o.data.slice(0, 7), por: me.uid, em: serverTimestamp(), ...marcaLanc(tipo) })); return r.id; }
+export function eUpd(tipo, id, patch) { const p = { ...patch, ...marcaLanc(tipo) }; if (p.data) p.mes = p.data.slice(0, 7); return track(updateDoc(doc(db, EQCOL[tipo], id), p)); }
+export function eDel(tipo, id) {
+  if (tipo === 'lanc') return track(updateDoc(doc(db, 'eqlanc', id), { apagado: true, ...marcaLanc(tipo) }));
+  const b = writeBatch(db); b.delete(doc(db, EQCOL[tipo], id)); return track(b.commit());
+}
 export const eSalvarConfig = patch => track(setDoc(doc(db, 'eq', 'config'), patch, { merge: true }));
 export const eSalvarCad = patch => track(setDoc(doc(db, 'eq', 'cadastro'), patch, { merge: true }));
 export const eSalvarAval = (mes, op, vals) => track(setDoc(doc(db, 'eqaval', mes), { itens: { [op]: vals } }, { merge: true }));
 export async function eCarregarTudo() {
-  const ler = async c => (await getDocs(collection(db, c))).docs.map(d => ({ id: d.id, ...d.data() }));
+  const ler = async c => (await getDocs(collection(db, c))).docs.map(d => ({ id: d.id, ...d.data() })).filter(x => !x.apagado);
   const [lanc, par, insp] = await Promise.all([ler('eqlanc'), ler('eqpar'), ler('eqinsp')]);
   return { lanc, par, insp };
 }

@@ -91,7 +91,8 @@ for (const [k, u] of Object.entries(USUARIOS)) {
   if (!u.acesso) { const r = acessoDoLegado(u); USUARIOS[k] = { ...u, acesso: r.acesso, escopos: r.escopos }; }
 }
 // Lançamento, parada e inspeção de equipamento válidos, em nome de quem grava (por) com a hora do servidor (em).
-const LANC = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', tipo: 'CARREGADEIRA', op: 'OPERADOR TESTE', area: 'PÁTIO', setor: null, status: 'EM OPERAÇÃO', ini: '07:00', fim: null, he: 0, heOrigem: '', sub: '', obs: '', por, em: serverTimestamp() });
+const LANC = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', tipo: 'CARREGADEIRA', op: 'OPERADOR TESTE', area: 'PÁTIO', setor: null, status: 'EM OPERAÇÃO', ini: '07:00', fim: null, he: 0, heOrigem: '', sub: '', obs: '', por, em: serverTimestamp(), atualizadoEm: serverTimestamp() });
+const AT = { atualizadoEm: serverTimestamp() }; // toda alteração de lançamento leva a hora do servidor (leitura incremental)
 const PAR = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', op: 'OPERADOR TESTE', ini: '09:00', fim: null, causa: 'MECÂNICA', desc: 'VAZAMENTO', os: '123', por, em: serverTimestamp() });
 const INSP = por => ({ data: '2026-10-20', mes: '2026-10', eq: 'CB-01', op: 'OPERADOR TESTE', itens: { a1: 'C', s1: 'NC' }, p5s: 1, pseg: 0, inspetor: 'INSPETOR', obs: '', por, em: serverTimestamp() });
 const SEM = 'RECEBIMENTO|2026-10-05', SEM_PREP = 'PREPARAÇÃO|2026-10-05', SEM_CHEIA = 'RECEBIMENTO|2026-10-12', SEM_B1 = 'BATERIA 1|2026-10-05';
@@ -1084,27 +1085,35 @@ test('Equipamentos: lançamento, parada e inspeção de outra pessoa: o líder s
   await assertSucceeds(setDoc(doc(L1, 'eqpar', 'aut1'), PAR('eqOpLider')));
   await assertSucceeds(setDoc(doc(L1, 'eqinsp', 'aut1'), INSP('eqOpLider')));
   // o autor altera e apaga o que é dele
-  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'aut1'), { op: 'OUTRO OPERADOR', he: 2, heOrigem: 'DIKMA' }));
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'aut1'), { op: 'OUTRO OPERADOR', he: 2, heOrigem: 'DIKMA', ...AT }));
   // outro líder: status, fim e troca no lançamento; fim, substituição na parada
-  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { status: 'FALTA' }), 'outro líder muda o status');
-  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { fim: '14:00', trocaPara: 'CB-02' }), 'outro líder fecha a troca');
+  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { status: 'FALTA', ...AT }), 'outro líder muda o status');
+  await assertSucceeds(updateDoc(doc(L2, 'eqlanc', 'aut1'), { fim: '14:00', trocaPara: 'CB-02', ...AT }), 'outro líder fecha a troca');
   await assertSucceeds(updateDoc(doc(L2, 'eqpar', 'aut1'), { fim: '11:30' }), 'outro líder libera a parada');
   await assertSucceeds(updateDoc(doc(L2, 'eqpar', 'aut1'), { subst: 'CB-02', lancSub: 'x1' }), 'outro líder substitui');
-  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { op: 'TERCEIRO' }), 'outro líder não troca o operador');
-  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { he: 5 }), 'outro líder não lança hora extra no registro dos outros');
-  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { data: '2026-10-21', mes: '2026-10' }), 'nem a data');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { op: 'TERCEIRO', ...AT }), 'outro líder não troca o operador');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { he: 5, ...AT }), 'outro líder não lança hora extra no registro dos outros');
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { data: '2026-10-21', mes: '2026-10', ...AT }), 'nem a data');
   await assertFails(updateDoc(doc(L2, 'eqpar', 'aut1'), { causa: 'OUTRA' }), 'nem a causa da parada');
   await assertFails(updateDoc(doc(L2, 'eqinsp', 'aut1'), { obs: 'mudou' }), 'nem a inspeção');
   for (const c of ['eqlanc', 'eqpar', 'eqinsp']) await assertFails(deleteDoc(doc(L2, c, 'aut1')), `outro líder não apaga ${c}`);
   // ninguém muda o autor nem a hora do lançamento
-  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { por: 'eqOpLider2' }), 'o autor não passa o registro para outro');
-  await assertFails(updateDoc(doc(S, 'eqlanc', 'aut1'), { em: serverTimestamp() }), 'nem o supervisor muda a hora do lançamento');
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { por: 'eqOpLider2', ...AT }), 'o autor não passa o registro para outro');
+  await assertFails(updateDoc(doc(S, 'eqlanc', 'aut1'), { em: serverTimestamp(), ...AT }), 'nem o supervisor muda a hora do lançamento');
   // supervisor e administrador alteram e apagam de qualquer pessoa
-  await assertSucceeds(updateDoc(doc(S, 'eqlanc', 'aut1'), { op: 'CORRIGIDO', obs: 'acerto' }));
+  await assertSucceeds(updateDoc(doc(S, 'eqlanc', 'aut1'), { op: 'CORRIGIDO', obs: 'acerto', ...AT }));
   await assertSucceeds(updateDoc(doc(S, 'eqinsp', 'aut1'), { obs: 'acerto' }));
   await assertSucceeds(deleteDoc(doc(S, 'eqinsp', 'aut1')));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'eqpar', 'aut1')));
+  // excluir no sistema marca apagado (os outros aparelhos ficam sabendo): só quem pode apagar
+  await assertFails(updateDoc(doc(L2, 'eqlanc', 'aut1'), { apagado: true, ...AT }), 'outro líder não marca como apagado');
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { obs: 'sem marca' }), 'alteração sem a hora do servidor');
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { obs: 'hora do aparelho', atualizadoEm: Timestamp.now() }), 'com hora do aparelho');
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'aut1'), { apagado: 'sim', ...AT }), 'apagado só sim ou não');
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'aut1'), { apagado: true, ...AT }), 'o autor marca o dele como apagado');
   await assertSucceeds(deleteDoc(doc(L1, 'eqlanc', 'aut1')), 'o autor apaga o dele');
+  const { atualizadoEm: _a, ...semMarca } = LANC('eqOpLider');
+  await assertFails(setDoc(doc(L1, 'eqlanc', 'aut5'), semMarca), 'lançamento novo sem atualizadoEm');
   // criar só em nome próprio e com a hora do servidor
   await assertFails(setDoc(doc(L1, 'eqlanc', 'aut2'), LANC('eqOpLider2')), 'em nome de outra pessoa');
   await assertFails(setDoc(doc(L1, 'eqlanc', 'aut3'), { ...LANC('eqOpLider'), em: Timestamp.now() }), 'com hora do aparelho');
@@ -1128,11 +1137,11 @@ test('Equipamentos: formato e tamanho dos lançamentos, paradas e inspeções', 
   const lixo = { ...LANC('eqOpLider') }; for (let k = 0; k < 40; k++) lixo['c' + k] = k;
   await assertFails(setDoc(doc(L1, 'eqlanc', 'ruimMuitos'), lixo), 'campos demais');
   await assertSucceeds(setDoc(doc(L1, 'eqlanc', 'bom1'), LANC('eqOpLider')));
-  await assertFails(updateDoc(doc(L1, 'eqlanc', 'bom1'), { obs: 'x'.repeat(600) }), 'alteração também confere o tamanho');
-  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'bom1'), { fim: null, ini: '7:05' }));
+  await assertFails(updateDoc(doc(L1, 'eqlanc', 'bom1'), { obs: 'x'.repeat(600), ...AT }), 'alteração também confere o tamanho');
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'bom1'), { fim: null, ini: '7:05', ...AT }));
   // registro antigo (de antes dos limites) continua podendo ser alterado nos outros campos
   await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'eqlanc', 'antigo1'), { ...LANC('eqOpLider'), em: Timestamp.now(), obs: 'x'.repeat(900) }); });
-  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'antigo1'), { status: 'FALTA' }));
+  await assertSucceeds(updateDoc(doc(L1, 'eqlanc', 'antigo1'), { status: 'FALTA', ...AT }));
 });
 test('Presença, cadastro, folha, férias e treinamentos: só os campos e tamanhos esperados', async () => {
   const lider = db('liderRec'), adm = db('admAn'), sg = db('segReg');
@@ -1812,31 +1821,13 @@ test('OMs: processo do bloqueio (OM gerada com número, horas da sala e do eletr
   await assertSucceeds(setDoc0(ref('supPatio', 'b2'), { status: 'finalizada', hFim: '2026-11-17T12:00', hDesb: '2026-11-17T12:20', ...mk('supPatio') }, { merge: true }), 'o líder finaliza já com o desbloqueio');
 });
 
-test('Administração › Documentos e OMs (documentos/{id}): administrador, Gestor e Coordenador da Gestão', async () => {
-  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
-  const ref = (u, id = 'dc1') => doc(db(u), 'documentos', id);
-  const ok = (u, x = {}) => ({ tipo: 'POP', numero: 'POP-012', titulo: 'Correias', conj: 'patio', resp: 'Supervisão', emissao: '2026-01-01', validade: '2026-12-01', situacao: 'Vigente', link: '', obs: '', criadoEm: '2026-11-17T10:00:00Z', criadoPor: u, criadoNome: 'X', ...mk(u), ...x });
-  await assertSucceeds(setDoc0(ref('admin'), ok('admin')), 'administrador cadastra');
-  await assertSucceeds(setDoc0(ref('geGestorSo', 'dc2'), ok('geGestorSo', { tipo: 'OM', validade: '' })), 'Gestor da Gestão cadastra');
-  await assertSucceeds(setDoc0(ref('geCoord'), { situacao: 'Concluído', ...mk('geCoord') }, { merge: true }), 'Coordenador da Gestão altera');
-  await assertSucceeds(getDoc(ref('geCoord')), 'Coordenador lê');
-  for (const u of ['supPatio', 'opGestorSo', 'rhSo']) {
-    await assertFails(getDoc(ref(u)), `${u} não lê`);
-    await assertFails(setDoc0(ref(u, 'dc3'), ok(u)), `${u} não cadastra`);
+test('Coleção antiga documentos (tela saiu em 17/11/2026): ninguém lê nem grava pelo sistema', async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), 'documentos', 'velho1'), { tipo: 'POP', titulo: 'x' }); });
+  for (const u of ['admin', 'geGestorSo', 'geCoord']) {
+    await assertFails(getDoc(doc(db(u), 'documentos', 'velho1')), `${u} não lê`);
+    await assertFails(setDoc(doc(db(u), 'documentos', 'novo1'), { tipo: 'POP' }), `${u} não grava`);
+    await assertFails(deleteDoc(doc(db(u), 'documentos', 'velho1')), `${u} não apaga (só a rotina Apagar documentos antigos)`);
   }
-  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { tipo: 'Carta' })), 'tipo fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { situacao: 'Talvez' })), 'situação fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { validade: '01/12/2026' })), 'data fora do formato');
-  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { outra: 1 })), 'campo fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc4'), ok('admin', { obs: 'a'.repeat(501) })), 'observação longa demais');
-  await assertSucceeds(setDoc0(ref('admin', 'dc5'), ok('admin', { tipo: 'OM', rev: '', area: 'BATERIA 2', local: 'Correia TC-03', emitente: 'Operação', prio: 'alta', period: null, aviso: 60 })), 'OM com os campos novos');
-  await assertSucceeds(setDoc0(ref('admin', 'dc6'), ok('admin', { tipo: 'ASO', colab: 'Pessoa', mat: '123', period: 12, aviso: 30 })), 'ASO com colaborador e periodicidade');
-  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { prio: 'urgentissima' })), 'prioridade fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { period: 7 })), 'periodicidade fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc7'), ok('admin', { aviso: 45 })), 'aviso fora da lista');
-  await assertFails(setDoc0(ref('admin', 'dc4'), { ...ok('admin'), atualizadoPor: 'geCoord' }), 'sem a própria marca');
-  await assertFails(deleteDoc(ref('supPatio')), 'supervisor não apaga');
-  await assertSucceeds(deleteDoc(ref('geGestorSo')), 'Gestor da Gestão apaga');
 });
 
 test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; só o Gestor dos Indicadores e o administrador gravam', async () => {
