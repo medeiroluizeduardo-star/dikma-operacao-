@@ -181,6 +181,44 @@ test('cópia de segurança: o Meu painel entra com as subcoleções e volta pela
   assert.equal((await db.doc('gocorr/a').get()).get('n'), 1);
 });
 
+test('ensaio de restauração: cópia inteira passa; cópia incompleta, velha ou sem o emulador falha', async () => {
+  await limpar();
+  const quando = Timestamp.fromDate(new Date('2026-10-02T10:30:00Z'));
+  await db.doc('usuarios/u1').set({ nome: 'Teste', acesso: { operacao: 'lider' } });
+  await db.doc('config/geral').set({ x: 1 });
+  await db.doc('gestao/colaboradores').set({ lista: [{ em: quando }], bin: Buffer.from([4, 5]) });
+  for (let i = 0; i < 305; i++) await db.doc(`gocorr/g${String(i).padStart(3, '0')}`).set({ n: i }); // 2 partes
+  await db.doc('painel/u1/tasks/t1').set({ titulo: 'Tarefa' });
+
+  const pasta = path.join(tmp, 'copia-ensaio');
+  rodar('backup.mjs', { BACKUP_TIPO: 'diaria', BACKUP_PASTA: pasta });
+  await db.doc('gocorr/a-mais').set({ n: -1 }); // o ensaio zera o emulador antes de restaurar
+  const s = rodar('ensaio-restauracao.mjs', { ENSAIO_PASTA: pasta });
+  assert.match(s, /voltou inteira/);
+  assert.match(s, /\| gocorr \| 305 \| 305 \| ok \|/);
+  assert.match(s, /\| painel \| 1 \| 1 \| ok \|/);
+  assert.ok(!(await db.doc('gocorr/a-mais').get()).exists);
+  assert.equal((await db.doc('painel/u1/tasks/t1').get()).get('titulo'), 'Tarefa');
+
+  // falta uma parte do pacote
+  const falha = path.join(tmp, 'copia-ensaio-falha');
+  fs.cpSync(pasta, falha, { recursive: true });
+  fs.rmSync(path.join(falha, 'gocorr.001.json.gz'));
+  assert.throws(() => rodar('ensaio-restauracao.mjs', { ENSAIO_PASTA: falha }), /gocorr: o manifesto diz 305 documento\(s\), o pacote tem 300/);
+
+  // cópia velha (a diária parou)
+  const velha = path.join(tmp, 'copia-ensaio-velha');
+  fs.cpSync(pasta, velha, { recursive: true });
+  const man = JSON.parse(fs.readFileSync(path.join(velha, 'manifesto.json'), 'utf8'));
+  man.inicio = new Date(Date.now() - 5 * 864e5).toISOString();
+  fs.writeFileSync(path.join(velha, 'manifesto.json'), JSON.stringify(man));
+  assert.throws(() => rodar('ensaio-restauracao.mjs', { ENSAIO_PASTA: velha }), /diária pode ter parado/);
+  assert.match(rodar('ensaio-restauracao.mjs', { ENSAIO_PASTA: velha, ENSAIO_IDADE_MAX_DIAS: '0' }), /voltou inteira/);
+
+  // nunca roda fora do emulador
+  assert.throws(() => rodar('ensaio-restauracao.mjs', { ENSAIO_PASTA: pasta, FIREBASE_SERVICE_ACCOUNT: '{}' }), /só roda no emulador/);
+});
+
 test('divisão do Efetivo por área: cada ficha vai para a área onde a pessoa está, e ocorrências e assinaturas acompanham', async () => {
   await limpar();
   await db.doc('config/sistema').set({ rotas: [] });

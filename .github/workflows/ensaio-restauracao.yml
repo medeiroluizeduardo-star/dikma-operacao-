@@ -1,0 +1,73 @@
+name: Ensaio de restauração da cópia
+
+# Todo dia 1º, às 6h (Brasília): pega a cópia de segurança mais recente, restaura tudo no EMULADOR do Firebase
+# (um banco de mentira que só existe dentro desta execução) e confere documento por documento.
+# O banco real não é tocado: esta rotina nem recebe a chave dele.
+# Se a cópia estiver incompleta, estragada ou velha (mais de 3 dias), a rotina falha e o GitHub manda e-mail.
+# Manual (Run workflow): dá para escolher o número de uma execução da cópia; em branco = a mais recente.
+on:
+  schedule:
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+    inputs:
+      execucao:
+        description: 'Opcional: número da execução da cópia (em branco = a mais recente que deu certo)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  ensaio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Achar a cópia
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ESCOLHIDA: ${{ inputs.execucao }}
+        run: |
+          ID="$ESCOLHIDA"
+          if [ -z "$ID" ]; then
+            ID=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/backup.yml/runs?status=success&per_page=1" --jq '.workflow_runs[0].id // empty')
+          fi
+          if [ -z "$ID" ]; then echo "::error::Nenhuma cópia de segurança que deu certo foi encontrada."; exit 1; fi
+          echo "Cópia da execução $ID"
+          echo "EXECUCAO=$ID" >> "$GITHUB_ENV"
+
+      - name: Baixar a cópia
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ env.EXECUCAO }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: copia
+          merge-multiple: true
+
+      - name: Instalar
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          # Só as ferramentas do Firebase (para o emulador), na versão dos testes, numa pasta à parte.
+          V=$(jq -r '.devDependencies["firebase-tools"]' testes/package.json)
+          npm install --no-audit --no-fund --prefix "$RUNNER_TEMP/fb" "firebase-tools@$V"
+
+      - name: Restaurar no emulador e conferir
+        env:
+          ENSAIO_PASTA: copia
+          # quem escolheu uma execução antiga de propósito não precisa do limite de idade
+          ENSAIO_IDADE_MAX_DIAS: ${{ inputs.execucao && '0' || '3' }}
+        run: |
+          "$RUNNER_TEMP/fb/node_modules/.bin/firebase" emulators:exec --only firestore --project demo-dikma --config firebase.json \
+            "node integracao/admin/ensaio-restauracao.mjs"
