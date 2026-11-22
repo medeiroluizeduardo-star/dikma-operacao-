@@ -265,7 +265,7 @@ export function criarAdministrativo(X) {
   function efAcaoRH(area, acao, mot = '', ok = '') {
     const conj = U.conj, dia = U.efD; const doc = DB.efDocs(conj)[`${dia}_${area}`] || null;
     if (!podeEf(acao, doc, quemEf())) { toast('Não é possível fazer isso neste dia.'); return; }
-    DB.efGravar(conj, dia, area, acao, mot);
+    DB.efGravar(conj, dia, area, acao, mot, (A().colabs[conj] || []).filter(c => c.area === area).map(c => c.id));
     DB.log(`Efetivo do dia: ${{ validado: 'validou', devolvido: 'devolveu', aberto: 'reabriu' }[acao]} ${AREA_S[area] || area} de ${ddmm(dia)} (${SETS[conj].curto})${mot ? ' · ' + mot : ''}`, 'rh');
     if (ok) toast(ok); render();
   }

@@ -185,9 +185,22 @@ service cloud.firestore {
     // Presença do mês (situacao e b_situacao): v = código do dia; cob, he, hed, jus, ck = cobertura, horas extras,
     // justificativas e conferência. Cada um é um mapa 'PESSOA|AAAA-MM-DD' → valor (até 40 mil por mês).
     function sitOk(ch) { let d = request.resource.data;
-      return soCampos(ch, ['v', 'cob', 'he', 'hed', 'jus', 'ck', 'mov', 'movK', 'atualizadoPor', 'atualizadoEm'])
+      return soCampos(ch, ['v', 'cob', 'he', 'hed', 'jus', 'ck', 'mov', 'movK', 'trv', 'sitK', 'atualizadoPor', 'atualizadoEm'])
         && fMapa(d, ch, 'v', 40000) && fMapa(d, ch, 'cob', 40000) && fMapa(d, ch, 'he', 40000) && fMapa(d, ch, 'hed', 40000)
-        && fMapa(d, ch, 'jus', 40000) && fMapa(d, ch, 'ck', 40000) && fMapa(d, ch, 'mov', 5000); }
+        && fMapa(d, ch, 'jus', 40000) && fMapa(d, ch, 'ck', 40000) && fMapa(d, ch, 'mov', 5000) && fMapa(d, ch, 'trv', 40000)
+        && (!('sitK' in ch) || (d.sitK is string && d.sitK.size() <= 200)); }
+    // Dia validado pelo RH travado no banco (trv; contas/efetivo-dia.js › travaEf). Ao validar, o RH grava em trv, junto
+    // com o Efetivo do dia, a chave 'PESSOA|DATA' de cada pessoa da área e 'ck|DATA|ÁREA' (check-in), com a área; ao
+    // reabrir, o administrador apaga essas chaves. Só o RH · Administrativo e o administrador mexem em trv e mudam um dia
+    // travado. Quem lança pela Operação muda uma chave por gravação, dita em sitK (como movK), e ela não pode estar em trv.
+    function sitAnt(f) { return resource == null ? {} : resource.data.get(f, {}); }
+    function sitSo(ch, d, f, k) { return !(f in ch) || (d.get(f, {}) is map && d.get(f, {}).diff(sitAnt(f)).affectedKeys().hasOnly([k])); }
+    function travaDe(k) { let p = k.split('[|]'); return p[0] == 'ck' && p.size() > 2 ? 'ck|' + p[1] + '|' + p[2] : k; }
+    function sitLivre(ch, d) { let k = d.get('sitK', '');
+      return !ch.hasAny(['v', 'cob', 'he', 'hed', 'jus', 'ck']) || (k is string && sitSo(ch, d, 'v', k) && sitSo(ch, d, 'cob', k)
+        && sitSo(ch, d, 'he', k) && sitSo(ch, d, 'hed', k) && sitSo(ch, d, 'jus', k) && sitSo(ch, d, 'ck', k)
+        && !(travaDe(k) in sitAnt('trv'))); }
+    function sitTrava(ch) { return (!('trv' in ch) && sitLivre(ch, request.resource.data)) || admin() || admEdita(); }
     // Mover de rota no dia (mov; contas/mover-rota.js). Cada gravação muda uma chave só, dita em movK ('PESSOA|DATA').
     // Pedir (pendente): na mesma área, quem lança a presença da área; para outra área, do supervisor para cima da
     // área de origem. Aprovar (ou já gravar aprovado) e recusar: na mesma área, supervisor, coordenador ou gestor
@@ -229,9 +242,9 @@ service cloud.firestore {
     // Presença do dia: a mesma para a Operação (Efetivo diário) e o Administrativo (Frequência).
     match /situacao/{mes} {
       allow read: if opI() || acAdm() || eqmI();   // Equipe e frota usa a mesma presença
-      allow create: if lancaSit('patio') && marcaOk() && sitOk(novos()) && movSit(novos(), 'patio');
-      allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'patio');
-      allow delete: if lancaSit('patio');
+      allow create: if lancaSit('patio') && marcaOk() && sitOk(novos()) && movSit(novos(), 'patio') && sitTrava(novos());
+      allow update: if lancaSit('patio') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'patio') && sitTrava(mudados());
+      allow delete: if admin() || admEdita();   // apagar o mês inteiro passaria por cima da trava
     }
 
     // Efetivo do dia (efetivoDia e b_efetivoDia/{AAAA-MM-DD}_{ÁREA}; contas/efetivo-dia.js): status do envio da presença
@@ -646,9 +659,9 @@ service cloud.firestore {
     }
     match /b_situacao/{mes} {
       allow read: if baI() || acAdm() || eqmI();
-      allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos()) && movSit(novos(), 'bateria');
-      allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'bateria');
-      allow delete: if lancaSit('bateria');
+      allow create: if lancaSit('bateria') && marcaOk() && sitOk(novos()) && movSit(novos(), 'bateria') && sitTrava(novos());
+      allow update: if lancaSit('bateria') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'bateria') && sitTrava(mudados());
+      allow delete: if admin() || admEdita();   // apagar o mês inteiro passaria por cima da trava
     }
     match /b_semanas/{id} {
       allow read: if baI();

@@ -1,7 +1,7 @@
 // Efetivo do dia (status do envio da presença por área e dia): contas/efetivo-dia.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { estadoEf, podeEf, travadoEf, novoEf, ultimaEf, quadroEf, aguardandoEf, idEf, EF_DESDE, EF_HIST_MAX } from '../public/contas/efetivo-dia.js';
+import { estadoEf, podeEf, travadoEf, novoEf, ultimaEf, quadroEf, aguardandoEf, idEf, EF_DESDE, EF_HIST_MAX, travaEf, destravaEf } from '../public/contas/efetivo-dia.js';
 
 const HOJE = '2026-11-20';
 const lider = { lanca: true }, rh = { valida: true }, adm = { lanca: true, valida: true, admin: true };
@@ -60,4 +60,12 @@ test('quadro do RH por área e lista do que aguarda validação', () => {
   assert.deepEqual(quadroEf(['RECEBIMENTO', 'PREPARAÇÃO'], docs, '2026-11-20', HOJE).map(x => [x.area, x.st]), [['RECEBIMENTO', 'enviado'], ['PREPARAÇÃO', 'pendente']]);
   assert.deepEqual(quadroEf(['RECEBIMENTO'], docs, '2026-11-21', HOJE), []);
   assert.deepEqual(aguardandoEf(docs).map(x => x.data), ['2026-11-18', '2026-11-20']);
+});
+
+test('trava no banco: validar trava cada pessoa da área no dia e o check-in; reabrir tira só as daquela área e dia', () => {
+  const t = travaEf(['C1', 'C2', ''], '2026-11-20', 'RECEBIMENTO');
+  assert.deepEqual(t, { 'C1|2026-11-20': 'RECEBIMENTO', 'C2|2026-11-20': 'RECEBIMENTO', 'ck|2026-11-20|RECEBIMENTO': 'RECEBIMENTO' });
+  const banco = { ...t, 'C3|2026-11-20': 'PREPARAÇÃO', 'C1|2026-11-21': 'RECEBIMENTO', 'C9|2026-11-20': 'RECEBIMENTO' };
+  assert.deepEqual(destravaEf(banco, ['C1'], '2026-11-20', 'RECEBIMENTO').sort(), ['C1|2026-11-20', 'C2|2026-11-20', 'C9|2026-11-20', 'ck|2026-11-20|RECEBIMENTO']);
+  assert.deepEqual(destravaEf(null, ['C1'], '2026-11-20', 'RECEBIMENTO').sort(), ['C1|2026-11-20', 'ck|2026-11-20|RECEBIMENTO'], 'sem ler o banco: as pessoas de agora');
 });

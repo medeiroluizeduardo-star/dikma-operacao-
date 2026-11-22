@@ -104,7 +104,11 @@ const db = uid => { if (!uid) return env.unauthenticatedContext().firestore(); c
 // quando" usa as originais (setDoc0, updateDoc0) para provar que sem a marca, ou com outra pessoa, o banco recusa.
 const COM_MARCA = /^((b_)?(semanas|situacao|colaboradores)|gcolab|gocorr)$/;
 const marcaDe = ref => { const uid = UID.get(ref.firestore); return uid && COM_MARCA.test(ref.parent.id) ? { atualizadoPor: uid, atualizadoEm: serverTimestamp() } : null; };
-const comMarca = (ref, data, criar) => { const m = marcaDe(ref); if (!m) return data; return { ...data, ...m, ...(criar && ref.parent.id === 'gocorr' && !('criadoEm' in data) ? { criadoEm: serverTimestamp() } : {}) }; };
+// Presença (situacao): o site diz em sitK a chave que mudou (nucleo/data.js › setSit); estas versões fazem o mesmo.
+const MAPAS_SIT = ['v', 'cob', 'he', 'hed', 'jus', 'ck'];
+const comSitK = (ref, data) => { if (!/^(b_)?situacao$/.test(ref.parent.id) || 'sitK' in data) return data;
+  const ks = MAPAS_SIT.flatMap(f => (data[f] && typeof data[f] === 'object' ? Object.keys(data[f]) : [])); return ks.length === 1 ? { ...data, sitK: ks[0] } : data; };
+const comMarca = (ref, data0, criar) => { const data = comSitK(ref, data0); const m = marcaDe(ref); if (!m) return data; return { ...data, ...m, ...(criar && ref.parent.id === 'gocorr' && !('criadoEm' in data) ? { criadoEm: serverTimestamp() } : {}) }; };
 const argsUpd = (ref, args) => { const m = marcaDe(ref); if (!m) return args; return typeof args[0] === 'string' || args[0] instanceof FieldPath ? [...args, 'atualizadoPor', m.atualizadoPor, 'atualizadoEm', m.atualizadoEm] : [{ ...args[0], ...m }]; };
 const setDoc = (ref, data, opt) => (opt ? setDoc0(ref, comMarca(ref, data, true), opt) : setDoc0(ref, comMarca(ref, data, true)));
 const updateDoc = (ref, ...args) => updateDoc0(ref, ...argsUpd(ref, args));
@@ -572,7 +576,7 @@ test('quem gravou e quando: semanas, presença, cadastro, fichas e ocorrências 
   await assertFails(updateDoc0(doc(d, 'semanas', SEM), M('sup', { 's.REC-009': 'N______' })), 'semana em nome de outra pessoa');
   await assertFails(updateDoc0(doc(d, 'semanas', SEM), M('liderRec', { 's.REC-009': 'N______', atualizadoEm: ontem })), 'semana com a hora do aparelho');
   // presença do dia
-  await assertSucceeds(setDoc0(doc(d, 'situacao', '2026-10'), M('liderRec', { v: { 'C001|2026-10-10': 'FT' } }), { merge: true }));
+  await assertSucceeds(setDoc0(doc(d, 'situacao', '2026-10'), M('liderRec', { v: { 'C001|2026-10-10': 'FT' }, sitK: 'C001|2026-10-10' }), { merge: true }));
   await assertFails(setDoc0(doc(d, 'situacao', '2026-10'), { v: { 'C001|2026-10-11': 'FT' } }, { merge: true }), 'presença sem a marca');
   await assertFails(setDoc0(doc(d, 'situacao', '2026-10'), M('admin', { v: { 'C001|2026-10-11': 'FT' } }), { merge: true }), 'presença em nome de outra pessoa');
   // cadastro das Atividades e fichas (administração)
@@ -1505,6 +1509,43 @@ test('Mover de rota no dia: o líder pede na área dele; o supervisor da área a
   await assertSucceeds(setDoc(doc(db('liderRec'), 'situacao', '2026-12'), { mov: { 'C1|2026-12-01': { ...ped('C1', R1, R2, 'liderRec'), dt: '2026-12-01' } }, movK: 'C1|2026-12-01' }, { merge: true }), 'mês novo');
   // Bateria: b_situacao com a mesma regra
   await assertSucceeds(setDoc(doc(db('supBat'), 'b_situacao', '2026-11'), { mov: { [k('B1')]: ped('B1', 'BATERIA 1|BT1', 'BATERIA 1|BT2', 'supBat', 'aprovado', { ok: 'supBat' }) }, movK: k('B1') }, { merge: true }), 'Bateria');
+});
+
+test('Dia validado travado no banco: com a chave em trv, a Operação não muda a pessoa naquele dia; o RH e o administrador mudam', async () => {
+  const D = '2026-11-25', M = '2026-11';
+  const ref = u => doc(db(u), 'situacao', M);
+  const ef = (uid, st) => ({ area: 'RECEBIMENTO', data: D, mes: M, st, por: uid, nome: uid, em: serverTimestamp(), mot: '', hist: [] });
+  await assertSucceeds(setDoc(ref('liderRec'), { v: { ['T1|' + D]: 'FT' } }, { merge: true }), 'antes de validar o líder lança');
+  await assertFails(setDoc(ref('liderRec'), { trv: { ['T1|' + D]: 'RECEBIMENTO' } }, { merge: true }), 'o líder não trava');
+  // o líder envia; o RH valida e trava no mesmo lote (como nucleo/data.js › efGravar)
+  await assertSucceeds(setDoc(doc(db('liderRec'), 'efetivoDia', `${D}_RECEBIMENTO`), ef('liderRec', 'enviado')));
+  const rh = db('rhSo'), b = writeBatch(rh);
+  b.set(doc(rh, 'efetivoDia', `${D}_RECEBIMENTO`), ef('rhSo', 'validado'));
+  b.set(doc(rh, 'situacao', M), { trv: { ['T1|' + D]: 'RECEBIMENTO', ['T2|' + D]: 'RECEBIMENTO', [`ck|${D}|RECEBIMENTO`]: 'RECEBIMENTO' } }, { merge: true });
+  await assertSucceeds(b.commit(), 'o RH valida e trava');
+  for (const f of ['v', 'cob', 'he', 'hed', 'jus']) await assertFails(setDoc(ref('liderRec'), { [f]: { ['T1|' + D]: 'X' } }, { merge: true }), 'travado: ' + f);
+  await assertFails(setDoc(ref('coord'), { v: { ['T2|' + D]: 'FT' } }, { merge: true }), 'travado: nem o coordenador');
+  await assertFails(setDoc(ref('liderRec'), { ck: { [`ck|${D}|RECEBIMENTO|D`]: 'x' } }, { merge: true }), 'travado: check-in da área');
+  await assertFails(setDoc(ref('liderRec'), { v: { ['T1|' + D]: 'AT', ['T9|' + D]: 'FT' }, sitK: 'T9|' + D }, { merge: true }), 'duas chaves, dizendo só a livre');
+  await assertFails(setDoc(ref('liderRec'), { v: { ['T1|' + D]: 'AT' }, sitK: 'T9|' + D }, { merge: true }), 'dizendo outra chave');
+  await assertFails(setDoc0(ref('liderRec'), { v: { ['T1|' + D]: 'AT' }, sitK: '', atualizadoPor: 'liderRec', atualizadoEm: serverTimestamp() }, { merge: true }), 'sem dizer a chave');
+  await assertFails(setDoc(ref('liderRec'), { trv: { ['T1|' + D]: deleteField() } }, { merge: true }), 'o líder não destrava');
+  await assertFails(deleteDoc(ref('liderRec')), 'o líder não apaga o mês');
+  await assertSucceeds(setDoc(ref('liderRec'), { v: { ['T3|' + D]: 'FT' } }, { merge: true }), 'pessoa fora da trava (entrou depois)');
+  await assertSucceeds(setDoc(ref('liderRec'), { v: { ['T1|2026-11-26']: 'FT' } }, { merge: true }), 'outro dia');
+  await assertSucceeds(setDoc(ref('liderRec'), { ck: { [`ck|${D}|PREPARAÇÃO|D`]: 'x' } }, { merge: true }), 'check-in de outra área');
+  await assertSucceeds(setDoc(ref('rhSo'), { v: { ['T1|' + D]: 'AT' } }, { merge: true }), 'o RH corrige o dia validado');
+  await assertSucceeds(setDoc(ref('admin'), { v: { ['T1|' + D]: 'FT' } }, { merge: true }), 'o administrador corrige');
+  // o administrador reabre: destrava e o líder volta a lançar
+  const ad = db('admin'), r = writeBatch(ad);
+  r.set(doc(ad, 'efetivoDia', `${D}_RECEBIMENTO`), ef('admin', 'aberto'));
+  r.set(doc(ad, 'situacao', M), { trv: { ['T1|' + D]: deleteField(), ['T2|' + D]: deleteField(), [`ck|${D}|RECEBIMENTO`]: deleteField() } }, { merge: true });
+  await assertSucceeds(r.commit(), 'o administrador reabre e destrava');
+  await assertSucceeds(setDoc(ref('liderRec'), { v: { ['T1|' + D]: 'P' } }, { merge: true }), 'reaberto: o líder lança');
+  // Bateria: a mesma regra
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc0(doc(ctx.firestore(), 'b_situacao', M), { trv: { ['B7|' + D]: 'BATERIA 1' } }, { merge: true }); });
+  await assertFails(setDoc(doc(db('supBat'), 'b_situacao', M), { v: { ['B7|' + D]: 'FT' } }, { merge: true }), 'Bateria travada');
+  await assertSucceeds(setDoc(doc(db('supBat'), 'b_situacao', M), { v: { ['B8|' + D]: 'FT' } }, { merge: true }), 'Bateria livre');
 });
 
 test('Indicadores: lê (só lê) os dados por trás dos painéis nos conjuntos do escopo; nada de outro conjunto', async () => {

@@ -488,7 +488,7 @@ function cardEf(area, dia) {
 function efAcao(a, acao, msg, ok) {
   const dia = diaEf(); const doc = DB.efDia(SK, dia, a);
   if (!podeEf(acao, doc, quemEf(a))) return toast('Não é possível fazer isso neste dia.');
-  DB.efGravar(SK, dia, a, acao); DB.log(`Efetivo do dia: ${msg} ${AREA_S[a] || a} de ${ddmm(dia)} (${SETS[SK].curto})`, 'operacao'); toast(ok); render();
+  DB.efGravar(SK, dia, a, acao, '', COLABS.filter(c => c.area === a).map(c => c.id)); DB.log(`Efetivo do dia: ${msg} ${AREA_S[a] || a} de ${ddmm(dia)} (${SETS[SK].curto})`, 'operacao'); toast(ok); render();
 }
 acoes.efEnviar = (t, d) => {
   const a = d.ef; const dia = diaEf(); const ct = contarDia(colabsDa(a), dia);

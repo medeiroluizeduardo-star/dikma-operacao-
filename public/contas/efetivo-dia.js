@@ -50,6 +50,19 @@ export function podeEf(acao, doc, quem = {}) {
 // O dia está travado para quem preenche a Presença: validado pelo RH.
 export const travadoEf = doc => !!doc && doc.st === 'validado';
 
+// Trava no banco (campo trv da presença do mês, situacao/b_situacao): ao validar, o RH grava a chave 'PESSOA|DATA' de
+// cada pessoa da área e 'ck|DATA|ÁREA' (check-in), com a área como valor. Com a chave em trv, as regras do banco não
+// deixam quem lança pela Operação mudar aquela pessoa naquele dia; só o RH · Administrativo e o administrador.
+export const travaEf = (ids, data, area) => {
+  const t = {}; for (const id of ids || []) if (id) t[`${id}|${data}`] = area;
+  t[`ck|${data}|${area}`] = area; return t;
+};
+// Ao reabrir: as chaves travadas daquela área e dia. trv = o que está no banco (null quando não deu para ler: usa as
+// pessoas de agora).
+export const destravaEf = (trv, ids, data, area) => (trv
+  ? Object.keys(trv).filter(k => trv[k] === area && k.split('|')[1] === data)
+  : Object.keys(travaEf(ids, data, area)));
+
 // Documento novo depois da ação (sem a hora do servidor, que a camada de dados acrescenta em "em").
 export function novoEf(doc, data, area, acao, quem, emISO, mot = '') {
   const m = acao === 'devolvido' ? String(mot || '').trim().slice(0, 300) : '';
