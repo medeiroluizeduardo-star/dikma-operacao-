@@ -2086,3 +2086,9 @@ button.ffase{cursor:pointer;min-height:22px}
   #view :is(.kpis>.kpi,.mini>div,.kpis5>div){padding:12px}
   #view :is(.kpis .kpi .v,.kpis .kpi.hero .v,.mini>div>b,.kpis5>div>b){font-size:28px}
 }
+/* Janela "Velocidade deste aparelho" (ui/velocidade.js) */
+.velo table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0}
+.velo th,.velo td{padding:6px 4px;border-bottom:1px solid var(--line-2);text-align:left;white-space:nowrap}
+.velo th{font-size:11px;color:var(--ink-3);font-weight:600}
+.velo .num{text-align:right;font-variant-numeric:tabular-nums}
+.velo .mut{color:var(--ink-3);font-size:12px;margin:6px 0;white-space:normal}
