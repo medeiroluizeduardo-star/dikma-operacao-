@@ -330,7 +330,7 @@ const EF = (() => { try { const x = JSON.parse(localStorage.getItem(LSEF) || 'nu
 })();
 export const efDia = (k, data, area) => EF[k][idEf(data, area)] || null;
 export const efDocs = k => EF[k];
-export async function efGravar(k, data, area, acao, mot = '') {
+export async function efGravar(k, data, area, acao, mot = '', ids = []) {   // ids: a trava no banco (data.js); o demo só guarda o status
   const id = idEf(data, area);
   EF[k][id] = { ...novoEf(EF[k][id], data, area, acao, { uid: me.uid, nome: me.nome || me.login || '' }, new Date().toISOString(), mot), em: new Date().toISOString() };
   try { localStorage.setItem(LSEF, JSON.stringify(EF)); } catch (e) { /* sem armazenamento */ }

@@ -9,7 +9,7 @@
 //   usuarios/{uid}            { nome, login, papel, area, trocarSenha }
 //   plano/{ÁREA}              { itens: [ {id, area, rota, local, ativ, tipo, dias:"1111100", ativo} ] }
 //   colaboradores/{ÁREA}      { itens: [ {id, area, rota, nome, funcao, regime} ] }
-//   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" } }
+//   situacao/{AAAA-MM}        { v: { "C001|2026-10-03": "F" }, sitK, trv: { "C001|2026-10-03": ÁREA } }  sitK = chave que mudou; trv = dia validado (travado)
 //   efetivoDia/{AAAA-MM-DD}_{ÁREA}  { area, data, mes, st, por, nome, em, mot, hist[] }  envio da presença ao RH (contas/efetivo-dia.js)
 //   semanas/{ÁREA|AAAA-MM-DD} { area, ini, mes, ids[], s: { "REC-001": "RRNPP__" }, m: { "REC-001|2": "motivo" },
 //                             dx: { "REC-001|3": "AAAA-MM-DD" },   dx = pendência dispensada na Limpeza de dados (a célula fica "_")
@@ -88,7 +88,7 @@ import { competenciaDe } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt } from '../contas/fotos.js';
-import { idEf, novoEf } from '../contas/efetivo-dia.js';
+import { idEf, novoEf, travaEf, destravaEf } from '../contas/efetivo-dia.js';
 
 export const isMock = false;
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
@@ -462,11 +462,18 @@ function efOuvir(k, mes) {
 export const efDia = (k, data, area) => EF[k][idEf(data, area)] || null;
 export const efDocs = k => EF[k];
 // Enviar, validar, devolver (com motivo) ou reabrir. Não espera o servidor: sem sinal, fica na fila do aparelho.
-export function efGravar(k, data, area, acao, mot = '') {
+export function efGravar(k, data, area, acao, mot = '', ids = []) {
   const id = idEf(data, area);
   const x = novoEf(EF[k][id], data, area, acao, { uid: me.uid, nome: me.nome || me.login || '' }, new Date().toISOString(), mot);
   EF[k][id] = { ...x, em: new Date() }; changed();
-  return track(setDoc(doc(db, C('efetivoDia', k), id), { ...x, em: serverTimestamp() }));
+  // Validar trava o dia no banco (trv na presença do mês) e reabrir destrava, na mesma gravação do status.
+  // ids = as pessoas da área (as chaves 'PESSOA|DATA'); ver travaEf em contas/efetivo-dia.js.
+  const ref = doc(db, C('efetivoDia', k), id), sref = doc(db, C('situacao', k), data.slice(0, 7));
+  const gravar = trv => { const b = writeBatch(db); b.set(ref, { ...x, em: serverTimestamp() }); if (trv && Object.keys(trv).length) b.set(sref, { trv, ...marca() }, { merge: true }); return b.commit(); };
+  if (acao === 'validado') return track(gravar(travaEf(ids, data, area)));
+  if (acao === 'aberto') return track(getDoc(sref).then(s => (s.exists() ? (s.data().trv || {}) : {}), () => null)
+    .then(t => gravar(Object.fromEntries(destravaEf(t, ids, data, area).map(c => [c, deleteField()])))));
+  return track(gravar(null));
 }
 // Extras do dia: cob = quem cobre a ausência (id do substituto) · he = hora extra a pedido de quem (DIKMA | ARCELOR)
 export const sitInfo = (key, k = cur) => { const m = key.split('|')[1].slice(0, 7); const x = ((S[k] || S[cur]).sitExtra || {})[m] || {}; return { cob: (x.cob || {})[key] || '', he: (x.he || {})[key] || '', hed: (x.hed || {})[key] || null, jus: (x.jus || {})[key] || null }; };
@@ -514,11 +521,11 @@ export function salvarAcao(id, dados, k = cur) {
 // k = conjunto (Pátio ou Bateria); sem k, o conjunto aberto. Usado para lançar a hora extra de quem cobre em outro conjunto.
 export function setSit(key, code, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao', k), m), { v: { [key]: code || deleteField() }, ...marca() }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { v: { [key]: code || deleteField() }, sitK: key, ...marca() }, { merge: true }));
 }
 export function setSitExtra(campo, key, val, k = cur) {
   const m = key.split('|')[1].slice(0, 7);
-  return track(setDoc(doc(db, C('situacao', k), m), { [campo]: { [key]: val || deleteField() }, ...marca() }, { merge: true }));
+  return track(setDoc(doc(db, C('situacao', k), m), { [campo]: { [key]: val || deleteField() }, sitK: key, ...marca() }, { merge: true }));
 }
 export const savePlano = (area, itens) => track(setDoc(doc(db, C('plano'), area), { itens }));
 // k = conjunto (patio | bateria); o cadastro do Efetivo grava nos dois, seja qual for o módulo aberto.
@@ -924,12 +931,12 @@ export function admWatch(conj, comp) {
 }
 // Grava o código de uma pessoa num dia. Quem está nas Atividades grava na presença do dia (situacao) — a mesma do Efetivo diário.
 export function admSetCodigo(conj, comp, p, data, cod) {
-  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() }, ...marca() }, { merge: true }));
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { v: { [p.ativ + '|' + data]: cod || deleteField() }, sitK: p.ativ + '|' + data, ...marca() }, { merge: true }));
   return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('d', p.k, data), cod || deleteField(), 'atualizadoEm', serverTimestamp()));
 }
 // Justificativa na Frequência: quem está nas Atividades grava junto da presença (situacao); os demais, na folha.
 export function admSetJus(conj, comp, p, data, val) {
-  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { jus: { [p.ativ + '|' + data]: val || deleteField() }, ...marca() }, { merge: true }));
+  if (p.ativ) return track(setDoc(doc(db, C('situacao', conj), data.slice(0, 7)), { jus: { [p.ativ + '|' + data]: val || deleteField() }, sitK: p.ativ + '|' + data, ...marca() }, { merge: true }));
   return track(updateDoc(doc(db, 'freqcomp', conj + '|' + comp), new FieldPath('jus', p.k, data), val || deleteField(), 'atualizadoEm', serverTimestamp()));
 }
 export const admSalvarComp = (conj, comp, dados) => track(setDoc(doc(db, 'freqcomp', conj + '|' + comp), { ...dados, conj, competencia: comp, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true }));
