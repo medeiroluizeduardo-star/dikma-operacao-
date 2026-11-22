@@ -39,7 +39,8 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('mess
 M.iniciarJanelas(); M.iniciarTopo();
 DB.start({
   onAuth: a => { definirAuth(a); if (ME && a.status === 'ready') { precarregarModulos(ME); enviarErros(); } if (ME && myArea()) UI.area = myArea(); render(); },
-  onData: () => { VEL.marcarDados(); mudouDados(); if (AUTH.status === 'ready') schedule(); },
+  modulo: () => UI.modulo, // o que ligar primeiro ao abrir (data.js › PRIO)
+  onData: () => { VEL.marcarDados(); mudouDados(); if (AUTH.status === 'ready') schedule(true); },
   onSync: () => { const e = $('sync'); if (e && AUTH.status === 'ready') e.innerHTML = syncPill(); },
   onError: err => { console.error(err); toast(err.code === 'permission-denied' ? 'Sem permissão para essa alteração' : 'Erro: ' + (err.message || err)); }
 });
