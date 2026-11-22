@@ -4,8 +4,8 @@ name: Alarme do backup e da cota
 # Falha (e o GitHub manda e-mail) se:
 #   - a cópia de segurança não deu certo nas últimas 26 horas, ou saiu bem menor que o costume;
 #   - leituras, gravações ou exclusões do Firestore passaram de 70% da cota grátis (hoje ou ontem).
-# O uso da cota vem do painel do Google (Cloud Monitoring). Se a conta de serviço não tiver permissão
-# de ler, fica um aviso no resumo e só a parte da cópia vale.
+# O uso da cota vem do painel do Google (Cloud Monitoring), que no plano grátis (Spark) exige faturamento ativo:
+# por isso hoje só a parte da cópia vale (a da cota passa a valer sozinha no plano Blaze).
 # Manual (Run workflow): marque "teste" para a rotina falhar de propósito e conferir que o e-mail chega.
 on:
   schedule:
