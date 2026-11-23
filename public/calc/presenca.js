@@ -4,7 +4,7 @@ import { SETS, SITS, AUSENTE, add, today } from '../contas/cal.js';
 import { situacaoDoDia, contagemDia, criarTurmaFicha, feriadosOperacao, AUS_COBRIVEL } from '../contas/situacao.js';
 import { efetivoRota, coberturasDoDia, subDeOutroConjunto } from '../contas/hoje.js';
 import { indiceFerias, indiceDesligados, areasDoCadastro } from '../contas/acessos.js';
-import { criarEscala, normRegime, letra, fatorRota, comoEra, anotarTroca } from '../contas/escala.js';
+import { criarEscala, normRegime, letra, fatorRota, comoEra, escalaDaFicha } from '../contas/escala.js';
 import { aprovadasDoDia, movsDoDia, pessoasDaRota, pessoasDaArea } from '../contas/mover-rota.js';
 import { DB, title } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, DATAV, isAdmin, podeItem, setsDe, perfil } from '../nucleo/estado.js';
@@ -32,14 +32,23 @@ export function desligadoDe(p) {
   if (!DEMi || DEMk[0] !== g || DEMk[1] !== rh || DEMk[2] !== res) { DEMi = indiceDesligados([...res, ...rh, ...g]); DEMk = [g, rh, res]; }
   return DEMi(p);
 }
-// Com a data, valem o regime e a turma daquele dia (a troca de escala só vale a partir da data dela).
-export const turmaDe = (c, dt) => { const x = dt ? comoEra(c, dt) : c; return letra(x.turma) || turmaFicha(x.nome); };
-export const regimeDe = (c, dt) => normRegime((dt ? comoEra(c, dt) : c).regime, escala().regimes);
-// Pessoa (Atividades) com a turma nova a partir de hoje: os dias anteriores guardam a turma antiga (escHist).
-export function comTurma(c, turma, desde = today()) {
-  const h = anotarTroca({ ...c, turma: turmaDe(c) }, { ...c, turma: letra(turma) || turmaFicha(c.nome) }, ['regime', 'turma'], desde);
-  const n = { ...c, turma }; if (h.length) n.escHist = h; else delete n.escHist; return n;
+// Ficha (RH › Colaboradores) da pessoa: pela matrícula; sem ela, pelo nome igual (sem acento).
+let FIi = null, FIk = [];
+const nomeK = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+export function fichaDe(c) {
+  const g = (DB.cache.g && DB.cache.g.colabs) || [], rh = (DB.cache.adm && DB.cache.adm.rh) || [];
+  if (!FIi || FIk[0] !== g || FIk[1] !== rh) {
+    const m = new Map(), n = new Map();
+    for (const f of [...g, ...rh]) { if (!f || !f.nome || (f.dem && f.dem <= today())) continue; if (f.mat) m.set(String(f.mat), f); n.set(nomeK(f.nome), f); }
+    FIi = { m, n }; FIk = [g, rh];
+  }
+  return (c && c.mat && FIi.m.get(String(c.mat))) || (c && FIi.n.get(nomeK(c.nome))) || null;
 }
+// Escala pela ficha no dia ({ regime, turma } ou null): a ficha manda na letra e na escala (escala.js › escalaDaFicha).
+export const escalaFicha = (c, dt) => escalaDaFicha(fichaDe(c), dt || today(), escala().regimes);
+// Com a data, valem o regime e a turma daquele dia (a troca de escala só vale a partir da data dela).
+export const turmaDe = (c, dt) => { const pf = escalaFicha(c, dt); if (pf) return pf.turma; const x = dt ? comoEra(c, dt) : c; return letra(x.turma) || turmaFicha(x.nome); };
+export const regimeDe = (c, dt) => { const pf = escalaFicha(c, dt); if (pf) return normRegime(pf.regime, escala().regimes); return normRegime((dt ? comoEra(c, dt) : c).regime, escala().regimes); };
 export const regimeNome = (c, dt) => { const r = escala().regimes[regimeDe(c, dt)]; return r ? r.nome : title((dt ? comoEra(c, dt) : c).regime || ''); };
 // { v: código, auto: veio da escala, motivo, semTurma }
 // Férias marcadas em Frequência e férias entram sozinhas como FE (o lançamento do dia ainda vale mais).
@@ -58,12 +67,13 @@ function previstoDe(c, dt) {
 let SDM = new Map(), SDv = -1;
 export function sitDia(c, dt) {
   if (SDv !== DATAV) { SDM = new Map(); SDv = DATAV; }
-  const ch = c.id + '|' + dt + '|' + (c.regime || '') + '|' + (c.turma || '') + '|' + (c.nome || '') + '|' + ((c.escHist || []).length);
+  const f = fichaDe(c); const ch = c.id + '|' + dt + '|' + (c.regime || '') + '|' + (c.turma || '') + '|' + (c.nome || '') + '|' + ((c.escHist || []).length) + '|' + ((f && f.turma) || '') + '|' + ((f && f.escHist && f.escHist.length) || 0);
   let r = SDM.get(ch); if (r) return r;
   r = Object.freeze(sitDiaCalc(c, dt)); SDM.set(ch, r); return r;
 }
 // Fontes da conta do dia (situacao.js): o lançado (get), demissão da ficha, férias, escala e turma pela ficha.
-export const fontesSit = get => ({ lancado: (c, dt) => get(c.id + '|' + dt), desligadoEm: desligadoDe, ferias: feriasDe, escala: escala(), turmaFicha });
+// turnoDesde: quem é de turno segue a escala da turma nos dias futuros (F/P gravados adiantado não valem).
+export const fontesSit = get => ({ lancado: (c, dt) => get(c.id + '|' + dt), desligadoEm: desligadoDe, ferias: feriasDe, escala: escala(), turmaFicha, escalaFicha, turnoDesde: today() });
 // Formato usado pelas telas: auto = folga pela escala (vira hora extra se trabalhar); férias e desligamento da ficha
 // não são "auto" (são ausências), mas vêm marcados (ferias, desligado) para a tela dizer de onde vieram.
 export const sitTela = s => (s.por === 'escala' ? { v: 'F', auto: true, motivo: s.motivo, por: s.por, periodo: '' }

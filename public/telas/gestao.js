@@ -4,7 +4,7 @@
 import { pd, add, pad, today, MESES_L, SETS, setDaArea, AREA_S, ehAreaGeral } from '../contas/cal.js';
 import { AREA_GERAL, AREA_OP, ehAreaAtiv, veTodasFichas, areasFichaDe } from '../contas/pessoas.js';
 import { criarImportador } from './importar.js';
-import { REGIMES_PADRAO, normRegime } from '../contas/escala.js';
+import { REGIMES_PADRAO, normRegime, anotarTroca } from '../contas/escala.js';
 import { campoBusca, definirValor, semAcento } from '../ui/busca.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { lideresDasFichas, trocarNasFichas, chaveLider, nomeLider } from '../contas/lideres.js';
@@ -383,6 +383,8 @@ export function criarGestao(X) {
       if (n.matArc) { const o = G().colabs.find(x => x.matArc && String(x.matArc) === n.matArc && String(x.mat) !== n.mat); if (o) throw new Error(`A matrícula Arcelor ${n.matArc} já é de ${title(o.nome)}.`); }
       if (n.dem && n.adm && n.dem < n.adm) throw new Error('A demissão não pode ser antes da admissão.');
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '', desde: ($('ncDesde') && $('ncDesde').value) || TODAY };
+      // a letra da turma/escala da ficha vale a partir da data da troca (os dias antes ficam como eram)
+      if (mat) { const h = anotarTroca(c, n, ['turma'], o.desde); if (h.length) n.escHist = h; else delete n.escHist; }
       if (ehAreaGeral(o.area)) o.rota = AREA_S[o.area].toUpperCase(); // área sem rota de atividades: a "rota" é o próprio nome (grupo na Escala do dia)
       if (ehAreaAtiv(o.area) && !o.rota) throw new Error('Escolha a rota.');
       if ((o.op || o.area === AREA_OP) && o.escala === '4x4' && !o.turma) throw new Error('Escolha a turma da escala 4x4.');

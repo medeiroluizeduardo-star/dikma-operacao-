@@ -2,7 +2,7 @@
 // Os dias anteriores continuam com a escala antiga. Não precisa do emulador: node --test testes/escala-troca.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { criarEscala, comoEra, anotarTroca } from '../public/contas/escala.js';
+import { criarEscala, comoEra, anotarTroca, escalaDaFicha, FICHA_ESCALA_DESDE } from '../public/contas/escala.js';
 import { situacaoDoDia } from '../public/contas/situacao.js';
 import { criarCalc } from '../public/contas/eqcalc.js';
 
@@ -74,4 +74,32 @@ test('Operação: escala do operador por dia (escalado e janela do lançamento)'
   assert.equal(C.escalaDe('OP', '2026-11-11'), '4x4');
   assert.equal(C.janela({ op: 'OP', data: '2026-11-05' }), 9);  // ADM 07–17 menos almoço
   assert.equal(C.janela({ op: 'OP', data: '2026-11-11' }), 11); // 4x4 07–19 menos intervalo
+});
+
+// ---------- a ficha manda na letra e na escala ----------
+test('escala pela ficha: lê "C", "TURMA C", "4X4 C", "ADM"; antes da folha atual não vale', () => {
+  const d = '2026-11-20';
+  assert.deepEqual(escalaDaFicha({ turma: 'C' }, d), { regime: '4x4', turma: 'C' });
+  assert.deepEqual(escalaDaFicha({ turma: 'Turma C' }, d), { regime: '4x4', turma: 'C' });
+  assert.deepEqual(escalaDaFicha({ turma: '3x3 J' }, d), { regime: '3x3', turma: 'J' });
+  assert.deepEqual(escalaDaFicha({ turma: 'ADM' }, d), { regime: 'ADM', turma: '' });
+  assert.equal(escalaDaFicha({ turma: '' }, d), null);
+  assert.equal(escalaDaFicha({ turma: 'Z' }, d), null);
+  assert.equal(escalaDaFicha({ turma: 'C' }, '2026-11-10'), null);
+  assert.ok(FICHA_ESCALA_DESDE <= d);
+  // troca na ficha com data: antes dela vale a letra antiga
+  const f = { turma: 'D', escHist: [{ ate: '2026-11-24', turma: 'C' }] };
+  assert.equal(escalaDaFicha(f, '2026-11-24').turma, 'C');
+  assert.equal(escalaDaFicha(f, '2026-11-25').turma, 'D');
+});
+test('situação do dia: a ficha (turno C) vale mais que as Atividades (administrativo)', () => {
+  const E = criarEscala({ regimes: { '4x4': { turmas: { C: '2026-11-16' } } } });
+  const c = { id: 'C9', nome: 'FULANO', regime: 'ADMINISTRATIVO', turma: '' };
+  const f = { escala: E, hoje: '2026-11-23', escalaFicha: () => ({ regime: '4x4', turma: 'C' }) };
+  // ciclo C: 16-19 trabalha, 20-23 folga, 24-27 trabalha (DDNN)
+  assert.equal(situacaoDoDia(c, '2026-11-26', f).por, 'padrao');
+  assert.equal(situacaoDoDia(c, '2026-11-26', f).periodo, 'N');
+  assert.equal(situacaoDoDia(c, '2026-11-21', f).por, 'escala');
+  // sem a ficha, administrativo: quinta 26/11 trabalha sem período
+  assert.equal(situacaoDoDia(c, '2026-11-26', { escala: E, hoje: '2026-11-23' }).periodo, '');
 });

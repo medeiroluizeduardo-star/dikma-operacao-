@@ -58,8 +58,8 @@ export function criarEscala(cfg = {}, eqTurmas = {}, feriadosEq = []) {
     const base = (r.turmas || {})[turma]; if (!base) return null;
     const n = (+r.trab || 0) + (+r.folga || 0); if (!n) return null;
     const i = ((dif(base, data) % n) + n) % n;
-    if (i >= r.trab) return { trab: false, motivo: `folga da turma ${turma}` };
-    return { trab: true, motivo: '', periodo: periodosDe(r)[i] || 'D', diaCiclo: i + 1 };
+    if (i >= r.trab) return { trab: false, motivo: `folga da turma ${turma}`, ciclo: true };
+    return { trab: true, motivo: '', periodo: periodosDe(r)[i] || 'D', diaCiclo: i + 1, ciclo: true };
   }
   // letras que trabalham no dia, por regime de ciclo
   const turmasDoDia = (regime, data) => Object.keys((R[regime] || {}).turmas || {}).filter(l => { const p = previsto(regime, l, data); return p && p.trab; });
@@ -92,4 +92,23 @@ export function anotarTroca(antes, depois, campos, desde) {
   const igual = (a, b) => campos.every(k => String(a[k] || '') === String(b[k] || ''));
   const junto = []; for (const x of novo) { const u = junto[junto.length - 1]; if (u && igual(u, x)) u.ate = x.ate; else junto.push({ ...x }); }
   return junto.slice(-HIST_MAX);
+}
+
+// ---- Escala pela ficha (RH › Colaboradores) ----
+// A ficha é a base da letra da turma e da escala: o campo "Turma / turno" (ex.: "C", "TURMA C", "4X4 C", "ADM").
+// Vale a partir de FICHA_ESCALA_DESDE (1º dia da folha 16/11 a 15/12/2026); antes disso fica o que já estava.
+// Troca feita na ficha guarda o que valia antes em escHist [{ ate, turma }] (comoEra), como nas Atividades.
+// Volta { regime, turma } ou null quando a ficha não diz (aí vale a Escala do dia, como antes).
+export const FICHA_ESCALA_DESDE = '2026-11-16';
+export function escalaDaFicha(ficha, data, regimes = REGIMES_PADRAO) {
+  if (!ficha || !data || data < FICHA_ESCALA_DESDE) return null;
+  const t = String(comoEra(ficha, data).turma || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (!t) return null;
+  if (/^ADM/.test(t) || /ADMINISTRATIVO|COMERCIAL/.test(t)) return { regime: 'ADM', turma: '' };
+  const m = t.match(/(\d+)\s*X\s*(\d+)/); const reg = m && regimes[`${m[1]}x${m[2]}`] ? `${m[1]}x${m[2]}` : '';
+  const l = letra(t) || ((t.replace(/\d+\s*X\s*\d+/g, ' ').match(/(?:^|[^A-Z])([A-Z])(?![A-Z])/) || [])[1] || '');
+  if (!l) return null;
+  const ks = reg ? [reg] : Object.keys(regimes).filter(k => regimes[k].tipo === 'ciclo');
+  const k = ks.find(x => Object.prototype.hasOwnProperty.call((regimes[x] || {}).turmas || {}, l));
+  return k ? { regime: k, turma: l } : null;
 }

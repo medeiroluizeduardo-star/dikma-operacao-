@@ -76,13 +76,19 @@ export const feriadosOperacao = eqCfg => ((eqCfg && eqCfg.feriados) || []).filte
 //   escala → criarEscala(...) (sem ela não marca folga sozinha),
 //   turmaFicha(nome) → letra da turma pela ficha (quando a pessoa não tem letra),
 //   regime(pessoa), turma(pessoa) → para quem guarda regime/turma de outro jeito (Frequência),
-//   hoje → dias depois de hoje sem nada lançado ficam vazios em vez de "presente" }
+//   escalaFicha(pessoa, data) → { regime, turma } pela ficha (vale mais que as Atividades) ou null,
+//   hoje → dias depois de hoje sem nada lançado ficam vazios em vez de "presente",
+//   turnoDesde → (AAAA-MM-DD) quem é de turno: folga (F) ou presente (P) gravados depois desse dia não valem; manda a
+//     escala da turma (planilhas trazem F nos fins de semana e no resto do mês, que não são a escala do turno) }
 // Devolve { v, auto, por, periodo, motivo, semTurma }:
 //   por: 'lancado' | 'desligado' | 'ferias' | 'escala' | 'padrao' · auto: não foi lançado
 //   periodo: 'D' | 'N' quando a escala diz que a pessoa trabalha no dia em turno; '' no administrativo ou de folga
 // A ordem é a mesma em todo o sistema: o lançado vale mais; depois desligamento, férias, folga da escala e presente.
 export function previstoDe(pessoa, data, fontes = {}) {
   const E = fontes.escala; if (!E) return null;
+  // a ficha (RH › Colaboradores) manda na letra e na escala quando diz (escala.js › escalaDaFicha)
+  const pf = fontes.escalaFicha ? fontes.escalaFicha(pessoa, data) : null;
+  if (pf) return E.previsto(normRegime(pf.regime, E.regimes), pf.turma, data);
   pessoa = comoEra(pessoa, data); // troca de escala vale só a partir da data dela
   const regime = fontes.regime ? fontes.regime(pessoa) : normRegime(pessoa.regime, E.regimes);
   const t = fontes.turma ? fontes.turma(pessoa) : letra(pessoa.turma);
@@ -92,7 +98,8 @@ export function previstoDe(pessoa, data, fontes = {}) {
 export function situacaoDoDia(pessoa, data, fontes = {}) {
   const p = previstoDe(pessoa, data, fontes);
   const periodo = p && p.trab ? p.periodo || '' : '';
-  const m = fontes.lancado ? fontes.lancado(pessoa, data) : '';
+  let m = fontes.lancado ? fontes.lancado(pessoa, data) : '';
+  if (m && p && p.ciclo && (m === 'F' || m === 'P') && fontes.turnoDesde && data > fontes.turnoDesde) m = '';
   if (m) return { v: m, auto: false, por: 'lancado', periodo };
   const dem = fontes.desligadoEm ? fontes.desligadoEm(pessoa) : '';
   if (dem && data >= dem) return { v: 'DS', auto: true, por: 'desligado', periodo: '' };

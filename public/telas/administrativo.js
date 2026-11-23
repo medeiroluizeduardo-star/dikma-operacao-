@@ -13,6 +13,7 @@ import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../
 import { caixaBusca } from '../ui/busca.js';
 import { passaFiltroFreq, filtrosFreqAtivos, rotasFreq } from '../contas/filtro-freq.js';
 import { gruposPelaFicha, folhaPelaFicha, SEM_FICHA } from '../contas/folha-ficha.js';
+import { repetidosNaFolha } from '../contas/duplicados.js';
 import { situacaoDoDia, contagemDia, CONTA, AUSENCIA, presente as presenteSit } from '../contas/situacao.js';
 
 // As abas deste módulo (nome, grupo e subtítulo) ficam declaradas em navegacao.js.
@@ -43,10 +44,13 @@ export function criarAdministrativo(X) {
   const colabPorId = conj => { const m = new Map(); (A().colabs[conj] || []).forEach(c => m.set(c.id, c)); return m; };
   // dt: regime e turma daquele dia (a troca de escala só vale a partir da data dela)
   function regimeTurma(conj, g, p, cmap, dt) {
+    // a ficha (RH › Colaboradores) manda na letra e na escala quando diz
+    const pf = X.escalaFicha ? X.escalaFicha({ mat: p.mat, nome: p.nome }, dt || TODAY) : null; if (pf) return pf;
     const c0 = p.ativ ? cmap.get(p.ativ) : null; const c = c0 && dt ? comoEra(c0, dt) : c0;
     const turno = p.turno != null ? p.turno : g.turno; // grupos pela ficha: cada um leva o turno do grupo da planilha
     const regime = c ? c.regime : turno ? (/3\s*X\s*3/i.test(g.nome) ? '3X3' : '4X4') : 'ADMINISTRATIVO';
-    return { regime, turma: (c && letra(c.turma)) || letra(p.turma) || '' };
+    // letra: a da Escala do dia (que vem da ficha); sem ela, a da ficha; a da planilha só em último caso
+    return { regime, turma: (c && letra(c.turma)) || (X.turmaFicha ? X.turmaFicha(p.nome) : '') || letra(p.turma) || '' };
   }
   // { v: código, auto: veio da escala/férias/padrão, por: 'lancado' | 'desligado' | 'ferias' | 'escala' | 'padrao' }
   // per: turno do dia pela letra ('D' diurno, 'N' noturno; a noite conta no dia em que começa)
@@ -55,7 +59,12 @@ export function criarAdministrativo(X) {
   // Quem foi ligado à Presença depois de a folha ter lançamentos próprios: vale a Escala do dia e, nos dias em que ela não
   // tem nada, o que já estava na folha (nada do histórico se perde).
   const daFolha = (doc, p, dt) => (((doc && doc.d) || {})[p.k] || {})[dt];
-  const lancadoDe = (conj, doc, p, dt) => (p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] || daFolha(doc, p, dt) : daFolha(doc, p, dt));
+  // turno (ciclo conhecido): folga (F) e presente (P) que vieram da folha/planilha não valem; manda a escala da turma.
+  // Ocorrências de verdade da folha (falta, atestado, férias, suspensão, abono, hora extra…) continuam valendo.
+  const lancadoDe = (conj, doc, p, dt, turno) => {
+    const s = p.ativ ? ((A().sit[conj] || {})[dt.slice(0, 7)] || {})[p.ativ + '|' + dt] : ''; if (s) return s;
+    const f = daFolha(doc, p, dt); return f && turno && (f === 'F' || f === 'P') ? '' : f;
+  };
   const desligadoEm = p => { const a = p.desligado || '', b = X.desligadoDe ? X.desligadoDe(p) : ''; return a && b ? (a < b ? a : b) : a || b; };
   // Hora extra lançada na Operação (lançamento de equipamento com status de hora extra): entra na folha pelo nome do operador.
   let HEOP = null, HEOPv = -1;
@@ -66,8 +75,9 @@ export function criarAdministrativo(X) {
   };
   function codigo(conj, comp, doc, g, p, dt, cmap) {
     const E = X.escala(); const rt = regimeTurma(conj, g, p, cmap, dt);
+    const pv = E.previsto(normRegime(rt.regime, E.regimes), rt.turma || (X.turmaFicha ? X.turmaFicha(p.nome) : ''), dt);
     const s = situacaoDoDia(p, dt, {
-      lancado: () => lancadoDe(conj, doc, p, dt), desligadoEm, ferias: (x, d) => ferIdx()({ mat: x.mat, nome: x.nome }, d),
+      lancado: () => lancadoDe(conj, doc, p, dt, !!(pv && pv.ciclo)), turnoDesde: TODAY, desligadoEm, ferias: (x, d) => ferIdx()({ mat: x.mat, nome: x.nome }, d),
       escala: E, regime: () => normRegime(rt.regime, E.regimes), turma: () => rt.turma, turmaFicha: X.turmaFicha, hoje: TODAY
     });
     if (s.por === 'lancado') return ['P', 'HE', 'ATR', 'SA'].includes(s.v) ? { v: s.v, auto: false, per: s.periodo } : { v: s.v, auto: false };
@@ -175,6 +185,8 @@ export function criarAdministrativo(X) {
     const ncol = vi.length + (mob ? 1 : 2 + CONTA.length);
     const q = normNome(U.q || ''); const ed = pode();
     const GR = gruposDe(conj, comp, doc);
+    // mesma pessoa em duas linhas (cadastro repetido ou matrícula diferente entre ficha, Escala do dia e folha)
+    const REP = repetidosNaFolha(GR.flatMap(g => g.pessoas.filter(p => !desligadoEm(p) || desligadoEm(p) > datas[0])));
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
     // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Escala do dia.
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
@@ -202,7 +214,7 @@ export function criarAdministrativo(X) {
       if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
-        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Escala do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
+        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${REP.has(p.k) ? '<span class="tag warn" title="A mesma pessoa aparece em duas linhas: corrija a ficha em RH › Colaboradores">duplicado</span> ' : ''}${q ? esc(g.nome) + ' · ' : ''}${(tu => (tu ? `<span class="tag">turma ${esc(tu)}</span> ` : ''))(regimeTurma(conj, g, p, cmap, diaRef).turma)}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Escala do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
           const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const ju = !c.auto && JUS_CODS.includes(c.v) ? jusDe(conj, doc, p, dt) : null; const semJus = !c.auto && JUS_CODS.includes(c.v) && !(ju && ju.cod === c.v) && dt <= TODAY;
           const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : c.por === 'operacao' ? ` (${c.motivo})` : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;
@@ -213,6 +225,7 @@ export function criarAdministrativo(X) {
     const head = `<tr><th class="fnome">Colaborador</th>${mob ? '' : '<th>Função</th>'}${vi.map(j => datas[j]).map(dt => { const d = new Date(dt + 'T12:00:00'); return `<th class="c${dt === TODAY ? ' today' : ''}${[0, 6].includes(d.getDay()) ? ' fds' : ''}">${DIA_L[d.getDay()]}<br><span class="thd">${dt.slice(8)}</span></th>`; }).join('')}${mob ? '' : CONTA.map(k => `<th class="c" title="${NOMES_CODIGO[k]}">${k}</th>`).join('')}</tr>`;
     const foot = vis.length ? `<tfoot><tr><th colspan="${mob ? 1 : 2}" class="fnome">Presentes</th>${vi.map(i => [datas[i], i]).map(([dt, i]) => `<td class="c num${dt === TODAY ? ' today' : ''}">${dt > TODAY ? '' : `<b class="${pres[i] < quadro[i] ? 'menos' : ''}">${pres[i]}</b><span class="muted">/${quadro[i]}</span>`}</td>`).join('')}${mob ? '' : CONTA.map(k => `<td class="c num tot">${resumo[k] || ''}</td>`).join('')}</tr></tfoot>` : '';
     const nPes = GR.reduce((n, g) => n + g.pessoas.length, 0); const nFora = GR.filter(g => g.virt).reduce((n, g) => n + g.pessoas.length, 0);
+    const nRep = (() => { const ns = new Set(); for (const g of GR) for (const p of g.pessoas) if (REP.has(p.k)) ns.add(normNome(p.nome)); return ns.size; })();
     const pelaFicha = folhaPelaFicha(comp); const nSem = GR.filter(g => g.nome === SEM_FICHA).reduce((n, g) => n + g.pessoas.length, 0);
     return `<div class="mini compacta"><div><b class="num">${resumo.pessoas}</b><span>Pessoas</span></div><div><b class="num" style="color:var(--st-nreal)">${resumo.FT}</b><span>Faltas</span></div><div><b class="num" style="color:var(--st-atr)">${resumo.AT}</b><span>Atestados</span></div><div><b class="num" style="color:var(--st-extra)">${resumo.HE}</b><span>Horas extras</span></div><div><b class="num">${resumo.AB}</b><span>Abonos</span></div><div><b class="num">${resumo.FE}</b><span>Dias de férias</span></div></div>${quadroEfRH(conj, datas)}
       <div class="card"><header><h2>Frequência</h2><p>${ed ? 'Toque no dia para mudar a situação · ✓ = presente' : 'Somente leitura'} · ${SETS[conj].curto} · ${dBR(datas[0])} a ${dBR(datas[datas.length - 1])}</p>${ed && !pelaFicha ? `<span class="r"><button class="btn sm" data-a="novoGrupo">${I.plus} Grupo</button></span>` : ''}</header>
@@ -221,6 +234,7 @@ export function criarAdministrativo(X) {
         ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-a="todos">${ab.size ? 'Recolher todos os grupos' : 'Abrir todos os grupos'}</button><span class="muted small">${vis.length} grupos · toque num grupo para ver as pessoas</span></div>` : ''}
         <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit P">${I.ok}<i class="peri D">D</i></span> Turno diurno</span><span><span class="sit P">${I.ok}<i class="peri N">N</i></span> Turno noturno (conta no dia em que começa)</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FE auto">FE</span> Férias (do cadastro de férias)</span>${CODS.filter(c => c !== 'P').map(c => `<span><span class="sit ${c}">${c}</span> ${NOMES_CODIGO[c]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span><span class="muted">Quem está na Escala do dia tem a mesma presença aqui e lá.</span></div></details>
         ${pelaFicha ? `<p class="body pt0 pb0 m0 small muted">Os grupos vêm do líder imediato de cada ficha em RH › Colaboradores (supervisão = líder da ficha do líder). Para mudar líder, função ou área, edite a ficha.${nSem ? ` <b>${nSem} pessoa${nSem === 1 ? '' : 's'} sem ficha</b>: cadastre em Colaboradores com a mesma matrícula.` : ''}</p>` : ''}
+        ${REP.size ? `<div class="body pt0 pb0"><div class="aviso warn small"><b>${nRep} colaborador${nRep === 1 ? ' aparece' : 'es aparecem'} duas vezes</b> (marcado${nRep === 1 ? '' : 's'} com <span class="tag warn">duplicado</span>): cadastro repetido ou matrícula diferente entre a ficha e a Escala do dia. A correção é feita na ficha, em RH › Colaboradores. <button type="button" class="btn sm" data-act="irDuplicados">Corrigir em Colaboradores</button></div></div>` : ''}
         ${nFora ? `<p class="body pt0 pb0 m0 small muted">${nFora} pessoa${nFora === 1 ? '' : 's'} da Escala do dia ${nFora === 1 ? 'não está' : 'não estão'} na folha: ${nFora === 1 ? 'aparece' : 'aparecem'} no fim, em PRESENÇA · área, com a mesma presença.${ed ? ' Toque no nome para incluir num grupo da folha.' : ''}</p>` : ''}
         ${mob && !U.fDia ? `<div class="semnav body pt0 pb0"><button class="btn ghost sm" data-a="fsem" data-v="-1" ${U.fSem ? '' : 'disabled'} aria-label="Semana anterior">‹</button><b>${ddmm(datas[vi[0]])} a ${ddmm(datas[vi[vi.length - 1]])}</b><span class="muted small">semana ${U.fSem + 1} de ${semanas.length}</span><button class="btn ghost sm" data-a="fsem" data-v="1" ${U.fSem < semanas.length - 1 ? '' : 'disabled'} aria-label="Próxima semana">›</button></div>` : ''}
         <div class="tw freqtw${mob ? ' semana' : ''}"><table class="efd freq"><thead>${head}</thead><tbody>${corpo || `<tr><td colspan="${ncol}" class="empty">${procura ? 'Ninguém encontrado com essa busca ou esses filtros.' : 'Nenhuma pessoa neste grupo.'}</td></tr>`}</tbody>${foot}</table></div></div>`;

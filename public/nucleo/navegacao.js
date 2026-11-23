@@ -265,4 +265,6 @@ function abrirEm(mod, view, ajustar) {
   salvarUI(); trocarTela(view);
 }
 acoes.irCadastro = (t, d) => abrirEm('rh', 'rcolab', () => { UI.co.mat = d.mat || null; UI.co.aba = 'dados'; });
+// Cadastros repetidos (aviso da Frequência): abre RH › Colaboradores já no filtro "Cadastro repetido".
+acoes.irDuplicados = () => abrirEm('rh', 'rcolab', () => { UI.co.mat = null; UI.co.f = 'dup'; UI.co.q = ''; UI.co.fa = ''; });
 acoes.irFicha = (t, d) => abrirEm('gestao', 'gcolab', () => { UI.g.mat = d.mat || null; });

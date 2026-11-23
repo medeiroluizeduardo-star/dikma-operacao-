@@ -11,12 +11,12 @@ import { acoes } from './acoes.js';
 import { I, MOD_IC } from '../ui/icones.js';
 import { setSt, tirarFora } from '../calc/atividades.js';
 import { mesmoLocal } from '../contas/execucao.js';
-import { sitDia, curto, removerCobertura, comTurma } from '../calc/presenca.js';
+import { sitDia, curto, removerCobertura } from '../calc/presenca.js';
 import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
 import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
 import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela, SELOS, numSelo } from '../ui/shell.js';
 import { apArea, cellMenu, pedirJustificativa, apply } from '../telas/apontar.js';
-import { lancarEfetivo, turmaSheet, irEscala, PER_NOME, equipeCheckin, editaDia } from '../telas/efetivo.js';
+import { lancarEfetivo, irEscala, PER_NOME, equipeCheckin, editaDia } from '../telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
 import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
 import { AV, modulo } from './modulos.js';
@@ -126,7 +126,6 @@ document.addEventListener('click', async e => {
   if (d.esset) { UI.esSet = d.esset; UI.eRota = '*'; UI.area = 'TODAS'; salvarUI(); render(); return; }
   if (d.erota) { UI.eRota = d.erota; render(); const s = $('fERota'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
   if (d.sit) { lancarEfetivo(d.sit); return; }
-  if (d.turma) { turmaSheet(d.turma); return; }
 
   if (d.ptog) {
     const [id, k] = d.ptog.split('|'); const p = PL.get(id); const itens = DB.cache.plano[p.area].map(x => (x.id === id ? { ...x, dias: [...x.dias].map((c, j) => (j === +k ? (c === '1' ? '0' : '1') : c)).join('') } : x));
@@ -203,7 +202,7 @@ document.addEventListener('change', e => {
     if (dd.escdia) { const [k, d] = dd.escdia.split('|'); const r = CF().rascEsc().regimes[k]; const l = new Set(r.dias || []); if (t.checked) l.add(+d); else l.delete(+d); r.dias = [...l].sort(); render(); return; }
     if (dd.escn) { const [k, f] = dd.escn.split('|'); CF().rascEsc().regimes[k][f] = Math.max(1, +t.value || 1); render(); return; }
     if (dd.esct) { const [k, l] = dd.esct.split('|'); CF().rascEsc().regimes[k].turmas[l] = t.value || ''; render(); return; }
-    if (dd.escpes) { const [k, a, id] = dd.escpes.split('|'); const itens = ((DB.dados(k).colabs || {})[a] || []).map(c => (c.id === id ? comTurma(c, t.value) : c)); DB.salvarColabsArea(a, itens, k); const c = itens.find(x => x.id === id); DB.log(`${title(c.nome)} · turma ${t.value || 'removida'}`, 'operacao'); toast(t.value ? `Turma ${t.value} gravada` : 'Turma removida'); return; } }
+  }
   const t = e.target;
   if (t.dataset.mdPref || t.dataset.mdHora) { AV.onChange(t); return; }
   if (t.dataset.resarea) { UI.resArea = t.value; render(); return; }
