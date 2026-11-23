@@ -14,7 +14,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
-const { criarEscala, fatorRota } = await import('./lib/escala.mjs');
+const { criarEscala, fatorRota, escalaDaFicha } = await import('./lib/escala.mjs');
 const { situacaoDoDia, criarTurmaFicha, feriadosOperacao } = await import('./lib/situacao.mjs');
 const { indiceFerias, indiceDesligados, resumoFerias, resumoDesligados, ehAdminU } = await import('./lib/acessos.mjs');
 const { tarefasParaAviso } = await import('./lib/processos.mjs');
@@ -126,7 +126,12 @@ const operadores = ((await db.doc('eq/cadastro').get()).data() || {}).operadores
 const turmaFicha = criarTurmaFicha(fichas, operadores);
 const ferias = indiceFerias(((await db.doc('adm/feriasAtivas').get()).data() || {}).itens || []);
 const desligadoEm = indiceDesligados(fichas);
-const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: (x, d) => get(x.id + '|' + d), desligadoEm, ferias, escala: ESC, turmaFicha, turnoDesde: hoje }); return s.por === 'padrao' ? undefined : s.v; };
+// a ficha manda na letra e na escala (escala.js › escalaDaFicha): pela matrícula, senão pelo nome igual
+const fichaK = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+const fichaM = new Map(), fichaN = new Map();
+for (const f of fichas) { if (!f || !f.nome || (f.dem && f.dem <= hoje)) continue; if (f.mat) fichaM.set(String(f.mat), f); fichaN.set(fichaK(f.nome), f); }
+const escalaFicha = (c, dt) => escalaDaFicha((c.mat && fichaM.get(String(c.mat))) || fichaN.get(fichaK(c.nome)) || null, dt, ESC.regimes);
+const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: (x, d) => get(x.id + '|' + d), desligadoEm, ferias, escala: ESC, turmaFicha, escalaFicha, turnoDesde: hoje }); return s.por === 'padrao' ? undefined : s.v; };
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};

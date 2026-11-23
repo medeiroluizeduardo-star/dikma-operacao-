@@ -44,6 +44,8 @@ export function criarAdministrativo(X) {
   const colabPorId = conj => { const m = new Map(); (A().colabs[conj] || []).forEach(c => m.set(c.id, c)); return m; };
   // dt: regime e turma daquele dia (a troca de escala só vale a partir da data dela)
   function regimeTurma(conj, g, p, cmap, dt) {
+    // a ficha (RH › Colaboradores) manda na letra e na escala quando diz
+    const pf = X.escalaFicha ? X.escalaFicha({ mat: p.mat, nome: p.nome }, dt || TODAY) : null; if (pf) return pf;
     const c0 = p.ativ ? cmap.get(p.ativ) : null; const c = c0 && dt ? comoEra(c0, dt) : c0;
     const turno = p.turno != null ? p.turno : g.turno; // grupos pela ficha: cada um leva o turno do grupo da planilha
     const regime = c ? c.regime : turno ? (/3\s*X\s*3/i.test(g.nome) ? '3X3' : '4X4') : 'ADMINISTRATIVO';
@@ -212,7 +214,7 @@ export function criarAdministrativo(X) {
       if (!aberto) continue;
       ps.forEach((p, i) => {
         const t = tot[i];
-        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${REP.has(p.k) ? '<span class="tag warn" title="A mesma pessoa aparece em duas linhas: corrija a ficha em RH › Colaboradores">duplicado</span> ' : ''}${q ? esc(g.nome) + ' · ' : ''}${p.turma ? `<span class="tag">turma ${esc(p.turma)}</span> ` : ''}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Escala do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
+        corpo += `<tr><td class="fnome"><button type="button" class="btn ghost link" data-a="pessoa" data-g="${gi}" data-p="${esc(p.k)}"><b>${esc(title(p.nome))}</b></button><div class="muted small">${REP.has(p.k) ? '<span class="tag warn" title="A mesma pessoa aparece em duas linhas: corrija a ficha em RH › Colaboradores">duplicado</span> ' : ''}${q ? esc(g.nome) + ' · ' : ''}${(tu => (tu ? `<span class="tag">turma ${esc(tu)}</span> ` : ''))(regimeTurma(conj, g, p, cmap, diaRef).turma)}${p.virt ? 'na Presença, fora da folha' : p.ativ ? 'Escala do dia' : 'só na folha'}${p.semFicha ? ' · sem ficha' : ''}${p.desligado ? ' · desligado ' + ddmm(p.desligado) : ''}${mob && fRH.get(String(p.mat)) ? ' · ' + esc(title(fRH.get(String(p.mat)))) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(fRH.get(String(p.mat)) || ''))}</td>`}${vi.map(j => {
           const c = cods[i][j]; const dt = datas[j]; const nm = NOMES_CODIGO[c.v] || 'sem lançamento';
           const ju = !c.auto && JUS_CODS.includes(c.v) ? jusDe(conj, doc, p, dt) : null; const semJus = !c.auto && JUS_CODS.includes(c.v) && !(ju && ju.cod === c.v) && dt <= TODAY;
           const tt = `${dBR(dt)} · ${nm}${c.por === 'ferias' ? ' (férias)' : c.por === 'escala' ? ' (folga pela escala)' : c.por === 'operacao' ? ` (${c.motivo})` : ''}${c.per ? ` · turno ${c.per === 'N' ? 'noturno' : 'diurno'}` : ''}${ju && ju.cod === c.v ? ' · ' + textoJus(ju) : semJus ? ' · sem justificativa' : ''}`;

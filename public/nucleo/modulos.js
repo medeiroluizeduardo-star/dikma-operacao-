@@ -10,7 +10,7 @@ import { ME, UI, podeItem, admDe, modsReais, isAdmin, meEm, perfil } from './est
 import { I } from '../ui/icones.js';
 import { temSeg } from '../contas/segcalc.js';
 import { conjsInd, eqInd, areasInd } from '../contas/acessos.js';
-import { escala, turmaFicha, desligadoDe, limparPresenca } from '../calc/presenca.js';
+import { escala, turmaFicha, escalaFicha, desligadoDe, limparPresenca } from '../calc/presenca.js';
 import { sheet, formSheet, showErr, prepararFoto, toast } from '../ui/janelas.js';
 import { render, schedule, isMobile } from '../ui/shell.js';
 
@@ -40,7 +40,7 @@ const CARGA = {
   // Nos Indicadores (Indicadores e Análises de equipamentos) a pessoa é vista pelo perfil dos Indicadores (só ver).
   EQ: () => import('../telas/equip.js').then(m => { EQ = m.criarEquip({ podeItem: id => (UI.modulo === 'gestao' && id === 'i_operacao' ? podeItem('i_aval', 'gestao') : podeItem(id)), escala: () => escala(), desligadoDe, PES, get ME() { return meEm(['gestao', 'indicadores'].includes(UI.modulo) ? UI.modulo : 'operacao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('equip'), framed, UI }); }),
   // Indicadores › Pessoas (painel e resumo da frequência): só os conjuntos do escopo e, para o "Vê" com área, só as dele.
-  AD: () => import('../telas/administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); },
+  AD: () => import('../telas/administrativo.js').then(m => { AD = m.criarAdministrativo({ podeItem: id => podeItem(id, 'rh'), limparPresenca, turmaFicha, escalaFicha, desligadoDe, pulsar: el => M.pulsar(el), get ME() { return meEm('rh'); },
     conjs: () => (UI.modulo === 'indicadores' ? conjsInd(ME) : ['patio', 'bateria']), areas: () => (UI.modulo === 'indicadores' ? areasInd(ME) : []), DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), agendar: () => { clearTimeout(window._aqt); window._aqt = setTimeout(schedule, 200); }, UI, isMobile, escala: () => escala(), framed }); }),
   SG: () => import('../telas/seguranca.js').then(m => { SG = m.criarSeguranca(); }),
   // IC: Indicadores › Visão geral e Histórico (indicadores do contrato)

@@ -15,6 +15,7 @@ import { AREA_GERAL, ehAreaAtiv } from '../contas/pessoas.js';
 import { lideresDasFichas, nomeLider } from '../contas/lideres.js';
 import { criarLiderancaDaFicha } from '../contas/folha-ficha.js';
 import { cadastrosDuplicados } from '../contas/duplicados.js';
+import { anotarTroca } from '../contas/escala.js';
 import { indiceFeriasPessoa, situacaoPeriodo, resumoFeriasPessoa, deFeriasHoje, feriasEmBreve, limiteProximo, feriasSemCadastro } from '../contas/ferias.js';
 import { campoBusca } from '../ui/busca.js';
 import { abas, dados, etiqueta, tabela, vazio, carregando, botaoAcao } from '../ui/padrao.js';
@@ -197,10 +198,12 @@ function formRH(mat) {
     <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="coSetor" list="coDlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio">${dl('coDlSetor', 'setor')}</label>
     <label class="sel"><span>Setor (RH)</span><input class="in" id="coSub" list="coDlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento">${dl('coDlSub', 'subsetor')}</label></div>
     <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="coTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('coLid', nomeLider(c.lider), opLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
-    ${mat ? '<p class="muted small m0">Nome, função, área de atuação e rota mudam também Atividades e Equipamentos: quem altera é o administrador.</p>' : ''}`, 'Salvar', async () => {
+    ${mat ? `<label class="sel"><span>A troca de turma / turno vale a partir de</span><input class="in" type="date" id="coDesde" value="${TODAY}"></label>` : ''}
+    ${mat ? '<p class="muted small m0">A letra da turma e a escala de turno valem pelo campo "Turma / turno" desta ficha (ex.: C, TURMA C, 4X4 C ou ADM). Nome, função, área de atuação e rota mudam também Atividades e Equipamentos: quem altera é o administrador.</p>' : ''}`, 'Salvar', async () => {
     const n = { ...c, matArc: $('coArc').value.trim().toUpperCase(), adm: $('coAdm').value || null, dem: $('coDem').value || null, setor: $('coSetor').value.trim(), subsetor: $('coSub').value.trim(), turma: $('coTur').value.trim().toUpperCase(), lider: nomeLider($('coLid').value) };
     if (!mat) Object.assign(n, { mat: $('coMat').value.trim().replace(/\.0$/, ''), nome: $('coNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('coFun').value.trim().toUpperCase() });
     validar(n, mat);
+    if (mat) { const h = anotarTroca(c, n, ['turma'], ($('coDesde') && $('coDesde').value) || TODAY); if (h.length) n.escHist = h; else delete n.escHist; }
     if (!n.matArc) delete n.matArc;
     await DB.rhSalvarFicha(n);
     DB.log(`RH: ${mat ? 'editou o cadastro de' : 'cadastrou'} ${title(n.nome)}`, 'rh');

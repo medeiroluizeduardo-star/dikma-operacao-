@@ -76,6 +76,7 @@ export const feriadosOperacao = eqCfg => ((eqCfg && eqCfg.feriados) || []).filte
 //   escala → criarEscala(...) (sem ela não marca folga sozinha),
 //   turmaFicha(nome) → letra da turma pela ficha (quando a pessoa não tem letra),
 //   regime(pessoa), turma(pessoa) → para quem guarda regime/turma de outro jeito (Frequência),
+//   escalaFicha(pessoa, data) → { regime, turma } pela ficha (vale mais que as Atividades) ou null,
 //   hoje → dias depois de hoje sem nada lançado ficam vazios em vez de "presente",
 //   turnoDesde → (AAAA-MM-DD) quem é de turno: folga (F) ou presente (P) gravados depois desse dia não valem; manda a
 //     escala da turma (planilhas trazem F nos fins de semana e no resto do mês, que não são a escala do turno) }
@@ -85,6 +86,9 @@ export const feriadosOperacao = eqCfg => ((eqCfg && eqCfg.feriados) || []).filte
 // A ordem é a mesma em todo o sistema: o lançado vale mais; depois desligamento, férias, folga da escala e presente.
 export function previstoDe(pessoa, data, fontes = {}) {
   const E = fontes.escala; if (!E) return null;
+  // a ficha (RH › Colaboradores) manda na letra e na escala quando diz (escala.js › escalaDaFicha)
+  const pf = fontes.escalaFicha ? fontes.escalaFicha(pessoa, data) : null;
+  if (pf) return E.previsto(normRegime(pf.regime, E.regimes), pf.turma, data);
   pessoa = comoEra(pessoa, data); // troca de escala vale só a partir da data dela
   const regime = fontes.regime ? fontes.regime(pessoa) : normRegime(pessoa.regime, E.regimes);
   const t = fontes.turma ? fontes.turma(pessoa) : letra(pessoa.turma);
