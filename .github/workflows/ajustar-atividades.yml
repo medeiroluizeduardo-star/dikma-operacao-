@@ -1,0 +1,65 @@
+name: Ajustar pessoas das Atividades
+
+# Tira cadastros repetidos ou de quem saiu (pelo número, ex. C037) e inclui numa área geral sem rota quem tem ficha
+# e não está em nenhuma lista (pela matrícula). Só manual (Run workflow). Rode antes a Cópia de segurança.
+#   simular (padrão): só mostra o que mudaria, sem nomes.
+#   gravar: faz uma cópia dos documentos que mudam (arquivo desta execução + coleção backups) e grava.
+on:
+  workflow_dispatch:
+    inputs:
+      remover:
+        description: 'Números para tirar, separados por vírgula (ex. C037,B024)'
+        type: string
+        required: false
+      incluir:
+        description: 'Matrículas para incluir, separadas por vírgula (ex. 4612,8190)'
+        type: string
+        required: false
+      area:
+        description: 'Área geral onde entram (COQUERIA GERAL, COQUERIA PÁTIO ou COQUERIA BATERIA)'
+        type: string
+        default: 'COQUERIA GERAL'
+      modo:
+        description: 'simular (só mostra) ou gravar'
+        type: choice
+        options: [simular, gravar]
+        default: simular
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  ajustar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Ajustar (${{ inputs.modo }})
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_PASTA: copia-ajuste
+          AJ_REMOVER: ${{ inputs.remover }}
+          AJ_INCLUIR: ${{ inputs.incluir }}
+          AJ_AREA: ${{ inputs.area }}
+          AJ_MODO: ${{ inputs.modo }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/ajustar-atividades.mjs
+
+      - name: Guardar a cópia dos documentos
+        if: inputs.modo == 'gravar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: antes-de-ajustar-atividades-${{ github.run_id }}
+          path: copia-ajuste/
+          retention-days: 90
+          if-no-files-found: ignore
