@@ -236,3 +236,25 @@ test('agruparAprov junta por dia e rota, mais antigo primeiro', () => {
   assert.deepEqual([r2.key, r2.n, r2.R, r2.N, r2.E, r2.itens.length], ['2026-11-03|B|Rota 2', 2, 1, 1, 0, 2]);
   assert.deepEqual(agruparAprov([]), []);
 });
+
+// ---------- turno: a escala da turma manda nos dias futuros ----------
+test('turno: F e P gravados adiantado (planilha) não valem depois de hoje; ocorrências de verdade valem', () => {
+  const E = criarEscala({ regimes: { '4x4': { turmas: { D: '2026-11-18' } } } });
+  const pes = { id: 'C1', nome: 'FULANO DE TAL', regime: 'TURNO 4X4', turma: 'D' };
+  const grav = { '2026-12-04': 'F', '2026-11-30': 'P', '2026-12-05': 'AT', '2026-11-22': 'F', '2026-12-12': 'F' };
+  const f = { lancado: (_p, d) => grav[d] || '', escala: E, hoje: '2026-11-23', turnoDesde: '2026-11-23' };
+  // 04/12 é dia de trabalho da turma D (ciclo 4x4 a partir de 18/11): o F gravado não vale
+  assert.equal(situacaoDoDia(pes, '2026-12-04', f).por, 'padrao');
+  assert.equal(situacaoDoDia(pes, '2026-12-04', f).periodo, 'D');
+  // 30/11 é folga da turma: o P gravado não vale, fica a folga da escala
+  assert.equal(situacaoDoDia(pes, '2026-11-30', f).por, 'escala');
+  // atestado gravado continua valendo
+  assert.equal(situacaoDoDia(pes, '2026-12-05', f).v, 'AT');
+  // dia passado: o lançado vale (é o que aconteceu)
+  assert.equal(situacaoDoDia(pes, '2026-11-22', f).por, 'lancado');
+  // administrativo: nada muda (sábado com F gravado continua o lançado)
+  const adm = { ...pes, regime: 'ADMINISTRATIVO', turma: '' };
+  assert.equal(situacaoDoDia(adm, '2026-12-12', f).por, 'lancado');
+  // sem turnoDesde, comportamento antigo
+  assert.equal(situacaoDoDia(pes, '2026-12-04', { ...f, turnoDesde: undefined }).por, 'lancado');
+});

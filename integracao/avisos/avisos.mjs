@@ -126,7 +126,7 @@ const operadores = ((await db.doc('eq/cadastro').get()).data() || {}).operadores
 const turmaFicha = criarTurmaFicha(fichas, operadores);
 const ferias = indiceFerias(((await db.doc('adm/feriasAtivas').get()).data() || {}).itens || []);
 const desligadoEm = indiceDesligados(fichas);
-const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: (x, d) => get(x.id + '|' + d), desligadoEm, ferias, escala: ESC, turmaFicha }); return s.por === 'padrao' ? undefined : s.v; };
+const sitEscala = get => (c, dt) => { const s = situacaoDoDia(c, dt, { lancado: (x, d) => get(x.id + '|' + d), desligadoEm, ferias, escala: ESC, turmaFicha, turnoDesde: hoje }); return s.por === 'padrao' ? undefined : s.v; };
 for (const k of Object.keys(sets)) { const S = sets[k]; S.sitDe = sitEscala(key => S.sit[key]); S.fator = cs => fatorRota(cs, ESC.regimes); }
 const estadoRef = db.doc('avisos_enviados/estado');
 const enviados = ((await estadoRef.get()).data() || {}).enviados || {};

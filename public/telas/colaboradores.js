@@ -14,6 +14,7 @@ import { editaAdm } from '../contas/acessos.js';
 import { AREA_GERAL, ehAreaAtiv } from '../contas/pessoas.js';
 import { lideresDasFichas, nomeLider } from '../contas/lideres.js';
 import { criarLiderancaDaFicha } from '../contas/folha-ficha.js';
+import { cadastrosDuplicados } from '../contas/duplicados.js';
 import { indiceFeriasPessoa, situacaoPeriodo, resumoFeriasPessoa, deFeriasHoje, feriasEmBreve, limiteProximo, feriasSemCadastro } from '../contas/ferias.js';
 import { campoBusca } from '../ui/busca.js';
 import { abas, dados, etiqueta, tabela, vazio, carregando, botaoAcao } from '../ui/padrao.js';
@@ -62,10 +63,15 @@ function etqFerias(c) {
 }
 const situacao = c => (!ativo(c) ? etiqueta('Desligado', 'neutro') : (etqFerias(c) || (emExp(c) ? etiqueta('Em experiência', 'info') : etiqueta('Ativo', 'ok'))));
 
+// Cadastro repetido (contas/duplicados.js): fichas com o mesmo nome ou matrícula, ou matrícula diferente da Escala do dia.
+let DUP = null, DUPk = [];
+const dups = () => { const k = [lista(), ...(PES.naEscala ? [PES.naEscala().length] : [])]; if (!DUP || k.some((x, i) => x !== DUPk[i])) { DUP = cadastrosDuplicados({ fichas: lista(), escala: PES.naEscala ? PES.naEscala() : [], hoje: TODAY }); DUPk = k; } return DUP; };
+const dupMats = () => new Set(dups().flatMap(d => d.mats.map(String)));
 const FILTROS = [['ativos', 'Ativos', ativo], ['exp', 'Em experiência', emExp], ['semArc', 'Sem matrícula Arcelor', c => ativo(c) && !c.matArc],
   ['ferAgora', 'De férias agora', c => ativo(c) && deFeriasHoje(feriasDe(c), TODAY)],
   ['ferProx', 'Férias nos próximos 60 dias', c => ativo(c) && feriasEmBreve(feriasDe(c), TODAY)],
   ['ferLim', 'Data limite em 60 dias, sem férias marcadas', c => ativo(c) && limiteProximo(feriasDe(c), TODAY)],
+  ['dup', 'Cadastro repetido', c => ativo(c) && dupMats().has(String(c.mat))],
   ['desl', 'Desligados', c => !ativo(c)], ['todos', 'Todos', () => true]];
 // Coluna de férias da lista (quando o filtro é de férias).
 function txtFerias(c) {
@@ -93,6 +99,9 @@ function vLista() {
   const exp = !framed && ferPronto() && ferLista().length ? `<button class="btn" data-act="coExpFerias">${I.dl} Exportar férias</button>` : '';
   const botoes = podeEditar() || completo() || exp ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}${exp}</div>` : '';
   let h = `<div class="card"><div class="body stackcol">${filtros}${botoes}</div></div>`;
+  const D = dups();
+  if (D.length && f[0] === 'dup') h += `<div class="aviso"><b>Cadastro repetido</b>: a mesma pessoa aparece duas vezes na Frequência. Abra a ficha certa e corrija a matrícula (ou desligue a ficha repetida). A troca de letra e de escala também é feita aqui, na ficha.<ul class="m0">${D.map(d => `<li>${d.mats.filter(Boolean).map(m => `<button type="button" class="btn ghost link" data-act="coFicha" data-mat="${esc(m)}">${esc(title(d.nome))} · ${esc(m)}</button>`).join(' · ') || esc(title(d.nome))}: ${esc(d.motivo)}</li>`).join('')}</ul></div>`;
+  else if (D.length) h += `<div class="aviso">${D.length} ${D.length === 1 ? 'cadastro repetido' : 'cadastros repetidos'} (a pessoa aparece duas vezes na Frequência). <button type="button" class="btn sm" data-act="irDuplicados">Ver e corrigir</button></div>`;
   if (ferF && !ferPronto()) return h + carregando();
   if (ferF) { // férias que não acham ninguém no cadastro: aparecem aqui para não sumirem
     const sem = feriasSemCadastro(ferLista().filter(x => x.inicio ? (x.termino || '') >= TODAY : true), L);

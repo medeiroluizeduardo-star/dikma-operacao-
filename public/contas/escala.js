@@ -58,8 +58,8 @@ export function criarEscala(cfg = {}, eqTurmas = {}, feriadosEq = []) {
     const base = (r.turmas || {})[turma]; if (!base) return null;
     const n = (+r.trab || 0) + (+r.folga || 0); if (!n) return null;
     const i = ((dif(base, data) % n) + n) % n;
-    if (i >= r.trab) return { trab: false, motivo: `folga da turma ${turma}` };
-    return { trab: true, motivo: '', periodo: periodosDe(r)[i] || 'D', diaCiclo: i + 1 };
+    if (i >= r.trab) return { trab: false, motivo: `folga da turma ${turma}`, ciclo: true };
+    return { trab: true, motivo: '', periodo: periodosDe(r)[i] || 'D', diaCiclo: i + 1, ciclo: true };
   }
   // letras que trabalham no dia, por regime de ciclo
   const turmasDoDia = (regime, data) => Object.keys((R[regime] || {}).turmas || {}).filter(l => { const p = previsto(regime, l, data); return p && p.trab; });

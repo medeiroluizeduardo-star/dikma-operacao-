@@ -137,6 +137,7 @@ th.today{background:color-mix(in srgb,var(--focus) 16%,var(--surface-2));color:v
 td.today{background:color-mix(in srgb,var(--focus) 6%,transparent)}
 .loc{color:var(--ink-3);font-size:12px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tag{display:inline-block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--ink-2);white-space:nowrap}
+.tag.warn{border-color:var(--st-atr);color:var(--st-atr)}
 
 /* day chips */
 .chip{width:30px;height:30px;border-radius:6px;border:1.5px solid transparent;display:inline-grid;place-items:center;font-size:14px;font-weight:700;background:none;padding:0;line-height:1}

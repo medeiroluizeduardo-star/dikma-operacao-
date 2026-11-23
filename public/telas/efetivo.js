@@ -9,11 +9,11 @@ import * as M from '../ui/movimento.js';
 import { semAcento, casa, caixaBusca, campoBusca } from '../ui/busca.js';
 import { PERIODO } from '../contas/escala.js';
 import { DB, TODAY, framed, esc, pct, title, $ } from '../nucleo/base.js';
-import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEditSit, temFichas, setsDe, aplicarSet, perfil, admDe } from '../nucleo/estado.js';
+import { ME, COLABS, SK, AREAS, UI, salvarUI, isAdmin, myArea, areaScope, canEditSit, temFichas, setsDe, aplicarSet, perfil, modsDe } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
 import { rotasDa } from '../calc/atividades.js';
-import { escala, comTurma, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet, movAprovDia, movDoDia, movDe, colabsDaNoDia } from '../calc/presenca.js';
+import { escala, turmaDe, regimeDe, regimeNome, sitDia, fontesSit, sitTela, desligadoNoDia, contarDia, periodoDe, marcaPer, folgaEscala, escalaRota, SIT_NOME, SIT_TOM, colabsDa, HE_ORIG, HE_SIG, cobDoDia, cobertoPor, cobrindo, refSub, sitDoSub, folgaNoDia, nomeDe, curto, removerCobertura, areasSitDe, colabsDoSet, sitDoSet, movAprovDia, movDoDia, movDe, colabsDaNoDia } from '../calc/presenca.js';
 import { pedirMov, decidirMov, podePedir, podeAprovar, partesRota, rotaK } from '../contas/mover-rota.js';
 import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile, trocarTela } from '../ui/shell.js';
@@ -196,22 +196,13 @@ function miniEscala(area) {
 }
 // Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
 // Turma de quem trabalha em turno: grava no cadastro das rotas (quem administra Pátio/Bateria).
-const podeTurma = () => admDe('ativ');
+// Letra da turma e escala: só se trocam na ficha (RH › Colaboradores), nunca aqui. Quem tem o RH vai direto à ficha.
+const vaiFicha = c => !!c.mat && modsDe(ME).includes('rh');
 function turmaTag(c) {
   const rg = regimeDe(c); const r = escala().regimes[rg]; const t = turmaDe(c);
   if (!r || r.tipo !== 'ciclo') return esc(regimeNome(c));
   const txt = t ? `${esc(r.nome)} · turma <b>${esc(t)}</b>` : `${esc(r.nome)} · <span class="semt">sem turma</span>`;
-  return podeTurma() ? `<button class="btn ghost link turma-b" data-turma="${esc(c.id)}" title="Escolher a turma">${txt}</button>` : txt;
-}
-export function turmaSheet(id) {
-  const c = COLABS.find(x => x.id === id); if (!c) return;
-  const rg = regimeDe(c); const r = escala().regimes[rg]; if (!r || r.tipo !== 'ciclo') return;
-  const letras = Object.keys(r.turmas || {}); const atual = turmaDe(c);
-  const prox = l => { const ds = []; for (let i = 0; i < 8; i++) { const d = add(TODAY, i); const p = escala().previsto(rg, l, d); ds.push(p ? (p.trab ? '●' : '○') : '?'); } return ds.join(' '); };
-  sheet(`Turma de ${title(c.nome)}`, `${esc(r.nome)} · ● trabalha ○ folga, a partir de hoje`, [...letras.map(l => ({ t: `Turma ${l}`, d: prox(l), v: l, cur: l === atual })), { t: 'Sem turma', d: 'A folga não é marcada sozinha', v: '' }], o => {
-    const itens = (DB.cache.colabs[c.area] || []).map(x => (x.id === c.id ? comTurma(x, o.v) : x));
-    DB.salvarColabsArea(c.area, itens); DB.log(`${title(c.nome)} · turma ${o.v || 'removida'}`, 'operacao'); toast(o.v ? `${title(c.nome).split(' ')[0]}: turma ${o.v}` : 'Turma removida'); render();
-  });
+  return vaiFicha(c) ? `<button class="btn ghost link turma-b" data-act="irCadastro" data-mat="${esc(c.mat)}" title="A turma e a escala se trocam na ficha (RH › Colaboradores)">${txt}</button>` : `<span title="A turma e a escala se trocam na ficha (RH › Colaboradores)">${txt}</span>`;
 }
 // Abre Pessoas no turno (Escala do dia) no conjunto atual, já na rota (area|rota) quando vier de um link.
 export function irEscala(rota) {

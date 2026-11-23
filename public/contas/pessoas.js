@@ -183,5 +183,7 @@ export function criarPessoas(DB) {
     return out.sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
-  return { vinculo, lotacao, lotacoes, areaNome, areasAtuacao, gruposArea, funcoes, rotasDe, sincronizar, sincronizarVarios, opcoesAtuais, syncFuncao, semFicha, temOp, casa, temSetDados };
+  // Pessoas da Escala do dia (Atividades) de todos os conjuntos carregados: [{ nome, mat, … }]
+  const naEscala = () => ativ().map(y => y.x);
+  return { vinculo, naEscala, lotacao, lotacoes, areaNome, areasAtuacao, gruposArea, funcoes, rotasDe, sincronizar, sincronizarVarios, opcoesAtuais, syncFuncao, semFicha, temOp, casa, temSetDados };
 }
