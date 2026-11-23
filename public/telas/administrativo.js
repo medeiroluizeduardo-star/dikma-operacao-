@@ -87,9 +87,9 @@ export function criarAdministrativo(X) {
     if (s.por === 'padrao') return { v: s.v, auto: true, por: 'padrao', per: s.periodo };
     return { v: s.v, auto: true, por: s.por === 'desligado' ? 'padrao' : s.por };
   }
-  // Folga pela escala no fim de semana aparece como S (sábado) ou D (domingo) em vez de F (a conta continua sendo folga).
-  // O D de domingo é a letra da célula; o selo redondo D/N (turno dia/noite) só aparece em dia trabalhado.
-  const rotuloSit = (c, dt) => { if (c.v !== 'F' || c.por !== 'escala') return c.v; const w = new Date(dt + 'T12:00:00').getDay(); return w === 6 ? 'S' : w === 0 ? 'D' : 'F'; };
+  // Folga no fim de semana (pela escala ou gravada) aparece como S (sábado) ou D (domingo) em vez de F (a conta continua
+  // sendo folga). O D de domingo é a letra da célula; o selo redondo D/N (turno dia/noite) só aparece em dia trabalhado.
+  const rotuloSit = (c, dt) => { if (c.v !== 'F') return c.v; const w = new Date(dt + 'T12:00:00').getDay(); return w === 6 ? 'S' : w === 0 ? 'D' : 'F'; };
   // Grupos do mesmo líder escritos de jeitos diferentes (KAUAN, KAUAN SOUZA, KAUAN SUZA) viram um grupo só;
   // quem edita grava a folha já arrumada.
   const compDoc = (conj, comp) => {
