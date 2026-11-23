@@ -345,3 +345,26 @@ test('trocar função: simular só conta; gravar faz a cópia e troca fichas, At
   assert.ok(fs.readdirSync(path.join(tmp, 'copia-funcao')).some(f => f.endsWith('.json.gz')), 'cópia em arquivo');
   assert.match(rodar('trocar-funcao.mjs', env), /0 pessoa\(s\) mudariam/, 'rodar de novo não muda ninguém');
 });
+
+// Nomes inventados. Tira um repetido sem matrícula, não tira quem só tem um cadastro e inclui quem tem ficha.
+test('ajustar Atividades: tira repetido, protege cadastro único e inclui na área geral', async () => {
+  await limpar();
+  await db.doc('gcolab/GERAL').set({ itens: [{ mat: '901', nome: 'ZE AJUSTE UM', funcao: 'COORDENADOR' }, { mat: '902', nome: 'LIA AJUSTE DOIS', funcao: 'TST', dem: '2026-01-01' }, { mat: '903', nome: 'RUI AJUSTE TRES', funcao: 'EXECUTANTE' }] });
+  await db.doc('colaboradores/RECEBIMENTO').set({ itens: [{ id: 'C017', mat: '903', nome: 'RUI AJUSTE TRES', regime: 'TURNO 4X4' }, { id: 'C040', mat: '904', nome: 'EVA AJUSTE QUATRO', regime: 'ADMINISTRATIVO' }], maiorId: 140 });
+  await db.doc('colaboradores/PREPARAÇÃO').set({ itens: [{ id: 'C051', nome: 'RUI AJUSTE TRES', regime: 'ADMINISTRATIVO' }] });
+  await db.doc('colaboradores/COQUERIA GERAL').set({ itens: [] });
+  const env = { AJ_REMOVER: 'c051, C040, C999', AJ_INCLUIR: '901,902,903', AJ_AREA: 'coqueria geral', BACKUP_PASTA: 'copia-ajuste' };
+  const sim = rodar('ajustar-atividades.mjs', env);
+  assert.match(sim, /só conferência/); assert.doesNotMatch(sim, /AJUSTE/, 'sem nomes no resumo');
+  assert.match(sim, /C040: tem matrícula e é o único/); assert.match(sim, /C999: não encontrado/);
+  assert.match(sim, /902: ficha com demissão/); assert.match(sim, /903: já está numa lista/);
+  assert.equal((await db.doc('colaboradores/PREPARAÇÃO').get()).get('itens').length, 1, 'simular não grava');
+  rodar('ajustar-atividades.mjs', { ...env, AJ_MODO: 'gravar' });
+  assert.deepEqual((await db.doc('colaboradores/PREPARAÇÃO').get()).get('itens'), []);
+  assert.equal((await db.doc('colaboradores/RECEBIMENTO').get()).get('itens').length, 2, 'cadastro único fica');
+  const g = await db.doc('colaboradores/COQUERIA GERAL').get();
+  assert.deepEqual(g.get('itens').map(x => [x.id, x.mat, x.area, x.rota, x.regime]), [['C141', '901', 'COQUERIA GERAL', 'COQUERIA GERAL', 'ADMINISTRATIVO']], 'número novo depois do maior já usado');
+  assert.equal(g.get('maiorId'), 141);
+  assert.ok((await db.collection('backups').get()).docs.some(d => d.id.startsWith('antes-ajustar-atividades-')), 'cópia no banco');
+  assert.match(rodar('ajustar-atividades.mjs', { ...env, AJ_MODO: 'gravar' }), /Nada a gravar/, 'rodar de novo não muda nada');
+});
