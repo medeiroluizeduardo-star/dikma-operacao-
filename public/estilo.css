@@ -1889,7 +1889,7 @@ button.tr-it:hover{border-color:var(--marca)}
 .om-passos small{font-size:10.5px;color:var(--ink-3)}
 .om-passos.canc{opacity:.55}
 .om-agora{margin:0 0 var(--s2);font-size:14px}.om-fora{color:var(--critico);font-weight:700}
-.om-passo{margin-bottom:var(--s3)}.om-passo .btn{min-height:46px;font-size:15px;flex:1 1 160px}
+.om-passo{margin-bottom:var(--s3)}.om-passo .btn{min-height:46px;font-size:15px;flex:1 1 160px}.om-passo .om-ed{flex:0 0 auto}
 .om-det{margin-top:var(--s2);border-top:1px solid var(--line);padding-top:var(--s2)}
 .om-det>summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--ink-2);padding:6px 0}
 .om-det .om-acoes{border-top:0}
