@@ -403,6 +403,7 @@ function stopData() {
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
   for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
   if (omsCfgSub) { try { omsCfgSub(); } catch (e) { /* já fechado */ } } omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
+  for (const f of omRecSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omRecSubs.clear(); cache.omsRec = {};
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
@@ -810,6 +811,35 @@ export function omApagar(id, conj) {
   const c = cache.oms[conj] || { d: {}, loaded: true }; const d = { ...c.d }; delete d[id];
   cache.oms = { ...cache.oms, [conj]: { ...c, d } }; changed();
   const b = writeBatch(db); b.delete(doc(db, 'oms', id)); return track(b.commit());
+}
+// Preventivas que se repetem (contas/oms-recorrentes.js): omsrec/{id}, uma escuta por conjunto, aberta pela tela das OMs.
+const omRecSubs = new Map(); cache.omsRec = {};
+export function omsRecWatch(conj) {
+  if (omRecSubs.has(conj)) return;
+  omRecSubs.set(conj, onSnapshot(query(collection(db, 'omsrec'), where('conj', '==', conj)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.omsRec = { ...cache.omsRec, [conj]: { d, loaded: true } }; changed(); },
+    e => { cache.omsRec = { ...cache.omsRec, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omRecSubs.delete(conj); changed(); }));
+}
+export const omRecNovoId = () => doc(collection(db, 'omsrec')).id;
+export function omRecSalvar(id, conj, dados, novo = false) {
+  const x = { ...dados, conj, ...(novo ? { criadoPor: me.uid, criadoNome: me.nome || me.login || '' } : {}), ...marca() };
+  const c = cache.omsRec[conj] || { d: {}, loaded: true };
+  cache.omsRec = { ...cache.omsRec, [conj]: { ...c, d: { ...c.d, [id]: { ...(c.d[id] || {}), id, ...x } } } }; changed();
+  return track(setDoc(doc(db, 'omsrec', id), x, { merge: true }));
+}
+export function omRecApagar(id, conj) {
+  const c = cache.omsRec[conj] || { d: {}, loaded: true }; const d = { ...c.d }; delete d[id];
+  cache.omsRec = { ...cache.omsRec, [conj]: { ...c, d } }; changed();
+  const b = writeBatch(db); b.delete(doc(db, 'omsrec', id)); return track(b.commit());
+}
+// OMs planejadas criadas pelas preventivas que se repetem: id fixo, só cria (sem merge). Se outra pessoa já criou ao
+// mesmo tempo, a gravação é recusada pelas regras e fica como está, sem aviso de erro. Devolve quantas criou.
+export async function omCriarPlanejadas(conj, lista) {
+  let n = 0;
+  for (const { id, dados } of lista) {
+    const x = { ...dados, conj, solPor: me.uid, solNome: me.nome || me.login || '', criadoEm: new Date().toISOString(), ...marca() };
+    try { await setDoc(doc(db, 'oms', id), x); n++; } catch (e) { /* já existe ou sem permissão: segue */ }
+  }
+  return n;
 }
 export const salvarPermissoes = abas => track(setDoc(doc(db, 'config', 'permissoes'), { abas, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
 // Horários dos avisos do Efetivo do dia (contas/efetivo-dia.js, HORAS_EF): o administrador muda em Avisos no celular.

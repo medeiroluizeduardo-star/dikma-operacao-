@@ -384,3 +384,89 @@ test('programação da semana: aviso da sexta ao cliente e a quem trata, por con
   assert.equal(r.find(x => x.uid === 'cli').chave, 'omprog|cli|patio|2026-11-23');
   assert.deepEqual(avisosProgramacao([om({ dPrev: '2026-12-01', status: 'planejada' })], us, '2026-11-20', 15, cfg), [], 'nada na próxima semana: sem aviso');
 });
+
+/* ---------- 2026-11-24: OMs mais fáceis de entender ---------- */
+import { nomeSit, etapas, comQuem, proximo, inicioPrazo, resumo7h } from '../public/contas/oms.js';
+import { conferirRecorrente, datasDa, aCriar, idDaOm, freqTxt, proximaData, HORIZONTE } from '../public/contas/oms-recorrentes.js';
+
+test('barra de passos, com quem está e o próximo passo de cada um', () => {
+  const cli = { uid: 'cliP', papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] };
+  const e = etapas(om({ status: 'solicitada' }));
+  assert.deepEqual(e.map(p => p.k), ['pedido', 'tecnico', 'om', 'lib', 'fim', 'desb']);
+  assert.ok(e[0].feito && e[1].atual && !e[1].feito);
+  const env = om({ status: 'enviada', clienteUid: 'cliP', hEnvio: '2026-11-17T08:00', hAprov: '2026-11-17T07:50' });
+  assert.ok(etapas(env)[2].atual); assert.ok(etapas({ ...env, hCiente: '2026-11-17T08:10' })[3].atual, 'OM gerada: falta liberar');
+  assert.ok(etapas(om({ status: 'recusada' }))[2].prob, 'não liberada fica vermelha');
+  assert.ok(etapas(om({ status: 'finalizada', hFim: '2026-11-17T16:00' }))[5].atual, 'falta o desbloqueio');
+  assert.ok(etapas(om({ status: 'finalizada', hFim: '2026-11-17T16:00', hDesb: '2026-11-17T17:00' })).every(p => p.feito));
+  assert.equal(nomeSit(om({ status: 'finalizada', hFim: '2026-11-17T16:00' })), 'Aguardando desbloqueio');
+  assert.equal(nomeSit(om({ status: 'finalizada', hDesb: '2026-11-17T17:00' })), 'Finalizada');
+  assert.equal(nomeSit(om({ status: 'aprovada' })), 'Aguardando envio');
+  assert.match(comQuem(om()), /Técnico/); assert.match(comQuem(om({ status: 'liberada' })), /líder/);
+  // O botão grande: técnico aprova; cliente gera a OM e depois libera; líder executa e marca o desbloqueio.
+  assert.equal(proximo(om(), U.tec), 'aprovar');
+  assert.equal(proximo(env, cli), 'ciente'); assert.equal(proximo({ ...env, hCiente: '2026-11-17T08:10' }, cli), 'liberar');
+  assert.equal(proximo(env, U.tec), null, 'com o cliente, o técnico só acompanha (liberar por fora fica em Mais)');
+  assert.equal(proximo({ ...env, clienteUid: '' }, U.tec), 'liberar', 'sem cliente no sistema, o técnico registra');
+  assert.equal(proximo(om({ status: 'liberada' }), U.lider), 'finalizar');
+  assert.equal(proximo(om({ status: 'finalizada', hFim: '2026-11-17T16:00' }), U.lider), 'desbloqueio');
+  assert.equal(proximo(om({ status: 'devolvida' }), U.lider), 'editar');
+  assert.equal(proximo(om({ status: 'planejada', dPrev: '2026-11-20' }), U.lider), 'solicitar');
+  assert.equal(proximo(om(), U.leitor), null);
+});
+
+test('um relógio só: o prazo conta da OM gerada até o eletricista liberar', () => {
+  const env = om({ status: 'enviada', prio: 'alta', clienteUid: 'cliP', hEnvio: '2026-11-17T08:00' });
+  assert.equal(inicioPrazo(env), '2026-11-17T08:00', 'sem OM gerada, conta do envio');
+  const ger = { ...env, hCiente: '2026-11-17T10:00' };
+  assert.equal(inicioPrazo(ger), '2026-11-17T10:00');
+  assert.equal(prazoOm(ger, null, '2026-11-18T09:00').resta, 60, 'alta = 24 h desde a OM gerada');
+  assert.ok(!foraDoPrazo(ger, null, '2026-11-18T09:00') && foraDoPrazo(ger, null, '2026-11-18T10:01'));
+  const lib = { ...ger, status: 'liberada', hEletr: '2026-11-18T09:30', hLib: '2026-11-18T11:00' };
+  const p = prazoOm(lib, null); assert.ok(!p.fora && !p.aberta, 'termina quando o eletricista liberou, não no toque do cliente');
+  assert.equal(p.usado, tempos(lib).bloqueio, 'é o mesmo número do tempo de bloqueio');
+});
+
+test('resumo das 7h: cada um recebe só o que é dele', () => {
+  const us = { tec: U.tec, lider: U.lider, leitor: U.leitor, cliP: { papel: 'leitor', acesso: { operacao: 'leitor' }, escopos: ['patio'] } };
+  const l = [
+    om({ id: 'a', status: 'solicitada' }),
+    om({ id: 'b', status: 'planejada', dPrev: '2026-11-24', hSol: '' }),
+    om({ id: 'c', status: 'liberada' }),
+    om({ id: 'd', status: 'enviada', clienteUid: 'cliP', hEnvio: '2026-11-23T08:00' }),
+    om({ id: 'e', status: 'finalizada', hFim: '2026-11-23T16:00' }),
+    om({ id: 'f', area: 'PREPARAÇÃO', status: 'liberada' })
+  ];
+  const r = Object.fromEntries(resumo7h(l, us, '2026-11-24', null, '2026-11-24T07:05').map(x => [x.uid, x]));
+  assert.deepEqual(Object.keys(r).sort(), ['cliP', 'lider', 'tec']);
+  assert.match(r.tec.corpo, /1 para aprovar/); assert.match(r.tec.corpo, /1 com o cliente/); assert.match(r.tec.corpo, /1 prevista para hoje/);
+  assert.match(r.lider.corpo, /1 para solicitar hoje/); assert.match(r.lider.corpo, /1 liberada para executar/); assert.match(r.lider.corpo, /1 sem a hora do desbloqueio/);
+  assert.doesNotMatch(r.lider.corpo, /2 liberadas/, 'só as da área dele');
+  assert.match(r.cliP.corpo, /1 para gerar a OM/);
+  assert.equal(r.tec.chave, 'om7|tec|2026-11-24');
+  assert.deepEqual(resumo7h([om({ status: 'finalizada', hDesb: '2026-11-23T17:00' })], us, '2026-11-24'), [], 'nada a fazer, nada de aviso');
+});
+
+test('preventivas que se repetem: datas, conferência e o que criar', () => {
+  const r = conferirRecorrente({ area: 'RECEBIMENTO', local: 'Correia 2', titulo: 'Lubrificar mancais', freq: 'semana', dias: [0, 3], inicio: '2026-11-24' });
+  assert.deepEqual(datasDa(r, '2026-11-23', '2026-12-06'), ['2026-11-26', '2026-11-30', '2026-12-03'], 'seg e qui, nunca antes do início (24/11 é terça)');
+  assert.equal(freqTxt(r), 'Toda semana: Seg, Qui');
+  const q = { ...r, freq: 'quinzena', dias: [1] };
+  assert.deepEqual(datasDa(q, '2026-11-24', '2026-12-15'), ['2026-11-24', '2026-12-08'], 'a cada 2 semanas');
+  const m = conferirRecorrente({ area: 'RECEBIMENTO', local: 'Peneira', titulo: 'Troca de tela', freq: 'mes', dia: 5, inicio: '2026-11-01' });
+  assert.deepEqual(datasDa(m, '2026-11-01', '2027-01-10'), ['2026-11-05', '2026-12-05', '2027-01-05']);
+  assert.throws(() => conferirRecorrente({ area: 'RECEBIMENTO', local: 'x', titulo: 'Lubrificar', freq: 'semana', dias: [], inicio: '2026-11-24' }), e => e.campo === 'orD0');
+  assert.throws(() => conferirRecorrente({ area: 'RECEBIMENTO', local: 'x', titulo: 'Lubrificar', freq: 'mes', dia: 31, inicio: '2026-11-24' }), e => e.campo === 'orDia');
+  assert.throws(() => conferirRecorrente({ area: 'X', local: 'x', titulo: 'Lubrificar', freq: 'mes', dia: 3, inicio: '2026-11-24' }, ['RECEBIMENTO']), e => e.campo === 'orArea');
+  const rec = { ...r, id: 'r1', ate: '' };
+  const quem = { uid: 'tec', nome: 'Técnico' };
+  const { oms, ate } = aCriar([rec], {}, '2026-11-24', quem);
+  assert.equal(ate.r1, '2026-12-15'); assert.equal(HORIZONTE, 21);
+  assert.deepEqual(oms.map(x => x.id), ['2026-11-26', '2026-11-30', '2026-12-03', '2026-12-07', '2026-12-10', '2026-12-14'].map(d => idDaOm('r1', d)));
+  const o = oms[0].dados; assert.equal(o.status, 'planejada'); assert.equal(o.tipo, 'preventiva'); assert.equal(o.dPrev, '2026-11-26'); assert.match(o.hist[0].txt, /se repete/);
+  assert.equal(aCriar([rec], { [idDaOm('r1', '2026-11-26')]: 1 }, '2026-11-24', quem).oms.length, 5, 'a que já existe não se repete');
+  assert.equal(aCriar([{ ...rec, ate: '2026-12-15' }], {}, '2026-11-24', quem).oms.length, 0, 'já criadas até o fim: nada (a apagada não volta)');
+  assert.equal(aCriar([{ ...rec, ate: '2026-12-15' }], {}, '2026-11-27', quem).oms.map(x => x.dados.dPrev).join(), '2026-12-17', 'dias depois, só a data nova');
+  assert.equal(aCriar([{ ...rec, ativa: false }], {}, '2026-11-24', quem).oms.length, 0, 'pausada não planeja');
+  assert.equal(proximaData(rec, '2026-11-24'), '2026-11-26');
+});

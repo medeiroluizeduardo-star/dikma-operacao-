@@ -350,3 +350,15 @@ test('programação das OMs: na sexta às 14h, um aviso por pessoa com o link da
   const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-11-20']));
   assert.equal(planejar({ ...base, enviados, agora: new Date('2026-11-20T15:05:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez');
 });
+
+test('resumo das OMs às 7h: uma vez por dia, só a quem tem algo a fazer', () => {
+  const us = conv({ tec: { papel: 'leitor', nome: 'Técnico', acesso: { operacao: 'tecnico' }, escopos: ['patio'] }, cli: { papel: 'leitor', nome: 'Usuário Pátio', acesso: { operacao: 'leitor' }, escopos: ['patio'] } });
+  const oms7 = [{ id: 'a', conj: 'patio', area: 'RECEBIMENTO', titulo: 'Troca de rolete', status: 'solicitada', solPor: 'x', hSol: '2026-11-23T15:00', hist: [] }];
+  const base = { usuarios: us, avisos: { tec: tok, cli: tok }, paradas: [], ocorr: [], sets: {}, enviados: {}, oms7, hoje: '2026-11-24' };
+  assert.equal(planejar({ ...base, agora: new Date('2026-11-24T06:30:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'antes das 7h');
+  const r = planejar({ ...base, agora: new Date('2026-11-24T07:05:00') });
+  const m = r.msgs.filter(x => x.tag === 'oms');
+  assert.deepEqual(m.map(x => x.uid), ['tec']); assert.match(m[0].titulo, /OMs hoje: 1 para aprovar/);
+  const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-11-24']));
+  assert.equal(planejar({ ...base, enviados, agora: new Date('2026-11-24T08:05:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez por dia');
+});
