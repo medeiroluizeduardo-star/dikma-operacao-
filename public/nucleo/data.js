@@ -739,13 +739,19 @@ export function medWatch(ym) {
 }
 // campo: l (lançado) · oc (oculto) · man (digitado); val = null apaga.
 export const medGravar = (ym, campo, id, val) => track(setDoc(doc(db, 'medicao', ym), { [campo]: { [id]: val == null ? deleteField() : val }, ...marca() }, { merge: true }));
+// Escuta que falhou NÃO reabre no próximo desenho: cada tentativa recusada pelas regras conta 1 leitura na cota grátis e a
+// tela redesenha até 4 vezes por segundo (achado de 24/11: telas sem permissão, como Causas e ações sem a Gestão, gastavam
+// milhares de leituras por hora). Sem permissão: fica assim até sair e entrar; outro erro: tenta de novo depois de 1 minuto.
+const ESPERA_ERRO = 60000;
+const parada = () => {};
+function aposErro(e, liberar) { if (!e || e.code !== 'permission-denied') setTimeout(liberar, ESPERA_ERRO); }
 // Gestão › Tratativas (tratativas/{id}: tipo acao | plano | ata; contas/tratativas.js). A coleção é lida quando a tela
 // abre (ou Causas e ações); grava quem edita as Tratativas (firestore.rules), sempre com a marca de quem gravou.
 let tratSub = null; cache.trat = { d: {}, loaded: false };
 export function tratWatch() {
   if (tratSub) return;
   tratSub = onSnapshot(collection(db, 'tratativas'), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data({ serverTimestamps: 'estimate' }) }; }); cache.trat = { d, loaded: true }; changed(); },
-    e => { cache.trat = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; tratSub = null; changed(); });
+    e => { cache.trat = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; tratSub = parada; aposErro(e, () => { if (tratSub === parada) tratSub = null; }); changed(); });
 }
 export const tratNovoId = () => doc(collection(db, 'tratativas')).id;
 // novo = true na criação (grava quem criou e quando); depois, só os campos que mudaram.
@@ -761,9 +767,9 @@ let procSub = null, rotSub = null; cache.proc = { cfg: null, docs: {}, loaded: f
 export function procWatch(desde) {
   if (procSub) return;
   procSub = onSnapshot(doc(db, 'processos', 'config'), s => { cache.proc = { ...cache.proc, cfg: s.exists() ? s.data() : null, loaded: true }; changed(); },
-    e => { cache.proc = { ...cache.proc, loaded: true, erro: e.code || e.message || 'erro' }; procSub = null; changed(); });
+    e => { cache.proc = { ...cache.proc, loaded: true, erro: e.code || e.message || 'erro' }; procSub = parada; aposErro(e, () => { if (procSub === parada) procSub = null; }); changed(); });
   rotSub = onSnapshot(query(collection(db, 'rotina'), where('data', '>=', desde)), qs => { const d = {}; qs.forEach(x => { d[x.id] = x.data(); }); cache.proc = { ...cache.proc, docs: d, rotLoaded: true }; changed(); },
-    e => { cache.proc = { ...cache.proc, rotLoaded: true, erro: e.code || e.message || 'erro' }; rotSub = null; changed(); });
+    e => { cache.proc = { ...cache.proc, rotLoaded: true, erro: e.code || e.message || 'erro' }; rotSub = parada; changed(); });
 }
 // patch: { itens: { P01: {...} }, desde, dono, donoNome } (itens[id] = null apaga um processo novo).
 export function procSalvarCfg(patch) {
@@ -784,10 +790,10 @@ const omSubs = new Map(); cache.oms = {};
 let omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
 export function omsWatch(conj) {
   if (!omsCfgSub) omsCfgSub = onSnapshot(doc(db, 'config', 'oms'), s => { cache.omsCfg = { loaded: true, d: s.exists() ? s.data() : null }; changed(); },
-    () => { cache.omsCfg = { loaded: true, d: null }; omsCfgSub = null; changed(); });
+    e => { cache.omsCfg = { loaded: true, d: null }; omsCfgSub = parada; aposErro(e, () => { if (omsCfgSub === parada) omsCfgSub = null; }); changed(); });
   if (omSubs.has(conj)) return;
   omSubs.set(conj, onSnapshot(query(collection(db, 'oms'), where('conj', '==', conj)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.oms = { ...cache.oms, [conj]: { d, loaded: true } }; changed(); },
-    e => { cache.oms = { ...cache.oms, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omSubs.delete(conj); changed(); }));
+    e => { cache.oms = { ...cache.oms, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omSubs.set(conj, parada); aposErro(e, () => { if (omSubs.get(conj) === parada) omSubs.delete(conj); }); changed(); }));
 }
 export const omNovoId = () => doc(collection(db, 'oms')).id;
 export function omSalvar(id, conj, dados, novo = false) {
@@ -817,7 +823,7 @@ const omRecSubs = new Map(); cache.omsRec = {};
 export function omsRecWatch(conj) {
   if (omRecSubs.has(conj)) return;
   omRecSubs.set(conj, onSnapshot(query(collection(db, 'omsrec'), where('conj', '==', conj)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data() }; }); cache.omsRec = { ...cache.omsRec, [conj]: { d, loaded: true } }; changed(); },
-    e => { cache.omsRec = { ...cache.omsRec, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omRecSubs.delete(conj); changed(); }));
+    e => { cache.omsRec = { ...cache.omsRec, [conj]: { d: {}, loaded: true, erro: e.code || e.message || 'erro' } }; omRecSubs.set(conj, parada); aposErro(e, () => { if (omRecSubs.get(conj) === parada) omRecSubs.delete(conj); }); changed(); }));
 }
 export const omRecNovoId = () => doc(collection(db, 'omsrec')).id;
 export function omRecSalvar(id, conj, dados, novo = false) {
