@@ -884,12 +884,51 @@ export async function acessosFichaDe(mat) {
   return qs.docs.map(deHist).sort((a, b) => b.at - a.at);
 }
 
+// Dados pessoais (CPF, endereço, telefone, rota de ônibus): dpessoais/{matrícula Dikma}, fora da ficha (gcolab), que é
+// lida por mais gente. Lê o administrador e o RH · Administrativo (e o RH · Somente leitura, se ligado em Perfis);
+// grava o administrador e o RH · Administrativo (firestore.rules › dpessoais). Lidos só quando a aba abre (no aparelho, só no cache do banco, como o resto).
+export async function dpLer(mat) {
+  const s = await getDoc(doc(db, 'dpessoais', String(mat)));
+  return s.exists() ? { id: s.id, ...s.data() } : null;
+}
+export async function dpLerTodos() {
+  const qs = await getDocs(collection(db, 'dpessoais'));
+  return qs.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+const dpDoc = (mat, d) => { const o = { mat: String(mat), ...marca() }; for (const k of ['cpf', 'end', 'tel', 'rotaOn']) o[k] = d[k] || null; return o; };
+export function dpSalvar(mat, d) { return track(setDoc(doc(db, 'dpessoais', String(mat)), dpDoc(mat, d))); }
+// Importação: itens = [{ mat, dados }] · arc = [{ mat, para }] (matrícula Arcelor na ficha, no documento da área dela).
+export async function dpImportar(itens, arc) {
+  const ops = itens.map(x => ['dp', x]);
+  if (arc && arc.length && !Object.keys(fichasRH).length) throw new Error('O cadastro do RH ainda não carregou. Espere um pouco e tente de novo.');
+  if (arc && arc.length) {
+    const m = new Map(arc.map(a => [String(a.mat), a.para]));
+    for (const a of Object.keys(fichasRH)) {
+      if (a.startsWith('_')) continue;
+      const l = fichasRH[a] || []; if (!l.some(c => m.has(String(c.mat)))) continue;
+      const n = l.map(c => (m.has(String(c.mat)) ? { ...c, matArc: m.get(String(c.mat)) } : c));
+      fichasRH[a] = n; ops.push(['g', a, n]);
+    }
+    cache.adm.rh = Object.values(fichasRH).flat(); changed();
+  }
+  for (let i = 0; i < ops.length; i += 400) {
+    const b = writeBatch(db);
+    for (const o of ops.slice(i, i + 400)) {
+      if (o[0] === 'dp') b.set(doc(db, 'dpessoais', String(o[1].mat)), dpDoc(o[1].mat, o[1].dados));
+      else b.set(doc(db, 'gcolab', o[1]), { itens: o[2], ...marca() });
+    }
+    pending++; syncMudou();
+    try { await b.commit(); } finally { pending--; syncMudou(); }
+  }
+}
+
 // LGPD › descarte por prazo (Administração › LGPD; contas/lgpd.js diz o que passou do prazo). Lê a presença (Pátio e
 // Bateria), as folhas da Frequência, os ASO, os acessos às fichas com mais de 1 ano e o cadastro (demissão).
 export async function lgpdLer(limAcesso) {
   const [sp, sb, comps, aso, acessos, fichas] = await Promise.all([limpezaLer('situacao'), limpezaLer('b_situacao'), limpezaLer('freqcomp'),
     limpezaLer('treinos', [['tipo', '==', 'ASO']]), limpezaLer('acessosFicha', [['dia', '<', limAcesso]]), limpezaLer('gcolab')]);
-  return { sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
+  const dps = await limpezaLer('dpessoais');
+  return { dps, sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
 }
 // ops: { tipo: 'obs', col, id, caminho[] } apaga a observação · { tipo: 'aso', id } apaga o ASO (marca de apagado do
 // incremental, sem as datas nem a observação) · { tipo: 'acesso', id } apaga a linha do registro de acesso.
@@ -899,6 +938,7 @@ export async function lgpdGravar(ops) {
     if (o.tipo === 'obs') b.update(doc(db, o.col, o.id), new FieldPath(...o.caminho), deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
     else if (o.tipo === 'aso') b.set(doc(db, 'treinos', o.id), { ...marcaApagado(), realizado: null, validade: null, obs: null }, { merge: true });
     else if (o.tipo === 'acesso') b.delete(doc(db, 'acessosFicha', o.id));
+    else if (o.tipo === 'dp') b.delete(doc(db, 'dpessoais', o.id));
   }
   pending++; syncMudou();
   try { await b.commit(); } finally { pending--; syncMudou(); }

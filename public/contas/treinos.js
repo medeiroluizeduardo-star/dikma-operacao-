@@ -99,7 +99,7 @@ export function conjDe(t) {
 // Área do registro; sem área, a geral do conjunto (Coqueria Pátio, Coqueria Bateria) ou "Sem área".
 export function areaDe(t) {
   if (t.area) return t.area;
-  const k = conjDe(t); return k ? SETS[k].gerais[SETS[k].gerais.length - 1] : 'SEM ÁREA';
+  const k = conjDe(t); const g = k ? SETS[k].gerais.filter(a => a.startsWith('COQUERIA')) : []; return g.length ? g[g.length - 1] : 'SEM ÁREA';
 }
 
 // Painel: situação de hoje por conjunto e área e por treinamento. Conformidade = em dia ÷ (em dia + a vencer + vencidos).

@@ -86,7 +86,7 @@ export function criarPessoas(DB) {
   const geraisComDados = () => AREAS_GERAIS.filter(a => temSetDados(setDaArea(a)));
   const areasAtuacao = () => [...geraisComDados(), ...SET_KEYS.filter(temSetDados).flatMap(k => SETS[k].areas), ...(temOp() ? [AREA_OP] : []), AREA_GERAL];
   // Grupos para o <select> de área de atuação
-  const gruposArea = () => [...(geraisComDados().length ? [['Coqueria (sem rota de atividades)', geraisComDados()]] : []), ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Equipamentos', [AREA_OP]]] : []), ['Outros', [AREA_GERAL]]];
+  const gruposArea = () => [...(geraisComDados().length ? [['Sem rota de atividades', geraisComDados()]] : []), ...SET_KEYS.filter(temSetDados).map(k => [SETS[k].nome, SETS[k].areas]), ...(temOp() ? [['Equipamentos', [AREA_OP]]] : []), ['Outros', [AREA_GERAL]]];
 
   function funcoes() {
     const s = new Set();

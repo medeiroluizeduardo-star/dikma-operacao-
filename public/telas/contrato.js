@@ -5,7 +5,7 @@
 // O mês que já está carregado é calculado na hora; os outros vêm do histórico guardado em config/indicadores (hist),
 // que o Gestor e o administrador atualizam sozinhos ao abrir a Visão geral (só quando os números mudam).
 import { IND_CONTRATO, metaDe, naMeta, situacaoInd, textoMeta, fmtNum, mesMais, mesesAte, diasDoMes, contarProgramacao, contarQuedas, contarAusencias, somarNumeros, calcularIndicadores, placar, CAMPOS, conferirMetas } from '../contas/contrato.js';
-import { SETS, MESES_L, today } from '../contas/cal.js';
+import { SETS, MESES_L, today, foraDaCoqueria } from '../contas/cal.js';
 import { contagemDia } from '../contas/situacao.js';
 import { fontesSit, colabsDoSet, sitDoSet, escala, regimeDe } from '../calc/presenca.js';
 import { horasHE } from './horas-justificativas.js';
@@ -54,7 +54,7 @@ function numerosConj(k, ym, assistir) {
   if (!st.monthsLoaded || !st.monthsLoaded.has(ym)) return null;
   if (!DB.isMock && (!(ym in (st.sitByMonth || {})) || !st.colabsLoaded)) return null;
   const ch = `${k}|${ym}|${DATAV}`; if (MEMO.has(ch)) return MEMO.get(ch);
-  const cs = colabsDoSet(k); const dias = diasDoMes(ym, TODAY); const f = fontesSit(key => sitDoSet(k, key));
+  const cs = colabsDoSet(k).filter(c => !foraDaCoqueria(c.area)); const dias = diasDoMes(ym, TODAY); const f = fontesSit(key => sitDoSet(k, key));
   const { esc: e, aus } = contarAusencias(dias.map(dt => contagemDia(cs, dt, f)));
   const hc = heCfgDe(st); let he = 0, heD = 0;
   for (const c of cs) for (const dt of dias) {

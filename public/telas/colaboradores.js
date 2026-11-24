@@ -24,6 +24,7 @@ import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
 import { registrarAcesso, botaoQuemAbriu } from '../ui/acessos-ficha.js';
+import { podeVerDP, podeEditarDP, vDadosPessoais, editarDP, importarDP } from './dados-pessoais.js';
 
 const C = UI.co;
 const $ = id => document.getElementById(id);
@@ -98,7 +99,8 @@ function vLista() {
   </div>`;
   const ferF = f[0].startsWith('fer');
   const exp = !framed && ferPronto() && ferLista().length ? `<button class="btn" data-act="coExpFerias">${I.dl} Exportar férias</button>` : '';
-  const botoes = podeEditar() || completo() || exp ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}${exp}</div>` : '';
+  const imp = podeEditarDP() && !framed ? '<button class="btn" data-act="coImpDP" title="CPF, endereço, telefone, rota de ônibus e matrícula Arcelor a partir da planilha do RH">Importar dados pessoais</button>' : '';
+  const botoes = podeEditar() || completo() || exp || imp ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}${exp}${imp}</div>` : '';
   let h = `<div class="card"><div class="body stackcol">${filtros}${botoes}</div></div>`;
   const D = dups();
   if (D.length && f[0] === 'dup') h += `<div class="aviso"><b>Cadastro repetido</b>: a mesma pessoa aparece duas vezes na Frequência. Abra a ficha certa e corrija a matrícula (ou desligue a ficha repetida). A troca de letra e de escala também é feita aqui, na ficha.<ul class="m0">${D.map(d => `<li>${d.mats.filter(Boolean).map(m => `<button type="button" class="btn ghost link" data-act="coFicha" data-mat="${esc(m)}">${esc(title(d.nome))} · ${esc(m)}</button>`).join(' · ') || esc(title(d.nome))}: ${esc(d.motivo)}</li>`).join('')}</ul></div>`;
@@ -125,8 +127,8 @@ function vFicha(c) {
   registrarAcesso(c, 'rh');
   const L = lista(); const lot = PES.lotacao(c); const ld = criarLiderancaDaFicha(L)(c);
   const at = lot.ativ ? lot.ativ.x : null, op = lot.op;
-  const aba = ['dados', 'lot', 'fer'].includes(C.aba) ? C.aba : 'dados';
-  const corpo = aba === 'fer' ? vFeriasFicha(c) : aba === 'dados'
+  const aba = ['dados', 'lot', 'fer', ...(podeVerDP() ? ['pes'] : [])].includes(C.aba) ? C.aba : 'dados';
+  const corpo = aba === 'pes' ? vDadosPessoais(c) : aba === 'fer' ? vFeriasFicha(c) : aba === 'dados'
     ? dados([
       ['Nome completo', esc(c.nome)], ['Matrícula Dikma', `<span class="mono">${esc(c.mat)}</span>`], ['Matrícula Arcelor', c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : ''],
       ['Admissão', c.adm ? `${dBR(c.adm)} <span class="muted small">· ${tempoCasa(c.adm)} de casa</span>` : ''], ['Demissão', dBR(c.dem)],
@@ -147,7 +149,7 @@ function vFicha(c) {
       <p class="muted m0">Matrícula Dikma <b class="mono">${esc(c.mat)}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}</p>
       <div class="row-gap co-etq">${situacao(c)}${c.adm && emExp(c) ? etiqueta(`${dias(c.adm, TODAY)} dias de casa`, 'info') : ''}</div></div>
       ${botoes ? `<div class="row-gap">${botoes}</div>` : ''}</div>
-    ${abas([['dados', 'Dados'], ['lot', 'Lotação e liderança'], ['fer', 'Férias']], aba, 'co-aba', 'Ficha do colaborador')}
+    ${abas([['dados', 'Dados'], ...(podeVerDP() ? [['pes', 'Dados pessoais']] : []), ['lot', 'Lotação e liderança'], ['fer', 'Férias']], aba, 'co-aba', 'Ficha do colaborador')}
     ${corpo}
     ${aba === 'lot' && lot.outros && lot.outros.length ? `<div class="aviso small">Esta pessoa está cadastrada em ${lot.outros.length + 1} lugares das Atividades (${esc(lot.txt.replace(/ \+ Equipamentos$/, ''))}) e por isso aparece em mais de uma Escala do dia.${completo() ? ' Toque em Editar, escolha a área de atuação certa e salve: ela fica só nesse lugar.' : ' Peça ao administrador para abrir Editar e salvar a ficha: ela fica só na área escolhida.'}</div>` : ''}
     ${aba === 'lot' ? '<p class="muted small m0">O supervisor imediato é o líder da ficha do líder (o mesmo que agrupa a Frequência). Área de atuação e rota vêm das Atividades e dos Equipamentos.</p>' : ''}
@@ -188,7 +190,7 @@ function formRH(mat) {
   if (!c) return;
   const L = lista();
   const opLider = () => lideresDasFichas(L, TODAY).map(l => ({ v: l.nome, t: title(l.nome), d: `${l.ativos} pessoa${l.ativos === 1 ? '' : 's'}` }));
-  const dl = (id, campo) => `<datalist id="${id}">${[...new Set(['Coqueria - Geral', 'Coqueria - Pátio', 'Coqueria - Bateria', ...L.map(x => x[campo]).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist>`;
+  const dl = (id, campo) => `<datalist id="${id}">${[...new Set(['Coqueria - Geral', 'Coqueria - Pátio', 'Coqueria - Bateria', 'Sinter', ...L.map(x => x[campo]).filter(Boolean)])].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist>`;
   formSheet(mat ? 'Editar cadastro' : 'Novo colaborador', mat ? `${esc(title(c.nome))} · ${esc(c.mat)}` : 'Entra sem área de atuação; o administrador coloca na área e na rota', `
     <div class="row2"><label class="sel"><span>Matrícula Dikma</span><input class="in" id="coMat" value="${esc(c.mat)}" ${mat ? 'readonly' : ''} inputmode="numeric"></label>
     <label class="sel"><span>Matrícula Arcelor</span><input class="in" id="coArc" value="${esc(c.matArc || '')}" autocomplete="off"></label></div>
@@ -228,6 +230,8 @@ acoes.coLideres = () => { if (completo()) comGestao(m => m.lideres()); };
 acoes.coFer = (t, d) => comFerias(m => m.formFerias(d.id));
 acoes.coFerNova = (t, d) => { const c = lista().find(x => String(x.mat) === String(d.mat)); if (c) comFerias(m => m.formFerias(null, { nome: c.nome, mat: c.mat, setor: c.setor || '' })); };
 acoes.coExpFerias = () => comFerias(m => m.exportarFerias());
+acoes.coImpDP = () => { if (podeEditarDP()) importarDP(lista()); };
+acoes.dpEditar = (t, d) => { const c = lista().find(x => String(x.mat) === String(d.mat)); if (c) editarDP(c); };
 document.addEventListener('click', e => { const t = e.target.closest('[data-co-aba]'); if (!t || UI.view !== 'rcolab') return; C.aba = t.dataset.coAba; render(); });
 document.addEventListener('input', e => {
   if (e.target.id !== 'coQ') return;
