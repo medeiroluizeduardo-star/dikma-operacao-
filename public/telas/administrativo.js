@@ -257,8 +257,8 @@ export function criarAdministrativo(X) {
       ${sel('aTurno', 'Turno', op('', 'Todos', F.turno) + op('ADM', 'Administrativo', F.turno) + op('TURNO', 'Turno (todas as turmas)', F.turno) + turmas.map(t => op(t, 'Turma ' + t, F.turno)).join(''))}
       ${nAt ? `<span class="muted small"><b>${n}</b> pessoa${n === 1 ? '' : 's'} · ${nAt} filtro${nAt > 1 ? 's' : ''}</span><button type="button" class="btn sm ghost" data-a="limparF">Limpar filtros</button>` : ''}</div>`;
   }
-  // Efetivo do dia: cada área com o status do envio do líder; o RH · Administrativo valida ou devolve (com motivo) e o
-  // administrador reabre o dia validado. Status em contas/efetivo-dia.js; o líder envia na Operação › Presença.
+  // Efetivo do dia: cada área com o status do envio do líder; o RH · Administrativo valida ou devolve (com motivo) e
+  // reabre o dia validado (o administrador também). Status em contas/efetivo-dia.js; o líder envia na Operação › Presença.
   const quemEf = () => ({ valida: pode(), admin: ehAdminU(ME()) });
   const diasEf = datas => datas.filter(d => d <= TODAY);
   function diaEfRH(datas) { const ds = diasEf(datas); if (!ds.includes(U.efD)) U.efD = ds.includes(TODAY) ? TODAY : ds[ds.length - 1] || null; return U.efD; }

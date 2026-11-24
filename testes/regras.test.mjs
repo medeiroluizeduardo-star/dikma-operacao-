@@ -1487,7 +1487,7 @@ test('Erros nos aparelhos: quem tem cadastro grava o próprio erro (campos curto
   await assertSucceeds(deleteDoc(doc(db('admin'), 'erros', 'e1')));
 });
 
-test('Efetivo do dia: o líder envia a área dele; o RH valida ou devolve; validado, só o administrador reabre', async () => {
+test('Efetivo do dia: o líder envia a área dele; o RH valida ou devolve; validado, o RH ou o administrador reabre', async () => {
   const D = '2026-11-20';
   const ef = (uid, area, st, extra = {}) => ({ area, data: D, mes: '2026-11', st, por: uid, nome: uid, em: serverTimestamp(), mot: '', hist: [{ st, nome: uid, em: '2026-11-20T11:00:00.000Z' }], ...extra });
   const ref = (u, area, col = 'efetivoDia') => doc(db(u), col, `${D}_${area}`);
@@ -1508,7 +1508,12 @@ test('Efetivo do dia: o líder envia a área dele; o RH valida ou devolve; valid
   await assertSucceeds(setDoc(ref('liderPrep', 'PREPARAÇÃO'), ef('liderPrep', 'PREPARAÇÃO', 'enviado')), 'reenviar depois de devolvido');
   await assertSucceeds(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'validado')));
   await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'validado não volta pelo líder');
-  await assertFails(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'aberto')), 'o RH não reabre');
+  await assertFails(setDoc(ref('coord', 'RECEBIMENTO'), ef('coord', 'RECEBIMENTO', 'aberto')), 'o coordenador não reabre');
+  await assertFails(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'aberto')), 'o líder não reabre');
+  await assertFails(setDoc(ref('rhLeitorNovo', 'RECEBIMENTO'), ef('rhLeitorNovo', 'RECEBIMENTO', 'aberto')), 'RH somente leitura não reabre');
+  await assertSucceeds(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'aberto')), 'o RH reabre');
+  await assertSucceeds(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'reaberto pelo RH: o líder envia de novo');
+  await assertSucceeds(setDoc(ref('rhSo', 'RECEBIMENTO'), ef('rhSo', 'RECEBIMENTO', 'validado')));
   await assertSucceeds(setDoc(ref('admin', 'RECEBIMENTO'), ef('admin', 'RECEBIMENTO', 'aberto')), 'o administrador reabre');
   await assertSucceeds(setDoc(ref('liderRec', 'RECEBIMENTO'), ef('liderRec', 'RECEBIMENTO', 'enviado')), 'reaberto: o líder envia de novo');
   await assertFails(deleteDoc(ref('liderRec', 'RECEBIMENTO')));
