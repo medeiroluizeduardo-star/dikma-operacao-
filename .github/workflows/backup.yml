@@ -1,11 +1,18 @@
 name: Cópia de segurança
 
-# Todo dia às 3h (Brasília): cópia diária (tudo, menos o histórico e as fotos), guardada 30 dias.
+# Todo dia logo depois que a cota grátis do Firestore zera (meia-noite do Pacífico = 5h de Brasília; 6h no horário de
+# verão de lá): cópia diária (tudo, menos o histórico e as fotos), guardada 30 dias.
 # Domingo: cópia semanal (inclui o histórico e a lista de fotos), guardada 90 dias.
-# Manual (Run workflow): escolha o tipo. "completa" inclui as fotos em tamanho cheio e fica 7 dias.
+# O GitHub costuma atrasar (e às vezes pular) os horários agendados em várias horas: por isso há 4 horários. O primeiro
+# que der certo faz a cópia do dia da cota; os outros veem que já tem e param sem ler nada do banco.
+# Antes (cron às 3h, ou seja, no FIM do dia da cota) a cópia chegava a rodar às 14h e falhava por cota (23 e 24/11/2026).
+# Manual (Run workflow): escolha o tipo. "completa" inclui as fotos em tamanho cheio e fica 7 dias. Sempre copia.
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '37 8 * * *'
+    - cron: '37 9 * * *'
+    - cron: '37 10 * * *'
+    - cron: '37 12 * * *'
   workflow_dispatch:
     inputs:
       tipo:
@@ -16,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # só para cancelar a execução quando já tem cópia do dia
 
 concurrency:
   group: banco
@@ -26,13 +34,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # Só nos horários agendados: já tem cópia boa neste dia da cota? Então cancela esta execução (fica "cancelada", não
+      # "deu certo", para o alarme e o ensaio de restauração só contarem as cópias de verdade) sem ler nada do banco.
+      - name: Já tem cópia de hoje?
+        if: github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          D=$(TZ=America/Los_Angeles date +%Y-%m-%d)
+          DESDE=$(date -u -d "TZ=\"America/Los_Angeles\" $D 00:00" +%Y-%m-%dT%H:%M:%SZ)
+          N=$(gh api "repos/${{ github.repository }}/actions/workflows/backup.yml/runs?status=success&created=%3E%3D$DESDE&per_page=5" --jq '.total_count')
+          echo "Dia da cota desde $DESDE (UTC): $N cópia(s) boa(s)."
+          if [ "${N:-0}" -gt 0 ]; then
+            echo "PULAR=1" >> "$GITHUB_ENV"; echo "::notice::Já tem cópia boa hoje. Nada a fazer."
+            gh run cancel ${{ github.run_id }} -R ${{ github.repository }} && sleep 60
+          fi
+
       - uses: actions/checkout@v5
+        if: env.PULAR != '1'
 
       - uses: actions/setup-node@v5
+        if: env.PULAR != '1'
         with:
           node-version: 22
 
       - name: Escolher o tipo
+        if: env.PULAR != '1'
         run: |
           T="${{ inputs.tipo }}"
           if [ -z "$T" ]; then
@@ -44,6 +71,7 @@ jobs:
           echo "NOME=copia-$T-$(TZ=America/Sao_Paulo date +%Y-%m-%d_%Hh%M)" >> "$GITHUB_ENV"
 
       - name: Copiar o banco
+        if: env.PULAR != '1'
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           BACKUP_PASTA: copia
@@ -52,6 +80,7 @@ jobs:
           node integracao/admin/backup.mjs
 
       - name: Guardar no GitHub
+        if: env.PULAR != '1'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.NOME }}
