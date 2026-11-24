@@ -1801,6 +1801,29 @@ test('OMs: o cliente recusa ou cancela com motivo; observações no histórico',
   await assertSucceeds(setDoc0(ref('supPatio', 'r4'), { status: 'cancelada', motivo: 'Aberta em dobro', hCanc: '2026-11-17T08:00', cancNome: 'X', cancCli: false, ...mk('supPatio') }, { merge: true }), 'quem abriu cancela');
 });
 
+test('OMs: preventivas que se repetem (omsrec/{id}) e a OM planejada criada com id fixo', async () => {
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const ref = (u, id = 'r1') => doc(db(u), 'omsrec', id);
+  const rec = (u, x = {}) => ({ conj: 'patio', area: 'RECEBIMENTO', local: 'Correia 2', equip: 'TC-02', titulo: 'Lubrificar mancais', desc: '', prio: 'baixa', freq: 'semana', dias: [0, 3], dia: 0, inicio: '2026-11-24', ativa: true, ate: '', criadoPor: u, criadoNome: 'X', ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('opGestorSo'), rec('opGestorSo')), 'quem trata no conjunto cadastra');
+  await assertFails(setDoc0(ref('supPatio', 'r2'), rec('supPatio')), 'líder/supervisor não cadastra');
+  await assertFails(setDoc0(ref('opGestorSo', 'r2'), rec('opGestorSo', { conj: 'bateria' })), 'fora do conjunto dele');
+  await assertFails(setDoc0(ref('opGestorSo', 'r2'), rec('opGestorSo', { freq: 'dia' })), 'frequência fora da lista');
+  await assertFails(setDoc0(ref('opGestorSo', 'r2'), rec('opGestorSo', { outra: 1 })), 'campo fora da lista');
+  await assertFails(setDoc0(ref('opGestorSo', 'r2'), { ...rec('opGestorSo'), atualizadoPor: 'admin' }), 'em nome de outra pessoa');
+  await assertSucceeds(setDoc0(ref('opGestorSo'), { ate: '2026-12-15', ...mk('opGestorSo') }, { merge: true }), 'marca até onde já planejou');
+  await assertFails(setDoc0(ref('opGestorSo'), { conj: 'bateria', ...mk('opGestorSo') }, { merge: true }), 'o conjunto não muda');
+  await assertSucceeds(getDoc(ref('supPatio')), 'quem tem a Operação no Pátio lê');
+  await assertFails(getDoc(ref('rhSo')), 'sem a Operação não lê');
+  // A OM planejada da data, com o id fixo, criada pelas regras de oms/{id} (status planejada, em nome de quem trata).
+  const om = doc(db('opGestorSo'), 'oms', 'Rr1_20261126');
+  const nova = { conj: 'patio', area: 'RECEBIMENTO', local: 'Correia 2', equip: 'TC-02', titulo: 'Lubrificar mancais', desc: '', tipo: 'preventiva', prio: 'baixa', status: 'planejada', dPrev: '2026-11-26', hSol: '', docs: {}, solPor: 'opGestorSo', solNome: 'X', criadoEm: '2026-11-24T10:00:00.000Z', hist: [], ...mk('opGestorSo') };
+  await assertSucceeds(setDoc0(om, nova), 'cria a planejada');
+  await assertFails(setDoc0(doc(db('admin'), 'oms', 'Rr1_20261126'), { ...nova, solPor: 'admin', ...mk('admin') }), 'outra pessoa não cria de novo por cima');
+  await assertFails(deleteDoc(ref('supPatio')), 'líder não apaga a preventiva');
+  await assertSucceeds(deleteDoc(ref('opGestorSo')), 'quem trata apaga');
+});
+
 test('OMs: processo do bloqueio (OM gerada com número, horas da sala e do eletricista, desbloqueio)', async () => {
   const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
   const ref = (u, id) => doc(db(u), 'oms', id);

@@ -21,6 +21,31 @@ export const STATUS = {
 // Situação do selo na lista (ui/padrao.js › etiqueta).
 export const COR = { planejada: 'neutro', solicitada: 'atencao', devolvida: 'critico', aprovada: 'info', enviada: 'info', recusada: 'critico', liberada: 'atencao', finalizada: 'ok', cancelada: 'neutro' };
 export const ABERTAS = ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'recusada', 'liberada'];
+// Nome da situação na tela (2026-11-24, mais fácil de entender): a finalizada sem o desbloqueio aparece como
+// "Aguardando desbloqueio" (o último passo é a sala desbloquear) e a aprovada (só quando o cliente do conjunto ainda não
+// foi escolhido) como "Aguardando envio". No banco a situação continua a mesma.
+export const nomeSit = o => (o.status === 'finalizada' && !o.hDesb ? 'Aguardando desbloqueio' : o.status === 'aprovada' ? 'Aguardando envio' : STATUS[o.status] || o.status);
+export const corSit = o => (o.status === 'finalizada' && !o.hDesb ? 'atencao' : COR[o.status] || 'neutro');
+// Barra de passos da OM: pedido → técnico → cliente gerou a OM → liberado → executado → desbloqueio.
+// Cada passo: { k, nome, quando ('AAAA-MM-DDTHH:MM' ou data), feito, atual }. A recusa e a devolução marcam o passo atual
+// como problema (prob) para a tela pintar de vermelho.
+export const ETAPAS = [['pedido', 'Pedido'], ['tecnico', 'Técnico'], ['om', 'OM gerada'], ['lib', 'Liberado'], ['fim', 'Executado'], ['desb', 'Desbloqueio']];
+export function etapas(o) {
+  const q = { pedido: o.hSol || '', tecnico: o.hAprov || '', om: o.hCiente || '', lib: o.hLib || '', fim: o.hFim || '', desb: o.hDesb || '' };
+  // Até onde a OM chegou (índice do próximo passo).
+  const ate = { planejada: 0, solicitada: 1, devolvida: 0, aprovada: 2, enviada: o.hCiente ? 3 : 2, recusada: 2, liberada: 4, finalizada: o.hDesb ? 6 : 5, cancelada: -1 }[o.status];
+  const prob = ['devolvida', 'recusada'].includes(o.status);
+  return ETAPAS.map(([k, nome], i) => ({ k, nome, quando: k === 'pedido' && !q.pedido ? o.dPrev || '' : q[k], feito: ate < 0 ? !!q[k] : i < ate, atual: i === ate, prob: prob && i === ate }));
+}
+// Com quem a OM está agora (frase curta para a lista e para a janela).
+export function comQuem(o) {
+  return {
+    planejada: 'Planejada: no dia, o líder solicita', solicitada: 'Com o Técnico de Processo (aprovar)', devolvida: 'Com quem abriu (corrigir e reenviar)',
+    aprovada: 'Com o Técnico de Processo (enviar ao cliente)', enviada: o.hCiente ? 'Com o cliente (esperando o eletricista liberar)' : 'Com o cliente (gerar a OM)',
+    recusada: 'Com o Técnico de Processo (cliente não liberou)', liberada: 'Com o líder da área (executar o serviço)',
+    finalizada: o.hDesb ? 'Encerrada' : 'Com o líder da área (marcar o desbloqueio)', cancelada: 'Cancelada'
+  }[o.status] || '';
+}
 export const PRIORIDADES = { baixa: 'Baixa', media: 'Média', alta: 'Alta', emergencia: 'Emergência' };
 export const TIPOS = { corretiva: 'Corretiva', preventiva: 'Preventiva', melhoria: 'Melhoria', seguranca: 'Segurança' };
 // Documentação de cada OM (não obrigatória: só mostra o que está pronto). Cada item: pronto, pendente ou não precisa.
@@ -86,6 +111,15 @@ export function acoesDe(om, u) {
   if ((trata || daArea) && ABERTAS.includes(om.status)) a.push('docs');
   if (trata) a.push('apagar');
   return a;
+}
+// O próximo passo desta pessoa nesta OM (o botão grande da janela); o resto fica em "Mais".
+// Para quem trata, "liberar" e "recusar" com a OM com o cliente são só o registro do que o cliente passou por fora: não
+// são o passo principal (o principal é o cliente tocar). null = nada a fazer agora.
+const ORDEM_PASSO = ['ciente', 'liberar', 'solicitar', 'aprovar', 'enviar', 'finalizar', 'desbloqueio'];
+export function proximo(om, u, ac = acoesDe(om, u)) {
+  const cli = ehClienteDa(om, u);
+  if (om.status === 'devolvida' && ac.includes('editar')) return 'editar';
+  return ORDEM_PASSO.find(a => ac.includes(a) && (a !== 'liberar' || cli || !om.clienteUid)) || null;
 }
 
 /* ---------- datas e horas ---------- */
@@ -157,12 +191,16 @@ export function conferirPrazos(x) {
   }
   return r;
 }
-// Prazo de resposta da OM com o cliente: conta da hora do envio até a liberação (ou até agora, se ainda está com ele).
-// null quando a OM não foi enviada ou a prioridade está sem prazo.
+// Prazo do cliente (2026-11-24: um relógio só, o mesmo do tempo de bloqueio): conta da OM gerada pelo cliente até o
+// eletricista liberar. Enquanto o cliente não gera a OM, conta do envio (a OM está parada com ele). Sem a hora do
+// eletricista (OMs antigas ou liberação registrada pelo técnico), termina na liberação. Com a OM ainda com o cliente, conta
+// até agora. null quando a OM não foi enviada ou a prioridade está sem prazo.
+export const inicioPrazo = om => (ehHora(om.hCiente) ? om.hCiente : ehHora(om.hEnvio) ? om.hEnvio : '');
 export function prazoOm(om, cfg, agora = agoraLocal()) {
-  if (!om || !ehHora(om.hEnvio) || !['enviada', 'liberada', 'finalizada'].includes(om.status)) return null;
+  const ini = om ? inicioPrazo(om) : '';
+  if (!ini || !['enviada', 'liberada', 'finalizada'].includes(om.status)) return null;
   const horas = prazosDe(cfg)[om.prio || 'media']; if (!horas) return null;
-  const ate = om.status === 'enviada' ? agora : om.hLib; const usado = minutosEntre(om.hEnvio, ate); if (usado == null) return null;
+  const ate = om.status === 'enviada' ? agora : ehHora(om.hEletr) ? om.hEletr : om.hLib; const usado = minutosEntre(ini, ate); if (usado == null) return null;
   return { horas, usado, resta: horas * 60 - usado, fora: usado > horas * 60, aberta: om.status === 'enviada' };
 }
 // Com o cliente e já passou do prazo (fica vermelha na tela e gera aviso).
@@ -366,6 +404,7 @@ export function avisosOms(oms, usuarios, hoje, cfg = null, agora = agoraLocal())
     if (foraDoPrazo(o, cfg, agora)) {
       const alvo = [...new Set([...(o.clienteUid && usuarios[o.clienteUid] ? [o.clienteUid] : []), ...tratam(o)])];
       for (const uid of alvo) l.push({ uid, tipo: 'prazo', om: o, chave: `om|${uid}|${o.id}|prazo|${o.hEnvio}` });
+      // (a chave segue com a hora do envio: um aviso de prazo por envio, mesmo quando o relógio recomeça na OM gerada)
     }
     const ult = (o.hist || []).slice(-1)[0]; const quando = (ult && ult.em) || o.hSol || '';
     if (String(quando).slice(0, 10) < desde) continue;
@@ -387,4 +426,45 @@ export function avisosOms(oms, usuarios, hoje, cfg = null, agora = agoraLocal())
     }
   }
   return l;
+}
+
+/* ---------- resumo das 7h (rotina de hora em hora: das 7h em diante, uma vez por dia por pessoa) ---------- */
+// Cada pessoa recebe só o que é dela, e só se houver algo:
+// - quem trata no conjunto (Técnico de Processo, coordenador, gestor, administrador): para aprovar, não liberadas, com o
+//   cliente (e fora do prazo), previstas para hoje;
+// - o líder ou supervisor da área (quem abre): para solicitar hoje, liberadas para executar, devolvidas, falta o desbloqueio;
+// - o usuário do cliente: com ele para gerar ou liberar.
+// Devolve [{ uid, titulo, corpo, chave }] (a chave marca o dia: om7|uid|AAAA-MM-DD). usuarios = { uid: perfil }.
+export function resumo7h(oms, usuarios, hoje, cfg = null, agora = agoraLocal()) {
+  const s = n => (n > 1 ? 's' : '');
+  const out = [];
+  for (const [uid, u0] of Object.entries(usuarios || {})) {
+    const u = { ...u0, uid }; if (!u || u.papel === 'bloqueado') continue;
+    const partes = []; let total = 0;
+    const conta = (n, txt) => { if (n) { partes.push(`${n} ${txt}`); total += n; } };
+    const conjs = ['patio', 'bateria'];
+    const trata = oms.filter(o => conjs.includes(o.conj) && trataOmU(u, o.conj));
+    if (trata.length) {
+      conta(trata.filter(o => o.status === 'solicitada').length, 'para aprovar');
+      conta(trata.filter(o => o.status === 'recusada').length, 'não liberada' + (trata.filter(o => o.status === 'recusada').length > 1 ? 's' : '') + ' pelo cliente');
+      const fora = trata.filter(o => foraDoPrazo(o, cfg, agora)).length;
+      const comCli = trata.filter(o => o.status === 'enviada').length;
+      if (comCli) { partes.push(`${comCli} com o cliente${fora ? ` (${fora} fora do prazo)` : ''}`); total += comCli; }
+      conta(trata.filter(o => o.status === 'planejada' && diaDe(o) === hoje).length, 'prevista' + s(trata.filter(o => o.status === 'planejada' && diaDe(o) === hoje).length) + ' para hoje');
+    } else {
+      const minhas = oms.filter(o => conjs.includes(o.conj) && abreOmU(u, o.conj, o.area));
+      if (minhas.length) {
+        const pedir = minhas.filter(o => o.status === 'planejada' && diaDe(o) <= hoje).length;
+        conta(pedir, `para solicitar hoje`);
+        const lib = minhas.filter(o => o.status === 'liberada').length; conta(lib, `liberada${s(lib)} para executar`);
+        const dev = minhas.filter(o => o.status === 'devolvida' && o.solPor === uid).length; conta(dev, `devolvida${s(dev)} para corrigir`);
+        const desb = minhas.filter(o => o.status === 'finalizada' && !o.hDesb && String(o.hFim || '').slice(0, 10) >= add(hoje, -7)).length; conta(desb, `sem a hora do desbloqueio`);
+      }
+    }
+    const doCli = oms.filter(o => o.status === 'enviada' && o.clienteUid === uid);
+    if (doCli.length) { const g = doCli.filter(o => !o.hCiente).length; conta(g, `para gerar a OM`); conta(doCli.length - g, `esperando a liberação`); }
+    if (!total) continue;
+    out.push({ uid, titulo: `OMs hoje: ${partes[0]}`.slice(0, 120), corpo: partes.join(' · ') + '\nToque para abrir.', chave: `om7|${uid}|${hoje}` });
+  }
+  return out;
 }

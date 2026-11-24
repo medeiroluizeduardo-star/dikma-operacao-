@@ -4,7 +4,8 @@
 // passa (sala → eletricista, eletricista liberou) e marca Liberado ou Não liberado (o técnico registra só se ele liberou por
 // fora); o líder registra a hora em que avisou a sala que terminou e a hora do desbloqueio. Cada OM tem a lista de documentação (não obrigatória) e o prazo do cliente.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, COR, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes, pidFotoOM } from '../contas/oms.js';
+import { STATUS, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes, pidFotoOM, nomeSit, corSit, etapas, comQuem, proximo } from '../contas/oms.js';
+import { FREQ, DIAS_SEM, conferirRecorrente, freqTxt, proximaData, aCriar, datasDa, HORIZONTE } from '../contas/oms-recorrentes.js';
 import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
 import { verFotoGrande } from '../ui/fotos.js';
@@ -49,15 +50,21 @@ const conjNome = () => (SETS[SK] && SETS[SK].local) || SK;
 function item(o) {
   const x = tempos(o);
   const hora = o.status === 'finalizada' ? `finalizada ${horaBR(o.hFim)}${x.total != null ? ' · total ' + duracao(x.total) : ''}` : o.status === 'liberada' ? `liberada ${horaBR(o.hLib)}${x.espera != null ? ' · espera ' + duracao(x.espera) : ''}` : o.status === 'planejada' ? `prevista ${dataBR(o.dPrev)}` : `solicitada ${horaBR(o.hSol)}${o.dPrev && o.dPrev !== String(o.hSol || '').slice(0, 10) ? ' · prevista ' + dataBR(o.dPrev) : ''}`;
-  const meta = [comCliente(o), o.hCiente && o.status === 'enviada' ? 'OM gerada ' + horaBR(o.hCiente) : '', o.status === 'finalizada' && o.hFim && !o.hDesb ? 'falta o desbloqueio' : '', o.numero ? 'OM ' + o.numero : '', areaNome(o.area), o.cliente ? 'cliente ' + o.cliente : '', [o.equip, o.local].filter(Boolean).join(' · '), o.prio && o.prio !== 'media' ? 'prioridade ' + PRIORIDADES[o.prio].toLowerCase() : '', o.solNome, hora].filter(Boolean).map(esc).join(' · ');
-  return `<button type="button" class="tr-it${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><span class="tr-it-s">${etiqueta(STATUS[o.status] || o.status, COR[o.status])}${atrasada(o, today()) ? etiqueta('Atrasada', 'critico') : ''}${foraDoPrazo(o, cfg()) ? etiqueta('Fora do prazo', 'critico') : ''}</span>
-    <span class="tr-it-t"><b>${esc(o.titulo)}</b><small>${meta}</small>${docsChips(o)}${['devolvida', 'recusada'].includes(o.status) && o.motivo ? `<small class="om-mot">${o.status === 'recusada' ? 'Recusada' : 'Devolvida'}: ${esc(o.motivo)}</small>` : ''}</span></button>`;
+  const meta = [comCliente(o), o.hCiente && o.status === 'enviada' ? 'OM gerada ' + horaBR(o.hCiente) : '', o.numero ? 'OM ' + o.numero : '', areaNome(o.area), o.cliente ? 'cliente ' + o.cliente : '', [o.equip, o.local].filter(Boolean).join(' · '), o.prio && o.prio !== 'media' ? 'prioridade ' + PRIORIDADES[o.prio].toLowerCase() : '', o.solNome, hora].filter(Boolean).map(esc).join(' · ');
+  return `<button type="button" class="tr-it${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><span class="tr-it-s">${etiqueta(nomeSit(o), corSit(o))}${atrasada(o, today()) ? etiqueta('Atrasada', 'critico') : ''}${foraDoPrazo(o, cfg()) ? etiqueta('Fora do prazo', 'critico') : ''}</span>
+    <span class="tr-it-t"><b>${esc(o.titulo)}</b><small class="om-quem">${esc(comQuem(o))}</small><small>${meta}</small>${docsChips(o)}${['devolvida', 'recusada'].includes(o.status) && o.motivo ? `<small class="om-mot">${o.status === 'recusada' ? 'Recusada' : 'Devolvida'}: ${esc(o.motivo)}</small>` : ''}</span></button>`;
 }
 // "com o cliente há 5 h · prazo 24 h" (enviada e ainda não liberada: conta desde o envio).
+// Com a OM já gerada, conta da OM gerada (é o tempo de bloqueio, o mesmo relógio do prazo).
 function comCliente(o) {
   if (o.status !== 'enviada' || !o.hEnvio) return '';
-  const m = minutosEntre(o.hEnvio, agoraLocal()); if (m == null || m < 0) return '';
-  const p = prazoOm(o, cfg()); return `com o cliente há ${duracao(m)}${p ? ` · prazo ${p.horas} h` : ''}`;
+  const m = minutosEntre(o.hCiente || o.hEnvio, agoraLocal()); if (m == null || m < 0) return '';
+  const p = prazoOm(o, cfg()); return `${o.hCiente ? 'bloqueio há' : 'com o cliente há'} ${duracao(m) || '0 min'}${p ? ` · prazo ${p.horas} h` : ''}`;
+}
+// Barra de passos (pedido → técnico → OM gerada → liberado → executado → desbloqueio).
+function barra(o) {
+  const l = etapas(o); const canc = o.status === 'cancelada';
+  return `<ol class="om-passos${canc ? ' canc' : ''}" aria-label="Passos da OM">${l.map(p => `<li class="${p.feito ? 'ok' : ''}${p.atual ? ' at' : ''}${p.prob ? ' prob' : ''}"${p.atual ? ' aria-current="step"' : ''}><i aria-hidden="true">${p.feito ? '✓' : ''}</i><b>${esc(p.nome)}</b><small>${esc(p.quando ? (p.quando.length > 10 ? horaBR(p.quando) : dataBR(p.quando)) : '')}</small></li>`).join('')}</ol>`;
 }
 // Documentação da OM: PT, APR, bloqueio… em verde (pronto) ou cinza (pendente); os "não precisa" não aparecem.
 function docsChips(o) {
@@ -80,7 +87,7 @@ const sel = (id, rot, val, ops) => `<label class="sel"><span>${rot}</span><selec
 const nav = (attr, rot, txt, extra = '') => `<div class="compnav om-nav"><button type="button" class="btn ghost sm" data-${attr}="-1" aria-label="${rot} anterior">‹</button><b>${esc(txt)}</b><button type="button" class="btn ghost sm" data-${attr}="1" aria-label="Próxim${rot === 'Semana' ? 'a' : 'o'} ${rot.toLowerCase()}">›</button>${extra}</div>`;
 const prioCls = o => 'om-p-' + (o.prio || 'media');
 // Cartão pequeno da agenda (Semana e dia do Mês).
-const cartao = o => `<button type="button" class="om-c ${prioCls(o)}${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><b>${esc(o.titulo)}</b><small>${esc([areaNome(o.area), o.equip].filter(Boolean).join(' · '))}</small><span>${etiqueta(STATUS[o.status] || o.status, COR[o.status])}${atrasada(o, today()) ? etiqueta('Atrasada', 'critico') : ''}${foraDoPrazo(o, cfg()) ? etiqueta('Fora do prazo', 'critico') : ''}</span>${docsChips(o)}${comCliente(o) ? `<small>${esc(comCliente(o))}</small>` : ''}</button>`;
+const cartao = o => `<button type="button" class="om-c ${prioCls(o)}${ABERTAS.includes(o.status) ? '' : ' fechada'}" data-act="omAbrir" data-id="${esc(o.id)}"><b>${esc(o.titulo)}</b><small>${esc([areaNome(o.area), o.equip].filter(Boolean).join(' · '))}</small><span>${etiqueta(nomeSit(o), corSit(o))}${atrasada(o, today()) ? etiqueta('Atrasada', 'critico') : ''}${foraDoPrazo(o, cfg()) ? etiqueta('Fora do prazo', 'critico') : ''}</span>${docsChips(o)}${comCliente(o) ? `<small>${esc(comCliente(o))}</small>` : ''}</button>`;
 const diaNome = d => `${DAYS[(pd(d).getDay() + 6) % 7]} ${ddmm(d)}`;
 
 function vHoje(l) {
@@ -155,8 +162,9 @@ function vTela() {
   const areas = [...new Set([...(SETS[SK] ? [...SETS[SK].areas, ...(SETS[SK].gerais || [])] : []), ...todos.map(o => o.area)])].filter(Boolean);
   let h = b.erro ? `<p class="err">Não foi possível ler as OMs (${esc(b.erro)}).</p>` : '';
   const cli = cliente(); const souCliente = !!cli && cli.uid === ME.uid;
-  if (souCliente && !trata) h += `<p class="ic-placar">Você é o cliente do ${esc(conjNome())}: gere a OM, libere ou recuse as solicitações abaixo.</p><details class="legdet omajuda noprint"><summary>Como funciona</summary><p>Toque em <b>OM gerada</b> quando gerar a OM (com o número) e passar à sala de controle. Quando a sala avisar que o eletricista liberou, toque em <b>Liberado</b> e informe as horas que a sala passou: a liberação fica registrada na hora do toque. Se não puder liberar, use <b>Não liberado</b> (com o motivo); se o serviço não vai mais acontecer, abra a OM e use <b>Cancelar</b>. Em todo passo dá para deixar uma observação. As programadas ficam em <b>Semana</b>.</p></details>`;
-  else h += `<p class="ic-placar">${trata ? 'Planeje as OMs com a data prevista e aprove (já vai para o cliente) ou devolva as solicitações.' : 'Planeje a OM com a data prevista ou abra a solicitação com a hora em que o serviço foi pedido. O Técnico de Processo confere e envia ao cliente.'}</p><details class="legdet omajuda noprint"><summary>Como funciona</summary><p>Caminho: solicitada → com o cliente (OM gerada, sala de controle, eletricista) → liberada → serviço feito → desbloqueio. Se o cliente não liberar, o técnico ajusta e reenvia.</p></details>`;
+  if (souCliente && !trata) h += `<p class="ic-placar">Você é o cliente do ${esc(conjNome())}: gere a OM e libere (ou não) as solicitações abaixo.</p>`;
+  else h += `<p class="ic-placar">${trata ? 'Aprove (já vai para o cliente) ou devolva as solicitações. Toque numa OM para ver em que passo ela está e o próximo passo.' : 'Abra a solicitação ou planeje a OM para uma data. Toque numa OM para ver em que passo ela está e o próximo passo.'}</p>`;
+  if (trata) gerarPreventivas(todos);
   const minhas = todos.filter(o => o.status === 'enviada' && ehClienteDa(o, ME));
   if (souCliente || minhas.length) h += vCliente(minhas);
   if (!souCliente && (trata || isAdmin())) {
@@ -165,7 +173,9 @@ function vTela() {
       <span class="om-pz">Prazo do cliente: ${Object.entries(PRIORIDADES).reverse().map(([k, n]) => `${esc(n.toLowerCase())} ${pz[k] ? pz[k] + ' h' : 'sem prazo'}`).join(' · ')}</span>${isAdmin() ? ' <button type="button" class="btn sm ghost" data-act="omPrazos">Mudar prazos</button>' : ''}</p>`;
   }
   h += `<div class="md-barra tr-barra">${planeja ? `<button type="button" class="btn pri" data-act="omNova">${I.plus} Nova OM</button>` : ''}
-    ${sel('omFArea', 'Área', u.area, [['', 'Todas'], ...areas.map(a => [a, areaNome(a)])])}</div>`;
+    ${sel('omFArea', 'Área', u.area, [['', 'Todas'], ...areas.map(a => [a, areaNome(a)])])}
+    ${trata ? `<button type="button" class="btn sm ghost" data-act="omRec">Preventivas que se repetem${nRec() ? ` (${nRec()})` : ''}</button>` : ''}
+    <button type="button" class="btn sm ghost" data-act="omComo">Como funciona</button></div>`;
   h += abas([['hoje', 'Hoje'], ['semana', 'Semana'], ['mes', 'Mês'], ['lista', 'Lista']], u.aba, 'om-aba', 'Visões das OMs');
   const l = u.area ? todos.filter(o => o.area === u.area) : todos;
   h += `<div class="om-vis">${u.aba === 'semana' ? vSemana(l) : u.aba === 'mes' ? vMes(l) : u.aba === 'lista' ? vLista(l, trata) : vHoje(l)}</div>`;
@@ -181,33 +191,42 @@ const docsCampos = d => `<fieldset class="om-docf dc-full"><legend>Documentaçã
 // Observação de cada passo (opcional): vai para o histórico da OM, com o nome e a hora.
 const obsCampo = (rot = 'Observação (opcional)', dica = 'Fica no histórico da OM') => `<label class="sel dc-full"><span>${rot}</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="${esc(dica)}"></textarea></label>`;
 const docsLidos = () => conferirDocs(Object.fromEntries(Object.keys(DOCS).map(k => [k, v$('omDoc_' + k)])));
-const focar = e => { const el = e.campo && document.getElementById(e.campo); if (el) { el.focus(); el.setAttribute('aria-invalid', 'true'); } throw e; };
+const focar = e => { const el = e.campo && document.getElementById(e.campo); if (el) { const d = el.closest('details'); if (d) d.open = true; el.focus(); el.setAttribute('aria-invalid', 'true'); } throw e; };
+// Sugestões de local e equipamento da área: os locais do plano padrão da área e os já usados nas OMs.
+const unicos = l => [...new Set(l.map(v => String(v || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+const locaisDe = area => unicos([...((DB.cache.plano || {})[area] || []).map(p => p.local), ...lista().filter(o => o.area === area).map(o => o.local)]);
+const equipsDe = area => unicos(lista().filter(o => !area || o.area === area).map(o => o.equip));
+const opcoes = l => l.slice(0, 200).map(v => `<option value="${esc(v)}"></option>`).join('');
 // Nova OM (planejada ou já solicitada), ou corrigir (corrigir uma devolvida já reenvia ao técnico).
-function editar(id) {
+// modelo = OM de onde copiar os campos (Repetir esta OM): a nova nasce com o mesmo serviço, área, local e prioridade.
+function editar(id, modelo = null) {
   const o = id ? achar(id) : null; if (id && !o) return;
   const lim = areasQuePlaneja(ME, SK);
   const areas = lim === null ? (SETS[SK] ? [...SETS[SK].areas, ...(SETS[SK].gerais || [])] : []) : lim;
   // Quem só trata (o Técnico de Processo) planeja; a solicitação é aberta pelo líder da área.
   const soPlaneja = !abreOmU(ME, SK);
   const u = U(); const diaSug = ['semana', 'mes'].includes(u.aba) && u.dia >= today() ? u.dia : today();
-  const x = o || { area: areas.length === 1 ? areas[0] : '', local: '', equip: '', titulo: '', desc: '', tipo: 'corretiva', prio: 'media', hSol: agoraLocal(), dPrev: diaSug };
+  const m = !o && modelo ? { area: areas.includes(modelo.area) ? modelo.area : '', local: modelo.local || '', equip: modelo.equip || '', titulo: modelo.titulo || '', desc: modelo.desc || '', tipo: modelo.tipo || 'corretiva', prio: modelo.prio || 'media' } : null;
+  const x = o || { area: areas.length === 1 ? areas[0] : '', local: '', equip: '', titulo: '', desc: '', tipo: 'corretiva', prio: 'media', ...(m || {}), hSol: agoraLocal(), dPrev: diaSug };
   const plano = o ? o.status === 'planejada' : soPlaneja || ['semana', 'mes'].includes(u.aba);
   const html = `<div class="dc-form">
     ${o && o.status === 'devolvida' && o.motivo ? `<p class="om-mot dc-full">Devolvida: ${esc(o.motivo)}</p>` : ''}
     ${o || soPlaneja ? '' : `<label class="sel dc-full"><span>O que fazer</span><select class="in" id="omQuando">${op([['agora', 'Solicitar agora (vai ao Técnico de Processo)'], ['planejar', 'Planejar para uma data (pedir no dia)']], plano ? 'planejar' : 'agora')}</select></label>`}
     <label class="sel"><span>Área ${ob}</span><select class="in" id="omArea"><option value="">Escolha</option>${op(areas.map(a => [a, areaNome(a)]), x.area)}</select></label>
     <label class="sel"><span>Data prevista${plano ? ' ' + ob : ''}</span><input class="in" type="date" id="omDPrev" value="${esc(x.dPrev || '')}"></label>
-    <label class="sel" id="omHSolL" ${plano ? 'hidden' : ''}><span>Hora da solicitação ${ob}</span><input class="in" type="datetime-local" id="omHSol" value="${esc(x.hSol || agoraLocal())}"></label>
-    <label class="sel"><span>Equipamento (TAG)</span><input class="in" id="omEquip" maxlength="${LIMITES.equip}" value="${esc(x.equip || '')}" placeholder="Ex.: TC-03" autocomplete="off"></label>
-    <label class="sel"><span>Local ${ob}</span><input class="in" id="omLocal" maxlength="${LIMITES.local}" value="${esc(x.local || '')}" placeholder="Ex.: Correia transportadora 3" autocomplete="off"></label>
     <label class="sel dc-full"><span>Serviço a executar ${ob}</span><input class="in" id="omTit" maxlength="${LIMITES.titulo}" value="${esc(x.titulo || '')}" placeholder="Ex.: Troca de rolete travado" autocomplete="off"></label>
-    <label class="sel"><span>Tipo</span><select class="in" id="omTipo">${op(Object.entries(TIPOS), x.tipo)}</select></label>
+    <label class="sel"><span>Local ${ob}</span><input class="in" id="omLocal" list="omLocais" maxlength="${LIMITES.local}" value="${esc(x.local || '')}" placeholder="Escolha da lista ou digite" autocomplete="off"></label>
+    <label class="sel"><span>Equipamento (TAG)</span><input class="in" id="omEquip" list="omEquips" maxlength="${LIMITES.equip}" value="${esc(x.equip || '')}" placeholder="Ex.: TC-03" autocomplete="off"></label>
+    <datalist id="omLocais">${opcoes(locaisDe(x.area))}</datalist><datalist id="omEquips">${opcoes(equipsDe(x.area))}</datalist>
     <label class="sel"><span>Prioridade</span><select class="in" id="omPrio">${op(Object.entries(PRIORIDADES), x.prio)}</select></label>
+    <details class="om-det dc-full"${o ? ' open' : ''}><summary>Mais detalhes (opcional): tipo, hora do pedido, detalhes e documentação</summary><div class="dc-form">
+    <label class="sel"><span>Tipo</span><select class="in" id="omTipo">${op(Object.entries(TIPOS), x.tipo)}</select></label>
+    <label class="sel" id="omHSolL" ${plano ? 'hidden' : ''}><span>Hora da solicitação</span><input class="in" type="datetime-local" id="omHSol" value="${esc(x.hSol || agoraLocal())}"></label>
     <label class="sel dc-full"><span>Detalhes</span><textarea class="in" id="omDesc" rows="3" maxlength="${LIMITES.desc}" placeholder="O que está acontecendo, riscos, o que precisa para liberar">${esc(x.desc || '')}</textarea></label>
     ${docsCampos(x.docs)}
-    ${!o || o.status === 'devolvida' ? obsCampo('Observação para o técnico (opcional)', o ? 'O que foi corrigido' : 'Recado para quem vai conferir; fica no histórico') : ''}
-    <p class="muted small m0 dc-full" id="omDica">${ob} campo obrigatório. ${plano ? 'A OM fica planejada na agenda; no dia, um toque em <b>Solicitar</b> a envia ao Técnico de Processo.' : 'Ao enviar, a solicitação vai para o Técnico de Processo.'}</p></div>`;
-  const titulo = o ? (o.status === 'planejada' ? 'Editar OM planejada' : 'Corrigir solicitação') : 'Nova OM';
+    ${!o || o.status === 'devolvida' ? obsCampo('Observação para o técnico (opcional)', o ? 'O que foi corrigido' : 'Recado para quem vai conferir; fica no histórico') : ''}</div></details>
+    <p class="muted small m0 dc-full" id="omDica">${ob} campo obrigatório. ${plano ? 'A OM fica planejada na agenda; no dia, um toque em <b>Solicitar</b> a envia ao Técnico de Processo.' : 'Ao enviar, a solicitação vai para o Técnico de Processo, com a hora de agora.'}</p></div>`;
+  const titulo = o ? (o.status === 'planejada' ? 'Editar OM planejada' : 'Corrigir solicitação') : m ? 'Repetir OM' : 'Nova OM';
   formSheet(titulo, o ? `${esc(STATUS[o.status])} · cadastrada por ${esc(o.solNome || '')}` : 'Planeje com a data prevista ou solicite agora', html, o && o.status === 'devolvida' ? 'Salvar e reenviar' : o ? 'Salvar' : 'Salvar', async () => {
     const planejar = o ? o.status === 'planejada' : soPlaneja || v$('omQuando') === 'planejar';
     let y; try { y = conferirSolicitacao({ area: v$('omArea'), hSol: v$('omHSol'), dPrev: v$('omDPrev'), equip: v$('omEquip'), local: v$('omLocal'), titulo: v$('omTit'), tipo: v$('omTipo'), prio: v$('omPrio'), desc: v$('omDesc') }, lim, planejar); } catch (e) { focar(e); }
@@ -254,7 +273,7 @@ function agir(id, acao) {
       : `<div class="dc-form">${o.clienteUid ? '<p class="muted small m0 dc-full">O cliente libera pelo sistema. Registre aqui só se ele liberou por fora (telefone, rádio).</p>' : ''}<label class="sel"><span>Hora da liberação ${ob}</span><input class="in" type="datetime-local" id="omHLib" value="${ag}"></label>${o.hCiente ? '' : '<label class="sel"><span>OM gerada em (opcional)</span><input class="in" type="datetime-local" id="omHOm" value=""></label>'}<label class="sel"><span>Sala passou ao eletricista (opcional)</span><input class="in" type="datetime-local" id="omHSala" value=""></label><label class="sel"><span>Eletricista liberou (opcional)</span><input class="in" type="datetime-local" id="omHEletr" value=""></label><label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omNum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label>${obsCampo()}</div>`,
     desbloqueio: `<label class="sel"><span>Hora em que a sala de controle desbloqueou ${ob}</span><input class="in" type="datetime-local" id="omHDesb" value="${ag}"></label>${OBS}`,
     apagar: `<p class="m0">A OM some da lista e dos números. <b>Não dá para desfazer.</b> Se ela só não vai mais acontecer, prefira <b>Cancelar</b>, que guarda o motivo no histórico.</p>`,
-    finalizar: `<p class="muted small m0">Serviço feito e sala de controle avisada. Se a sala já desbloqueou, marque a hora; senão, marque depois em <b>Desbloqueio</b>.</p><label class="sel"><span>Avisou a sala que terminou ${ob}</span><input class="in" type="datetime-local" id="omHFim" value="${ag}"></label><label class="sel"><span>Sala desbloqueou (opcional)</span><input class="in" type="datetime-local" id="omHDesb" value=""></label><label class="sel"><span>Como ficou (opcional)</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="Serviço feito, testado, pendências"></textarea></label>`
+    finalizar: `<p class="muted small m0">Serviço feito e sala de controle avisada. Se a sala já desbloqueou, marque as duas horas agora e a OM se encerra. Se ainda não, deixe em branco: a OM fica em <b>Aguardando desbloqueio</b> até você marcar.</p><label class="sel"><span>Avisou a sala que terminou ${ob}</span><input class="in" type="datetime-local" id="omHFim" value="${ag}"></label><label class="sel"><span>Sala desbloqueou (opcional)</span><input class="in" type="datetime-local" id="omHDesb" value=""></label><label class="sel"><span>Como ficou (opcional)</span><textarea class="in" id="omObs" rows="2" maxlength="${LIMITES.obs}" placeholder="Serviço feito, testado, pendências"></textarea></label>`
   }[acao];
   const nome = { obs: 'Adicionar observação', recusar: peloCli ? 'Equipamento não liberado' : 'Registrar que o cliente não liberou', ciente: 'OM gerada', desbloqueio: 'Desbloqueio pela sala de controle', docs: 'Documentação da OM', solicitar: 'Solicitar a OM agora', aprovar: cli ? 'Aprovar e enviar ao cliente' : 'Aprovar a solicitação', devolver: 'Devolver ao solicitante', cancelar: peloCli ? 'Cancelar a OM (cliente)' : 'Cancelar a OM', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', liberar: libCli ? 'Equipamento liberado' : 'Registrar a liberação', finalizar: 'Serviço terminado', apagar: 'Apagar a OM de vez?' }[acao];
   const btn = { obs: 'Salvar observação', recusar: peloCli ? 'Não liberado' : 'Registrar', ciente: 'OM gerada', desbloqueio: 'Salvar', docs: 'Salvar', solicitar: 'Enviar ao técnico', aprovar: cli ? 'Aprovar e enviar' : 'Aprovar', devolver: 'Devolver', cancelar: 'Cancelar a OM', enviar: o.status === 'recusada' ? 'Reenviar' : 'Marcar como enviada', liberar: libCli ? 'Liberado' : 'Registrar liberação', finalizar: 'Finalizar', apagar: 'Apagar de vez' }[acao];
@@ -322,35 +341,54 @@ function fotosOm(o, depois = () => {}) {
       delete FOTOS_OM[o.id]; depois();
     } });
 }
+// Nome de cada botão (o mesmo na janela e no "Mais").
+function nomeBotao(o, a) {
+  const souCli = ehClienteDa(o, ME);
+  return { editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: cliente() ? 'Aprovar e enviar ao cliente' : 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Não liberado' : 'Registrar que o cliente não liberou', obs: '+ Observação', ciente: 'OM gerada', desbloqueio: 'Marcar o desbloqueio', docs: 'Documentação', liberar: souCli ? 'Liberado' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Serviço terminado', cancelar: 'Cancelar a OM', apagar: 'Apagar' }[a] || a;
+}
+// A alternativa do passo principal, ao lado dele: aprovar ou devolver; para o cliente, liberar ou não.
+const ALT = { aprovar: 'devolver', liberar: 'recusar', ciente: 'recusar' };
 function abrir(id) {
   const o = achar(id); if (!o) return;
   const ac = acoesDe(o, ME); const x = tempos(o); const pz = prazoOm(o, cfg()); const dr = docsResumo(o); const souCli = ehClienteDa(o, ME);
+  const pri = proximo(o, ME, ac); const alt = pri && ALT[pri] && ac.includes(ALT[pri]) && (ALT[pri] !== 'recusar' || souCli) ? ALT[pri] : null;
+  const mais = ac.filter(a => a !== pri && a !== alt);
+  const bt = (a, cls) => `<button type="button" class="btn${cls}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc(nomeBotao(o, a))}</button>`;
   const linha = (r, v) => (v ? `<div><dt>${esc(r)}</dt><dd>${v}</dd></div>` : '');
-  const html = `<dl class="p-dados om-dados">
-      ${linha('Situação', etiqueta(STATUS[o.status], COR[o.status]))}${linha('Nº OM no cliente', esc(o.numero || ''))}
-      ${linha('Área', esc(areaNome(o.area)))}${linha('Equipamento / local', esc([o.equip, o.local].filter(Boolean).join(' · ')))}
-      ${linha('Tipo e prioridade', esc(`${TIPOS[o.tipo] || ''} · ${PRIORIDADES[o.prio] || ''}`))}${linha('Solicitante', esc(o.solNome || ''))}
-      ${linha('Data prevista', esc(dataBR(o.dPrev)))}${linha('Hora da solicitação', esc(horaBR(o.hSol)))}${linha('Aprovada', esc([horaBR(o.hAprov), o.aprovNome].filter(Boolean).join(' · ')))}${linha('Cliente', esc([o.cliente, o.contato].filter(Boolean).join(' · ')))}
+  const html = `${barra(o)}
+    <p class="om-agora"><b>${esc(comQuem(o))}</b>${pz && pz.aberta ? ` · ${pz.fora ? '<span class="om-fora">fora do prazo</span>' : 'prazo: resta ' + esc(duracao(pz.resta) || '0 min')}` : ''}</p>
+    ${pri ? `<div class="row-gap om-passo">${bt(pri, ' pri')}${alt ? bt(alt, '') : ''}</div>` : ''}
+    ${['devolvida', 'recusada'].includes(o.status) && o.motivo ? `<p class="om-mot">${o.status === 'recusada' ? 'Não liberada' : 'Devolvida'}: ${esc(o.motivo)}</p>` : ''}
+    <dl class="p-dados om-dados">
+      ${linha('Nº OM no cliente', esc(o.numero || ''))}${linha('Área', esc(areaNome(o.area)))}${linha('Equipamento / local', esc([o.equip, o.local].filter(Boolean).join(' · ')))}
+      ${linha('Tipo e prioridade', esc(`${TIPOS[o.tipo] || ''} · ${PRIORIDADES[o.prio] || ''}`))}${linha('Solicitante', esc(o.solNome || ''))}${linha('Data prevista', esc(dataBR(o.dPrev)))}
+      ${linha('Tempo de bloqueio', x.bloqueio != null && x.bloqueio >= 0 ? `<b>${esc(duracao(x.bloqueio) || '0 min')}</b>` : '')}
+      ${linha('Prazo do cliente', pz ? `${pz.horas} h · ${pz.fora ? etiqueta('Fora do prazo', 'critico') : pz.aberta ? 'resta ' + esc(duracao(pz.resta)) : 'no prazo'}` : '')}
+      ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}
+      ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}
+      ${dr ? `<div class="dc-full"><dt>Documentação (${dr.prontos} de ${dr.total} pronta${dr.total === 1 ? '' : 's'})</dt><dd>${dr.total ? docsChips(o) : 'Nada a preparar'}</dd></div>` : ''}</dl>
+    <details class="om-det"><summary>Todas as horas e o histórico</summary><dl class="p-dados om-dados">
+      ${linha('Hora da solicitação', esc(horaBR(o.hSol)))}${linha('Aprovada', esc([horaBR(o.hAprov), o.aprovNome].filter(Boolean).join(' · ')))}${linha('Cliente', esc([o.cliente, o.contato].filter(Boolean).join(' · ')))}
       ${linha('Enviada ao cliente', esc(horaBR(o.hEnvio)))}${linha('OM gerada pelo cliente', esc([horaBR(o.hCiente), o.cienteNome].filter(Boolean).join(' · ')))}
-      ${linha('Sala passou ao eletricista', esc(horaBR(o.hSala)))}${linha('Eletricista liberou', esc(horaBR(o.hEletr)))}${linha('Tempo de bloqueio', x.bloqueio != null && x.bloqueio >= 0 ? `<b>${esc(duracao(x.bloqueio) || '0 min')}</b>` : '')}
-      ${linha('Prazo do cliente', pz ? `${pz.horas} h · ${pz.fora ? etiqueta('Fora do prazo', 'critico') : pz.aberta ? 'resta ' + esc(duracao(pz.resta)) : 'liberada no prazo'}` : '')}
+      ${linha('Sala passou ao eletricista', esc(horaBR(o.hSala)))}${linha('Eletricista liberou', esc(horaBR(o.hEletr)))}
       ${linha('Hora da liberação', esc([horaBR(o.hLib), o.libNome ? `${o.libNome}${o.libCli ? ' (cliente)' : ' (registrada pelo técnico)'}` : ''].filter(Boolean).join(' · ')))}${linha('Avisou a sala que terminou', esc(horaBR(o.hFim)))}${linha('Sala desbloqueou', esc(horaBR(o.hDesb)))}
       ${o.hCanc && ['recusada', 'cancelada'].includes(o.status) ? linha(o.status === 'recusada' ? 'Não liberada em' : 'Cancelada em', esc([horaBR(o.hCanc), o.cancNome ? `${o.cancNome}${o.cancCli ? ' (cliente)' : o.status === 'recusada' ? ' (registrada pelo técnico)' : ''}` : ''].filter(Boolean).join(' · '))) : ''}
       ${linha('Espera até liberar', esc(duracao(x.espera)))}${linha('Execução', esc(duracao(x.execucao)))}
-      ${o.desc ? `<div class="dc-full"><dt>Detalhes</dt><dd>${esc(o.desc)}</dd></div>` : ''}${o.motivo ? `<div class="dc-full"><dt>${o.status === 'cancelada' ? 'Motivo do cancelamento' : o.status === 'recusada' ? 'Por que não liberou' : 'O que corrigir'}</dt><dd>${esc(o.motivo)}</dd></div>` : ''}
-      ${o.obsFim ? `<div class="dc-full"><dt>Como ficou</dt><dd>${esc(o.obsFim)}</dd></div>` : ''}
-      ${dr ? `<div class="dc-full"><dt>Documentação (${dr.prontos} de ${dr.total} pronta${dr.total === 1 ? '' : 's'})</dt><dd>${dr.total ? docsChips(o) : 'Nada a preparar'}</dd></div>` : ''}</dl>
-    ${(o.hist || []).length ? `<p class="dc-sec">Histórico</p><ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || PASSOS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}${p.obs ? `<span class="om-obs">${esc(p.obs)}</span>` : ''}</li>`).join('')}</ol>` : ''}
+      ${o.motivo && o.status === 'cancelada' ? `<div class="dc-full"><dt>Motivo do cancelamento</dt><dd>${esc(o.motivo)}</dd></div>` : ''}</dl>
+      ${(o.hist || []).length ? `<ol class="om-hist">${o.hist.map(p => `<li><b>${esc(STATUS[p.s] || PASSOS[p.s] || p.s)}</b> · ${esc(horaBR(p.em))}${p.nome ? ' · ' + esc(p.nome) : ''}${p.txt ? `<br><small>${esc(p.txt)}</small>` : ''}${p.obs ? `<span class="om-obs">${esc(p.obs)}</span>` : ''}</li>`).join('')}</ol>` : ''}</details>
     <p class="dc-sec">Fotos</p><div id="omFotos" class="om-fotos"></div>
-    <div class="row-gap om-acoes"><button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button></div>
-    ${ac.length ? `<div class="row-gap om-acoes">${ac.map(a => `<button type="button" class="btn sm${['solicitar', 'aprovar', 'enviar', 'finalizar', 'desbloqueio'].includes(a) || (a === 'ciente' && souCli) || (a === 'liberar' && (souCli || !o.clienteUid)) ? ' pri' : a === 'cancelar' || a === 'apagar' || a === 'recusar' ? ' ghost' : ''}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc({ editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: cliente() ? 'Aprovar e enviar ao cliente' : 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Não liberado' : 'Registrar que o cliente não liberou', obs: '+ Observação', ciente: 'OM gerada', desbloqueio: 'Desbloqueio', docs: 'Documentação', liberar: souCli ? 'Liberado' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Serviço terminado', cancelar: 'Cancelar', apagar: 'Apagar' }[a])}</button>`).join('')}</div>` : ''}`;
-  formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))}`, html, 'Fechar', async () => {}, {});
+    <details class="om-det om-mais"><summary>Mais ações</summary><div class="row-gap om-acoes">
+      <button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button>
+      ${planejaOmU(ME, SK) ? `<button type="button" class="btn sm" data-act="omRepetir" data-id="${esc(o.id)}">Repetir esta OM</button>` : ''}
+      ${mais.map(a => bt(a, ` sm${['cancelar', 'apagar', 'recusar'].includes(a) ? ' ghost' : ''}`)).join('')}</div></details>`;
+  formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))} · ${esc(nomeSit(o))}`, html, 'Fechar', async () => {}, {});
   const f = document.getElementById('fSheet'); if (!f) return;
   const c = f.querySelector('[data-close]'); if (c) c.hidden = true;
   const s = f.querySelector('[type=submit]'); if (s) s.classList.remove('pri');
   // A janela não deixa o clique subir até a página: os botões das ações são ligados aqui.
   f.querySelectorAll('[data-act="omAcao"]').forEach(b => b.addEventListener('click', () => acoes.omAcao(b, b.dataset)));
   f.querySelectorAll('[data-act="omImprimir"]').forEach(b => b.addEventListener('click', () => imprimir(b.dataset.id)));
+  f.querySelectorAll('[data-act="omRepetir"]').forEach(b => b.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; editar('', o); }));
   pintarFotosOm(o); carregarFotosOm(o.id).then(() => pintarFotosOm(o));
 }
 
@@ -415,7 +453,7 @@ function escolherCliente() {
 function mudarPrazos() {
   if (!isAdmin()) return;
   const pz = prazosDe(cfg());
-  const html = `<div class="p-form"><p class="muted small m0">Horas que o cliente tem para liberar a OM, contadas do envio. Passou do prazo, a OM fica vermelha e o cliente e o Técnico de Processo recebem aviso. Use 0 para não ter prazo. Vale para o Pátio e a Bateria.</p>
+  const html = `<div class="p-form"><p class="muted small m0">Horas que o cliente tem para liberar a OM. É o mesmo relógio do tempo de bloqueio: conta da OM gerada até o eletricista liberar (enquanto o cliente não gera a OM, conta do envio). Passou do prazo, a OM fica vermelha e o cliente e o Técnico de Processo recebem aviso. Use 0 para não ter prazo. Vale para o Pátio e a Bateria.</p>
     <div class="dc-form">${Object.entries(PRIORIDADES).reverse().map(([k, n]) => `<label class="sel"><span>${esc(n)} (horas)</span><input class="in" type="number" inputmode="numeric" min="0" max="${PRAZO_MAX}" step="1" id="omPz_${k}" value="${pz[k]}"></label>`).join('')}</div></div>`;
   formSheet('Prazos do cliente', 'Por prioridade', html, 'Salvar', async () => {
     let y; try { y = conferirPrazos(Object.fromEntries(Object.keys(pz).map(k => [k, v$('omPz_' + k)]))); } catch (e) { focar(e); }
@@ -424,11 +462,105 @@ function mudarPrazos() {
   });
 }
 
+// Como funciona: o caminho da OM, em passos curtos, para cada um.
+function comoFunciona() {
+  const p = (t, l) => `<p class="dc-sec">${t}</p><ol class="om-como">${l.map(x => `<li>${x}</li>`).join('')}</ol>`;
+  const html = `<div class="p-form">${barra({ status: 'liberada', hSol: '1', hAprov: '1', hCiente: '1', hLib: '1' })}
+    <p class="muted small m0">Toda OM mostra esta barra: os passos feitos ficam marcados e o passo atual em destaque. Na OM aberta, o botão grande é sempre o próximo passo de quem está olhando; o resto fica em <b>Mais ações</b>.</p>
+    ${p('Líder da área', ['Toque em <b>Nova OM</b>: área, serviço e local (o local tem sugestões da área). Pode <b>solicitar agora</b> ou <b>planejar para uma data</b>.', 'Planejada: no dia, toque em <b>Solicitar agora</b>.', 'Devolvida: corrija o que o técnico pediu e reenvie.', 'Liberada: execute, avise a sala e toque em <b>Serviço terminado</b>. Quando a sala desbloquear, toque em <b>Marcar o desbloqueio</b> (ou marque as duas horas juntas).', 'Para repetir um serviço, abra a OM antiga e use <b>Mais ações › Repetir esta OM</b>.'])}
+    ${p('Técnico de Processo', ['Confira a solicitação e toque em <b>Aprovar e enviar ao cliente</b> (ou <b>Devolver</b> com o que corrigir).', 'Não liberada pelo cliente: ajuste e toque em <b>Reenviar ao cliente</b>, ou cancele.', 'Preventivas que se repetem: cadastre uma vez e o sistema planeja as OMs das próximas 3 semanas sozinho.'])}
+    ${p('Cliente', ['Toque em <b>OM gerada</b> quando gerar a OM (com o número) e passar à sala de controle. Aqui começa o tempo de bloqueio e o prazo.', 'Quando a sala avisar que o eletricista liberou, toque em <b>Liberado</b> e informe as horas que a sala passou. Se não der, <b>Não liberado</b> com o motivo.'])}
+    <p class="muted small m0">Tempo de bloqueio e prazo do cliente são o mesmo relógio: da OM gerada até o eletricista liberar.</p></div>`;
+  formSheet('Como funcionam as OMs', 'Do pedido ao desbloqueio', html, 'Entendi', async () => {}, {});
+  const f = document.getElementById('fSheet'); const c = f && f.querySelector('[data-close]'); if (c) c.hidden = true;
+}
+
+/* ---------- preventivas que se repetem (contas/oms-recorrentes.js) ---------- */
+const recBase = () => { if (DB.omsRecWatch) DB.omsRecWatch(SK); return (DB.cache.omsRec || {})[SK] || { d: {}, loaded: false }; };
+const recs = () => Object.values(recBase().d || {}).sort((a, b) => String(a.titulo).localeCompare(String(b.titulo), 'pt-BR'));
+const nRec = () => recs().filter(r => r.ativa !== false).length;
+// Quem trata, ao abrir a tela: cria as OMs planejadas que faltam (até 3 semanas para a frente). Uma vez por vez que as
+// preventivas mudam (a marca evita repetir a cada desenho da tela).
+let gerando = false; const jaGerou = new Set();
+function gerarPreventivas(todos) {
+  const b = recBase(); if (!b.loaded || gerando || !trataOmU(ME, SK)) return;
+  const hoje = today(); const marca = SK + '|' + hoje + '|' + recs().map(r => `${r.id}:${r.ate || ''}:${r.ativa}`).join(',');
+  if (jaGerou.has(marca)) return; jaGerou.add(marca);
+  const { oms, ate } = aCriar(recs(), Object.fromEntries(todos.map(o => [o.id, 1])), hoje, quem());
+  const mudar = recs().filter(r => ate[r.id] && ate[r.id] !== r.ate);
+  if (!oms.length && !mudar.length) return;
+  gerando = true;
+  setTimeout(async () => {
+    try {
+      const n = oms.length ? await DB.omCriarPlanejadas(SK, oms) : 0;
+      for (const r of mudar) await DB.omRecSalvar(r.id, SK, { ate: ate[r.id] });
+      if (n) { DB.log(`OMs: ${n} preventiva${n > 1 ? 's' : ''} planejada${n > 1 ? 's' : ''} sozinha${n > 1 ? 's' : ''} (que se repetem)`, 'operacao'); toast(`${n} OM${n > 1 ? 's' : ''} preventiva${n > 1 ? 's' : ''} planejada${n > 1 ? 's' : ''} na agenda`); }
+    } finally { gerando = false; render(); }
+  }, 0);
+}
+// OMs planejadas (ainda não pedidas) que esta preventiva criou daqui para a frente.
+const futurasDa = (rid, hoje) => lista().filter(o => o.id.startsWith(`R${rid}_`) && o.status === 'planejada' && o.dPrev >= hoje);
+function listaRecorrentes() {
+  const hoje = today(); const L = recs();
+  const html = `<div class="p-form"><p class="muted small m0">Cadastre uma vez o serviço que se repete. O sistema põe na agenda, como <b>Planejada</b>, as OMs das próximas 3 semanas; no dia, o líder solicita como qualquer outra.</p>
+    ${L.length ? `<div class="tr-lista">${L.map(r => { const px = proximaData(r, hoje); return `<button type="button" class="tr-it${r.ativa === false ? ' fechada' : ''}" data-orid="${esc(r.id)}"><span class="tr-it-s">${etiqueta(r.ativa === false ? 'Pausada' : 'Ativa', r.ativa === false ? 'neutro' : 'ok')}</span><span class="tr-it-t"><b>${esc(r.titulo)}</b><small>${esc([freqTxt(r), areaNome(r.area), [r.equip, r.local].filter(Boolean).join(' · '), px ? 'próxima ' + dataBR(px) : ''].filter(Boolean).join(' · '))}</small></span></button>`; }).join('')}</div>` : '<p class="muted small m0">Nenhuma ainda.</p>'}
+    <div class="row-gap"><button type="button" class="btn pri" data-ornova="1">${I.plus} Nova preventiva que se repete</button></div></div>`;
+  formSheet('Preventivas que se repetem', esc(conjNome()), html, 'Fechar', async () => {}, {});
+  const f = document.getElementById('fSheet'); if (!f) return;
+  const c = f.querySelector('[data-close]'); if (c) c.hidden = true;
+  const s = f.querySelector('[type=submit]'); if (s) s.classList.remove('pri');
+  f.querySelectorAll('[data-orid]').forEach(b => b.addEventListener('click', () => editarRecorrente(b.dataset.orid)));
+  f.querySelectorAll('[data-ornova]').forEach(b => b.addEventListener('click', () => editarRecorrente('')));
+}
+function editarRecorrente(id) {
+  const r = id ? recBase().d[id] : null; if (id && !r) return;
+  const areas = SETS[SK] ? [...SETS[SK].areas, ...(SETS[SK].gerais || [])] : [];
+  const x = r || { area: '', local: '', equip: '', titulo: '', desc: '', prio: 'media', freq: 'semana', dias: [], dia: 1, inicio: today(), ativa: true };
+  const html = `<div class="dc-form">
+    <label class="sel dc-full"><span>Serviço ${ob}</span><input class="in" id="orTit" maxlength="${LIMITES.titulo}" value="${esc(x.titulo)}" placeholder="Ex.: Lubrificar mancais da correia 2" autocomplete="off"></label>
+    <label class="sel"><span>Área ${ob}</span><select class="in" id="orArea"><option value="">Escolha</option>${op(areas.map(a => [a, areaNome(a)]), x.area)}</select></label>
+    <label class="sel"><span>Local ${ob}</span><input class="in" id="orLocal" list="orLocais" maxlength="${LIMITES.local}" value="${esc(x.local)}" autocomplete="off"></label>
+    <label class="sel"><span>Equipamento (TAG)</span><input class="in" id="orEquip" list="orEquips" maxlength="${LIMITES.equip}" value="${esc(x.equip)}" autocomplete="off"></label>
+    <datalist id="orLocais">${opcoes(locaisDe(x.area))}</datalist><datalist id="orEquips">${opcoes(equipsDe(x.area))}</datalist>
+    <label class="sel"><span>Prioridade</span><select class="in" id="orPrio">${op(Object.entries(PRIORIDADES), x.prio)}</select></label>
+    <label class="sel"><span>Repete</span><select class="in" id="orFreq">${op(Object.entries(FREQ), x.freq)}</select></label>
+    <fieldset class="om-docf dc-full" id="orDiasF" ${x.freq === 'mes' ? 'hidden' : ''}><legend>Dias da semana ${ob}</legend><div class="row-gap">${DIAS_SEM.map((d, i) => `<label class="om-dsem"><input type="checkbox" id="orD${i}" ${(x.dias || []).includes(i) ? 'checked' : ''}> ${d}</label>`).join('')}</div></fieldset>
+    <label class="sel" id="orDiaL" ${x.freq === 'mes' ? '' : 'hidden'}><span>Dia do mês (1 a 28) ${ob}</span><input class="in" type="number" inputmode="numeric" min="1" max="28" id="orDia" value="${esc(String(x.dia || 1))}"></label>
+    <label class="sel"><span>A partir de ${ob}</span><input class="in" type="date" id="orIni" value="${esc(x.inicio)}"></label>
+    <label class="sel"><span>Situação</span><select class="in" id="orAtiva">${op([['1', 'Ativa'], ['0', 'Pausada (não planeja mais)']], x.ativa === false ? '0' : '1')}</select></label>
+    <label class="sel dc-full"><span>Detalhes</span><textarea class="in" id="orDesc" rows="2" maxlength="${LIMITES.desc}">${esc(x.desc || '')}</textarea></label>
+    <p class="muted small m0 dc-full">As OMs das próximas 3 semanas entram na agenda como Planejadas (tipo Preventiva). Ao mudar ou apagar, as planejadas que esta preventiva já criou e que não valem mais saem da agenda.</p>
+    ${r ? '<div class="row-gap dc-full"><button type="button" class="btn sm ghost" id="orApagar">Apagar esta preventiva</button></div>' : ''}</div>`;
+  formSheet(r ? 'Editar preventiva que se repete' : 'Nova preventiva que se repete', esc(conjNome()), html, 'Salvar', async () => {
+    let y; try { y = conferirRecorrente({ area: v$('orArea'), local: v$('orLocal'), equip: v$('orEquip'), titulo: v$('orTit'), desc: v$('orDesc'), prio: v$('orPrio'), freq: v$('orFreq'), dias: DIAS_SEM.map((d, i) => (document.getElementById('orD' + i) || {}).checked ? i : -1).filter(i => i >= 0), dia: v$('orDia'), inicio: v$('orIni'), ativa: v$('orAtiva') !== '0' }); } catch (e) { focar(e); }
+    const rid = r ? r.id : DB.omRecNovoId();
+    // Recomeça a contar de hoje (o "ate" volta para vazio): as datas novas entram já; as que já existem não se repetem.
+    await DB.omRecSalvar(rid, SK, { ...y, ate: '' }, !r);
+    if (r) await tirarFuturas(rid, y.ativa ? new Set(datasDa({ ...y }, today(), add(today(), HORIZONTE))) : new Set());
+    DB.log(`OMs: preventiva que se repete ${r ? 'alterada' : 'cadastrada'} (${y.titulo}, ${freqTxt(y).toLowerCase()})`, 'operacao'); toast('Preventiva salva'); jaGerou.clear(); render();
+  }, { cancelarTxt: 'Voltar', aoCancelar: () => setTimeout(listaRecorrentes, 0) });
+  const f = document.getElementById('fSheet'); if (!f) return;
+  const fr = document.getElementById('orFreq');
+  if (fr) fr.addEventListener('change', () => { const mes = fr.value === 'mes'; const a = document.getElementById('orDiasF'), b = document.getElementById('orDiaL'); if (a) a.hidden = mes; if (b) b.hidden = !mes; });
+  const ap = document.getElementById('orApagar');
+  if (ap) ap.addEventListener('click', async () => {
+    if (ap.dataset.certo !== '1') { ap.dataset.certo = '1'; ap.textContent = 'Apagar mesmo? (toque de novo)'; return; }
+    ap.disabled = true; await DB.omRecApagar(r.id, SK); await tirarFuturas(r.id, new Set());
+    DB.log(`OMs: preventiva que se repete apagada (${r.titulo})`, 'operacao'); toast('Preventiva apagada'); document.getElementById('layer').innerHTML = ''; render();
+  });
+}
+// Tira da agenda as planejadas futuras desta preventiva que não estão mais nas datas (manter = datas que continuam).
+async function tirarFuturas(rid, manter) {
+  for (const o of futurasDa(rid, today())) if (!manter.has(o.dPrev)) { try { await DB.omApagar(o.id, SK); } catch (e) { /* segue */ } }
+}
+
 // Programação da semana mostrada (com a área escolhida no topo).
 const progDados = () => { const u = U(); const l = u.area ? lista().filter(o => o.area === u.area) : lista(); return [l, weekOf(u.dia), { hoje: today(), cfg: cfg(), onde: conjNome(), area: u.area, areaNome }]; };
 acoes.omProg = () => imprimirProgramacao(...progDados());
 acoes.omProgXls = () => excelProgramacao(...progDados());
 acoes.omNova = () => editar('');
+acoes.omComo = () => comoFunciona();
+acoes.omRec = () => listaRecorrentes();
 acoes.omPrazos = () => mudarPrazos();
 acoes.omCliente = () => escolherCliente();
 acoes.omAbrir = (el, d) => abrir(d.id);
@@ -441,6 +573,11 @@ acoes.omExcel = async () => {
 const FILTROS = { omFSit: 'status', omFArea: 'area' };
 document.addEventListener('change', e => {
   const k = e.target && FILTROS[e.target.id]; if (k) { U()[k] = e.target.value; salvarUI(); render(); return; }
+  // Nova OM: trocar a área troca as sugestões de local e equipamento.
+  if (e.target && (e.target.id === 'omArea' || e.target.id === 'orArea')) {
+    const dl = document.getElementById(e.target.id === 'omArea' ? 'omLocais' : 'orLocais'); if (dl) dl.innerHTML = opcoes(locaisDe(e.target.value));
+    const de = document.getElementById(e.target.id === 'omArea' ? 'omEquips' : 'orEquips'); if (de) de.innerHTML = opcoes(equipsDe(e.target.value));
+  }
   // Nova OM: "Planejar" esconde a hora da solicitação (fica para o dia em que for pedida).
   if (e.target && e.target.id === 'omQuando') {
     const pl = e.target.value === 'planejar'; const l = document.getElementById('omHSolL'); if (l) l.hidden = pl;

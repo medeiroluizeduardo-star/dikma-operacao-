@@ -9,7 +9,7 @@ import { avisosSeg, STATUS_SEG } from './lib/segcalc.mjs';
 import { usuarioEm, areasDoCadastro } from './lib/acessos.mjs';
 import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
-import { avisosOms } from './lib/oms.mjs';
+import { avisosOms, resumo7h } from './lib/oms.mjs';
 import { avisosProgramacao } from './lib/oms-programacao.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
@@ -337,6 +337,15 @@ export function planejar(d) {
       const titulo = `Programação das OMs: ${n} OM${n > 1 ? 's' : ''} na semana de ${ini.slice(8, 10)}/${ini.slice(5, 7)}`;
       const corpo = [...l.map(x => `${SETS[x.conj] ? SETS[x.conj].curto : x.conj}: ${x.n}${x.urgentes ? ` (${x.urgentes} alta ou emergência)` : ''}${x.docsPend ? ` · ${x.docsPend} com documentação pendente` : ''}`), 'Toque para ver e salvar o PDF.'].join('\n');
       msgs.push({ uid, titulo: titulo.slice(0, 120), corpo, tag: 'oms', url: `/?m=operacao&v=oms&conj=${l[0].conj}&omsem=${ini}` });
+    }
+  }
+  // 13) Resumo das OMs das 7h (Operação › OMs): das 7h em diante, uma vez por dia, a cada um só o que é dele (para aprovar,
+  //     para solicitar hoje, para executar, para liberar…). Só quando há algo. d.oms7 = OMs lidas só de manhã (7h às 12h).
+  if (hora >= 7 && (d.oms7 || []).length) {
+    for (const x of resumo7h(d.oms7, d.usuarios, hoje, d.omsCfg || null)) {
+      if (d.enviados[x.chave]) continue; marcar.add(x.chave);
+      const a = alvo.find(y => y.uid === x.uid); if (!a || !a.prefs.oms) continue;
+      msgs.push({ uid: x.uid, titulo: x.titulo, corpo: x.corpo, tag: 'oms', url: '/?m=operacao&v=oms' });
     }
   }
   return { msgs, marcar: [...marcar] };

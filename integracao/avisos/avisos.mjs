@@ -164,9 +164,18 @@ const oms = []; for (const st of ['solicitada', 'enviada', 'recusada', 'devolvid
 const omsProx = [];
 { const ag = new Date(); const hj = today();
   if (ag.getDay() === PROG_DIA && ag.getHours() >= PROG_HORA) { const ini = add(weekOf(hj), 7); (await db.collection('oms').where('dPrev', '>=', ini).where('dPrev', '<=', add(ini, 6)).get()).forEach(x => omsProx.push({ id: x.id, ...x.data() })); } }
+// Resumo das OMs das 7h (uma vez por dia por pessoa, das 7h às 12h): além das em andamento, as planejadas, as aprovadas
+// esperando envio e as finalizadas da última semana (para lembrar o desbloqueio).
+const oms7 = [];
+{ const ag = new Date(); const hj = today();
+  if (ag.getHours() >= 7 && ag.getHours() < 13) {
+    oms7.push(...oms);
+    for (const st of ['planejada', 'aprovada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms7.push({ id: x.id, ...x.data() }));
+    (await db.collection('oms').where('hFim', '>=', add(hj, -7)).get()).forEach(x => { const o = x.data(); if (o.status === 'finalizada') oms7.push({ id: x.id, ...o }); });
+  } }
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
 const omsCfg = (await db.doc('config/oms').get()).data() || null;
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, omsCfg, agora: new Date() });
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, oms7, omsCfg, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

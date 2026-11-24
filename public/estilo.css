@@ -1873,6 +1873,30 @@ button.tr-it:hover{border-color:var(--marca)}
 .om-hist{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13px}
 .om-obs{display:block;margin-top:3px;padding:4px 8px;border-left:3px solid var(--line);background:var(--surface-2);border-radius:4px;font-size:12.5px;white-space:pre-wrap}
 .om-acoes{padding-top:6px;border-top:1px solid var(--line)}
+.om-quem{color:var(--ink-2);font-weight:600}
+/* Barra de passos da OM (pedido → técnico → OM gerada → liberado → serviço feito → desbloqueado) */
+.om-passos{list-style:none;margin:0 0 var(--s2);padding:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;counter-reset:p}
+.om-passos li{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:2px;font-size:11.5px;color:var(--ink-3);min-width:0}
+.om-passos li::before{content:"";position:absolute;top:11px;left:-50%;width:100%;height:3px;background:var(--line);z-index:0}
+.om-passos li:first-child::before{display:none}
+.om-passos li.ok::before,.om-passos li.at::before{background:var(--ok)}
+.om-passos i{position:relative;z-index:1;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);background:var(--surface);display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:700}
+.om-passos li.ok i{background:var(--ok);border-color:var(--ok);color:#fff}
+.om-passos li.at i{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.om-passos li.prob i{border-color:var(--critico)}
+.om-passos li.at b{color:var(--ink)}.om-passos li.prob b{color:var(--critico)}
+.om-passos b{font-weight:600;line-height:1.15}
+.om-passos small{font-size:10.5px;color:var(--ink-3)}
+.om-passos.canc{opacity:.55}
+.om-agora{margin:0 0 var(--s2);font-size:14px}.om-fora{color:var(--critico);font-weight:700}
+.om-passo{margin-bottom:var(--s3)}.om-passo .btn{min-height:46px;font-size:15px;flex:1 1 160px}
+.om-det{margin-top:var(--s2);border-top:1px solid var(--line);padding-top:var(--s2)}
+.om-det>summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--ink-2);padding:6px 0}
+.om-det .om-acoes{border-top:0}
+.om-como{margin:0 0 var(--s2);padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.om-dsem{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:13.5px}
+.om-dsem input{width:18px;height:18px;accent-color:var(--accent)}
+@media (max-width:640px){.om-passos{gap:2px}.om-passos b{font-size:10px;letter-spacing:-.1px}.om-passos small{display:none}}
 /* Operação › OMs: Hoje, Semana e Mês */
 .om-cards4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .om-vis{margin-top:var(--s3)}

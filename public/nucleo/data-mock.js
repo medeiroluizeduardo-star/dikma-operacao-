@@ -263,6 +263,13 @@ export function omSalvar(id, conj, dados, novo = false) {
   const c = cache.oms[conj] || { d: {}, loaded: true };
   c.d = { ...c.d, [id]: { ...(c.d[id] || {}), id, ...dados, ...(novo ? { conj, solPor: me.uid, solNome: me.nome } : {}) } }; cache.oms = { ...cache.oms, [conj]: c }; changed(); return Promise.resolve();
 }
+// Preventivas que se repetem: na demonstração, uma no Pátio (toda segunda e quinta).
+cache.omsRec = { patio: { loaded: true, d: { rec1: { id: 'rec1', conj: 'patio', area: 'RECEBIMENTO', local: 'Correia 2', equip: 'TC-02', titulo: 'Lubrificar mancais da correia', prio: 'baixa', freq: 'semana', dias: [0, 3], dia: 0, inicio: today(), ativa: true, ate: '' } } }, bateria: { loaded: true, d: {} } };
+export function omsRecWatch() { /* tudo já está em memória */ }
+export const omRecNovoId = () => 'rec' + Date.now().toString(36);
+export function omRecSalvar(id, conj, dados) { const c = cache.omsRec[conj] || { d: {}, loaded: true }; c.d = { ...c.d, [id]: { ...(c.d[id] || {}), id, conj, ...dados } }; cache.omsRec = { ...cache.omsRec, [conj]: c }; changed(); return Promise.resolve(); }
+export function omRecApagar(id, conj) { const c = cache.omsRec[conj]; if (c) { c.d = { ...c.d }; delete c.d[id]; cache.omsRec = { ...cache.omsRec }; } changed(); return Promise.resolve(); }
+export async function omCriarPlanejadas(conj, lista) { let n = 0; for (const { id, dados } of lista) { const c = cache.oms[conj] || { d: {}, loaded: true }; if (c.d[id]) continue; c.d = { ...c.d, [id]: { id, ...dados, conj, solPor: me.uid, solNome: me.nome } }; cache.oms = { ...cache.oms, [conj]: c }; n++; } changed(); return n; }
 export function indSalvar(patch) {
   const c = cache.ind.cfg || {}; const novo = { ...c };
   for (const [k, v] of Object.entries(patch)) novo[k] = v && typeof v === 'object' && !Array.isArray(v) ? { ...(c[k] || {}), ...v } : v;

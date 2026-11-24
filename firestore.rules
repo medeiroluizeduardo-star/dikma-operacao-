@@ -605,9 +605,23 @@ service cloud.firestore {
               && omDocsOk(request.resource.data.get('docs', {}))));
       allow delete: if omTrata(resource.data.conj);
     }
+    // Preventivas que se repetem (contas/oms-recorrentes.js): quem trata as OMs no conjunto cadastra, muda e apaga; quem lê
+    // as OMs lê. As OMs planejadas de cada data são criadas pela tela com as regras de oms/{id} (status planejada).
+    match /omsrec/{id} {
+      allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
+      allow create, update: if marcaOk() && omTrata(request.resource.data.conj) && (resource == null || resource.data.conj == request.resource.data.conj)
+        && request.resource.data.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'prio', 'freq', 'dias', 'dia', 'inicio', 'ativa', 'ate', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.conj in ['patio', 'bateria'] && request.resource.data.titulo is string && request.resource.data.titulo.size() >= 5 && request.resource.data.titulo.size() <= 200
+        && request.resource.data.area is string && request.resource.data.area.size() <= 40 && tTxt(request.resource.data, 'local', 120) && tTxt(request.resource.data, 'equip', 80)
+        && tTxt(request.resource.data, 'desc', 1000) && request.resource.data.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
+        && request.resource.data.freq in ['semana', 'quinzena', 'mes'] && request.resource.data.get('dias', []) is list && request.resource.data.get('dias', []).size() <= 7
+        && request.resource.data.get('dia', 0) is int && request.resource.data.get('ativa', true) is bool
+        && tTxt(request.resource.data, 'inicio', 10) && tTxt(request.resource.data, 'ate', 10) && tTxt(request.resource.data, 'criadoNome', 150) && tTxt(request.resource.data, 'criadoPor', 128);
+      allow delete: if omTrata(resource.data.conj);
+    }
 
     // A coleção antiga documentos (Administração › Documentos e OMs, que saiu em 17/11/2026) não tem regra: ninguém lê
-    // nem grava pelo sistema. A rotina "Apagar documentos antigos" (apagar-documentos.yml) a apaga depois da cópia.
+    // nem grava pelo sistema (conferida em 22/11/2026: já estava vazia no banco).
 
     // Indicadores do contrato (Indicadores › Visão geral e Histórico): metas, ICCC/ICCP do mês e o histórico dos meses.
     // Quem tem o módulo Indicadores lê; o Gestor dos Indicadores e o administrador gravam (só estes campos, mapas pequenos).
