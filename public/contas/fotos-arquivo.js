@@ -353,3 +353,35 @@ export function encaixar(pw, ph, cx) {
   if (h > cx.h) { h = cx.h; w = h * r; }
   return { x: cx.x + (cx.w - w) / 2, y: cx.y + (cx.h - h) / 2, w, h };
 }
+
+// ---------- painel (dashboard) dos últimos slides do relatório ----------
+// Cor de um percentual: verde a partir de 90%, amarelo de 70% a 89%, vermelho abaixo de 70%; sem número, nenhuma.
+export const FAIXA_OK = 90, FAIXA_ATENCAO = 70;
+export const semaforo = p => (p == null ? '' : p >= FAIXA_OK ? 'ok' : p >= FAIXA_ATENCAO ? 'atencao' : 'critico');
+// Registros fotográficos por dia do período (até o último dia contado). Mais de 35 dias: por semana (segunda).
+// grupos: os grupos do relatório (todos, antes do limite de fotos). Devolve [{ rot: '17/11' ou 'Sem. 47', n }].
+export function fotosPorPeriodo(grupos, de, ate) {
+  const n = new Map();
+  for (const g of grupos || []) n.set(g.dia, (n.get(g.dia) || 0) + g.fotos.length);
+  const dias = []; for (let d = de; d <= ate && dias.length < 400; d = add(d, 1)) dias.push(d);
+  if (dias.length <= 35) return dias.map(d => ({ rot: ddmm(d), n: n.get(d) || 0 }));
+  const sem = new Map();
+  for (const d of dias) { const s = weekOf(d); sem.set(s, (sem.get(s) || 0) + (n.get(d) || 0)); }
+  return [...sem].map(([s, v]) => ({ rot: `Sem. ${semanaISO(s)}`, n: v }));
+}
+// Contagem por um campo, do maior para o menor; além de "max" linhas, o resto vira "Outros".
+// lista: itens; chave(item) → texto (vazio conta como "Sem informação"); peso(item) → quanto soma (padrão 1).
+export function contarPor(lista, chave, max = 6, peso = _x => 1) {
+  const m = new Map();
+  for (const x of lista || []) { const k = String(chave(x) || '').trim() || 'Sem informação'; m.set(k, (m.get(k) || 0) + peso(x)); }
+  const tudo = [...m].map(([rot, n]) => ({ rot, n })).sort((a, b) => b.n - a.n || a.rot.localeCompare(b.rot));
+  if (tudo.length <= max) return tudo;
+  const resto = tudo.slice(max - 1).reduce((s, x) => s + x.n, 0);
+  return [...tudo.slice(0, max - 1), { rot: `Outros (${tudo.length - max + 1})`, n: resto }];
+}
+// Números dos registros (Queda zero e OMs, e a capa): fotos, ocorrências (grupos), dias com foto, locais e pessoas.
+export function resumoRegistros(grupos) {
+  const gs = grupos || []; const set = f => new Set(gs.flatMap(f).filter(Boolean)).size;
+  return { fotos: gs.reduce((s, g) => s + g.fotos.length, 0), ocorrencias: gs.length, dias: set(g => [g.dia]),
+    locais: set(g => [g.local || g.rota]), pessoas: set(g => g.colabs || []) };
+}

@@ -192,20 +192,28 @@ para o administrador; a arquivada abre só a miniatura, com o lote da exportaç�
 Gerado no navegador com a PptxGenJS (tamanho 16:9, cores da marca: azul `#272662`, laranja `#F05A26`, logotipo
 branco). Não grava nada no banco.
 
-1. **Capa**: área (Pátio/Bateria), período, rota, quem gerou e um resumo (% de cumprimento, % com foto, realizadas,
-   registros fotográficos).
-2. **Indicadores do período**: programadas, realizadas, não realizadas, extras, % de cumprimento (realizadas ÷
-   programadas, contando os dias até hoje) e % com foto (realizadas e extras com foto, pela contagem `ft` da semana);
-   gráfico de barras por rota.
-3. **Resultado por rota** (tabela, 14 rotas por slide, com o total).
-4. **Registros fotográficos**: até 4 fotos por slide, com legenda (número, data, hora, colaborador). A atividade com
-   4 fotos ou mais tem slides só dela, com data, área, rota, local/equipamento, colaborador e a situação no cabeçalho;
-   atividades com poucas fotos do mesmo dia, área e rota dividem o slide (cada foto com a legenda da sua atividade e a
-   situação). A foto de várias atividades ("Marcar restantes") aparece uma vez, com "Vale para: …".
-5. **Atividades não realizadas** (com o motivo) e **Realizadas sem registro fotográfico** (tabelas; até 4 e 3 slides).
+1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e
+   % com foto; na Queda zero e nas OMs: fotos, ocorrências e locais).
+2. **Registros fotográficos**: até 4 fotos por slide; a marca Antes/Durante/Depois fica numa etiqueta colorida em
+   cima da foto e a hora embaixo. À direita, um cartão com data, atividade (ou motivo da queda / serviço da OM), rota
+   e área, colaborador e a situação colorida, e o número do slide ("3 de 25"). A atividade com 4 fotos ou mais tem
+   slides só dela; atividades com poucas fotos do mesmo dia, área e rota dividem o slide ("Atividade 1", "2"…).
+3. **Painel de resultados** (dashboard, no fim): 6 cartões (programadas, realizadas, não realizadas, extras,
+   % de cumprimento = realizadas ÷ programadas contando os dias até hoje, % com foto pela contagem `ft` da semana),
+   rosca da situação das programadas, cumprimento por rota (da menor para a maior) e fotos por dia (por semana acima
+   de 35 dias).
+4. **Painel por rota**: tabela com barras de cumprimento e de foto (12 rotas por slide, com o total). Cores:
+   verde 90% ou mais, amarelo 70% a 89%, vermelho abaixo de 70% (`FA.semaforo`).
+5. **Pontos de atenção**: não realizadas por motivo e por rota, realizadas sem foto por rota.
+6. **Anexos**: listas das não realizadas (com o motivo) e das realizadas sem foto (até 4 e 3 slides) e o encerramento.
+
+Queda zero e OMs: no lugar dos itens 3 a 6, um **Painel de registros** (fotos, ocorrências, dias, locais,
+colaboradores, fotos por dia e locais com mais fotos). As contas do painel ficam em `contas/fotos-arquivo.js`
+(`fotosPorPeriodo`, `contarPor`, `resumoRegistros`) e usam todas as fotos do período, mesmo as que ficaram fora do
+arquivo pelo limite.
 
 **Limite:** 120 fotos por relatório (~150 KB cada). Acima disso, as fotos entram em rodízio entre as atividades do
-período (a 1ª de cada, depois a 2ª…) e a tela e o slide de indicadores avisam quantas ficaram de fora — para todas,
+período (a 1ª de cada, depois a 2ª…) e a tela e a capa avisam quantas ficaram de fora — para todas,
 escolha uma rota ou um período menor. A foto arquivada entra com a miniatura (e o aviso na legenda).
 
 ## Exportar fotos (.zip)
