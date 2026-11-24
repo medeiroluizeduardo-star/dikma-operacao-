@@ -25,3 +25,9 @@ test('Frequência: linhas da mesma pessoa (nome ou matrícula)', () => {
   const r = repetidosNaFolha([{ k: 'a', nome: 'RODRIGO X', mat: '1' }, { k: 'b', nome: 'Rodrigo X', mat: '2' }, { k: 'c', nome: 'OUTRO', mat: '3' }, { k: 'd', nome: 'OUTRO NOME', mat: '3' }, { k: 'e', nome: 'SOZINHO', mat: '' }]);
   assert.deepEqual([...r].sort(), ['a', 'b', 'c', 'd']);
 });
+
+test('a mesma pessoa duas vezes na Escala do dia', () => {
+  const d = cadastrosDuplicados({ fichas: [{ mat: '7', nome: 'ANA' }], escala: [{ nome: 'ANA', mat: '7', area: 'X' }, { nome: 'ANA', mat: '7', area: 'Y' }] });
+  assert.equal(d.length, 1);
+  assert.match(d[0].motivo, /2 vezes na Escala do dia \(X, Y\)/);
+});

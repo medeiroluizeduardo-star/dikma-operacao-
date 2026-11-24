@@ -56,3 +56,13 @@ test('nome parecido não liga; nome idêntico só quando falta matrícula', () =
   const gr2 = gruposPelaFicha({ fichas: fs, colabs: [{ id: 'c1', nome: 'João  Silva' }], ini: '2026-10-16' });
   assert.equal(gr2[0].nome, 'LIDER X');
 });
+
+test('linha da planilha com o mesmo nome e sem ficha própria não vira linha repetida', () => {
+  const fs = [{ mat: '20', nome: 'RODRIGO TESTE', lider: 'X' }, { mat: '30', nome: 'PAULO HOMONIMO', lider: 'X' }, { mat: '31', nome: 'PAULO HOMONIMO', lider: 'Y' }];
+  const colabs = [{ id: 'c1', nome: 'RODRIGO TESTE', mat: '20' }, { id: 'c2', nome: 'PAULO HOMONIMO', mat: '30' }];
+  const folha = [{ nome: 'G', turno: true, pessoas: [{ k: 'f1', nome: 'Rodrigo Teste', mat: '99' }, { k: 'f2', nome: 'PAULO HOMONIMO', mat: '31' }] }];
+  const ps = gruposPelaFicha({ fichas: fs, colabs, folha, ini: '2026-11-16' }).flatMap(g => g.pessoas);
+  assert.equal(ps.filter(p => p.nome === 'RODRIGO TESTE').length, 1); // a da planilha (mat 99, sem ficha) juntou
+  assert.equal(ps.find(p => p.nome === 'RODRIGO TESTE').k, 'f1'); // e leva os lançamentos antigos dela
+  assert.equal(ps.filter(p => p.nome === 'PAULO HOMONIMO').length, 2); // homônimo com ficha própria continua
+});
