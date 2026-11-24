@@ -116,7 +116,7 @@ Quando a senha de alguém é redefinida pelo site, a conta de login antiga fica 
 - **Rotina Trocar líder** (GitHub › Actions › Run workflow): `simular` lista todos os líderes (fichas, folha da competência atual e futuras, ocorrências abertas, cadastro da Operação) e o que mudaria; `gravar` faz a cópia dos documentos e troca nas fichas, move as pessoas na folha e troca nas ocorrências abertas. Competências passadas e ocorrências assinadas ficam como estão.
 
 ## Cópia de segurança
-Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia às 3h:
+Rotina **Cópia de segurança** (`.github/workflows/backup.yml`), todo dia logo depois que a cota grátis zera (por volta de 5h30 de Brasília; o GitHub pode atrasar, por isso há 4 horários e só o primeiro que der certo copia, os outros ficam como "cancelada"):
 - **Diária:** todas as coleções, menos o histórico e as fotos. Fica guardada 30 dias.
 - **Semanal (domingo):** inclui o histórico e a lista de fotos com miniatura. Fica guardada 90 dias.
 - **Completa (só manual, Run workflow):** inclui as fotos e arquivos em tamanho cheio. Fica 7 dias. É pesada: use quando quiser baixar tudo para um computador.

@@ -51,3 +51,9 @@ test('última execução de uma rotina (para a tela Saúde do sistema): pula as 
   const r = ultimaRotina([{ id: 3, status: 'in_progress' }, { id: 2, status: 'completed', conclusion: 'cancelled' }, { id: 1, status: 'completed', conclusion: 'failure', created_at: 'x' }]);
   assert.deepEqual(r, { ultima: 'x', ok: false, id: 1 });
 });
+
+test('horário agendado cancelado (já tinha a cópia do dia) não conta nem gera aviso', () => {
+  const r = avaliarBackup([exec(1, null, { conclusion: 'cancelled' }), exec(4, 1000), exec(28, 1000), exec(52, 1000)], agora);
+  assert.deepEqual(r.problemas, []);
+  assert.deepEqual(r.avisos, []);
+});

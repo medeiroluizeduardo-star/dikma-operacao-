@@ -16,7 +16,8 @@ const kb = b => b >= 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB
 // Devolve { problemas: [...], avisos: [...], ultima } (problemas fazem a rotina falhar).
 export function avaliarBackup(execucoes, agora = new Date()) {
   const problemas = [], avisos = [];
-  const feitas = execucoes.filter(e => e.status === 'completed');
+  // Canceladas = horário agendado que viu que já tinha a cópia do dia (backup.yml): não contam.
+  const feitas = execucoes.filter(e => e.status === 'completed' && e.conclusion !== 'cancelled');
   const boas = feitas.filter(e => e.conclusion === 'success');
   const ultima = boas[0];
   if (!ultima) return { problemas: ['Nenhuma cópia de segurança que deu certo foi encontrada.'], avisos, ultima: null };
