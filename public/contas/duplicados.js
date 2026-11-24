@@ -20,6 +20,13 @@ export function cadastrosDuplicados({ fichas = [], escala = [], hoje = '' } = {}
   }
   for (const l of porNome.values()) if (l.length > 1) add(l[0].nome, l.map(mat), `${l.length} fichas com o mesmo nome (matrículas ${l.map(f => mat(f) || 'em branco').join(' e ')})`);
   for (const [m, l] of porMat) if (l.length > 1) add(l[0].nome, l.map(mat), `${l.length} fichas com a mesma matrícula ${m}`);
+  // a mesma pessoa duas vezes na Escala do dia (duas áreas ou dois conjuntos): salvar a ficha deixa só na área escolhida
+  const naEscala = new Map();
+  for (const e of escala || []) { const k = mat(e) || 'n:' + normNome(e.nome); if (!naEscala.has(k)) naEscala.set(k, []); naEscala.get(k).push(e); }
+  for (const l of naEscala.values()) if (l.length > 1) {
+    const f = (mat(l[0]) && (porMat.get(mat(l[0])) || [])[0]) || (porNome.get(normNome(l[0].nome)) || [])[0];
+    add(f ? f.nome : l[0].nome, f ? [mat(f)] : [mat(l[0])], `está ${l.length} vezes na Escala do dia${l.some(e => e.area) ? ' (' + l.map(e => e.area).filter(Boolean).join(', ') + ')' : ''}: abra a ficha, confira a área e salve`);
+  }
   const matsFicha = new Set(porMat.keys());
   for (const e of escala || []) {
     const me = mat(e); if (!me || matsFicha.has(me)) continue;

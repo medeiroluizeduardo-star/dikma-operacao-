@@ -73,14 +73,20 @@ export function gruposPelaFicha({ fichas = [], colabs = [], outros = [], folha =
     out.push({ g: grupoDe(f), p });
   }
   const outrosDe = indice(outros || []);
+  // mesma pessoa pelo nome (sem acento): a linha da folha (planilha) com outra matrícula não vira uma segunda linha;
+  // os lançamentos antigos dela ficam ligados à linha que já existe (k), quando essa ainda não tem folha.
+  const porNome = new Map(); for (const o of out) porNome.set(normNome(o.p.nome), o.p);
   for (const x of daFolha) {
     if (usadas.has(x)) continue;
     if (x.p.ativ && ids.has(x.p.ativ)) continue; // já entrou acima
     if (outrosDe(x.p)) continue; // está na Presença do outro conjunto: a frequência dele é lá
-    const f = fichaDe(x.p);
+    const f0 = fichaDe(x.p); const ja = porNome.get(normNome(x.p.nome)) || porNome.get(normNome(f0 && f0.nome));
+    // homônimo com ficha própria (outra matrícula) continua separado; sem ficha própria, é a mesma pessoa
+    if (ja && !(f0 && mat(f0) && mat(f0) !== mat(ja))) { usadas.add(x); if (String(ja.k).startsWith('at:')) ja.k = x.p.k; continue; }
+    const f = f0;
     const p = { k: x.p.k, nome: (f && f.nome) || x.p.nome, mat: mat(x.p) || mat(f), turma: letra(x.p.turma) || '', obs: x.p.obs || '', notas: x.p.notas || [], ativ: null, desligado: x.p.desligado || null, turno: x.turno, semFicha: !f };
     if (fora(p)) continue;
-    usadas.add(x); out.push({ g: grupoDe(f), p });
+    usadas.add(x); out.push({ g: grupoDe(f), p }); porNome.set(normNome(p.nome), p);
   }
   const por = new Map();
   for (const { g, p } of out) { if (!por.has(g)) por.set(g, []); por.get(g).push(p); }
