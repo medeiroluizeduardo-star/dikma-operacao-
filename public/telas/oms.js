@@ -4,7 +4,7 @@
 // passa (sala → eletricista, eletricista liberou) e marca Liberado ou Não liberado (o técnico registra só se ele liberou por
 // fora); o líder registra a hora em que avisou a sala que terminou e a hora do desbloqueio. Cada OM tem a lista de documentação (não obrigatória) e o prazo do cliente.
 // As contas ficam em contas/oms.js; o banco, em oms/{id} (nucleo/data.js), uma escuta por conjunto.
-import { STATUS, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes, pidFotoOM, nomeSit, corSit, etapas, comQuem, proximo } from '../contas/oms.js';
+import { STATUS, ABERTAS, PRIORIDADES, TIPOS, LIMITES, veOmsU, trataOmU, abreOmU, planejaOmU, areasQuePlaneja, acoesDe, agoraLocal, horaBR, dataBR, duracao, tempos, minutosEntre, conferirSolicitacao, mudar, filtrar, resumo, linhasExcel, clienteDe, palpiteCliente, diaDe, atrasada, visaoHoje, visaoSemana, visaoMes, DOCS, DOC_SIT, PASSOS, PRAZO_MAX, prazosDe, prazoOm, foraDoPrazo, docsResumo, conferirDocs, conferirPrazos, passo, ehClienteDa, docsTxt, observacoes, pidFotoOM, nomeSit, corSit, etapas, comQuem, proximo, HORAS_EDIT, conferirHoras, mudouTxt } from '../contas/oms.js';
 import { FREQ, DIAS_SEM, conferirRecorrente, freqTxt, proximaData, aCriar, datasDa, HORIZONTE } from '../contas/oms-recorrentes.js';
 import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
@@ -209,6 +209,9 @@ function editar(id, modelo = null) {
   const m = !o && modelo ? { area: areas.includes(modelo.area) ? modelo.area : '', local: modelo.local || '', equip: modelo.equip || '', titulo: modelo.titulo || '', desc: modelo.desc || '', tipo: modelo.tipo || 'corretiva', prio: modelo.prio || 'media' } : null;
   const x = o || { area: areas.length === 1 ? areas[0] : '', local: '', equip: '', titulo: '', desc: '', tipo: 'corretiva', prio: 'media', ...(m || {}), hSol: agoraLocal(), dPrev: diaSug };
   const plano = o ? o.status === 'planejada' : soPlaneja || ['semana', 'mes'].includes(u.aba);
+  // Depois de aprovada, só quem trata edita: além dos dados, o nº da OM e as horas já registradas.
+  const pos = !!o && !['planejada', 'solicitada', 'devolvida'].includes(o.status);
+  const horas = pos ? HORAS_EDIT.filter(([k]) => o[k]) : [];
   const html = `<div class="dc-form">
     ${o && o.status === 'devolvida' && o.motivo ? `<p class="om-mot dc-full">Devolvida: ${esc(o.motivo)}</p>` : ''}
     ${o || soPlaneja ? '' : `<label class="sel dc-full"><span>O que fazer</span><select class="in" id="omQuando">${op([['agora', 'Solicitar agora (vai ao Técnico de Processo)'], ['planejar', 'Planejar para uma data (pedir no dia)']], plano ? 'planejar' : 'agora')}</select></label>`}
@@ -221,15 +224,17 @@ function editar(id, modelo = null) {
     <label class="sel"><span>Prioridade</span><select class="in" id="omPrio">${op(Object.entries(PRIORIDADES), x.prio)}</select></label>
     <details class="om-det dc-full"${o ? ' open' : ''}><summary>Mais detalhes (opcional): tipo, hora do pedido, detalhes e documentação</summary><div class="dc-form">
     <label class="sel"><span>Tipo</span><select class="in" id="omTipo">${op(Object.entries(TIPOS), x.tipo)}</select></label>
-    <label class="sel" id="omHSolL" ${plano ? 'hidden' : ''}><span>Hora da solicitação</span><input class="in" type="datetime-local" id="omHSol" value="${esc(x.hSol || agoraLocal())}"></label>
+    <label class="sel" id="omHSolL" ${plano || pos ? 'hidden' : ''}><span>Hora da solicitação</span><input class="in" type="datetime-local" id="omHSol" value="${esc(x.hSol || agoraLocal())}"></label>
     <label class="sel dc-full"><span>Detalhes</span><textarea class="in" id="omDesc" rows="3" maxlength="${LIMITES.desc}" placeholder="O que está acontecendo, riscos, o que precisa para liberar">${esc(x.desc || '')}</textarea></label>
-    ${docsCampos(x.docs)}
-    ${!o || o.status === 'devolvida' ? obsCampo('Observação para o técnico (opcional)', o ? 'O que foi corrigido' : 'Recado para quem vai conferir; fica no histórico') : ''}</div></details>
-    <p class="muted small m0 dc-full" id="omDica">${ob} campo obrigatório. ${plano ? 'A OM fica planejada na agenda; no dia, um toque em <b>Solicitar</b> a envia ao Técnico de Processo.' : 'Ao enviar, a solicitação vai para o Técnico de Processo, com a hora de agora.'}</p></div>`;
-  const titulo = o ? (o.status === 'planejada' ? 'Editar OM planejada' : 'Corrigir solicitação') : m ? 'Repetir OM' : 'Nova OM';
+    ${docsCampos(x.docs)}</div></details>
+    ${pos ? `<label class="sel"><span>Nº da OM no cliente</span><input class="in" id="omENum" maxlength="${LIMITES.numero}" value="${esc(o.numero || '')}" autocomplete="off"></label>
+    <fieldset class="om-docf dc-full"><legend>Horas registradas <small>(corrija se alguma foi marcada errada)</small></legend><div class="dc-form">${horas.map(([k, n]) => `<label class="sel"><span>${esc(n)}</span><input class="in" type="datetime-local" id="omE_${k}" value="${esc(o[k])}"></label>`).join('')}</div></fieldset>` : ''}
+    <div class="dc-full">${!o || o.status === 'devolvida' ? obsCampo('Observação para o técnico (opcional)', o ? 'O que foi corrigido' : 'Recado para quem vai conferir; fica no histórico') : ''}</div>
+    <p class="muted small m0 dc-full" id="omDica">${ob} campo obrigatório. ${o && o.status !== 'devolvida' ? 'O que você mudar fica no histórico da OM, com o seu nome.' : plano ? 'A OM fica planejada na agenda; no dia, um toque em <b>Solicitar</b> a envia ao Técnico de Processo.' : 'Ao enviar, a solicitação vai para o Técnico de Processo, com a hora de agora.'}</p></div>`;
+  const titulo = o ? (o.status === 'planejada' ? 'Editar OM planejada' : o.status === 'devolvida' ? 'Corrigir solicitação' : 'Editar OM') : m ? 'Repetir OM' : 'Nova OM';
   formSheet(titulo, o ? `${esc(STATUS[o.status])} · cadastrada por ${esc(o.solNome || '')}` : 'Planeje com a data prevista ou solicite agora', html, o && o.status === 'devolvida' ? 'Salvar e reenviar' : o ? 'Salvar' : 'Salvar', async () => {
     const planejar = o ? o.status === 'planejada' : soPlaneja || v$('omQuando') === 'planejar';
-    let y; try { y = conferirSolicitacao({ area: v$('omArea'), hSol: v$('omHSol'), dPrev: v$('omDPrev'), equip: v$('omEquip'), local: v$('omLocal'), titulo: v$('omTit'), tipo: v$('omTipo'), prio: v$('omPrio'), desc: v$('omDesc') }, lim, planejar); } catch (e) { focar(e); }
+    let y; try { y = conferirSolicitacao({ area: v$('omArea'), hSol: pos ? v$('omE_hSol') || o.hSol : v$('omHSol'), dPrev: v$('omDPrev'), equip: v$('omEquip'), local: v$('omLocal'), titulo: v$('omTit'), tipo: v$('omTipo'), prio: v$('omPrio'), desc: v$('omDesc') }, lim, planejar); } catch (e) { focar(e); }
     y.docs = docsLidos();
     if (!o) {
       const st = planejar ? 'planejada' : 'solicitada';
@@ -242,10 +247,17 @@ function editar(id, modelo = null) {
       if (poeFotoOm(nova)) { FOTOS_OM[novoId] = []; setTimeout(() => fotosOm(nova), 0); }
       return;
     }
-    if (planejar) delete y.hSol;
-    const extra = o.status === 'devolvida' ? mudar(o, 'reenviar', quem(), { obs: v$('omObs') }) : {};
+    if (planejar || pos) delete y.hSol;
+    if (pos) {
+      let hs; try { hs = conferirHoras(o, Object.fromEntries(horas.map(([k]) => [k, v$('omE_' + k)]))); } catch (e) { focar(e); }
+      Object.assign(y, hs, { numero: v$('omENum').trim().slice(0, LIMITES.numero) });
+    }
+    const txt = mudouTxt(o, y);
+    if (o.status !== 'devolvida' && !txt) { toast('Nada mudou'); return; }
+    // O histórico guarda quem editou e o que mudou (a devolvida já ganha a linha "corrigida e reenviada").
+    const extra = o.status === 'devolvida' ? mudar(o, 'reenviar', quem(), { obs: v$('omObs') }) : { hist: [...(o.hist || []), passo('editada', quem(), txt)].slice(-LIMITES.hist) };
     await DB.omSalvar(o.id, SK, { ...y, ...extra });
-    DB.log(`OMs: solicitação ${o.status === 'devolvida' ? 'corrigida e reenviada' : 'alterada'} (${y.titulo})`, 'operacao'); toast(o.status === 'devolvida' ? 'Solicitação reenviada' : 'Solicitação salva'); render();
+    DB.log(`OMs: ${o.status === 'devolvida' ? 'solicitação corrigida e reenviada' : 'OM editada, ' + txt} (${y.titulo})`, 'operacao'); toast(o.status === 'devolvida' ? 'Solicitação reenviada' : 'OM salva'); render();
   });
 }
 // Uma mudança de situação, com a janela do que é preciso digitar.
@@ -344,7 +356,7 @@ function fotosOm(o, depois = () => {}) {
 // Nome de cada botão (o mesmo na janela e no "Mais").
 function nomeBotao(o, a) {
   const souCli = ehClienteDa(o, ME);
-  return { editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : 'Editar', solicitar: 'Solicitar agora', aprovar: cliente() ? 'Aprovar e enviar ao cliente' : 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Não liberado' : 'Registrar que o cliente não liberou', obs: '+ Observação', ciente: 'OM gerada', desbloqueio: 'Marcar o desbloqueio', docs: 'Documentação', liberar: souCli ? 'Liberado' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Serviço terminado', cancelar: 'Cancelar a OM', apagar: 'Apagar' }[a] || a;
+  return { editar: o.status === 'devolvida' ? 'Corrigir e reenviar' : '✎ Editar', solicitar: 'Solicitar agora', aprovar: cliente() ? 'Aprovar e enviar ao cliente' : 'Aprovar', devolver: 'Devolver', enviar: o.status === 'recusada' ? 'Reenviar ao cliente' : 'Enviar ao cliente', recusar: souCli ? 'Não liberado' : 'Registrar que o cliente não liberou', obs: '+ Observação', ciente: 'OM gerada', desbloqueio: 'Marcar o desbloqueio', docs: 'Documentação', liberar: souCli ? 'Liberado' : o.clienteUid ? 'Registrar liberação (cliente liberou por fora)' : 'Registrar liberação', finalizar: 'Serviço terminado', cancelar: 'Cancelar a OM', apagar: 'Apagar' }[a] || a;
 }
 // A alternativa do passo principal, ao lado dele: aprovar ou devolver; para o cliente, liberar ou não.
 const ALT = { aprovar: 'devolver', liberar: 'recusar', ciente: 'recusar' };
@@ -352,12 +364,13 @@ function abrir(id) {
   const o = achar(id); if (!o) return;
   const ac = acoesDe(o, ME); const x = tempos(o); const pz = prazoOm(o, cfg()); const dr = docsResumo(o); const souCli = ehClienteDa(o, ME);
   const pri = proximo(o, ME, ac); const alt = pri && ALT[pri] && ac.includes(ALT[pri]) && (ALT[pri] !== 'recusar' || souCli) ? ALT[pri] : null;
-  const mais = ac.filter(a => a !== pri && a !== alt);
+  const mais = ac.filter(a => a !== pri && a !== alt && a !== 'editar');
+  const ed = ac.includes('editar') && pri !== 'editar';
   const bt = (a, cls) => `<button type="button" class="btn${cls}" data-act="omAcao" data-id="${esc(o.id)}" data-v="${a}">${esc(nomeBotao(o, a))}</button>`;
   const linha = (r, v) => (v ? `<div><dt>${esc(r)}</dt><dd>${v}</dd></div>` : '');
   const html = `${barra(o)}
     <p class="om-agora"><b>${esc(comQuem(o))}</b>${pz && pz.aberta ? ` · ${pz.fora ? '<span class="om-fora">fora do prazo</span>' : 'prazo: resta ' + esc(duracao(pz.resta) || '0 min')}` : ''}</p>
-    ${pri ? `<div class="row-gap om-passo">${bt(pri, ' pri')}${alt ? bt(alt, '') : ''}</div>` : ''}
+    ${pri || ed ? `<div class="row-gap om-passo">${pri ? bt(pri, ' pri') : ''}${alt ? bt(alt, '') : ''}${ed ? bt('editar', pri ? ' ghost om-ed' : '') : ''}</div>` : ''}
     ${['devolvida', 'recusada'].includes(o.status) && o.motivo ? `<p class="om-mot">${o.status === 'recusada' ? 'Não liberada' : 'Devolvida'}: ${esc(o.motivo)}</p>` : ''}
     <dl class="p-dados om-dados">
       ${linha('Nº OM no cliente', esc(o.numero || ''))}${linha('Área', esc(areaNome(o.area)))}${linha('Equipamento / local', esc([o.equip, o.local].filter(Boolean).join(' · ')))}

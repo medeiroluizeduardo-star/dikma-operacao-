@@ -56,7 +56,7 @@ export const DOC_SIT = { pend: 'Pendente', ok: 'Pronto', na: 'Não precisa' };
 export const PRAZO_PADRAO = { emergencia: 2, alta: 24, media: 48, baixa: 120 };
 export const PRAZO_MAX = 720;
 // Nomes das linhas do histórico que não são situação.
-export const PASSOS = { ciente: 'OM gerada pelo cliente', observacao: 'Observação', desbloqueio: 'Desbloqueio' };
+export const PASSOS = { ciente: 'OM gerada pelo cliente', observacao: 'Observação', desbloqueio: 'Desbloqueio', editada: 'Editada' };
 export const LIMITES = { titulo: 200, local: 120, equip: 80, desc: 1000, motivo: 400, numero: 40, obs: 600, hist: 60, cliente: 120, contato: 120 };
 
 /* ---------- quem faz o quê ---------- */
@@ -92,7 +92,9 @@ export function acoesDe(om, u) {
   if (cli && om.status === 'enviada') { if (!om.hCiente) a.push('ciente'); a.push('liberar', 'recusar'); }
   // O cliente também cancela (o serviço não vai mais acontecer), com a OM com ele ou já liberada.
   if (cli && ['enviada', 'liberada'].includes(om.status)) a.push('cancelar');
-  if ((dono || trata) && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) a.push('editar');
+  // Editar (2026-11-24): quem abriu, enquanto a OM não foi aprovada; quem trata no conjunto (Técnico de Processo,
+  // coordenador, gestor, administrador), em qualquer situação, inclusive as horas já registradas.
+  if ((dono && ['planejada', 'solicitada', 'devolvida'].includes(om.status)) || trata) a.push('editar');
   // No dia (ou antes), a planejada vira solicitação: quem cadastrou, quem trata ou o líder da área.
   if ((dono || trata || daArea) && om.status === 'planejada') a.push('solicitar');
   if (trata && om.status === 'solicitada') a.push('aprovar', 'devolver');
@@ -167,6 +169,38 @@ export function conferirSolicitacao(x, areasOk = null, planejar = false) {
   // Sem data prevista, a solicitação fica prevista para o dia em que foi pedida.
   if (!y.dPrev) y.dPrev = y.hSol.slice(0, 10);
   return y;
+}
+// Horas que quem trata pode corrigir ao editar (só as que já foram registradas na OM), na ordem do caminho.
+export const HORAS_EDIT = [['hSol', 'Solicitação'], ['hAprov', 'Aprovação do técnico'], ['hEnvio', 'Envio ao cliente'], ['hCiente', 'OM gerada pelo cliente'], ['hSala', 'Sala passou ao eletricista'], ['hEletr', 'Eletricista liberou'], ['hLib', 'Liberação'], ['hFim', 'Avisou a sala que terminou'], ['hDesb', 'Sala desbloqueou']];
+// Confere as horas corrigidas: cada uma no formato certo e a ordem do caminho respeitada. x = { campo: valor digitado }.
+// Hora já registrada não pode ficar em branco. Devolve só as que mudaram.
+export function conferirHoras(om, x) {
+  const y = {};
+  for (const [k, nome] of HORAS_EDIT) {
+    if (!ehHora(om[k])) continue;
+    const v = String(x[k] == null ? om[k] : x[k]).trim();
+    if (!ehHora(v)) erro(`Informe a hora: ${nome.toLowerCase()}.`, 'omE_' + k);
+    if (v !== om[k]) y[k] = v;
+  }
+  const h = k => (k in y ? y[k] : om[k]);
+  const antes = (a, b, msg) => { if (ehHora(h(a)) && ehHora(h(b)) && h(b) < h(a)) erro(msg, 'omE_' + b); };
+  antes('hSol', 'hAprov', 'A aprovação não pode ser antes da solicitação.');
+  antes('hAprov', 'hEnvio', 'O envio não pode ser antes da aprovação.');
+  antes('hEnvio', 'hCiente', 'A OM gerada não pode ser antes do envio ao cliente.');
+  antes('hCiente', 'hSala', 'A sala não pode ter passado ao eletricista antes de a OM ser gerada.');
+  antes('hSala', 'hEletr', 'O eletricista não pode ter liberado antes de receber da sala.');
+  antes('hCiente', 'hEletr', 'O eletricista não pode ter liberado antes de a OM ser gerada.');
+  antes('hEletr', 'hLib', 'A liberação no sistema não pode ser antes do eletricista liberar.');
+  antes('hSol', 'hLib', 'A liberação não pode ser antes da solicitação.');
+  antes('hLib', 'hFim', 'A finalização não pode ser antes da liberação.');
+  antes('hFim', 'hDesb', 'O desbloqueio não pode ser antes do aviso de fim do serviço.');
+  return y;
+}
+// Linha do histórico da edição: o que mudou (nomes dos campos), para quem acompanha saber.
+const NOMES_CAMPOS = { area: 'área', local: 'local', equip: 'equipamento', titulo: 'serviço', desc: 'detalhes', tipo: 'tipo', prio: 'prioridade', dPrev: 'data prevista', numero: 'nº da OM', docs: 'documentação', ...Object.fromEntries(HORAS_EDIT.map(([k, n]) => [k, 'hora: ' + n.toLowerCase()])) };
+export function mudouTxt(om, y) {
+  const l = Object.keys(y).filter(k => NOMES_CAMPOS[k] && (k === 'docs' ? JSON.stringify(conferirDocs(y[k])) !== JSON.stringify(conferirDocs(om[k])) : String(y[k] ?? '') !== String(om[k] ?? ''))).map(k => NOMES_CAMPOS[k]);
+  return l.length ? 'mudou ' + l.join(', ') : '';
 }
 // Documentação: só os itens conhecidos, cada um pronto, pendente ou não precisa (o que vier diferente fica pendente).
 export const conferirDocs = x => Object.fromEntries(Object.keys(DOCS).map(k => [k, DOC_SIT[x && x[k]] ? x[k] : 'pend']));

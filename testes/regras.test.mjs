@@ -1724,6 +1724,8 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertSucceeds(setDoc0(ref('admin'), { status: 'liberada', hLib: '2026-11-17T13:00', numero: '4500123', ...mk('admin') }, { merge: true }), 'administrador registra a liberação');
   await assertFails(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', titulo: 'Outro título', ...mk('supPatio') }, { merge: true }), 'ao finalizar, só a hora e a observação');
   await assertSucceeds(setDoc0(ref('supPatio'), { status: 'finalizada', hFim: '2026-11-17T16:00', obsFim: 'ok', ...mk('supPatio') }, { merge: true }), 'líder/supervisor da área finaliza');
+  await assertFails(setDoc0(ref('supPatio'), { titulo: 'Editado depois de finalizada', ...mk('supPatio') }, { merge: true }), 'quem abriu não edita depois de aprovada');
+  await assertSucceeds(setDoc0(ref('opGestorSo'), { titulo: 'Troca de rolete (editada)', prio: 'baixa', hFim: '2026-11-17T15:30', hist: [{ s: 'editada', em: '2026-11-17T17:00', por: 'opGestorSo', nome: 'X', txt: 'mudou serviço' }], ...mk('opGestorSo') }, { merge: true }), 'quem trata edita a finalizada (dados e horas)');
   await assertFails(setDoc0(ref('opGestorSo'), { conj: 'bateria', ...mk('opGestorSo') }, { merge: true }), 'o conjunto não muda');
   await assertSucceeds(setDoc0(ref('opGestorSo'), { cliente: 'Usuário Pátio', clienteUid: 'leitor', contato: 'Ramal 1234', ...mk('opGestorSo') }, { merge: true }), 'quem trata informa o cliente');
   const cfg = u => doc(db(u), 'config', 'oms');

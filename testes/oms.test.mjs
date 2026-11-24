@@ -26,11 +26,11 @@ test('quem vê, abre e trata', () => {
 test('botões conforme a situação e a pessoa', () => {
   assert.deepEqual(acoesDe(om(), U.lider), ['editar', 'cancelar', 'obs', 'docs']);
   assert.deepEqual(acoesDe(om(), U.tec), ['editar', 'aprovar', 'devolver', 'cancelar', 'obs', 'docs', 'apagar']);
-  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['enviar', 'cancelar', 'obs', 'docs', 'apagar']);
-  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['liberar', 'recusar', 'cancelar', 'obs', 'docs', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.tec), ['editar', 'enviar', 'cancelar', 'obs', 'docs', 'apagar']);
+  assert.deepEqual(acoesDe(om({ status: 'enviada' }), U.tec), ['editar', 'liberar', 'recusar', 'cancelar', 'obs', 'docs', 'apagar']);
   assert.deepEqual(acoesDe(om({ status: 'liberada' }), U.lider), ['finalizar', 'obs', 'docs'], 'o líder da área finaliza');
   assert.deepEqual(acoesDe(om({ status: 'aprovada' }), U.lider), ['obs', 'docs'], 'depois de aprovada, o líder só acompanha e marca a documentação');
-  assert.deepEqual(acoesDe(om({ status: 'finalizada', hDesb: '2026-11-17T17:00' }), U.tec), ['apagar'], 'quem trata apaga mesmo finalizada');
+  assert.deepEqual(acoesDe(om({ status: 'finalizada', hDesb: '2026-11-17T17:00' }), U.tec), ['editar', 'apagar'], 'quem trata edita e apaga mesmo finalizada');
   assert.deepEqual(acoesDe(om(), U.leitor), []);
 });
 
@@ -208,7 +208,7 @@ test('cliente recusa ou cancela, com motivo e hora; o técnico reenvia a recusad
   assert.equal(r.hist[0].txt, 'Falta a APR assinada'); assert.equal(r.hist[0].obs, 'Liberamos amanhã');
   const rec = { ...env, ...r };
   assert.deepEqual(acoesDe(rec, cli), [], 'depois de recusar, o cliente só acompanha');
-  assert.deepEqual(acoesDe(rec, U.tec), ['enviar', 'cancelar', 'obs', 'docs', 'apagar'], 'o técnico ajusta e reenvia ou cancela');
+  assert.deepEqual(acoesDe(rec, U.tec), ['editar', 'enviar', 'cancelar', 'obs', 'docs', 'apagar'], 'o técnico ajusta e reenvia ou cancela');
   const re = mudar(rec, 'enviar', { uid: 'tec', nome: 'Técnico' }, { cliente: { uid: 'cliP', nome: 'Usuário Pátio' }, obs: 'APR anexada' });
   assert.equal(re.status, 'enviada'); assert.equal(re.motivo, ''); assert.equal(re.cancCli, false); assert.equal(re.hCiente, '', 'o cliente confirma de novo');
   assert.match(re.hist.at(-1).txt, /^reenviada/); assert.equal(re.hist.at(-1).obs, 'APR anexada');
@@ -386,7 +386,7 @@ test('programação da semana: aviso da sexta ao cliente e a quem trata, por con
 });
 
 /* ---------- 2026-11-24: OMs mais fáceis de entender ---------- */
-import { nomeSit, etapas, comQuem, proximo, inicioPrazo, resumo7h } from '../public/contas/oms.js';
+import { nomeSit, etapas, comQuem, proximo, inicioPrazo, resumo7h, conferirHoras, mudouTxt } from '../public/contas/oms.js';
 import { conferirRecorrente, datasDa, aCriar, idDaOm, freqTxt, proximaData, HORIZONTE } from '../public/contas/oms-recorrentes.js';
 
 test('barra de passos, com quem está e o próximo passo de cada um', () => {
@@ -469,4 +469,19 @@ test('preventivas que se repetem: datas, conferência e o que criar', () => {
   assert.equal(aCriar([{ ...rec, ate: '2026-12-15' }], {}, '2026-11-27', quem).oms.map(x => x.dados.dPrev).join(), '2026-12-17', 'dias depois, só a data nova');
   assert.equal(aCriar([{ ...rec, ativa: false }], {}, '2026-11-24', quem).oms.length, 0, 'pausada não planeja');
   assert.equal(proximaData(rec, '2026-11-24'), '2026-11-26');
+});
+
+test('editar: quem abriu até a aprovação; quem trata em qualquer situação, com as horas', () => {
+  const fin = om({ status: 'finalizada', solPor: 'lider', hSol: '2026-11-17T07:40', hAprov: '2026-11-17T08:00', hEnvio: '2026-11-17T08:00', hCiente: '2026-11-17T08:20', hEletr: '2026-11-17T09:00', hLib: '2026-11-17T09:10', hFim: '2026-11-17T15:00' });
+  assert.ok(!acoesDe(fin, U.lider).includes('editar') && acoesDe(om(), U.lider).includes('editar'));
+  assert.ok(acoesDe(fin, U.tec).includes('editar') && acoesDe(om({ status: 'cancelada' }), U.adm).includes('editar'));
+  assert.ok(!acoesDe(fin, U.leitor).includes('editar'));
+  assert.deepEqual(conferirHoras(fin, { hEletr: '2026-11-17T08:50' }), { hEletr: '2026-11-17T08:50' }, 'só a que mudou');
+  assert.deepEqual(conferirHoras(fin, {}), {}, 'sem mudança');
+  assert.throws(() => conferirHoras(fin, { hEletr: '2026-11-17T08:10' }), e => e.campo === 'omE_hEletr', 'antes da OM gerada');
+  assert.throws(() => conferirHoras(fin, { hFim: '2026-11-17T09:00' }), e => e.campo === 'omE_hFim', 'fim antes da liberação');
+  assert.throws(() => conferirHoras(fin, { hLib: '' }), e => e.campo === 'omE_hLib', 'hora registrada não fica em branco');
+  assert.deepEqual(Object.keys(conferirHoras(om({ status: 'enviada', hEnvio: '2026-11-17T08:00' }), { hDesb: '2026-11-17T09:00' })), [], 'hora não registrada não entra');
+  assert.equal(mudouTxt(fin, { titulo: 'Troca de rolete', prio: 'alta', hEletr: '2026-11-17T08:50', docs: {} }), 'mudou prioridade, hora: eletricista liberou');
+  assert.equal(mudouTxt(om({ docs: { pt: 'ok' } }), { docs: { pt: 'ok', apr: 'pend' } }), '', 'documentação igual não conta');
 });
