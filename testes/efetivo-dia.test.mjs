@@ -15,7 +15,7 @@ test('sem documento: não enviado; antes de a função entrar no ar, sem registr
   assert.equal(estadoEf({ st: 'validado' }, '2026-11-01', HOJE).st, 'validado');
 });
 
-test('quem faz cada passo: líder envia, RH valida ou devolve o enviado, administrador reabre o validado', () => {
+test('quem faz cada passo: líder envia, RH valida ou devolve o enviado, RH ou administrador reabre o validado', () => {
   assert.ok(podeEf('enviado', null, lider));
   assert.ok(podeEf('enviado', { st: 'enviado' }, lider), 'reenviar');
   assert.ok(podeEf('enviado', { st: 'devolvido' }, lider));
@@ -28,7 +28,8 @@ test('quem faz cada passo: líder envia, RH valida ou devolve o enviado, adminis
   assert.ok(!podeEf('validado', { st: 'devolvido' }, rh));
   assert.ok(!podeEf('validado', { st: 'enviado' }, lider), 'o líder não valida');
   assert.ok(podeEf('aberto', { st: 'validado' }, adm));
-  assert.ok(!podeEf('aberto', { st: 'validado' }, rh), 'só o administrador reabre');
+  assert.ok(podeEf('aberto', { st: 'validado' }, rh), 'o RH também reabre');
+  assert.ok(!podeEf('aberto', { st: 'validado' }, lider), 'o líder não reabre');
   assert.ok(!podeEf('aberto', { st: 'enviado' }, adm));
 });
 

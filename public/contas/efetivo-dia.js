@@ -1,6 +1,6 @@
 // Dikma Gestão — Efetivo do dia (sem tela): status do envio da presença por área e dia.
 // O líder ou supervisor preenche a Presença e envia; o RH · Administrativo valida ou devolve (com motivo); o
-// administrador reabre um dia validado. O dia abre sozinho (liberação automática): qualquer dia até hoje pode ser enviado.
+// RH · Administrativo (ou o administrador) reabre um dia validado. O dia abre sozinho (liberação automática): qualquer dia até hoje pode ser enviado.
 // Documento: efetivoDia/{AAAA-MM-DD}_{ÁREA} (Bateria: b_efetivoDia) = { area, data, mes, st, por, nome, em, mot, hist[] }
 //   st = enviado | validado | devolvido | aberto (reaberto) · por/nome/em = quem fez a última ação (em = hora do servidor)
 //   mot = motivo da devolução · hist = [{ st, nome, em (ISO), mot }] (as últimas 60 ações, mais antiga primeiro)
@@ -38,12 +38,12 @@ export function estadoEf(doc, data, hoje) {
 
 // Quem pode fazer cada passo. quem = { lanca (preenche a presença da área), valida (RH · Administrativo ou admin), admin }
 // enviar: quem lança, se o dia não está validado (vale reenviar depois de devolvido ou reaberto)
-// validar e devolver: o RH, só o que foi enviado · reabrir: o administrador, só o validado
+// validar e devolver: o RH, só o que foi enviado · reabrir: o RH · Administrativo ou o administrador, só o validado
 export function podeEf(acao, doc, quem = {}) {
   const st = (doc && doc.st) || '';
   if (acao === 'enviado') return !!quem.lanca && st !== 'validado';
   if (acao === 'validado' || acao === 'devolvido') return !!quem.valida && st === 'enviado';
-  if (acao === 'aberto') return !!quem.admin && st === 'validado';
+  if (acao === 'aberto') return !!(quem.admin || quem.valida) && st === 'validado';
   return false;
 }
 

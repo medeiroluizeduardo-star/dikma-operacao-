@@ -102,7 +102,7 @@ const CODS_EF = CODIGOS_LANC;
 export function lancarEfetivo(key) {
   fecharSitPop();
   const [id, dt] = key.split('|'); const c = COLABS.find(x => x.id === id); if (!c) return;
-  if (!editaDia(c.area, dt)) { toast('Este dia já foi validado pelo RH. Para mudar, o administrador reabre o dia.'); return; }
+  if (!editaDia(c.area, dt)) { toast('Este dia já foi validado pelo RH. Para mudar, peça ao RH para reabrir o dia.'); return; }
   const sx = sitDia(c, dt); const info = DB.sitInfo(key); const cobre = cobrindo(id, dt);
   const prev = escala().previsto(regimeDe(c, dt), turmaDe(c, dt), dt);
   const linha = prev ? (prev.trab ? `Pela escala: trabalha${turmaDe(c, dt) ? ` (turma ${esc(turmaDe(c, dt))})` : ''}` : `Pela escala: folga (${esc(prev.motivo)})`) : 'Sem turma: a escala não marca folga sozinha';
@@ -406,7 +406,7 @@ function tentarMov(f) { try { f(); } catch (e) { toast(e.message); } }
 const agoraISO = () => new Date().toISOString();
 acoes.movPessoa = (t, d) => {
   const c = COLABS.find(x => x.id === d.id); if (!c) return; const dia = diaEf(); const k = DAYS.findIndex((_, j) => add(UI.ini, j) === dia);
-  if (!livreMov(c.area, dia)) return toast('Este dia já foi validado pelo RH. Para mudar, o administrador reabre o dia.');
+  if (!livreMov(c.area, dia)) return toast('Este dia já foi validado pelo RH. Para mudar, peça ao RH para reabrir o dia.');
   const q = quemMov(); const atual = movDe(c.id, dia); const ativo = atual && ['pendente', 'aprovado'].includes(atual.st) ? atual : null;
   const opts = [];
   if (ativo && ativo.st === 'pendente' && podeAprovar(q, ativo.ao, ativo.ap)) opts.push({ t: 'Aprovar a movimentação', d: `Para ${nomeRota(ativo.para, ativo.ao !== ativo.ap)} · pedido por ${curto(ativo.nome)}`, v: 'aprovar' }, { t: 'Recusar a movimentação', v: 'recusar' });
@@ -438,7 +438,7 @@ acoes.movRecusar = (t, d) => {
 };
 /* ---------------- EFETIVO DO DIA (envio ao RH) ---------------- */
 // O líder ou supervisor preenche a Presença e envia o efetivo de cada área; o RH · Administrativo valida ou devolve na
-// Frequência. O dia abre sozinho (qualquer dia até hoje). Validado, o dia fica travado aqui até o administrador reabrir.
+// Frequência. O dia abre sozinho (qualquer dia até hoje). Validado, o dia fica travado aqui até o RH ou o administrador reabrir.
 // Status e regras em contas/efetivo-dia.js; documento efetivoDia/{data}_{área}.
 const quemEf = area => ({ lanca: canEditSit(area), valida: editaAdm(ME), admin: isAdmin() });
 // Pode mudar a presença dessa área nesse dia: quem lança e o dia não está validado.
@@ -467,7 +467,7 @@ function cardEf(area, dia) {
     const ct = contarDia(colabsDa(a), dia);
     const env = ultimaEf(doc, 'enviado'), val = ultimaEf(doc, 'validado');
     const det = doc && doc.st === 'devolvido' ? `Devolvido por ${esc(doc.nome)}: <b>${esc(doc.mot)}</b>. Corrija e envie de novo.`
-      : doc && doc.st === 'validado' ? `Validado por ${esc(val ? val.nome : doc.nome)}${val ? ' em ' + horaEf(val.em) : ''}. Para mudar, o administrador reabre o dia.`
+      : doc && doc.st === 'validado' ? `Validado por ${esc(val ? val.nome : doc.nome)}${val ? ' em ' + horaEf(val.em) : ''}. Para mudar, peça ao RH para reabrir o dia.`
       : doc && doc.st === 'aberto' ? `Reaberto por ${esc(doc.nome)}. Ajuste e envie de novo.`
       : env ? `Enviado por ${esc(env.nome)} em ${horaEf(env.em)}. Ainda dá para corrigir e reenviar até o RH validar.` : q.lanca ? 'Confira a presença acima e envie para o RH.' : 'Ainda não enviado pelo líder da área.';
     const bts = [podeEf('enviado', doc, q) ? (doc && doc.st === 'enviado' ? `<button type="button" class="btn sm" data-act="efEnviar" data-ef="${esc(a)}">Reenviar</button>` : (as.length === 1 ? botaoAcao(rotEnv(doc), `data-act="efEnviar" data-ef="${esc(a)}"`) : `<button type="button" class="btn sm pri" data-act="efEnviar" data-ef="${esc(a)}">${rotEnv(doc)}</button>`)) : '',
@@ -485,7 +485,7 @@ acoes.efEnviar = (t, d) => {
   const a = d.ef; const dia = diaEf(); const ct = contarDia(colabsDa(a), dia);
   const semJus = colabsDa(a).filter(c => { const x = sitDia(c, dia); return !x.auto && JUS_CODS.includes(x.v) && !((DB.sitInfo(c.id + '|' + dia).jus || {}).cod === x.v); }).length;
   formSheet(`Enviar efetivo · ${AREA_S[a] || a}`, `${DIA_NOME[DAYS.findIndex((_, k) => add(UI.ini, k) === dia)] || ''} ${ddmm(dia)}`,
-    `<p class="m0">${ct ? `<b>${ct.presentes} de ${ct.escalados}</b> presentes.` : ''} O RH confere e valida. Depois de validado, a presença deste dia só muda se o administrador reabrir.</p>${semJus ? `<p class="m0 small" style="color:var(--atencao)">${semJus} falta${semJus === 1 ? '' : 's'} ou atraso${semJus === 1 ? '' : 's'} sem justificativa. Dá para enviar assim e justificar depois.</p>` : ''}`,
+    `<p class="m0">${ct ? `<b>${ct.presentes} de ${ct.escalados}</b> presentes.` : ''} O RH confere e valida. Depois de validado, a presença deste dia só muda se o RH reabrir.</p>${semJus ? `<p class="m0 small" style="color:var(--atencao)">${semJus} falta${semJus === 1 ? '' : 's'} ou atraso${semJus === 1 ? '' : 's'} sem justificativa. Dá para enviar assim e justificar depois.</p>` : ''}`,
     'Enviar', async () => { efAcao(a, 'enviado', 'enviou', 'Efetivo enviado ao RH'); });
 };
 acoes.efReabrir = (t, d) => {
