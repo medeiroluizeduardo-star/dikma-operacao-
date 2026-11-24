@@ -562,6 +562,32 @@ test('LGPD (acessosFicha): cada um registra só o próprio acesso à ficha, ning
   await assertSucceeds(getDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
   await assertSucceeds(deleteDoc(doc(db('admin'), 'acessosFicha', id('liderRec'))));
 });
+test('Dados pessoais (dpessoais): só administrador e RH · Administrativo leem e gravam; RH · Somente leitura só com o item ligado', async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc0(doc(ctx.firestore(), 'config', 'permissoes'), {}); });
+  const dp = (uid, x = {}) => ({ mat: '3844', cpf: '52998224725', end: 'RUA TESTE 1', tel: '27 90000-0000', rotaOn: 'ROTA 01', atualizadoPor: uid, atualizadoEm: serverTimestamp(), ...x });
+  await assertSucceeds(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), dp('rhSo')));
+  await assertSucceeds(setDoc0(doc(db('admin'), 'dpessoais', '3844'), dp('admin', { tel: null })));
+  await assertFails(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), dp('rhSo', { cpf: '529.982.247-25' })), 'CPF fora do formato');
+  await assertFails(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), dp('rhSo', { mat: '999' })), 'matrícula diferente do id');
+  await assertFails(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), { ...dp('rhSo'), extra: 1 }), 'campo a mais');
+  await assertFails(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), dp('admin')), 'em nome de outra pessoa');
+  await assertFails(setDoc0(doc(db('rhSo'), 'dpessoais', '3844'), dp('rhSo', { end: 'x'.repeat(301) })), 'endereço longo demais');
+  for (const u of ['rhLeitorNovo', 'liderRec', 'gestorG', 'coord', 'sup', 'admModulo', 'leitorG', 'bloq']) {
+    await assertFails(getDoc(doc(db(u), 'dpessoais', '3844')), 'ler: ' + u);
+    await assertFails(setDoc0(doc(db(u), 'dpessoais', '3844'), dp(u)), 'gravar: ' + u);
+  }
+  await assertSucceeds(getDoc(doc(db('rhSo'), 'dpessoais', '3844')));
+  await assertSucceeds(getDoc(doc(db('admin'), 'dpessoais', '3844')));
+  // Perfis: ligar para o Somente leitura do RH; desligar do Administrativo
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc0(doc(ctx.firestore(), 'config', 'permissoes'), { 'rh|leitor': { i_dpessoais: true }, 'rh|administrativo': { i_dpessoais: false } }); });
+  await assertSucceeds(getDoc(doc(db('rhLeitorNovo'), 'dpessoais', '3844')));
+  await assertFails(setDoc0(doc(db('rhLeitorNovo'), 'dpessoais', '3844'), dp('rhLeitorNovo')), 'leitor não grava');
+  await assertFails(getDoc(doc(db('rhSo'), 'dpessoais', '3844')), 'administrativo desligado em Perfis');
+  await assertSucceeds(getDoc(doc(db('admin'), 'dpessoais', '3844')));
+  await assertFails(deleteDoc(doc(db('rhSo'), 'dpessoais', '3844')), 'só o administrador apaga');
+  await assertSucceeds(deleteDoc(doc(db('admin'), 'dpessoais', '3844')));
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc0(doc(ctx.firestore(), 'config', 'permissoes'), {}); });
+});
 test('LGPD › descarte por prazo: o administrador apaga a observação do atestado (presença e folha) e o ASO antigo; outros não', async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     const f = ctx.firestore();

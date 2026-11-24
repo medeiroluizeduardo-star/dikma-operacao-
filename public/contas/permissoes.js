@@ -78,7 +78,7 @@ export function resumoExcecao(u, views, cfg) {
 // (i_exportar, i_imprimir) continua valendo como exceção da pessoa em todos os módulos.
 const EXP = ['i_exportar', 'Exportar para o Excel', 'Botões de exportar das abas'], IMP = ['i_imprimir', 'Imprimir e salvar em PDF', 'Folha do líder, resumos, etiquetas e fichas'];
 const comunsDe = (mod, quem) => [EXP, IMP].map(([id, nome, d]) => ({ id: `${id}_${mod}`, base: id, mod, nome, d, quem }));
-/** @type {{ id: string, mod: string, nome: string, d: string, quem: string[], base?: string }[]} */
+/** @type {{ id: string, mod: string, nome: string, d: string, quem: string[], base?: string, off?: string[] }[]} */
 export const ITENS = [
   { id: 'i_apontar', mod: 'operacao', nome: 'Apontar atividades', d: 'Marcar realizada ou não realizada, com justificativa', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   { id: 'i_foraprog', mod: 'operacao', nome: 'Incluir atividade fora da programação', d: 'Programar no dia uma atividade que não estava prevista', quem: ['coordenador', 'supervisor'] },
@@ -92,6 +92,9 @@ export const ITENS = [
   { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   ...comunsDe('gestao', ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor']),
   { id: 'i_freq', mod: 'rh', nome: 'Editar frequência e férias', d: 'Lançar na folha de 16 a 15 e cadastrar férias', quem: ['administrativo'] },
+  // Dados pessoais: ligado para o Administrativo e desligado para o Somente leitura até o administrador ligar (as regras do
+  // banco, firestore.rules › dpessoais, leem o mesmo config/permissoes).
+  { id: 'i_dpessoais', mod: 'rh', nome: 'Ver dados pessoais', d: 'CPF, endereço, telefone e rota de ônibus na ficha (RH › Colaboradores)', quem: ['administrativo', 'leitor'], off: ['leitor'] },
   ...comunsDe('rh', ['administrativo', 'leitor']),
   { id: 'i_metas', mod: 'indicadores', nome: 'Editar metas e valores do contrato', d: 'Metas dos 8 indicadores e os valores de ICCC e ICCP do mês (Visão geral)', quem: ['gestor'] },
   ...comunsDe('indicadores', ['ve', 'gestor'])
@@ -103,7 +106,7 @@ export function itemPerfil(mod, papel, it, cfg) {
   if (!itemDoPapel(papel, it)) return false;
   let c = valorCfg(cfg, mod, papel, it.id);
   if (typeof c !== 'boolean' && it.base) c = valorCfg(cfg, mod, papel, it.base);
-  return typeof c === 'boolean' ? c : true;
+  return typeof c === 'boolean' ? c : !(it.off || []).includes(papel); // sem configuração: ligado, salvo os 'off'
 }
 // O item para esta pessoa: exceção dela (só para tirar ou devolver o que o perfil tem), senão o perfil do módulo.
 // id pode ser o comum (i_exportar, i_imprimir): vale o do módulo pedido (mod).

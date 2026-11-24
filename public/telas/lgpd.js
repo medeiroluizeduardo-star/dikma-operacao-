@@ -2,6 +2,7 @@
 // leitura e a gravação, em data.js (data-mock.js na demonstração). Nada sai sozinho: 1) ler o que passou do prazo,
 // 2) baixar a cópia (arquivo JSON no computador), 3) digitar APAGAR e confirmar. Usa o visual da Limpeza de dados.
 import * as LG from '../contas/lgpd.js';
+import { dpParaDescartar, DP_ANOS_DEMISSAO } from '../contas/dados-pessoais.js';
 import { DB, DEMO, TODAY, esc, title } from '../nucleo/base.js';
 import { isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -21,10 +22,12 @@ async function montar() {
   for (const s of d.sit) for (const x of LG.obsDaSituacao(s, TODAY)) obs.push({ ...x, col: s.col, id: s.id, onde: s.col === 'b_situacao' ? 'Presença da Bateria' : 'Presença do Pátio' });
   for (const c of d.comps) for (const x of LG.obsDaFolha(c, TODAY)) obs.push({ ...x, col: 'freqcomp', id: c.id, onde: 'Folha da Frequência' });
   const acessos = LG.acessosParaDescartar(d.acessos, TODAY);
-  const ops = [...obs.map(o => ({ tipo: 'obs', col: o.col, id: o.id, caminho: o.caminho })), ...aso.map(t => ({ tipo: 'aso', id: t.id })), ...acessos.map(a => ({ tipo: 'acesso', id: a.id }))];
+  const dps = dpParaDescartar(d.dps || [], d.fichas, TODAY);
+  const ops = [...dps.map(x => ({ tipo: 'dp', id: x.id })), ...obs.map(o => ({ tipo: 'obs', col: o.col, id: o.id, caminho: o.caminho })), ...aso.map(t => ({ tipo: 'aso', id: t.id })), ...acessos.map(a => ({ tipo: 'acesso', id: a.id }))];
   const copia = { tipo: 'dikma-lgpd', versao: 1, geradoEm: new Date().toISOString(), hoje: TODAY, prazos: LG.PRAZOS,
-    aso: aso.map(({ motivo, dem, ...t }) => t), observacoes: obs.map(o => ({ colecao: o.col, id: o.id, caminho: o.caminho, obs: o.obs })), acessos };
-  return { aso, obs, acessos, ops, copia };
+    aso: aso.map(({ motivo, dem, ...t }) => t), observacoes: obs.map(o => ({ colecao: o.col, id: o.id, caminho: o.caminho, obs: o.obs })), acessos,
+    dadosPessoais: dps.map(x => ({ ...((d.dps || []).find(y => String(y.id) === x.id) || {}), id: x.id })) };
+  return { aso, obs, acessos, dps, ops, copia };
 }
 async function ler() {
   if (!isAdmin() || L.lendo) return;
@@ -45,7 +48,7 @@ const pode = () => !!L.previa && L.previa.ops.length > 0 && L.baixou && L.conf.t
 async function executar() {
   if (!isAdmin() || !pode()) return;
   if (!DEMO && !navigator.onLine) { toast('Sem sinal: o descarte precisa de conexão com o servidor'); return; }
-  const P = L.previa; const resumo = `LGPD · descarte por prazo: ${n0(P.aso.length)} ASO, ${n0(P.obs.length)} observações de atestado/afastamento e ${n0(P.acessos.length)} registros de acesso`;
+  const P = L.previa; const resumo = `LGPD · descarte por prazo: ${n0(P.aso.length)} ASO, ${n0(P.obs.length)} observações de atestado/afastamento, ${n0(P.acessos.length)} registros de acesso e ${n0(P.dps.length)} dados pessoais`;
   L.exec = { feito: 0, total: P.ops.length, rodando: true }; render();
   try {
     for (const l of LG.emLotes(P.ops)) { await DB.lgpdGravar(l); L.exec.feito += l.length; render(); }
@@ -64,13 +67,14 @@ function previa(P) {
   return `<div class="lpprev">
     ${item('ASO antigos', P.aso.length, lista(P.aso, t => `<span>${esc(title(t.nome || t.mat || ''))}</span><span class="muted num">exame ${dBR(t.realizado)} · ${t.motivo === 'demissao' ? `saiu em ${dBR(t.dem)}` : `venceu em ${dBR(t.validade)}`}</span>`, 'Nenhum ASO passou do prazo.'))}
     ${item('Observações de atestado e afastamento', P.obs.length, lista(P.obs, o => `<span>${esc(o.onde)} · ${o.cod === 'AF' ? 'afastamento' : 'atestado'}</span><span class="muted num">${dBR(o.dia)}</span>`, 'Nenhuma observação passou do prazo.'))}
+    ${item('Dados pessoais (CPF, endereço, telefone, rota)', P.dps.length, lista(P.dps, x => `<span>${esc(title(x.nome || x.id))}</span><span class="muted num">saiu em ${dBR(x.dem)}</span>`, 'Nenhum dado pessoal passou do prazo.'))}
     ${item('Registros de quem abriu a ficha', P.acessos.length, lista(P.acessos, a => `<span>${esc(title(a.nome || ''))} abriu a ficha de ${esc(title(a.pessoa || a.mat))}</span><span class="muted num">${dBR(a.dia)}</span>`, 'Nenhum registro passou do prazo.'))}
   </div>${P.ops.length ? '' : '<p class="muted m0">Nada passou do prazo hoje. Volte daqui a algumas semanas.</p>'}`;
 }
 export function vLgpd() {
   if (!isAdmin()) return '<div class="card"><div class="empty">Só o administrador faz o descarte por prazo.</div></div>';
   const P = L.previa, E = L.exec, temOps = !!P && P.ops.length > 0;
-  let h = `<div class="lpaviso" role="note">${I.pend}<p class="m0"><b>Prazos de guarda (LGPD), aprovados em 22/11/2026.</b> ASO: fica sempre o mais recente de cada pessoa; os antigos saem 2 anos depois de vencer e, de quem saiu da empresa, 2 anos depois da demissão. Atestado e afastamento: o código fica (frequência, horas e medição), só a observação escrita sai depois de 12 meses. Quem abriu a ficha: 1 ano. Nada sai sozinho.</p></div>`;
+  let h = `<div class="lpaviso" role="note">${I.pend}<p class="m0"><b>Prazos de guarda (LGPD), aprovados em 22/11/2026.</b> ASO: fica sempre o mais recente de cada pessoa; os antigos saem 2 anos depois de vencer e, de quem saiu da empresa, 2 anos depois da demissão. Atestado e afastamento: o código fica (frequência, horas e medição), só a observação escrita sai depois de 12 meses. Quem abriu a ficha: 1 ano. Dados pessoais (CPF, endereço, telefone, rota de ônibus): ${DP_ANOS_DEMISSAO} anos depois da demissão. Nada sai sozinho.</p></div>`;
   h += passo(1, 'O que passou do prazo', 'Lido agora do banco', `${P ? previa(P) : ''}${L.erro ? `<p class="err m0" role="alert">${esc(L.erro)}</p>` : ''}<div class="row-gap"><button class="btn${P ? '' : ' pri'}" data-act="lgLer" ${L.lendo || (E && E.rodando) ? 'disabled' : ''}>${L.lendo ? 'Lendo do banco…' : P ? 'Ler de novo' : 'Ver o que passou do prazo'}</button></div>`);
   h += passo(2, 'Cópia de segurança', 'Arquivo com tudo o que vai sair. Guarde num lugar restrito e apague quando não precisar mais', `<div class="row-gap"><button class="btn${L.baixou ? '' : ' pri'}" data-act="lgCopia" ${temOps ? '' : 'disabled'}>${I.dl} ${L.baixou ? 'Baixar de novo' : 'Baixar cópia antes de apagar'}</button>${L.baixou ? '<span class="pill ok">Cópia baixada</span>' : ''}</div>`, temOps);
   let res = '';

@@ -393,15 +393,25 @@ export function acessoFicha(mat, pessoa, ficha) {
   if (!acessosMock.has(id)) acessosMock.set(id, { id, at: new Date(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || ''), ficha, dia });
 }
 export async function acessosFichaDe(mat) { return [...acessosMock.values()].filter(x => x.mat === String(mat)).sort((a, b) => b.at - a.at); }
+// Dados pessoais (demonstração): só na memória, com números de exemplo (nada real).
+const dpMock = new Map([['1001', { id: '1001', mat: '1001', cpf: '52998224725', end: 'Rua Exemplo, 100 - Centro', tel: '27 90000-0000', rotaOn: 'ROTA 01' }]]);
+export async function dpLer(mat) { const d = dpMock.get(String(mat)); return d ? { ...d } : null; }
+export async function dpLerTodos() { return [...dpMock.values()].map(d => ({ ...d })); }
+export function dpSalvar(mat, d) { dpMock.set(String(mat), { id: String(mat), mat: String(mat), cpf: d.cpf || null, end: d.end || null, tel: d.tel || null, rotaOn: d.rotaOn || null }); return Promise.resolve(); }
+export async function dpImportar(itens, arc) {
+  for (const x of itens) dpSalvar(x.mat, x.dados);
+  if (arc && arc.length) { const m = new Map(arc.map(a => [String(a.mat), a.para])); cache.g.colabs = (cache.g.colabs || []).map(c => (m.has(String(c.mat)) ? { ...c, matArc: m.get(String(c.mat)) } : c)); gch(); }
+}
 // LGPD › descarte por prazo (demonstração): as mesmas leituras e gravações de data.js, sobre o que está em memória.
 export async function lgpdLer(limAcesso) {
   const sit = []; for (const k of SET_KEYS) for (const [m, v] of Object.entries(S[k].sitByMonth || {})) sit.push({ id: m, col: (k === 'bateria' ? 'b_' : '') + 'situacao', v, jus: ((S[k].sitExtra || {})[m] || {}).jus || {} });
   const comps = Object.entries((cache.adm && cache.adm.comps) || {}).filter(([, c]) => c).map(([id, c]) => ({ id, ...c }));
-  return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), fichas: (cache.g && cache.g.colabs) || [] }));
+  return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), dps: [...dpMock.values()], fichas: (cache.g && cache.g.colabs) || [] }));
 }
 export async function lgpdGravar(ops) {
   for (const o of ops) {
     if (o.tipo === 'acesso') acessosMock.delete(o.id);
+    else if (o.tipo === 'dp') dpMock.delete(o.id);
     else if (o.tipo === 'aso') cache.treinos = cache.treinos.filter(t => t.id !== o.id);
     else if (o.tipo === 'obs') {
       const k = o.col.startsWith('b_') ? 'bateria' : 'patio';

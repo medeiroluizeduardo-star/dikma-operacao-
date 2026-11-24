@@ -6,7 +6,7 @@
 // Coordenador da Gestão (o administrador pode tirar em Perfis e permissões › item "Lançar na Medição").
 import { TIPOS, CONJ_NOME, registrosPresenca, registrosParadas, juntarMes, ocultosDoMes, pendente, resumoMes, conferirManual, linhasExcel } from '../contas/medicao.js';
 import { mesMais, fmtNum } from '../contas/contrato.js';
-import { MESES_L, today } from '../contas/cal.js';
+import { MESES_L, today, foraDaCoqueria } from '../contas/cal.js';
 import { colabsDoSet, escala, regimeDe } from '../calc/presenca.js';
 import { etiqueta, tabela, vazio, carregando, recolhido } from '../ui/padrao.js';
 import { DB, esc } from '../nucleo/base.js';
@@ -49,7 +49,7 @@ function presencaConj(k, ym) {
   const ch = `${k}|${ym}`; const m = MEMO.get(ch);
   if (m && m.sit === sit && m.ex === (st.sitExtra || {})[ym] && m.cs === st.colabs) return m.out;
   const hc = { ciclo: 12, adm: 8, ...((st.config.he) || {}) };
-  const out = registrosPresenca({ k, colabs: colabsDoSet(k), sit, info: key => DB.sitInfo(key, k), ym, hoje: TODAY,
+  const out = registrosPresenca({ k, colabs: colabsDoSet(k).filter(c => !foraDaCoqueria(c.area)), sit, info: key => DB.sitInfo(key, k), ym, hoje: TODAY,
     estimativa: (c, dt) => { if (!c) return hc.adm; const r = escala().regimes[regimeDe(c, dt)]; return r && r.tipo === 'ciclo' ? hc.ciclo : hc.adm; } });
   MEMO.set(ch, { sit, ex: (st.sitExtra || {})[ym], cs: st.colabs, out }); return out;
 }

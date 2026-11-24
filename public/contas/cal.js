@@ -4,7 +4,7 @@
 // Conjuntos de atividades: cada um é um módulo com as próprias áreas, plano, semanas e efetivo diário.
 // pre = prefixo das coleções no Firestore (o Pátio usa os nomes originais).
 export const SETS = {
-  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'], gerais: ['COQUERIA GERAL', 'COQUERIA PÁTIO'] },
+  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'], gerais: ['COQUERIA GERAL', 'COQUERIA PÁTIO', 'SINTER'] },
   bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'], gerais: ['COQUERIA BATERIA'] }
 };
 export const SET_KEYS = Object.keys(SETS);
@@ -14,10 +14,14 @@ export const AREAS_ATIV = SET_KEYS.flatMap(k => SETS[k].areas);
 // conjunto, mas a área não tem plano, apontamento nem indicador de atividades. Ficam em colaboradores/{ÁREA} como as outras.
 export const AREAS_GERAIS = SET_KEYS.flatMap(k => SETS[k].gerais);
 export const ehAreaGeral = a => AREAS_GERAIS.includes(a);
+// Áreas que não são da Coqueria (Sinter, 24/11/2026): ficam na Escala do dia e na Frequência do Pátio, como a Coqueria
+// Geral, mas saem da Medição e dos números do contrato da Coqueria (ICCC/ICCP, Visão geral).
+export const AREAS_FORA_COQUERIA = ['SINTER'];
+export const foraDaCoqueria = a => AREAS_FORA_COQUERIA.includes(a);
 // Todas as áreas onde ficam pessoas do conjunto (atividades + gerais).
 export const areasDoSet = k => [...SETS[k].areas, ...SETS[k].gerais];
 export const setDaArea = a => SET_KEYS.find(k => areasDoSet(k).includes(a)) || null;
-export const AREA_S = { 'COQUERIA GERAL': 'Coqueria Geral', 'COQUERIA PÁTIO': 'Coqueria Pátio', 'COQUERIA BATERIA': 'Coqueria Bateria', 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque', 'BATERIA 1': 'Bateria 1', 'BATERIA 2': 'Bateria 2', 'TRILHO': 'Trilho', 'CDQ': 'CDQ' };
+export const AREA_S = { 'COQUERIA GERAL': 'Coqueria Geral', 'COQUERIA PÁTIO': 'Coqueria Pátio', 'COQUERIA BATERIA': 'Coqueria Bateria', 'SINTER': 'Sinter', 'RECEBIMENTO': 'Recebimento', 'FINAL DO PÁTIO': 'Final do Pátio', 'PREPARAÇÃO': 'Preparação', 'TRATAMENTO DE COQUE': 'Tratamento de Coque', 'BATERIA 1': 'Bateria 1', 'BATERIA 2': 'Bateria 2', 'TRILHO': 'Trilho', 'CDQ': 'CDQ' };
 export const DAYS = ['SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB', 'DOM'];
 export const DL = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'];
 export const MESES_L = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];

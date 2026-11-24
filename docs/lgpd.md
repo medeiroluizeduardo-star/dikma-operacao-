@@ -7,12 +7,20 @@ Decidido pelo Eduardo em 22/11/2026.
 - Só o administrador vê (botão **Quem abriu** na ficha). Ninguém altera. Só o administrador apaga (descarte por prazo).
 - Código: `public/ui/acessos-ficha.js`, `DB.acessoFicha` e `DB.acessosFichaDe` em `public/nucleo/data.js`.
 
+## Dados pessoais (CPF, endereço, telefone, rota de ônibus)
+- Ficam fora da ficha, em `dpessoais/{matrícula Dikma}` (a ficha `gcolab` é lida por líderes, leitores e Indicadores). Aparecem na aba **Dados pessoais** da ficha em RH › Colaboradores.
+- Quem vê: administrador e RH · Administrativo. RH · Somente leitura só se o administrador ligar **Ver dados pessoais** em Administração › Perfis (RH). O banco confere o mesmo (`firestore.rules` › `dpessoais`, lê `config/permissoes`).
+- Quem grava: administrador e RH · Administrativo (editar na aba ou **Importar dados pessoais** na lista, com prévia antes de gravar). Quem apaga: só o administrador (descarte por prazo).
+- A planilha usada na importação não fica guardada no sistema nem no repositório.
+- Código: `public/contas/dados-pessoais.js` (testes em `testes/dados-pessoais.test.mjs`), `public/telas/dados-pessoais.js`, `DB.dpLer`/`dpSalvar`/`dpImportar` em `public/nucleo/data.js`.
+
 ## Prazos de guarda
 | O quê | Prazo | O que sai |
 |---|---|---|
 | ASO (Treinamentos e ASO, tipo `ASO`) | 2 anos depois de vencer; de quem saiu, 2 anos depois da demissão | o registro antigo (o mais recente de cada pessoa ativa sempre fica) |
 | Atestado (AT) e afastamento (AF) | 12 meses depois do dia | só a observação escrita (`jus.obs`); o código e o motivo da lista ficam |
 | Registro de quem abriu a ficha | 1 ano | a linha |
+| Dados pessoais (CPF, endereço, telefone, rota de ônibus) | 2 anos depois da demissão | o documento `dpessoais` da pessoa |
 
 O exame em si (prontuário, NR-7) fica com a medicina do trabalho, não neste sistema.
 

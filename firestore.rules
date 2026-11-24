@@ -1056,6 +1056,29 @@ service cloud.firestore {
         && request.resource.data.dia is string && request.resource.data.dia.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && id == request.auth.uid + '|' + request.resource.data.mat + '|' + request.resource.data.ficha + '|' + request.resource.data.dia;
     }
+    // Dados pessoais (CPF, endereço, telefone, rota de ônibus): dpessoais/{matrícula Dikma}, fora da ficha (gcolab), que é
+    // lida por líderes, leitores e Indicadores. Lê: administrador e RH · Administrativo (o administrador pode desligar em
+    // Perfis); RH · Somente leitura só com o item ligado em Perfis (config/permissoes 'rh|leitor'.i_dpessoais = true).
+    // Grava: administrador e RH · Administrativo. Apaga: só o administrador (descarte LGPD, 2 anos após a demissão).
+    function dpItem(p) {
+      let pr = /databases/$(database)/documents/config/permissoes;
+      let v = exists(pr) ? get(pr).data.get('rh|' + p, {}).get('i_dpessoais', null) : null;
+      return p == 'administrativo' ? v != false : v == true;
+    }
+    function veDP() { return admin() || (ativo() && pEm('rh') in ['administrativo', 'leitor'] && dpItem(pEm('rh'))); }
+    function dpOk(mat, ch) {
+      let d = request.resource.data;
+      return soCampos(ch, ['mat', 'cpf', 'end', 'tel', 'rotaOn', 'atualizadoPor', 'atualizadoEm'])
+        && d.get('mat', '') == mat
+        && (d.get('cpf', null) == null || (d.cpf is string && d.cpf.matches('[0-9]{11}')))
+        && fTxt(d, ch, 'end', 300) && fTxt(d, ch, 'tel', 40) && fTxt(d, ch, 'rotaOn', 40);
+    }
+    match /dpessoais/{mat} {
+      allow read: if veDP();
+      allow create: if admEdita() && marcaOk() && dpOk(mat, novos());
+      allow update: if admEdita() && marcaOk() && dpOk(mat, mudados());
+      allow delete: if admin();
+    }
     match /historico/{id} {
       allow read: if veHist(resource.data.get('mod', ''));
       allow create: if ativo()

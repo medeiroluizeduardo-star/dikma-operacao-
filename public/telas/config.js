@@ -470,7 +470,7 @@ export function rascunhoPerm() {
   }
   return UI.perm;
 }
-const permR = (R, mod, p, id) => { const x = R[chavePerm(mod, p)]; return x && typeof x[id] === 'boolean' ? x[id] : true; };
+const permR = (R, mod, p, id) => { const x = R[chavePerm(mod, p)]; if (x && typeof x[id] === 'boolean') return x[id]; const it = ITENS.find(i => i.id === id); return !(it && (it.off || []).includes(p)); };
 export function vPerfis() {
   const R = rascunhoPerm(); const cfg = permCfg();
   const mod = GRUPOS_ABAS.some(g => g.mod === UI.permMod) ? UI.permMod : 'operacao';
@@ -571,7 +571,7 @@ acoes.permSalvar = async (t, d) => {
   for (const g of GRUPOS_ABAS) for (const [p] of PERFIS_MOD[g.mod]) {
     const k = chavePerm(g.mod, p); const o = {};
     for (const v of abasDoModulo(g.mod)) if (configuravel(g.mod, p, v)) { const on = permR(R, g.mod, p, v.id); if (!on) o[v.id] = false; else if (g.mod === 'administracao') o[v.id] = true; }
-    for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it) && !permR(R, g.mod, p, it.id)) o[it.id] = false;
+    for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it)) { const on = permR(R, g.mod, p, it.id); if (!on) o[it.id] = false; else if ((it.off || []).includes(p)) o[it.id] = true; } // item desligado de fábrica: grava o 'ligado'
     out[k] = o;
   }
   await DB.salvarPermissoes(out); UI.perm = null; DB.log('Alterou as abas por perfil', 'administracao'); toast('Permissões salvas'); render();
