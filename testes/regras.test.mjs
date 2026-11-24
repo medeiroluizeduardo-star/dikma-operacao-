@@ -1760,7 +1760,8 @@ test('Operação › Solicitações de OM (oms/{id}): líder abre na área, téc
   await assertFails(setDoc0(ref('cliPatio', 'c1'), { hCiente: '2026-11-17T09:11', prio: 'baixa', ...mk('cliPatio') }, { merge: true }), 'no Ciente, só a hora e o nome');
   await assertFails(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', ...mk('cliPatio') }, { merge: true }), 'a liberação do cliente vai marcada libCli');
   await assertFails(setDoc0(ref('cliPatio', 'c1'), { status: 'finalizada', hFim: '2026-11-17T10:00', ...mk('cliPatio') }, { merge: true }), 'o cliente não finaliza');
-  await assertSucceeds(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, libNome: 'Usuário Pátio', numero: '4500200', hist: [], ...mk('cliPatio') }, { merge: true }), 'o cliente libera');
+  await assertFails(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, libNome: 'Usuário Pátio', numero: '4500200', hist: [], ...mk('cliPatio') }, { merge: true }), 'sem a hora do eletricista, não libera');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'c1'), { status: 'liberada', hLib: '2026-11-17T10:00', hEletr: '2026-11-17T09:55', libCli: true, libNome: 'Usuário Pátio', numero: '4500200', hist: [], ...mk('cliPatio') }, { merge: true }), 'o cliente libera');
   await assertFails(setDoc0(ref('cliPatio', 'c1'), { hLib: '2026-11-17T11:00', ...mk('cliPatio') }, { merge: true }), 'depois de liberada, o cliente não muda a hora');
   await assertSucceeds(setDoc0(ref('supPatio', 'c3'), nova('supPatio')), 'outra OM');
   await assertSucceeds(setDoc0(ref('opGestorSo', 'c3'), { status: 'enviada', clienteUid: 'admin', hEnvio: '2026-11-17T09:00', ...mk('opGestorSo') }, { merge: true }), 'enviada a outro cliente');
@@ -1797,7 +1798,9 @@ test('OMs: o cliente recusa ou cancela com motivo; observações no histórico',
   await assertSucceeds(setDoc0(ref('tecPatio', 'r1'), { status: 'enviada', motivo: '', hCanc: '', cancNome: '', cancCli: false, hCiente: '', cienteNome: '', hEnvio: '2026-11-17T11:00', ...mk('tecPatio') }, { merge: true }), 'o técnico reenvia');
   // Cancelamento pelo cliente: com a OM com ele e já liberada.
   await assertSucceeds(setDoc0(ref('cliPatio', 'r2'), { status: 'cancelada', motivo: 'Serviço não precisa mais', hCanc: '2026-11-17T09:40', cancNome: 'Usuário Pátio', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'o cliente cancela a enviada');
-  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { status: 'liberada', hLib: '2026-11-17T10:00', libCli: true, libNome: 'Usuário Pátio', ...mk('cliPatio') }, { merge: true }), 'libera');
+  await assertFails(setDoc0(ref('cliPatio', 'r3'), { status: 'liberada', hLib: '2026-11-17T10:00', hEletr: '2026-11-17T09:50', libCli: true, libNome: 'Usuário Pátio', ...mk('cliPatio') }, { merge: true }), 'sem a OM gerada, não libera');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { hCiente: '2026-11-17T09:20', cienteNome: 'Usuário Pátio', numero: '4500210', ...mk('cliPatio') }, { merge: true }), 'OM gerada');
+  await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { status: 'liberada', hLib: '2026-11-17T10:00', hEletr: '2026-11-17T09:50', libCli: true, libNome: 'Usuário Pátio', ...mk('cliPatio') }, { merge: true }), 'libera');
   await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { hist: [{ s: 'observacao', em: '2026-11-17T10:05', obs: 'Área isolada' }], ...mk('cliPatio') }, { merge: true }), 'liberada: o cliente deixa observação');
   await assertFails(setDoc0(ref('cliPatio', 'r3'), { status: 'recusada', motivo: 'Mudou de ideia', hCanc: '2026-11-17T10:10', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'liberada não se recusa (cancela)');
   await assertSucceeds(setDoc0(ref('cliPatio', 'r3'), { status: 'cancelada', motivo: 'Equipamento entrou em produção', hCanc: '2026-11-17T10:10', cancNome: 'Usuário Pátio', cancCli: true, ...mk('cliPatio') }, { merge: true }), 'o cliente cancela a liberada');

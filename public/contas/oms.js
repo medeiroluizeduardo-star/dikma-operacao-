@@ -31,7 +31,7 @@ export const corSit = o => (o.status === 'finalizada' && !o.hDesb ? 'atencao' : 
 // como problema (prob) para a tela pintar de vermelho.
 export const ETAPAS = [['pedido', 'Pedido'], ['tecnico', 'Técnico'], ['om', 'OM gerada'], ['lib', 'Liberado'], ['fim', 'Executado'], ['desb', 'Desbloqueio']];
 export function etapas(o) {
-  const q = { pedido: o.hSol || '', tecnico: o.hAprov || '', om: o.hCiente || '', lib: o.hLib || '', fim: o.hFim || '', desb: o.hDesb || '' };
+  const q = { pedido: o.hSol || '', tecnico: o.hAprov || '', om: o.hCiente || '', lib: o.hEletr || o.hLib || '', fim: o.hFim || '', desb: o.hDesb || '' };
   // Até onde a OM chegou (índice do próximo passo).
   const ate = { planejada: 0, solicitada: 1, devolvida: 0, aprovada: 2, enviada: o.hCiente ? 3 : 2, recusada: 2, liberada: 4, finalizada: o.hDesb ? 6 : 5, cancelada: -1 }[o.status];
   const prob = ['devolvida', 'recusada'].includes(o.status);
@@ -89,7 +89,8 @@ export function acoesDe(om, u) {
   const daArea = abreOmU(u, om.conj, om.area); const cli = ehClienteDa(om, u);
   const a = [];
   // O cliente vem primeiro: a liberação é dele; o técnico registra só se o cliente liberou por fora.
-  if (cli && om.status === 'enviada') { if (!om.hCiente) a.push('ciente'); a.push('liberar', 'recusar'); }
+  // 2026-11-24: a liberação só existe depois da OM gerada e quando o eletricista liberar (antes, só "OM gerada").
+  if (cli && om.status === 'enviada') a.push(om.hCiente ? 'liberar' : 'ciente', 'recusar');
   // O cliente também cancela (o serviço não vai mais acontecer), com a OM com ele ou já liberada.
   if (cli && ['enviada', 'liberada'].includes(om.status)) a.push('cancelar');
   // Editar (2026-11-24): quem abriu, enquanto a OM não foi aprovada; quem trata no conjunto (Técnico de Processo,
@@ -100,7 +101,8 @@ export function acoesDe(om, u) {
   if (trata && om.status === 'solicitada') a.push('aprovar', 'devolver');
   // Recusada: o técnico ajusta e envia de novo ao cliente (ou cancela).
   if (trata && ['aprovada', 'recusada'].includes(om.status)) a.push('enviar');
-  if (trata && om.status === 'enviada' && !a.includes('liberar')) a.push('liberar', 'recusar');
+  // Quem trata registra o que o cliente passou por fora: primeiro a OM gerada, depois a liberação do eletricista.
+  if (trata && om.status === 'enviada' && !a.includes('recusar')) a.push(om.hCiente ? 'liberar' : 'ciente', 'recusar');
   if ((trata || daArea) && om.status === 'liberada') a.push('finalizar');
   // Desbloqueio pela sala de controle: a hora pode ser marcada depois da finalização.
   if ((trata || daArea) && om.status === 'finalizada' && !om.hDesb) a.push('desbloqueio');
@@ -121,7 +123,7 @@ const ORDEM_PASSO = ['ciente', 'liberar', 'solicitar', 'aprovar', 'enviar', 'fin
 export function proximo(om, u, ac = acoesDe(om, u)) {
   const cli = ehClienteDa(om, u);
   if (om.status === 'devolvida' && ac.includes('editar')) return 'editar';
-  return ORDEM_PASSO.find(a => ac.includes(a) && (a !== 'liberar' || cli || !om.clienteUid)) || null;
+  return ORDEM_PASSO.find(a => ac.includes(a) && ((a !== 'liberar' && a !== 'ciente') || cli || !om.clienteUid)) || null;
 }
 
 /* ---------- datas e horas ---------- */
@@ -296,17 +298,19 @@ export function mudar(om, acao, quem, d = {}) {
       // O cliente libera pelo sistema: vale a hora do toque (a real). O técnico registra a hora que o cliente informou.
       // Horas que a sala de controle passa: quando passou ao eletricista (opcional) e quando o eletricista liberou
       // (obrigatória para o cliente). Sem "OM gerada" antes, o cliente informa também a hora em que gerou a OM.
-      const cli = !!d.peloCliente; const h = cli ? ag : d.hLib;
-      if (!ehHora(h)) erro('Informe a hora da liberação.', 'omHLib');
+      // 2026-11-24 (Eduardo): só fica Liberada depois da OM gerada e com a confirmação de que o eletricista liberou
+      // (d.confirma, a caixa marcada na janela) e a hora em que ele liberou. Vale para o cliente e para quem trata.
+      const cli = !!d.peloCliente; const h = ag;
+      if (!ehHora(om.hCiente)) erro('Primeiro registre a OM gerada (com o número). A liberação vem depois, quando o eletricista liberar.', 'omHEletr');
+      if (!d.confirma) erro('Confirme que o eletricista liberou o equipamento.', 'omConf');
       if (om.hSol && h < om.hSol) erro('A liberação não pode ser antes da solicitação.', 'omHLib');
-      const hOm = om.hCiente || (ehHora(d.hCiente) ? d.hCiente : '');
+      const hOm = om.hCiente;
       const hSala = ehHora(d.hSala) ? d.hSala : ''; const hEletr = ehHora(d.hEletr) ? d.hEletr : '';
-      if (cli && !hOm) erro('Informe a hora em que a OM foi gerada.', 'omHOm');
-      if (cli && !hEletr) erro('Informe a hora em que o eletricista liberou o equipamento.', 'omHEletr');
+      if (!hEletr) erro('Informe a hora em que o eletricista liberou o equipamento.', 'omHEletr');
       if (hOm && hSala && hSala < hOm) erro('A sala não pode ter passado ao eletricista antes de a OM ser gerada.', 'omHSala');
       if (hEletr && ((hSala && hEletr < hSala) || (hOm && hEletr < hOm))) erro('O eletricista não pode ter liberado antes de receber a OM.', 'omHEletr');
-      if (hEletr && hEletr > h) erro('A liberação do eletricista não pode ser depois da liberação no sistema.', 'omHEletr');
-      const ciente = !om.hCiente && hOm ? { hCiente: hOm, cienteNome: t(quem.nome, 150) } : {};
+      if (hEletr > h) erro('A hora do eletricista não pode ser depois de agora.', 'omHEletr');
+      const ciente = {};
       const txt = [cli ? 'liberada pelo cliente' : 'registrada pelo técnico', hEletr ? 'eletricista liberou ' + horaBR(hEletr) : ''].filter(Boolean).join(' · ');
       return { status: 'liberada', hLib: h, libNome: t(quem.nome, 150), libCli: cli, ...ciente, ...(hSala ? { hSala } : {}), ...(hEletr ? { hEletr } : {}), ...(d.numero ? { numero: t(d.numero, LIMITES.numero) } : {}), hist: comHist(om, passo('liberada', quem, txt, h, obs)) };
     }

@@ -515,6 +515,7 @@ service cloud.firestore {
     // Processo do bloqueio (2026-11-19): o "Ciente" virou "OM gerada" (hCiente, com o número da OM); ao liberar, o cliente
     // grava também as horas que a sala de controle passou (hSala: passou ao eletricista; hEletr: eletricista liberou). O líder
     // da área grava a hora do desbloqueio pela sala (hDesb) ao finalizar ou depois, com a OM já finalizada.
+    // 2026-11-24: o cliente só passa a Liberada com a OM já gerada (hCiente) e com a hora em que o eletricista liberou (hEletr).
     function omTrata(e) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['tecnico', 'coordenador', 'gestor']); }
     function omAbre(e, area) { return admin() || (ativo() && esc(e) && pEm('operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && areaEm(pEm('operacao'), area)); }
     // Campos da OM. Na criação, confere todos; na alteração, só os que mudam (bem mais barato: a regra das OMs está perto do
@@ -586,6 +587,7 @@ service cloud.firestore {
               && ((request.resource.data.status == resource.data.status
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hCiente', 'cienteNome', 'numero', 'hist', 'atualizadoEm', 'atualizadoPor']))
                 || (resource.data.status == 'enviada' && request.resource.data.status == 'liberada' && request.resource.data.get('libCli', false) == true
+                    && resource.data.get('hCiente', '') != '' && request.resource.data.get('hEletr', '') != ''
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'hLib', 'numero', 'hCiente', 'cienteNome', 'libNome', 'libCli', 'hSala', 'hEletr', 'hist', 'atualizadoEm', 'atualizadoPor']))
                 || (((resource.data.status == 'enviada' && request.resource.data.status == 'recusada') || request.resource.data.status == 'cancelada')
                     && request.resource.data.get('cancCli', false) == true && request.resource.data.get('motivo', '').size() >= 5

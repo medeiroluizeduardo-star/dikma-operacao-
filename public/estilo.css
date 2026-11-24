@@ -1893,6 +1893,7 @@ button.tr-it:hover{border-color:var(--marca)}
 .om-det{margin-top:var(--s2);border-top:1px solid var(--line);padding-top:var(--s2)}
 .om-det>summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--ink-2);padding:6px 0}
 .om-det .om-acoes{border-top:0}
+.om-conf{display:flex;gap:8px;align-items:flex-start;margin:var(--s2) 0;padding:10px 12px;border:2px solid var(--accent);border-radius:10px;font-size:14px;cursor:pointer}.om-conf input{width:20px;height:20px;flex:none;margin-top:1px;accent-color:var(--accent)}
 .om-como{margin:0 0 var(--s2);padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .om-dsem{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:13.5px}
 .om-dsem input{width:18px;height:18px;accent-color:var(--accent)}
