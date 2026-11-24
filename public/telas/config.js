@@ -6,7 +6,7 @@ import { semAcento, casa, caixaBusca } from '../ui/busca.js';
 import { MODULOS_ACESSO, MODULO_ACESSO, ESCOPOS, perfilNome, legadoDoAcesso, acessoDe, selosAcesso, perfilDe, areasDoCadastro } from '../contas/acessos.js';
 import { criarEscala, normRegime, letra, PERIODO, periodosDe } from '../contas/escala.js';
 import { PERFIS_MOD, GRUPOS_ABAS, configuravel, doPerfil, podeVer, resumoExcecao, ITENS, itemPerfil, itemDoPapel, podeItemU, chavePerm } from '../contas/permissoes.js';
-import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $ } from '../nucleo/base.js';
+import { DB, TODAY, CUR_WEEK, CUR_MONTH, esc, title, $, framed } from '../nucleo/base.js';
 import { ME, PL, COLABS, SK, AREAS, UI, rotas, tipos, meses, isAdmin, admDe, papelNome, modsDe, setsDe, permCfg, rebuild } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { senhaAleatoria } from '../contas/senha.js';
@@ -294,12 +294,40 @@ export function vGerador() {
   if (!UI.gMes || ms.includes(UI.gMes)) UI.gMes = opts[0];
   const ws = weeksOfMonth(UI.gMes);
   const per = AREAS.map(a => ({ a, n: (DB.cache.plano[a] || []).filter(p => p.ativo !== false).length }));
-  return `<div class="grid2"><div class="card"><header><h2>Gerar novo mês</h2><p>Cada semana (seg–dom) entra no mês da sua quinta-feira</p></header><div class="body stackcol">
+  return `<div class="grid2 noprint"><div class="card"><header><h2>Gerar novo mês</h2><p>Cada semana (seg–dom) entra no mês da sua quinta-feira</p></header><div class="body stackcol">
    <label class="sel"><span>Mês</span><select class="in" id="gMes">${opts.map(o => `<option value="${o}" ${o === UI.gMes ? 'selected' : ''}>${monthLabel(o)}</option>`).join('')}</select></label>
    <div class="tw"><table><thead><tr><th>Semana</th>${per.map(x => `<th class="r">${AREA_S[x.a]}</th>`).join('')}</tr></thead><tbody>${ws.map((w, i) => `<tr><td>S${i + 1} · ${ddmm(w)} a ${ddmm(add(w, 6))}</td>${per.map(x => `<td class="r num">${x.n}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
    <div class="row-gap"><button class="btn pri" data-act="gerar" ${UI.busy ? 'disabled' : ''}>${I.gerador} ${UI.busy ? 'Gerando…' : 'Gerar ' + monthLabel(UI.gMes)}</button><span class="muted num">${ws.length} semanas × ${per.reduce((n, x) => n + x.n, 0)} atividades</span></div>
   </div></div>
-  <div class="card"><header><h2>Meses gerados</h2></header><div class="body"><div class="plist">${ms.map(m => `<div class="pitem"><div><div class="t">${monthLabel(m)}</div><div class="l num">${weeksOfMonth(m).length} semanas</div></div>${m === CUR_MONTH ? '<span class="pill ok">atual</span>' : m > CUR_MONTH ? '<span class="pill neu">futuro</span>' : '<span class="pill neu">anterior</span>'}</div>`).join('')}</div></div></div></div>`;
+  <div class="card"><header><h2>Meses gerados</h2></header><div class="body"><div class="plist">${ms.map(m => `<div class="pitem"><div><div class="t">${monthLabel(m)}</div><div class="l num">${weeksOfMonth(m).length} semanas</div></div>${m === CUR_MONTH ? '<span class="pill ok">atual</span>' : m > CUR_MONTH ? '<span class="pill neu">futuro</span>' : '<span class="pill neu">anterior</span>'}</div>`).join('')}</div></div></div></div>${folhaPlanejamento()}`;
+}
+
+// Folha de planejamento (no modelo da Folha do líder): as atividades do plano padrão, por rota, com as caixas dos dias
+// em branco para a liderança marcar à mão em que dias vai atender cada uma. Coluna "Hoje" = dias atuais no plano.
+function folhaPlanejamento() {
+  if (!AREAS.includes(UI.gfArea)) UI.gfArea = AREAS[0];
+  const area = UI.gfArea;
+  const todas = (DB.cache.plano[area] || []).filter(p => p.ativo !== false);
+  const ordem = rotasDa(area).map(r => r.rota);
+  const rts = [...new Set(todas.map(p => p.rota))].sort((x, y) => (ordem.indexOf(x) + 1 || 999) - (ordem.indexOf(y) + 1 || 999) || x.localeCompare(y));
+  if (UI.gfRota !== 'TODAS' && !rts.includes(UI.gfRota)) UI.gfRota = 'TODAS';
+  const lid = COLABS.find(c => c.area === area && /^L[IÍ]DER/.test(c.funcao || ''));
+  const lider = UI.lider || (lid ? title(lid.nome) : '');
+  const hoje = p => [...(p.dias || '')].map((c, k) => (c === '1' ? DAYS[k].slice(0, 3) : '')).filter(Boolean).join(' ') || '—';
+  const usadas = rts.filter(r => UI.gfRota === 'TODAS' || r === UI.gfRota);
+  const filtros = `<div class="card noprint"><header><h2>Folha de planejamento para a liderança</h2><p>Sai no modelo da Folha do líder, uma folha por rota, com as caixas dos dias em branco. O líder marca à mão em que dias vai atender cada atividade e devolve assinada para ajustar o Plano padrão.</p></header><div class="body"><div class="filters">
+   <label class="sel"><span>Área</span><select class="in" id="gfArea">${AREAS.map(x => `<option value="${x}" ${x === area ? 'selected' : ''}>${AREA_S[x]}</option>`).join('')}</select></label>
+   <label class="sel"><span>Rota</span><select class="in" id="gfRota"><option value="TODAS">Todas (${rts.length})</option>${rts.map(r => `<option ${r === UI.gfRota ? 'selected' : ''}>${esc(r)}</option>`).join('')}</select></label>
+   <label class="sel"><span>Líder</span><input class="in" id="fLider" value="${esc(lider)}"></label>
+   ${!framed ? `<button class="btn pri" data-act="print" style="align-self:flex-end" ${usadas.length ? '' : 'disabled'}>${I.print} Imprimir / salvar PDF</button>` : ''}
+  </div>${usadas.length > 1 ? `<p class="muted small m0">${usadas.length} rotas · cada rota sai numa folha separada.</p>` : ''}</div></div>`;
+  if (!usadas.length) return filtros + '<div class="card"><div class="empty">Nenhuma atividade no Plano padrão desta área.</div></div>';
+  const folha = rota => { let n = 0; const grupos = agruparLocais(todas.filter(p => p.rota === rota));
+    return `<div class="paper folha"><div class="hd"><div><h3>PLANEJAMENTO SEMANAL DE ATIVIDADES</h3><div class="meta"><span><b>Área:</b> ${AREA_S[area]}</span><span><b>Rota:</b> ${esc(rota)}</span><span><b>Vale a partir de:</b> ____/____/________</span></div><div class="meta"><span class="liderTxt"><b>Líder responsável:</b> ${esc(lider || '_______________________')}</span><span>Marque ✓ nos dias em que a atividade será atendida</span></div></div><div class="rt small"><img class="plogo" src="img/dikma-logo.png" alt="Dikma"><br>${esc(SETS[SK].local)}</div></div>
+  <table><thead><tr><th>Nº</th><th>Local / equipamento</th><th>Atividade</th><th>Tipo</th><th>Hoje no plano</th>${DAYS.map(d => `<th class="c">${d}</th>`).join('')}<th style="width:120px">Observação</th></tr></thead><tbody>
+  ${grupos.map(g => g.itens.map(p => `<tr><td class="c">${++n}</td><td>${esc(p.local)}</td><td>${esc(p.ativ)}</td><td>${esc(p.tipo || '')}</td><td class="small">${hoje(p)}</td>${DAYS.map(() => '<td class="c"><span class="box"></span></td>').join('')}<td class="obs"></td></tr>`).join('')).join('')}
+  </tbody></table><div class="sign"><div>Líder</div><div>Supervisor</div></div></div>`; };
+  return filtros + `<div class="tw folhas">${usadas.map(folha).join('')}</div>`;
 }
 
 /* ---------------- USUÁRIOS ---------------- */

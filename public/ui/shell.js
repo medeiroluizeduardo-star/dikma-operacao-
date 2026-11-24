@@ -447,6 +447,8 @@ function afterRender() {
   on('fPRota', 'change', e => { UI.pRota = e.target.value; UI.more = 0; render(); });
   on('fPQ', 'input', e => { UI.pQ = e.target.value; UI.more = 0; clearTimeout(window._pqt); window._pqt = setTimeout(schedule, 180); });
   on('gMes', 'change', e => { UI.gMes = e.target.value; render(); });
+  on('gfArea', 'change', e => { UI.gfArea = e.target.value; UI.gfRota = 'TODAS'; UI.lider = ''; render(); });
+  on('gfRota', 'change', e => { UI.gfRota = e.target.value; render(); });
   on('impIni', 'change', e => { UI.impIni = e.target.value; });
   on('fNova', 'submit', e => {
     e.preventDefault();
