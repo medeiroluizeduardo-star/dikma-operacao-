@@ -32,7 +32,7 @@ export async function sha256(u8) {
 }
 
 // ---------- cores e textos (modelo visual da Dikma: creme, azul-marinho e laranja) ----------
-const COR = { navy: '272662', barra: '10243E', laranja: 'F15A24', vermelho: 'FF0000', creme: 'F7ECDA', cremeClaro: 'FBF6EE', tinta: '16172E', cinza: '666880', linha: 'E4D9C6', branco: 'FFFFFF', R: '1E8A4C', N: 'D23B3B', E: '7A4FD6', P: '5F6385' };
+const COR = { navy: '272662', barra: '10243E', laranja: 'F15A24', vermelho: 'FF0000', creme: 'F7ECDA', cremeClaro: 'FBF6EE', tinta: '16172E', cinza: '666880', linha: 'E4D9C6', branco: 'FFFFFF', R: '1E8A4C', N: 'D23B3B', E: '7A4FD6', P: '5F6385', ok: '1E8A4C', atencao: 'D99A00', critico: 'D23B3B', semNum: '666880', trilho: 'EFE7DA' };
 const SIT = { R: 'Realizada', N: 'Não realizada', E: 'Extra', P: 'Programada' };
 const FONTE = 'Red Hat Display', FONTE_FORTE = 'Red Hat Display Heavy';
 const W = 13.333, H = 7.5;
@@ -52,19 +52,24 @@ export async function imagensModelo() {
   return out;
 }
 
-// o = { rel (FA.montarRelatorio + FA.limitarFotos), tipo ('ativ'|'qz'|'om'), nomeConj ('Atividades Pátio'),
-//       area ('Tratamento de Coque' ou o local do conjunto), responsavel, autor, geradoEm (Date),
-//       img (imagensModelo()), carregarFoto(f) → data:… ou null, progresso(feito, total, texto), fora }
+// o = { rel (FA.montarRelatorio + FA.limitarFotos), gruposTodos (os grupos antes do limite, para os números do painel),
+//       tipo ('ativ'|'qz'|'om'), nomeConj ('Atividades Pátio'), area ('Tratamento de Coque' ou o local do conjunto),
+//       responsavel, autor, geradoEm (Date), img (imagensModelo()), carregarFoto(f) → data:… ou null,
+//       progresso(feito, total, texto), fora }
+// Ordem dos slides: capa (com os 3 números principais) → registros fotográficos → painel de resultados (cartões,
+// gráficos, tabela por rota com barras coloridas e pontos de atenção) → anexos (listas) → encerramento.
 // Devolve o Blob do .pptx.
 export async function gerarPptx(o) {
   await carregarBiblioteca();
   // tipo 'qz' (Queda zero) e 'om' (OMs): sem os indicadores e as tabelas das atividades.
   const { rel } = o; const img = o.img || {}; const qz = o.tipo === 'qz' || o.tipo === 'om';
   const nomeTipo = o.tipo === 'qz' ? 'Queda zero' : o.tipo === 'om' ? 'Solicitações de OM' : '';
+  const todos = o.gruposTodos || rel.grupos; const reg = FA.resumoRegistros(todos); const i = rel.ind || {};
   const pptx = new globalThis.PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE'; pptx.author = o.responsavel || o.autor || 'Dikma Gestão'; pptx.company = 'Dikma'; pptx.title = `Relatório fotográfico${qz ? ' · ' + nomeTipo : ''} · ${o.nomeConj}`;
   pptx.subject = `Período ${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
   const periodo = `${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
+  const filtro = `${o.area ? ' · ' + o.area : ''}${rel.rota ? ' · ' + rel.rota : ''}`;
   pptx.defineSlideMaster({
     title: 'DIKMA', background: { color: COR.branco },
     objects: [
@@ -76,157 +81,279 @@ export async function gerarPptx(o) {
   // Texto da barra azul (título do slide) e a linha de baixo (detalhe).
   const titulo = (s, t, sub) => {
     s.addText(t, { x: 3.7, y: 0.06, w: W - 3.85, h: 0.63, fontFace: FONTE_FORTE, fontSize: 24, bold: true, color: COR.branco, valign: 'middle', fit: 'shrink', margin: 0 });
-    if (sub) s.addText(sub, { x: 3.7, y: 0.74, w: W - 3.85, h: 0.3, fontFace: FONTE, fontSize: 11.5, color: COR.navy, valign: 'top', margin: 0, fit: 'shrink' });
+    if (sub) s.addText(sub, { x: 3.7, y: 0.74, w: W - 3.85, h: 0.22, fontFace: FONTE, fontSize: 11, color: COR.cinza, valign: 'top', margin: 0, fit: 'shrink' });
   };
+  const ret = (s, x, y, w, h, cor, raio) => s.addShape(raio ? pptx.ShapeType.roundRect : pptx.ShapeType.rect, { x, y, w, h, fill: { color: cor }, line: { color: cor, width: 0 }, ...(raio ? { rectRadius: raio } : {}) });
+  const txt = (s, t, x, y, w, h, op = {}) => s.addText(t, { x, y, w, h, fontFace: FONTE, fontSize: 11, color: COR.tinta, margin: 0, valign: 'middle', ...op });
+  // Cartão branco com borda fina e título (as caixas do painel).
+  const cartao = (s, x, y, w, h, tit, sub) => {
+    s.addShape(pptx.ShapeType.roundRect, { x, y, w, h, fill: { color: COR.branco }, line: { color: COR.linha, width: 0.75 }, rectRadius: 0.06 });
+    if (tit) txt(s, tit, x + 0.22, y + 0.12, w - 0.44, 0.34, { fontFace: FONTE_FORTE, fontSize: 13.5, bold: true, color: COR.navy });
+    if (sub) txt(s, sub, x + 0.22, y + 0.45, w - 0.44, 0.24, { fontSize: 9.5, color: COR.cinza });
+  };
+  // Número grande do painel: faixa colorida à esquerda, valor, nome e uma nota curta.
+  const numero = (s, x, y, w, h, valor, nome, cor, nota) => {
+    ret(s, x, y, w, h, COR.creme, 0.06); ret(s, x, y + 0.14, 0.07, h - 0.28, cor);
+    txt(s, valor, x + 0.22, y + 0.08, w - 0.3, h * 0.5, { fontFace: FONTE_FORTE, fontSize: 28, bold: true, color: cor, valign: 'bottom', fit: 'shrink' });
+    txt(s, nome.toUpperCase(), x + 0.22, y + h * 0.56, w - 0.3, 0.24, { fontSize: 9.5, bold: true, color: COR.navy, charSpacing: 0.5, fit: 'shrink' });
+    if (nota) txt(s, nota, x + 0.22, y + h * 0.56 + 0.22, w - 0.3, 0.2, { fontSize: 8.5, color: COR.cinza, fit: 'shrink' });
+  };
+  // Lista de barras horizontais (desenhadas, para ler fácil): nome · barra · valor.
+  const barras = (s, itens, { x, y, w, h, cor, fmt = nTxt, max, rotW = 0.42, linhaMax = 0.46 }) => {
+    if (!itens.length) return;
+    const lh = Math.min(linhaMax, h / itens.length); const rw = w * rotW, nw = 0.62, bw = w - rw - nw - 0.12;
+    const mx = max || Math.max(1, ...itens.map(it => it.n));
+    itens.forEach((it, j) => {
+      const yy = y + j * lh; const c = typeof cor === 'function' ? cor(it) : cor;
+      txt(s, corta(it.rot, 46), x, yy, rw - 0.08, lh, { fontSize: 10.5, fit: 'shrink' });
+      ret(s, x + rw, yy + lh * 0.28, bw, lh * 0.44, COR.trilho);
+      if (it.n > 0) ret(s, x + rw, yy + lh * 0.28, Math.max(0.04, bw * Math.min(1, it.n / mx)), lh * 0.44, c);
+      txt(s, fmt(it.n), x + rw + bw + 0.1, yy, nw, lh, { fontSize: 11, bold: true, color: c === COR.trilho ? COR.cinza : COR.tinta });
+    });
+  };
+  const corPct = p => COR[FA.semaforo(p) || 'semNum'];
+  const legendaFaixas = (s, x, y, w) => txt(s, [
+    { text: '■ ', options: { color: COR.ok } }, { text: `${FA.FAIXA_OK}% ou mais    ` },
+    { text: '■ ', options: { color: COR.atencao } }, { text: `${FA.FAIXA_ATENCAO}% a ${FA.FAIXA_OK - 1}%    ` },
+    { text: '■ ', options: { color: COR.critico } }, { text: `abaixo de ${FA.FAIXA_ATENCAO}%` }
+  ], x, y, w, 0.24, { fontSize: 9.5, color: COR.cinza, align: 'right' });
 
   // ---- capa ----
   {
     const s = pptx.addSlide();
     s.background = { color: COR.creme };
     if (img.capa) s.addImage({ data: img.capa, x: 0, y: 0, w: 5.73, h: 6.35, sizing: { type: 'cover', w: 5.73, h: 6.35 } });
-    else s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 5.73, h: 6.35, fill: { color: COR.navy }, line: { color: COR.navy } });
+    else ret(s, 0, 0, 5.73, 6.35, COR.navy);
     if (img.faixaCapa) s.addImage({ data: img.faixaCapa, x: 0, y: 6.35, w: W, h: H - 6.35 });
-    else s.addShape(pptx.ShapeType.rect, { x: 0, y: 6.35, w: W, h: H - 6.35, fill: { color: COR.laranja }, line: { color: COR.laranja } });
+    else ret(s, 0, 6.35, W, H - 6.35, COR.laranja);
     if (img.logos) s.addImage({ data: img.logos, x: 6.0, y: 0.32, w: 3.4, h: 0.729 });
     const cheia = FA.ehSemanaCheia(rel.de, rel.ate);
     const oQue = o.tipo === 'om' ? 'das OMs' : o.tipo === 'qz' ? 'da queda zero' : 'de atividades';
-    s.addText(`Relatório fotográfico${cheia ? ' semanal' : ''} ${oQue}`, { x: 6.3, y: 1.55, w: 6.75, h: 1.6, fontFace: FONTE_FORTE, fontSize: 40, bold: true, color: COR.navy, valign: 'bottom', margin: 0, fit: 'shrink', lineSpacingMultiple: 0.9 });
-    const lb = (t, v, ult) => [{ text: t, options: { bold: true } }, { text: ' ' + v, options: { bold: true, breakLine: !ult } }];
-    s.addText([...lb('Data:', FA.periodoExtenso(rel.de, rel.ate)), { text: FA.textoSemanas(rel.de, rel.ate), options: { bold: true } }],
-      { x: 6.37, y: 3.35, w: 6.6, h: 0.85, fontFace: FONTE, fontSize: 18, color: COR.laranja, valign: 'top', margin: 0, fit: 'shrink' });
-    const linhas = [[{ text: 'Área:', options: { bold: true } }, { text: ' ' + (o.area || o.nomeConj), options: { breakLine: true } }]];
-    if (rel.rota) linhas.push([{ text: 'Rota:', options: { bold: true } }, { text: ' ' + rel.rota, options: { breakLine: true } }]);
-    linhas.push([{ text: 'Responsável:', options: { bold: true } }, { text: ' ' + (nomeProprio(o.responsavel) || '—') }]);
-    s.addText(linhas.flat(), { x: 6.37, y: 4.4, w: 6.6, h: 1.3, fontFace: FONTE, fontSize: 18, color: COR.laranja, valign: 'top', margin: 0, fit: 'shrink' });
+    txt(s, `Relatório fotográfico${cheia ? ' semanal' : ''} ${oQue}`, 6.3, 1.25, 6.75, 1.45, { fontFace: FONTE_FORTE, fontSize: 38, bold: true, color: COR.navy, valign: 'bottom', fit: 'shrink', lineSpacingMultiple: 0.9 });
+    txt(s, [{ text: FA.periodoExtenso(rel.de, rel.ate), options: { bold: true, breakLine: true } }, { text: FA.textoSemanas(rel.de, rel.ate) }],
+      6.32, 2.85, 6.6, 0.7, { fontSize: 17, color: COR.laranja, valign: 'top', fit: 'shrink' });
+    const linhas = [[{ text: 'Área: ', options: { bold: true } }, { text: o.area || o.nomeConj, options: { breakLine: true } }]];
+    if (rel.rota) linhas.push([{ text: 'Rota: ', options: { bold: true } }, { text: rel.rota, options: { breakLine: true } }]);
+    linhas.push([{ text: 'Responsável: ', options: { bold: true } }, { text: nomeProprio(o.responsavel) || '—' }]);
+    txt(s, linhas.flat(), 6.32, 3.65, 6.6, 0.95, { fontSize: 14, color: COR.navy, valign: 'top', fit: 'shrink', paraSpaceAfter: 2 });
+    // os 3 números principais
+    const tres = qz ? [[nTxt(reg.fotos), 'registros fotográficos'], [nTxt(reg.ocorrencias), o.tipo === 'om' ? 'OMs com foto' : 'ocorrências'], [nTxt(reg.locais), 'locais']]
+      : [[nTxt(reg.fotos), 'registros fotográficos'], [pctTxt(i.cumpr), 'de cumprimento'], [pctTxt(i.pctFoto), 'das atividades com foto']];
+    tres.forEach(([v, t], j) => {
+      const x = 6.32 + j * 2.22; ret(s, x, 4.78, 2.07, 1.0, COR.branco, 0.06);
+      txt(s, v, x + 0.15, 4.84, 1.8, 0.52, { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: j === 0 ? COR.navy : COR.laranja, fit: 'shrink' });
+      txt(s, t, x + 0.15, 5.36, 1.8, 0.34, { fontSize: 10, color: COR.navy, valign: 'top', fit: 'shrink' });
+    });
     const g = o.geradoEm || new Date();
-    s.addText(`${nomeTipo || o.nomeConj} · ${nTxt(rel.nFotos)} registros fotográficos · gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)} · Dikma Gestão`, { x: 6.37, y: 5.85, w: 6.6, h: 0.3, fontFace: FONTE, fontSize: 10, color: COR.cinza, margin: 0, fit: 'shrink' });
+    txt(s, `${nomeTipo || o.nomeConj}${o.fora ? ` · ${nTxt(o.fora)} fotos fora deste arquivo pelo limite de ${FA.MAX_FOTOS_PPTX}` : ''} · gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)} · Dikma Gestão`, 6.32, 5.92, 6.6, 0.26, { fontSize: 9.5, color: COR.cinza, fit: 'shrink' });
   }
 
-  // ---- indicadores ----
-  if (!qz) {
-    const s = pptx.addSlide({ masterName: 'DIKMA' });
-    titulo(s, 'Indicadores do período', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${o.area ? ' · ' + o.area : ''}${rel.rota ? ' · ' + rel.rota : ''}`);
-    const i = rel.ind;
-    const cards = [['Programadas', nTxt(i.prog), COR.P], ['Realizadas', nTxt(i.R), COR.R], ['Não realizadas', nTxt(i.N), COR.N], ['Extras', nTxt(i.E), COR.E], ['% de cumprimento', pctTxt(i.cumpr), COR.laranja], ['% com foto', pctTxt(i.pctFoto), COR.navy]];
-    cards.forEach(([t, v, c], j) => {
-      const x = 0.5 + (j % 2) * 2.85, y = 1.2 + Math.floor(j / 2) * 1.38;
-      s.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.65, h: 1.22, fill: { color: COR.creme }, line: { color: COR.creme }, rectRadius: 0.1 });
-      s.addShape(pptx.ShapeType.rect, { x: x + 0.18, y: y + 0.18, w: 0.07, h: 0.86, fill: { color: c }, line: { color: c } });
-      s.addText(v, { x: x + 0.38, y: y + 0.1, w: 2.15, h: 0.7, fontFace: FONTE_FORTE, fontSize: 30, bold: true, color: c, margin: 0 });
-      s.addText(t.toUpperCase(), { x: x + 0.38, y: y + 0.8, w: 2.15, h: 0.3, fontFace: FONTE, fontSize: 10, color: COR.navy, bold: true, margin: 0 });
-    });
-    const notas = [`Pendentes (programadas sem apontamento): ${nTxt(i.P)}`, `Realizadas e extras com foto: ${nTxt(i.comFoto)} de ${nTxt(i.exigem)}`, `Registros fotográficos no período: ${nTxt(rel.nFotos)}${o.fora ? ` (${nTxt(o.fora)} fora deste relatório pelo limite de ${FA.MAX_FOTOS_PPTX})` : ''}`];
-    s.addText(notas.map((t, j) => ({ text: t, options: { breakLine: j < notas.length - 1, bullet: { indent: 12 } } })), { x: 0.5, y: 5.4, w: 5.7, h: 0.95, fontFace: FONTE, fontSize: 10.5, color: COR.navy, valign: 'top', margin: 0 });
-    // gráfico por rota: % de cumprimento e % com foto
-    const rr = rel.porRota.slice(0, 12);
-    if (rr.length) {
-      s.addText('Por rota', { x: 6.6, y: 1.15, w: 6.2, h: 0.35, fontFace: FONTE_FORTE, fontSize: 14, bold: true, color: COR.navy, margin: 0 });
-      s.addChart(pptx.ChartType.bar, [
-        { name: '% de cumprimento', labels: rr.map(r => corta(r.rota, 22)), values: rr.map(r => r.cumpr || 0) },
-        { name: '% com foto', labels: rr.map(r => corta(r.rota, 22)), values: rr.map(r => r.pctFoto || 0) }
-      ], { x: 6.5, y: 1.5, w: 6.4, h: 5.05, barDir: 'bar', barGrouping: 'clustered', chartColors: [COR.laranja, COR.navy], valAxisMaxVal: 100, valAxisMinVal: 0, valAxisLabelFontSize: 9, catAxisLabelFontSize: 9, catAxisOrientation: 'maxMin',
-        showLegend: true, legendPos: 'b', legendFontSize: 9, showValue: true, dataLabelFontSize: 8, dataLabelFormatCode: '0"%"', valGridLine: { color: 'EDE5D8', size: 0.5 }, catAxisLabelFontFace: FONTE, valAxisLabelFontFace: FONTE });
-      if (rel.porRota.length > rr.length) s.addText(`As outras ${rel.porRota.length - rr.length} rotas estão na tabela a seguir.`, { x: 6.6, y: 6.5, w: 6.2, h: 0.2, fontFace: FONTE, fontSize: 9, color: COR.cinza, margin: 0 });
-    } else s.addText('Nenhuma atividade programada ou apontada no período.', { x: 6.6, y: 3, w: 6.2, h: 0.5, fontFace: FONTE, fontSize: 14, color: COR.cinza });
-  }
-
-  // ---- tabela por rota ----
-  const cab = (t, opt = {}) => ({ text: t, options: { bold: true, color: COR.branco, fill: { color: COR.navy }, fontSize: 10, align: opt.align || 'left', valign: 'middle' } });
-  const cel = (t, opt = {}) => ({ text: String(t ?? ''), options: { fontSize: 10, color: opt.cor || COR.tinta, align: opt.align || 'left', bold: !!opt.bold, valign: 'middle', fill: opt.fill ? { color: opt.fill } : undefined } });
-  const tabOpts = (colW, y = 1.15) => ({ x: 0.5, y, w: W - 1, colW, fontFace: FONTE, border: { type: 'solid', pt: 0.5, color: COR.linha }, rowH: 0.34, margin: [2, 6, 2, 6], autoPage: false });
-  if (!qz && rel.porRota.length) {
-    const pags = FA.paginar(rel.porRota, 14);
-    pags.forEach((pg, n) => {
-      const s = pptx.addSlide({ masterName: 'DIKMA' });
-      titulo(s, 'Resultado por rota', `${periodo}${pags.length > 1 ? ` · parte ${n + 1} de ${pags.length}` : ''}`);
-      const rows = [[cab('Área'), cab('Rota'), cab('Programadas', { align: 'right' }), cab('Realizadas', { align: 'right' }), cab('Não realizadas', { align: 'right' }), cab('Extras', { align: 'right' }), cab('% cumprimento', { align: 'right' }), cab('% com foto', { align: 'right' })]];
-      pg.forEach((r, j) => { const f = j % 2 ? COR.cremeClaro : undefined; rows.push([cel(r.area, { fill: f }), cel(r.rota, { fill: f, bold: true }), cel(nTxt(r.prog), { align: 'right', fill: f }), cel(nTxt(r.R), { align: 'right', fill: f, cor: COR.R }), cel(nTxt(r.N), { align: 'right', fill: f, cor: r.N ? COR.N : COR.tinta }), cel(nTxt(r.E), { align: 'right', fill: f }), cel(pctTxt(r.cumpr), { align: 'right', fill: f, bold: true }), cel(pctTxt(r.pctFoto), { align: 'right', fill: f, bold: true })]); });
-      if (n === pags.length - 1) { const i = rel.ind; const t = COR.creme; rows.push([cel('Total', { bold: true, fill: t }), cel('', { fill: t }), cel(nTxt(i.prog), { align: 'right', bold: true, fill: t }), cel(nTxt(i.R), { align: 'right', bold: true, fill: t }), cel(nTxt(i.N), { align: 'right', bold: true, fill: t }), cel(nTxt(i.E), { align: 'right', bold: true, fill: t }), cel(pctTxt(i.cumpr), { align: 'right', bold: true, fill: t }), cel(pctTxt(i.pctFoto), { align: 'right', bold: true, fill: t })]); }
-      s.addTable(rows, tabOpts([2.2, 3.3, 1.1, 1.1, 1.2, 0.9, 1.25, 1.28]));
-    });
-  }
-
-  // ---- registros fotográficos (como no modelo) ----
-  // Barra "Local:", fotos à esquerda com moldura creme e a marca Antes/Durante/Depois pela hora, e à direita
-  // a data do registro, a descrição (ou o motivo da queda / o serviço da OM) e os demais dados.
+  // ---- registros fotográficos ----
+  // Fotos à esquerda (a marca Antes/Durante/Depois fica numa etiqueta em cima da foto) e, à direita, um cartão com
+  // os dados do registro: data, local, atividade (ou o motivo da queda / o serviço da OM), rota e área, colaborador
+  // e a situação colorida.
   const total = rel.grupos.reduce((n, g) => n + g.fotos.length, 0); let feitas = 0;
-  const rotDesc = o.tipo === 'qz' ? 'Motivo da queda / descrição' : o.tipo === 'om' ? 'Serviço da OM' : 'Descrição da atividade';
-  const pilula = (s, sit, x, y, w = 1.63, h = 0.36, fs = 11) => {
-    const c = COR[sit] || COR.P;
-    s.addShape(pptx.ShapeType.roundRect, { x, y, w, h, fill: { color: c }, line: { color: c }, rectRadius: 0.08 });
-    s.addText(SIT[sit] || sit || '—', { x, y, w, h, fontFace: FONTE, fontSize: fs, bold: true, color: COR.branco, align: 'center', valign: 'middle', margin: 0 });
-  };
-  const item = (rot, val, cor = COR.navy) => [
-    { text: rot.toUpperCase() + ':', options: { bold: true, color: cor, bullet: { indent: 14 }, breakLine: true, fontFace: FONTE_FORTE } },
-    { text: val || '—', options: { color: COR.tinta, breakLine: true, paraSpaceAfter: 8 } }
+  const rotDesc = o.tipo === 'qz' ? 'Motivo da queda / descrição' : o.tipo === 'om' ? 'Serviço da OM' : 'Atividade';
+  const COR_MARCA = { Antes: COR.laranja, Durante: COR.navy, Depois: COR.R };
+  const campo = (rot, val, op = {}) => [
+    { text: rot.toUpperCase(), options: { fontSize: 10, bold: true, color: COR.laranja, charSpacing: 0.6, breakLine: true } },
+    { text: val || '—', options: { fontSize: op.fs || 14, bold: !!op.bold, color: COR.tinta, breakLine: true, paraSpaceAfter: 14 } }
   ];
-  for (const pag of FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE)) {
+  const pags = FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE); let nPag = 0;
+  if (!pags.length) {
+    const s = pptx.addSlide({ masterName: 'DIKMA' }); titulo(s, 'Registros fotográficos', periodo + filtro);
+    txt(s, 'Nenhum registro fotográfico no período.', 0.5, 3, W - 1, 0.6, { fontSize: 18, color: COR.cinza, align: 'center' });
+  }
+  for (const pag of pags) {
+    nPag++;
     const s = pptx.addSlide({ masterName: 'DIKMA' });
     const g = pag.grupos[0]; const so = pag.grupos.length === 1; const um = so && g.itens.length <= 1;
     const colabs = [...new Set(pag.grupos.flatMap(x => x.colabs))];
-    const parte = pag.parte && pag.parte[1] > 1 ? ` · parte ${pag.parte[0]} de ${pag.parte[1]}` : '';
+    const parte = pag.parte && pag.parte[1] > 1 ? ` (parte ${pag.parte[0]} de ${pag.parte[1]})` : '';
     titulo(s, corta(`Local: ${so ? g.local || g.rota || '—' : g.rota || '—'}`, 90));
-    // painel da direita
-    const desc = so ? (um ? g.titulo : g.itens.map(x => x.ativ).filter(Boolean).slice(0, 6).map(t => corta(t, 60)).join('; ') + (g.itens.length > 6 ? `; e mais ${g.itens.length - 6}` : ''))
+    // cartão da direita
+    const cx0 = 8.78, cw = W - cx0 - 0.45;
+    ret(s, cx0, 0.95, cw, 5.62, COR.creme, 0.05);
+    const desc = so ? (um ? g.titulo : g.itens.map(x => x.ativ).filter(Boolean).slice(0, 6).map(t => '• ' + corta(t, 60)).join('\n') + (g.itens.length > 6 ? `\ne mais ${g.itens.length - 6}` : ''))
       : pag.grupos.map((x, j) => `${j + 1}. ${corta(x.itens.length > 1 ? `${x.itens.length} atividades` : x.titulo, 60)}`).join('\n');
     const painel = [
-      ...item('Data do registro', `${diaSemana(g.dia)} ${FA.dBR(g.dia)}${parte}`, COR.vermelho),
-      ...item(so ? rotDesc : 'Atividades neste slide', corta(desc, 420)),
-      ...item('Rota · área', `${g.rota || '—'} · ${AREA_S[g.area] || nomeProprio(g.area) || '—'}`),
-      ...item('Colaborador', corta(colabs.map(nomeProprio).join(', ') || '—', 120))
+      ...campo('Data do registro', `${diaSemana(g.dia)} · ${FA.dBR(g.dia)}${parte}`, { bold: true }),
+      ...campo(so ? rotDesc : 'Atividades neste slide', corta(desc, 420), { bold: um, fs: um ? 15 : 13 }),
+      ...campo('Rota · área', `${g.rota || '—'} · ${AREA_S[g.area] || nomeProprio(g.area) || '—'}`),
+      ...campo(colabs.length > 1 ? 'Colaboradores' : 'Colaborador', corta(colabs.map(nomeProprio).join(', ') || '—', 120))
     ];
-    s.addText(painel, { x: 8.45, y: 1.1, w: 4.5, h: so && g.sit ? 4.85 : 5.45, fontFace: FONTE, fontSize: 12.5, valign: 'top', margin: 0, fit: 'shrink', paraSpaceAfter: 2 });
-    if (so && g.sit && !qz) pilula(s, g.sit, 8.45, 6.1, 1.8, 0.38, 11);
-    const leg = 0.36;
-    const pos = FA.gradeFotos(pag.fotos.length, { x: 0.45, y: 0.95, w: 7.7, h: 5.65 }, leg, 0.22);
+    txt(s, painel, cx0 + 0.25, 1.15, cw - 0.5, 4.6, { valign: 'top', fit: 'shrink' });
+    if (so && g.sit && !qz) {
+      txt(s, 'SITUAÇÃO', cx0 + 0.25, 5.62, 1.6, 0.2, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
+      const c = COR[g.sit] || COR.P; ret(s, cx0 + 0.25, 5.86, 1.75, 0.4, c, 0.08);
+      txt(s, SIT[g.sit] || g.sit, cx0 + 0.25, 5.86, 1.75, 0.4, { fontSize: 12, bold: true, color: COR.branco, align: 'center' });
+    }
+    txt(s, `${nPag} de ${pags.length}`, cx0 + cw - 1.3, 6.06, 1.05, 0.2, { fontSize: 9, color: COR.cinza, align: 'right' });
+    // fotos
+    const leg = 0.3;
+    const pos = FA.gradeFotos(pag.fotos.length, { x: 0.45, y: 0.95, w: 8.1, h: 5.65 }, leg, 0.2);
     for (let j = 0; j < pag.fotos.length; j++) {
       const { f, g: gf } = pag.fotos[j]; const cx = pos[j]; const st = FA.statusFoto(f);
       o.progresso && o.progresso(feitas, total, `Fotos ${feitas + 1} de ${total}`);
       let dados = null;
       try { dados = st === 'arquivada' ? f.thumb : await o.carregarFoto(f); } catch (e) { dados = null; }
       if (!dados && f.thumb) dados = f.thumb;
-      const e = FA.encaixar(f.w || 4, f.h || 3, { x: cx.x + 0.07, y: cx.y + 0.07, w: cx.w - 0.14, h: cx.h - 0.14 });
+      const e = FA.encaixar(f.w || 4, f.h || 3, { x: cx.x + 0.05, y: cx.y + 0.05, w: cx.w - 0.1, h: cx.h - 0.1 });
       if (dados) {
-        s.addShape(pptx.ShapeType.roundRect, { x: e.x - 0.07, y: e.y - 0.07, w: e.w + 0.14, h: e.h + 0.14, fill: { color: COR.creme }, line: { color: COR.linha, width: 0.5 }, rectRadius: 0.12 });
+        s.addShape(pptx.ShapeType.rect, { x: e.x - 0.05, y: e.y - 0.05, w: e.w + 0.1, h: e.h + 0.1, fill: { color: COR.branco }, line: { color: COR.linha, width: 0.75 }, shadow: { type: 'outer', blur: 4, offset: 1.5, angle: 90, color: '000000', opacity: 0.18 } });
         s.addImage({ data: dados, x: e.x, y: e.y, w: e.w, h: e.h, altText: `Foto: ${gf.titulo || ''}` });
       } else {
-        s.addShape(pptx.ShapeType.roundRect, { x: cx.x, y: cx.y, w: cx.w, h: cx.h, fill: { color: COR.creme }, line: { color: COR.linha, width: 0.5 }, rectRadius: 0.12 });
-        s.addText('Foto não encontrada no banco', { x: cx.x, y: cx.y, w: cx.w, h: cx.h, fontFace: FONTE, fontSize: 12, color: COR.cinza, align: 'center', valign: 'middle' });
+        ret(s, cx.x, cx.y, cx.w, cx.h, COR.creme, 0.06);
+        txt(s, 'Foto não encontrada no banco', cx.x, cx.y, cx.w, cx.h, { fontSize: 12, color: COR.cinza, align: 'center' });
       }
       const marca = FA.marcaDaFoto(f, gf.fotos);
+      if (marca && dados) {
+        ret(s, e.x + 0.1, e.y + 0.1, 1.05, 0.32, COR_MARCA[marca] || COR.navy, 0.06);
+        txt(s, marca.toUpperCase(), e.x + 0.1, e.y + 0.1, 1.05, 0.32, { fontFace: FONTE_FORTE, fontSize: 10.5, bold: true, color: COR.branco, align: 'center', charSpacing: 0.8 });
+      }
       const extra = st === 'arquivada' ? ' · miniatura (foto completa arquivada)' : !dados || dados === f.thumb ? ' · miniatura' : '';
-      const ref = so ? '' : `${pag.grupos.indexOf(gf) + 1}. `;
-      s.addText([
-        ...(marca ? [{ text: marca, options: { bold: true, color: COR.vermelho, fontFace: FONTE_FORTE } }, { text: ' · ' }] : []),
-        { text: `${ref}${hora(f.at) || FA.ddmm(f.dia)}`, options: { bold: true, color: COR.navy } },
+      const ref = so ? '' : `Atividade ${pag.grupos.indexOf(gf) + 1} · `;
+      txt(s, [
+        { text: ref, options: { bold: true, color: COR.navy } },
+        { text: hora(f.at) ? `${hora(f.at)}` : FA.ddmm(f.dia), options: { color: COR.navy } },
+        ...(!marca || dados ? [] : [{ text: ' · ' + marca }]),
         { text: extra }
-      ], { x: cx.x, y: e.y + e.h + 0.1, w: cx.w, h: 0.26, fontFace: FONTE, fontSize: 11, color: COR.cinza, align: 'center', valign: 'top', margin: 0, fit: 'shrink' });
+      ], cx.x, e.y + e.h + 0.08, cx.w, 0.24, { fontSize: 10.5, color: COR.cinza, align: 'center', valign: 'top', fit: 'shrink' });
       feitas++;
     }
   }
 
-  // ---- tabelas: não realizadas e realizadas sem foto ----
+  // ---- painel de resultados (dashboard) ----
+  const porDia = FA.fotosPorPeriodo(todos, rel.de, rel.fim || rel.ate);
+  const graficoDias = (s, x, y, w, h) => {
+    if (!porDia.some(d => d.n)) { txt(s, 'Sem fotos no período.', x, y, w, h, { fontSize: 12, color: COR.cinza, align: 'center' }); return; }
+    s.addChart(pptx.ChartType.bar, [{ name: 'Fotos', labels: porDia.map(d => d.rot), values: porDia.map(d => d.n) }], {
+      x, y, w, h, barDir: 'col', chartColors: [COR.navy], barGapWidthPct: 45, showValue: porDia.length <= 16, dataLabelFontSize: 9, dataLabelColor: COR.navy, dataLabelPosition: 'outEnd',
+      catAxisLabelFontSize: porDia.length > 16 ? 7 : 9, valAxisHidden: true, valGridLine: { style: 'none' }, catAxisLineShow: true, catAxisLineColor: COR.linha,
+      catAxisLabelFontFace: FONTE, catAxisLabelColor: COR.cinza, showLegend: false
+    });
+  };
+  if (!qz) {
+    // 1) painel geral
+    {
+      const s = pptx.addSlide({ masterName: 'DIKMA' });
+      titulo(s, 'Painel de resultados', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${filtro}`);
+      const nums = [[nTxt(i.prog), 'Programadas', COR.P, 'no período'], [nTxt(i.R), 'Realizadas', COR.R, i.prog ? `${pctTxt(i.cumpr)} das programadas` : ''],
+        [nTxt(i.N), 'Não realizadas', COR.N, i.P ? `${nTxt(i.P)} sem apontamento` : ''], [nTxt(i.E), 'Extras', COR.E, 'fora da programação'],
+        [pctTxt(i.cumpr), 'Cumprimento', corPct(i.cumpr), 'realizadas ÷ programadas'], [pctTxt(i.pctFoto), 'Com foto', corPct(i.pctFoto), `${nTxt(i.comFoto)} de ${nTxt(i.exigem)} atividades`]];
+      const nw = (W - 1 - 5 * 0.15) / 6;
+      nums.forEach(([v, t, c, n], j) => numero(s, 0.5 + j * (nw + 0.15), 1.05, nw, 1.12, v, t, c, n));
+      const y2 = 2.35, h2 = 4.2;
+      // rosca: situação das programadas
+      cartao(s, 0.5, y2, 3.7, h2, 'Situação das programadas', 'Realizadas, não realizadas e pendentes');
+      if (i.prog) {
+        s.addChart(pptx.ChartType.doughnut, [{ name: 'Situação', labels: ['Realizadas', 'Não realizadas', 'Pendentes'], values: [i.R, i.N, i.P] }], {
+          x: 0.75, y: y2 + 0.75, w: 3.2, h: 2.6, holeSize: 62, chartColors: [COR.R, COR.N, COR.trilho], showLegend: false, showValue: false, showPercent: false, dataBorder: { pt: 1, color: COR.branco } });
+        txt(s, pctTxt(i.cumpr), 0.75, y2 + 1.7, 3.2, 0.5, { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: corPct(i.cumpr), align: 'center' });
+        txt(s, 'cumprimento', 0.75, y2 + 2.17, 3.2, 0.26, { fontSize: 10, color: COR.cinza, align: 'center' });
+        const leg = [['Realizadas', i.R, COR.R], ['Não realizadas', i.N, COR.N], ['Pendentes', i.P, COR.cinza]];
+        leg.forEach(([t, v, c], j) => txt(s, [{ text: '■ ', options: { color: c } }, { text: t, options: { breakLine: true } }, { text: nTxt(v), options: { bold: true, fontSize: 12 } }], 0.7 + j * 1.12, y2 + 3.45, 1.12, 0.55, { fontSize: 9.5, align: 'center', valign: 'top' }));
+      } else txt(s, 'Nada programado no período.', 0.7, y2 + 1.5, 3.3, 0.5, { fontSize: 12, color: COR.cinza, align: 'center' });
+      // cumprimento por rota (menor primeiro)
+      const rr = rel.porRota.filter(r => r.prog).sort((a, b) => (a.cumpr ?? 101) - (b.cumpr ?? 101) || String(a.rota).localeCompare(String(b.rota)));
+      cartao(s, 4.35, y2, 4.55, h2, 'Cumprimento por rota', rr.length > 8 ? `As 8 com menor cumprimento (de ${rr.length}); todas no slide seguinte` : 'Da menor para a maior');
+      if (rr.length) barras(s, rr.slice(0, 8).map(r => ({ rot: r.rota, n: r.cumpr || 0 })), { x: 4.57, y: y2 + 0.8, w: 4.15, h: h2 - 1.25, cor: it => corPct(it.n), fmt: v => v + '%', max: 100, rotW: 0.4 });
+      else txt(s, 'Nenhuma rota com atividade programada.', 4.5, y2 + 1.5, 4.2, 0.5, { fontSize: 12, color: COR.cinza, align: 'center' });
+      legendaFaixas(s, 4.5, y2 + h2 - 0.38, 4.25);
+      // fotos por dia
+      cartao(s, 9.05, y2, W - 9.55, h2, 'Registros fotográficos', `${nTxt(reg.fotos)} fotos · ${porDia.length > 0 && porDia[0].rot.startsWith('Sem') ? 'por semana' : 'por dia'}`);
+      graficoDias(s, 9.15, y2 + 0.75, W - 9.75, h2 - 0.9);
+    }
+    // 2) painel por rota: tabela com barras coloridas
+    if (rel.porRota.length) {
+      const pr = FA.paginar(rel.porRota, 12);
+      pr.forEach((pg, n) => {
+        const s = pptx.addSlide({ masterName: 'DIKMA' });
+        titulo(s, 'Painel por rota', `${periodo}${filtro}${pr.length > 1 ? ` · parte ${n + 1} de ${pr.length}` : ''}`);
+        const cols = [['Rota', 2.85, 'left'], ['Programadas', 1.2], ['Realizadas', 1.1], ['Não realizadas', 1.25], ['Extras', 0.8], ['Cumprimento', 2.55, 'barra'], ['Com foto', 2.55, 'barra']];
+        const xs = []; let xx = 0.5; for (const c of cols) { xs.push(xx); xx += c[1]; }
+        const tw = xx - 0.5, y0 = 1.05, rh = pg.length <= 8 ? 0.46 : 0.37;
+        ret(s, 0.5, y0, tw, 0.4, COR.navy, 0);
+        cols.forEach(([t, w, al], j) => txt(s, t, xs[j] + 0.1, y0, w - 0.2, 0.4, { fontSize: 10, bold: true, color: COR.branco, align: al ? 'left' : 'right', fit: 'shrink' }));
+        const linha = (r, y, fundo, forte) => {
+          if (fundo) ret(s, 0.5, y, tw, rh, fundo);
+          txt(s, forte ? [{ text: 'Total', options: { bold: true } }] : [{ text: r.rota || '—', options: { bold: true } }, { text: '  ' + (AREA_S[r.area] || nomeProprio(r.area) || ''), options: { color: COR.cinza, fontSize: 9 } }], xs[0] + 0.1, y, cols[0][1] - 0.2, rh, { fontSize: 10.5, fit: 'shrink' });
+          [[r.prog], [r.R, COR.R], [r.N, r.N ? COR.N : COR.tinta], [r.E]].forEach(([v, c], j) => txt(s, nTxt(v), xs[j + 1] + 0.1, y, cols[j + 1][1] - 0.2, rh, { fontSize: 10.5, align: 'right', color: c || COR.tinta, bold: forte }));
+          [r.cumpr, r.pctFoto].forEach((p, j) => {
+            const x = xs[5 + j] + 0.12, bw = cols[5 + j][1] - 0.95;
+            ret(s, x, y + rh * 0.3, bw, rh * 0.4, COR.trilho);
+            if (p) ret(s, x, y + rh * 0.3, Math.max(0.04, bw * Math.min(1, p / 100)), rh * 0.4, corPct(p));
+            txt(s, pctTxt(p), x + bw + 0.08, y, 0.7, rh, { fontSize: 10.5, bold: true, color: p == null ? COR.cinza : corPct(p) });
+          });
+        };
+        pg.forEach((r, j) => linha(r, y0 + 0.4 + j * rh, j % 2 ? COR.cremeClaro : null));
+        let yf = y0 + 0.4 + pg.length * rh;
+        if (n === pr.length - 1) { linha(i, yf, COR.creme, true); yf += rh; }
+        s.addShape(pptx.ShapeType.line, { x: 0.5, y: yf, w: tw, h: 0, line: { color: COR.linha, width: 0.75 } });
+        legendaFaixas(s, 0.5, Math.min(6.38, yf + 0.12), tw);
+      });
+    }
+    // 3) pontos de atenção
+    {
+      const s = pptx.addSlide({ masterName: 'DIKMA' });
+      titulo(s, 'Pontos de atenção', `${periodo}${filtro}`);
+      const ch = 5.5, y = 1.05, cw = (W - 1.15) / 2;
+      cartao(s, 0.5, y, cw, ch);
+      txt(s, [{ text: nTxt(rel.naoReal.length), options: { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: rel.naoReal.length ? COR.N : COR.R } }, { text: '  não realizadas', options: { fontFace: FONTE_FORTE, fontSize: 14, bold: true, color: COR.navy } }], 0.72, y + 0.12, cw - 0.44, 0.55);
+      if (rel.naoReal.length) {
+        txt(s, 'MOTIVOS INFORMADOS', 0.72, y + 0.8, cw - 0.44, 0.24, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
+        barras(s, FA.contarPor(rel.naoReal, x => x.motivo, 5), { x: 0.72, y: y + 1.05, w: cw - 0.44, h: 2.1, cor: COR.N, rotW: 0.5, linhaMax: 0.42 });
+        txt(s, 'ROTAS COM MAIS NÃO REALIZADAS', 0.72, y + 3.3, cw - 0.44, 0.24, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
+        barras(s, FA.contarPor(rel.naoReal, x => x.rota, 4), { x: 0.72, y: y + 3.55, w: cw - 0.44, h: 1.75, cor: COR.N, rotW: 0.5, linhaMax: 0.42 });
+      } else txt(s, 'Todas as atividades programadas e apontadas foram realizadas.', 0.72, y + 1.2, cw - 0.44, 0.6, { fontSize: 13, color: COR.R });
+      const x2 = 0.5 + cw + 0.15;
+      cartao(s, x2, y, cw, ch);
+      txt(s, [{ text: nTxt(rel.semFoto.length), options: { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: rel.semFoto.length ? COR.atencao : COR.R } }, { text: '  realizadas sem foto', options: { fontFace: FONTE_FORTE, fontSize: 14, bold: true, color: COR.navy } }], x2 + 0.22, y + 0.12, cw - 0.44, 0.55);
+      if (rel.semFoto.length) {
+        txt(s, `POR ROTA · ${pctTxt(i.pctFoto)} DAS ATIVIDADES TÊM FOTO`, x2 + 0.22, y + 0.8, cw - 0.44, 0.24, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
+        barras(s, FA.contarPor(rel.semFoto, x => x.rota, 9), { x: x2 + 0.22, y: y + 1.05, w: cw - 0.44, h: 4.25, cor: COR.atencao, rotW: 0.5, linhaMax: 0.44 });
+      } else txt(s, 'Todas as atividades realizadas têm registro fotográfico.', x2 + 0.22, y + 1.2, cw - 0.44, 0.6, { fontSize: 13, color: COR.R });
+    }
+  } else {
+    // Queda zero e OMs: números dos registros, fotos por dia e os locais com mais registros
+    const s = pptx.addSlide({ masterName: 'DIKMA' });
+    titulo(s, 'Painel de registros', `${periodo}${filtro}`);
+    const nums = [[nTxt(reg.fotos), 'Registros fotográficos', COR.navy], [nTxt(reg.ocorrencias), o.tipo === 'om' ? 'OMs com foto' : 'Ocorrências', COR.laranja],
+      [nTxt(reg.dias), 'Dias com registro', COR.P], [nTxt(reg.locais), 'Locais', COR.E], [nTxt(reg.pessoas), 'Colaboradores', COR.R]];
+    const nw = (W - 1 - 4 * 0.15) / 5;
+    nums.forEach(([v, t, c], j) => numero(s, 0.5 + j * (nw + 0.15), 1.05, nw, 1.12, v, t, c));
+    const y2 = 2.35, h2 = 4.2, w1 = 6.6;
+    cartao(s, 0.5, y2, w1, h2, 'Registros fotográficos', porDia.length && porDia[0].rot.startsWith('Sem') ? 'Por semana' : 'Por dia');
+    graficoDias(s, 0.6, y2 + 0.75, w1 - 0.2, h2 - 0.9);
+    cartao(s, 0.65 + w1, y2, W - 1.15 - w1, h2, 'Locais com mais registros', 'Quantidade de fotos');
+    barras(s, FA.contarPor(todos, g => g.local || g.rota, 8, g => g.fotos.length), { x: 0.87 + w1, y: y2 + 0.8, w: W - 1.6 - w1, h: h2 - 1.0, cor: COR.navy, rotW: 0.5 });
+  }
+
+  // ---- anexos: listas das não realizadas e das realizadas sem foto ----
+  const cab = (t, opt = {}) => ({ text: t, options: { bold: true, color: COR.branco, fill: { color: COR.navy }, fontSize: 10, align: opt.align || 'left', valign: 'middle' } });
+  const cel = (t, opt = {}) => ({ text: String(t ?? ''), options: { fontSize: 10, color: opt.cor || COR.tinta, align: opt.align || 'left', bold: !!opt.bold, valign: 'middle', fill: opt.fill ? { color: opt.fill } : undefined } });
+  const tabOpts = (colW, y = 1.05) => ({ x: 0.5, y, w: W - 1, colW, fontFace: FONTE, border: { type: 'solid', pt: 0.5, color: COR.linha }, rowH: 0.34, margin: [2, 6, 2, 6], autoPage: false });
   const tabela = (lista, tituloT, cols, linha, max = 4) => {
     if (!lista.length) return;
-    const pags = FA.paginar(lista, 13); const usar = pags.slice(0, max);
+    const pgs = FA.paginar(lista, 13); const usar = pgs.slice(0, max);
     usar.forEach((pg, n) => {
       const s = pptx.addSlide({ masterName: 'DIKMA' });
-      titulo(s, tituloT, `${nTxt(lista.length)} no período${pags.length > 1 ? ` · parte ${n + 1} de ${usar.length}` : ''}${n === usar.length - 1 && pags.length > usar.length ? ` · mostrando ${nTxt(usar.length * 13)} (veja a lista completa no sistema)` : ''}`);
+      titulo(s, tituloT, `${nTxt(lista.length)} no período${usar.length > 1 ? ` · parte ${n + 1} de ${usar.length}` : ''}${n === usar.length - 1 && pgs.length > usar.length ? ` · mostrando ${nTxt(usar.length * 13)} (veja a lista completa no sistema)` : ''}`);
       const rows = [cols.map(([t]) => cab(t))];
       pg.forEach((x, j) => rows.push(linha(x).map(t => cel(t, { fill: j % 2 ? COR.cremeClaro : undefined }))));
       s.addTable(rows, tabOpts(cols.map(c => c[1])));
     });
   };
-  if (!qz) tabela(rel.naoReal, 'Atividades não realizadas', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.0], ['Atividade', 3.2], ['Motivo', 2.43]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 40), corta(x.ativ, 70), corta(x.motivo || '—', 60)]);
-  if (!qz) tabela(rel.semFoto, 'Realizadas sem registro fotográfico', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.3], ['Atividade', 4.13], ['Situação', 1.2]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, x.area, x.rota, corta(x.local, 44), corta(x.ativ, 80), SIT[x.sit] || x.sit], 3);
+  if (!qz) tabela(rel.naoReal, 'Anexo · Atividades não realizadas', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.0], ['Atividade', 3.2], ['Motivo', 2.43]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, AREA_S[x.area] || x.area, x.rota, corta(x.local, 40), corta(x.ativ, 70), corta(x.motivo || '—', 60)]);
+  if (!qz) tabela(rel.semFoto, 'Anexo · Realizadas sem foto', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.3], ['Atividade', 4.13], ['Situação', 1.2]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, AREA_S[x.area] || x.area, x.rota, corta(x.local, 44), corta(x.ativ, 80), SIT[x.sit] || x.sit], 3);
 
-  // ---- fecho ----
+  // ---- encerramento ----
   {
     const s = pptx.addSlide();
     s.background = { color: COR.creme };
     if (img.fecho) s.addImage({ data: img.fecho, x: 6.05, y: 0, w: W - 6.05, h: H });
-    else s.addShape(pptx.ShapeType.rect, { x: 8.9, y: 0, w: W - 8.9, h: H, fill: { color: COR.navy }, line: { color: COR.navy } });
-    s.addText('Obrigado pela atenção!', { x: 0.75, y: 2.4, w: 5.0, h: 1.4, fontFace: FONTE_FORTE, fontSize: 40, bold: true, color: COR.navy, valign: 'middle', margin: 0, fit: 'shrink' });
+    else ret(s, 8.9, 0, W - 8.9, H, COR.navy);
+    txt(s, 'Obrigado pela atenção!', 0.75, 2.4, 5.0, 1.4, { fontFace: FONTE_FORTE, fontSize: 40, bold: true, color: COR.navy, fit: 'shrink' });
     if (img.dikma) s.addImage({ data: img.dikma, x: 0.75, y: 5.4, w: 3.9, h: 1.3 });
   }
 

@@ -85,7 +85,7 @@ async function gerarRelatorio() {
     const [img] = await Promise.all([mod.imagensModelo(), mod.carregarBiblioteca()]);
     const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: FA.doTipo(A.fotos, A.tipo), de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota, areas: A.area ? [A.area] : null });
     const lim = FA.limitarFotos(rel.grupos, FA.MAX_FOTOS_PPTX);
-    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, fora: lim.fora, tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
+    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${sufixoFiltro()}.pptx`;
     mod.baixarBlob(blob, nome);

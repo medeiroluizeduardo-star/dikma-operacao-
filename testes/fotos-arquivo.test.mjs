@@ -287,3 +287,15 @@ test('relatórios separados: fotos das OMs (atividade OM-…)', () => {
   assert.deepEqual(FA.doTipo([om, ativ], 'om').map(f => f.id), ['o']);
   assert.deepEqual(FA.doTipo([om, ativ], 'ativ').map(f => f.id), ['a'], 'as fotos das OMs não entram no relatório das atividades');
 });
+
+test('painel do relatório: cor do percentual, fotos por dia/semana, contagem com "Outros" e resumo dos registros', () => {
+  assert.deepEqual([95, 90, 89, 70, 69, 0, null].map(FA.semaforo), ['ok', 'ok', 'atencao', 'atencao', 'critico', 'critico', '']);
+  const g = (dia, n, local, colabs = ['A']) => ({ dia, local, rota: 'ROTA 1', colabs, fotos: Array(n).fill({}) });
+  const gs = [g('2026-11-16', 2, 'Moega'), g('2026-11-16', 1, 'Correia', ['B']), g('2026-11-18', 3, 'Moega')];
+  assert.deepEqual(FA.fotosPorPeriodo(gs, '2026-11-16', '2026-11-18'), [{ rot: '16/11', n: 3 }, { rot: '17/11', n: 0 }, { rot: '18/11', n: 3 }]);
+  const mes = FA.fotosPorPeriodo(gs, '2026-10-01', '2026-11-30');
+  assert.ok(mes[0].rot.startsWith('Sem. ')); assert.equal(mes.reduce((s, x) => s + x.n, 0), 6);
+  assert.deepEqual(FA.contarPor([{ m: 'a' }, { m: 'a' }, { m: 'b' }, { m: '' }, { m: 'c' }], x => x.m, 3), [{ rot: 'a', n: 2 }, { rot: 'b', n: 1 }, { rot: 'Outros (2)', n: 2 }]);
+  assert.deepEqual(FA.contarPor(gs, x => x.local, 6, x => x.fotos.length), [{ rot: 'Moega', n: 5 }, { rot: 'Correia', n: 1 }]);
+  assert.deepEqual(FA.resumoRegistros(gs), { fotos: 6, ocorrencias: 3, dias: 2, locais: 2, pessoas: 2 });
+});
