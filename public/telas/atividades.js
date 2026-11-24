@@ -15,7 +15,7 @@ import { fotosSemana, indicadorFotos, cfgF } from './fotos.js';
 import { fotosDaCel } from '../contas/fotos.js';
 import { agruparAprov } from '../contas/aprovacao.js';
 import { abre } from '../ui/dobra.js';
-import { modsHistorico } from '../contas/acessos.js';
+import { modsHistorico, perfilDe } from '../contas/acessos.js';
 import { conferirAcao } from '../contas/tratativas.js';
 import { viewsDoModulo } from '../nucleo/navegacao.js';
 import { execPorLocal, resumoExec, chipDoLocal } from '../contas/execucao.js';
@@ -161,7 +161,8 @@ const causaDe = m => (MOTIVOS.includes(m) ? m : OUTRAS);
 const podeAcao = area => acompanha() && podeItem('i_acoes') && (area === 'TODAS' ? todasAreas() : (todasAreas() || myAreas().includes(area)));
 // Ações das causas: as antigas (acoes/ do conjunto aberto) e as das Tratativas com origem Atividades neste conjunto.
 function acoesDasCausas() {
-  if (DB.tratWatch) DB.tratWatch();
+  // As Tratativas só são lidas por quem tem a Gestão (firestore.rules › tratLe): sem ela, nem tenta (gastaria cota).
+  if (DB.tratWatch && (isAdmin() || perfilDe(ME, 'gestao'))) DB.tratWatch();
   const novas = Object.values((DB.cache.trat || {}).d || {}).filter(x => x.tipo === 'acao' && x.origem === 'atividades' && x.conj === SK && x.causa)
     .map(x => ({ id: 't:' + x.id, _t: x.id, acao: x.titulo, causa: x.causa, area: x.area || 'TODAS', resp: x.resp, prazo: x.prazo, status: x.status === 'andamento' ? 'aberta' : x.status, em: x.criadoEm }));
   return [...Object.values(DB.cache.acoes || {}), ...novas];
