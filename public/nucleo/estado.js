@@ -46,7 +46,7 @@ try { if (localStorage.getItem('dikma-acesso') === 'sistema') { UI.modulo = 'adm
 // dessas telas, porque eles chegam depois (sob demanda) e a busca e o Meu dia já mexem nela antes (ex.: abrir uma ficha).
 UI.e = { mes: TODAY.slice(0, 7), dia: TODAY, pf: 'aberta', avMes: TODAY.slice(0, 7), inMes: TODAY.slice(0, 7), hist: null };
 // RH › Colaboradores (telas/colaboradores.js): busca, filtro (f), área (fa), ficha aberta (mat) e aba da ficha.
-UI.co = { q: '', f: 'ativos', fa: '', mat: null, aba: 'dados' };
+UI.co = { q: '', f: 'ativos', fa: '', un: '', mat: null, aba: 'dados' };
 UI.g = { de: TODAY.slice(0, 8) + '01', ate: TODAY, q: '', filtro: 'ativos', ocSt: 'pendente', ocTipo: '', ocQ: '', mat: null, impMat: '', impDoc: 'ficha', cq: '', cf: 'todos', area: '', fa: '' };
 // Segurança (telas/seguranca.js): mês e filtros das listas, situação da fila de anomalias e mês do painel.
 UI.sg = { mes: TODAY.slice(0, 7), area: '', sit: 'abertas', csit: 'pendentes', q: '', pMes: TODAY.slice(0, 7), itipo: '' };
