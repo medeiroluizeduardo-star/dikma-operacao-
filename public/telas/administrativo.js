@@ -196,9 +196,12 @@ export function criarAdministrativo(X) {
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
     // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Escala do dia.
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
-    const filtra = !!(F.area || F.rota || F.turno || U.fCard); const procura = !!q || filtra;
+    // Unidade (Coqueria, Sinter, Alto Forno): pela área da Escala do dia ou pela Área/Setor da ficha.
+    const fichaMat = new Map((A().rh || []).map(c => [String(c.mat), c]));
+    const unidadeP = p => { const c = p.ativ ? cmap.get(p.ativ) : null; const fi = fichaMat.get(String(p.mat)) || {}; const t = `${(c && c.area) || ''} | ${fi.setor || ''} | ${fi.subsetor || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return /SINTER/.test(t) ? 'Sinter' : /ALTO\s*FORNO/.test(t) ? 'Alto Forno' : 'Coqueria'; };
+    const filtra = !!(F.area || F.rota || F.turno || U.fCard || U.fUn); const procura = !!q || filtra;
     const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
-    const passa = (g, p) => { if (!(F.area || F.rota || F.turno)) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
+    const passa = (g, p) => { if (U.fUn && unidadeP(p) !== U.fUn) return false; if (!(F.area || F.rota || F.turno)) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
     const todos = U.grp === '*' || !!q;
     const vis = GR.map((g, gi) => ({ g, gi, ps: g.pessoas.filter(p => (!q || normNome(p.nome).includes(q)) && passa(g, p)) })).filter(x => (x.ps.length || (ed && !procura && !x.g.virt && !x.g.auto)) && (todos || String(x.gi) === String(U.grp))); // grupo vazio: só quem edita vê (para incluir, renomear ou apagar)
     const recolhe = todos && !procura && vis.length > 4;
@@ -271,8 +274,9 @@ export function criarAdministrativo(X) {
     const turmas = [...new Set(cs.map(c => letra(c.turma)).filter(Boolean))].sort();
     const op = (v, t, at) => `<option value="${esc(v)}" ${v === at ? 'selected' : ''}>${esc(t)}</option>`;
     const sel = (id, rot, opts) => `<label class="sel"><span>${rot}</span><select class="in" id="${id}" aria-label="${rot}">${opts}</select></label>`;
-    const nAt = filtrosFreqAtivos({ ...F, dia: '' }) + (U.fCard ? 1 : 0);
-    return `<div class="body pt0 lbar efbar ffreq">${sel('aArea', 'Área', op('', 'Todas as áreas', F.area) + areas.map(a => op(a, AREA_S[a] || a, F.area)).join(''))}
+    const nAt = filtrosFreqAtivos({ ...F, dia: '' }) + (U.fCard ? 1 : 0) + (U.fUn ? 1 : 0);
+    return `<div class="body pt0 lbar efbar ffreq">${sel('aUn', 'Unidade', op('', 'Todas', U.fUn || '') + ['Coqueria', 'Sinter', 'Alto Forno'].map(u => op(u, u, U.fUn || '')).join(''))}
+      ${sel('aArea', 'Área', op('', 'Todas as áreas', F.area) + areas.map(a => op(a, AREA_S[a] || a, F.area)).join(''))}
       ${sel('aRota', 'Rota', op('', 'Todas as rotas', F.rota) + rotas.map(r => op(r, title(r), F.rota)).join(''))}
       ${sel('aTurno', 'Turno', op('', 'Todos', F.turno) + op('ADM', 'Administrativo', F.turno) + op('TURNO', 'Turno (todas as turmas)', F.turno) + turmas.map(t => op(t, 'Turma ' + t, F.turno)).join(''))}
       ${nAt ? `<span class="muted small"><b>${n}</b> pessoa${n === 1 ? '' : 's'} · ${nAt} filtro${nAt > 1 ? 's' : ''}</span><button type="button" class="btn sm ghost" data-a="limparF">Limpar filtros</button>` : ''}</div>`;
@@ -755,7 +759,7 @@ export function criarAdministrativo(X) {
     else if (a === 'fsem') { U.fSem = Math.max(0, (U.fSem || 0) + (+v)); render(); }
     else if (a === 'soGrupo') { U.grp = v; render(); }
     else if (a === 'limparQ') { U.q = ''; render(); }
-    else if (a === 'limparF') { U.fDia = U.fArea = U.fRota = U.fTurno = U.fCard = ''; render(); }
+    else if (a === 'limparF') { U.fDia = U.fArea = U.fRota = U.fTurno = U.fCard = U.fUn = ''; render(); }
     else if (a === 'modo') { U.modo = v; U.fDia = ''; U.fSem = null; render(); }
     else if (a === 'fdia') { if (v) { U.fDia = v === TODAY ? '' : v; U.modo = 'dia'; if (v <= TODAY) U.efD = v; render(); } }
     else if (a === 'card') { U.fCard = U.fCard === v ? '' : v; render(); }
@@ -804,6 +808,7 @@ export function criarAdministrativo(X) {
     if (UI.modulo !== 'rh') return;
     if (e.target.id === 'aGrp') { U.grp = e.target.value; U.abertos = []; render(); }
     if (e.target.id === 'aDia') { U.fDia = e.target.value; if (U.fDia && U.fDia <= TODAY) U.efD = U.fDia; render(); }
+    if (e.target.id === 'aUn') { U.fUn = e.target.value; render(); }
     if (e.target.id === 'aArea') { U.fArea = e.target.value; U.fRota = ''; render(); }
     if (e.target.id === 'aRota') { U.fRota = e.target.value; render(); }
     if (e.target.id === 'aTurno') { U.fTurno = e.target.value; render(); }
