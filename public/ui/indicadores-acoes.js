@@ -137,6 +137,8 @@ export function imprimirRelatorio(view, rel) {
 }
 
 // Imprimir a própria aba: cabeçalho de papel no topo, quadros recolhidos abertos e, depois, tudo volta como estava.
+// Indicadores › Atividades: relatório fotográfico da área (carrega a janela só no clique).
+acoes.relFotosArea = async () => { const m = await import('../telas/fotos-relatorio.js'); m.abrirRelatorioArea(); };
 acoes.indPrint = async () => {
   const view = $('view'); if (!view) return;
   if (RELATORIOS[UI.view]) {
