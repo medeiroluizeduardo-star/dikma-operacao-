@@ -10,6 +10,7 @@ import { PES, carregarModulo } from '../nucleo/modulos.js';
 import { editaAdm } from '../contas/acessos.js';
 import { AREA_GERAL } from '../contas/pessoas.js';
 import { indiceFeriasPessoa } from '../contas/ferias.js';
+import { UNIDADES, unidadeDe } from '../contas/colab-rh.js';
 import { quadroDoMes, conflitosDoMes, pendenciasFerias, planoDoAno, pessoaDoPeriodo, turmaCurta, nomeMes, mesCurto, somarMeses, mesSugerido, MAX_TURMA_PADRAO } from '../contas/ferias-plano.js';
 import { abas, etiqueta, tabela, vazio, carregando, indicadores } from '../ui/padrao.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -18,7 +19,7 @@ import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
 import { imprimirRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
 
-const F = UI.fp || (UI.fp = { aba: 'mes', mes: TODAY.slice(0, 7), fa: '' });
+const F = UI.fp || (UI.fp = { aba: 'mes', mes: TODAY.slice(0, 7), fa: '', un: '' });
 const $ = id => document.getElementById(id);
 const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
 const ddmm = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
@@ -36,15 +37,15 @@ function ctx() {
   if (CX && CXk[0] === L && CXk[1] === FL && CXk[2] === TODAY) return CX;
   const lot = PES.lotacoes(L); const idx = indiceFeriasPessoa(FL, L); const achar = pessoaDoPeriodo(L);
   const grupoDe = (p, f) => {
-    if (!p) return { area: '', areaNome: f && f.setor ? title(f.setor) : 'Sem cadastro', turma: '' };
+    if (!p) return { area: '', areaNome: f && f.setor ? title(f.setor) : 'Sem cadastro', turma: '', un: unidadeDe({ setor: f && f.setor }) };
     const l = lot.get(String(p.mat)) || {}; const area = l.area || p.area || AREA_GERAL;
     const turma = turmaCurta(p.turma || (l.patio && l.patio.turma) || (l.op && l.op.turma) || '');
-    return { area, areaNome: PES.areaNome(area), turma };
+    return { area, areaNome: PES.areaNome(area), turma, un: unidadeDe(p, area) };
   };
   CX = { L, achar, grupoDe, feriasDe: c => idx(c).filter(f => !f.apagado) }; CXk = [L, FL, TODAY];
   return CX;
 }
-const daArea = g => !F.fa || (g && g.area) === F.fa;
+const daArea = g => (!F.fa || (g && g.area) === F.fa) && (!F.un || (g && g.un) === F.un);
 const nomePessoa = (p, f) => title((p && p.nome) || f.nome || '');
 const linkFicha = (p, f) => (p ? `<button type="button" class="btn ghost link" data-act="fpFicha" data-mat="${esc(p.mat)}">${esc(nomePessoa(p, f))}</button>` : `<b>${esc(nomePessoa(p, f))}</b> <span class="muted small">sem cadastro</span>`);
 const turmaTxt = g => [g.areaNome, g.turma ? `turma ${g.turma}` : ''].filter(Boolean).join(' · ');
@@ -58,7 +59,7 @@ function pendencias() {
 export function vFerias() {
   if (!pronto()) return carregando();
   const c = ctx();
-  const areas = [...new Set(c.L.filter(p => !p.dem || p.dem > TODAY).map(p => c.grupoDe(p).area))].sort((a, b) => PES.areaNome(a).localeCompare(PES.areaNome(b)));
+  const areas = [...new Set(c.L.filter(p => (!p.dem || p.dem > TODAY) && (!F.un || c.grupoDe(p).un === F.un)).map(p => c.grupoDe(p).area))].sort((a, b) => PES.areaNome(a).localeCompare(PES.areaNome(b)));
   if (F.fa && !areas.includes(F.fa)) F.fa = '';
   const P = pendencias();
   const mesHoje = TODAY.slice(0, 7);
@@ -72,7 +73,7 @@ export function vFerias() {
     { rotulo: `Saem em ${mesCurto(mesHoje)}`, valor: String(saem) },
     { rotulo: 'Limite vencido ou em 60 dias', valor: String(nLim), situacao: nLim ? 'critico' : 'ok' },
     { rotulo: 'Avisos a entregar', valor: String(nAviso), situacao: nAviso ? 'atencao' : 'ok' }]);
-  const filtro = `<div class="p-form co-filtros"><label class="p-campo"><span>Área de atuação</span><select id="fpFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${F.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
+  const filtro = `<div class="p-form co-filtros"><label class="p-campo"><span>Unidade</span><select id="fpUn"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${F.un === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label><label class="p-campo"><span>Área de atuação</span><select id="fpFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${F.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
     <div class="fp-max"><p class="m0 small"><b>Máximo por turma:</b> ${maxTurma()} ${maxTurma() === 1 ? 'pessoa' : 'pessoas'} da mesma área e turma de férias ao mesmo tempo</p>${edita() ? '<button type="button" class="btn sm ghost" data-act="fpMax">Alterar</button>' : ''}</div></div>`;
   const aba = ['mes', 'ano', 'pend'].includes(F.aba) ? F.aba : 'mes';
   const corpo = aba === 'ano' ? vAno() : aba === 'pend' ? vPend(P) : vMes();
@@ -148,12 +149,12 @@ function vPend(P) {
 // ---- Programação do mês (PDF e Excel), no padrão dos resumos ----
 function relatorioMes(mes) {
   const ls = linhasDoMes(mes); const conf = conflitosDoMes(ls, mes, maxTurma());
-  const area = F.fa ? PES.areaNome(F.fa) : 'Todas as áreas';
+  const area = [F.un, F.fa ? PES.areaNome(F.fa) : ''].filter(Boolean).join(' · ') || 'Todas as áreas';
   const porArea = new Map(); for (const l of ls) { const k = l.g.areaNome || 'Sem área'; porArea.set(k, (porArea.get(k) || 0) + 1); }
   const semAviso = ls.filter(l => l.f.inicio && !l.f.avisoEm && !['gozo', 'gozada'].includes(l.etapa.k)).length;
   const semSub = ls.filter(l => l.f.inicio && !String(l.f.substituto || '').trim()).length;
   return {
-    titulo: `Programação de férias · ${nomeMes(mes)}`, papel: 'PROGRAMAÇÃO DE FÉRIAS DO MÊS', arquivo: [nomeMes(mes).replace('/', '-'), F.fa ? area : ''].filter(Boolean),
+    titulo: `Programação de férias · ${nomeMes(mes)}`, papel: 'PROGRAMAÇÃO DE FÉRIAS DO MÊS', arquivo: [nomeMes(mes).replace('/', '-'), F.fa || F.un ? area : ''].filter(Boolean),
     meta: ['ArcelorMittal · Coqueria', `Mês: ${nomeMes(mes)}`, `Área: ${area}`, `Gerado em: ${agoraTxt()}`],
     kpis: [
       { rot: 'Períodos no mês', v: ls.length, fmt: 'int', det: `${ls.filter(l => !l.f.inicio).length} planejados sem data` },
@@ -196,4 +197,4 @@ acoes.fpMax = () => {
   });
 };
 document.addEventListener('click', e => { const t = e.target.closest('[data-fp-aba]'); if (!t || UI.view !== 'rferias') return; F.aba = t.dataset.fpAba; render(); });
-document.addEventListener('change', e => { if (e.target.id === 'fpFa') { F.fa = e.target.value; render(); } });
+document.addEventListener('change', e => { if (e.target.id === 'fpFa') { F.fa = e.target.value; render(); } if (e.target.id === 'fpUn') { F.un = e.target.value; F.fa = ''; render(); } });
