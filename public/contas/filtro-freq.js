@@ -22,3 +22,15 @@ export const filtrosFreqAtivos = f => ['area', 'rota', 'turno', 'dia'].filter(k 
 
 // Opções de rota de uma área (ou de todas), sem repetir, em ordem.
 export const rotasFreq = (colabs, area) => [...new Set((colabs || []).filter(c => !area || c.area === area).map(c => c.rota).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+
+// Cartões do topo da Frequência (tocar filtra): o que cada pessoa tem nos dias que estão na tela.
+// dias = [{ v: código, semJus: falta/atraso… sem justificativa }] · extra = { duplicado, semFicha }
+export const CARTOES_FREQ = [['atencao', 'Precisa de atenção'], ['FT', 'Faltas'], ['semjus', 'Sem justificativa'], ['AT', 'Atestados'], ['HE', 'Horas extras'], ['FE', 'Férias']];
+export function marcasFreq(dias = [], extra = {}) {
+  const m = { FT: 0, AT: 0, HE: 0, FE: 0, semjus: 0 };
+  for (const c of dias) { if (c.v in m) m[c.v]++; if (c.semJus) m.semjus++; }
+  m.atencao = m.semjus || extra.duplicado || extra.semFicha ? 1 : 0;
+  return m;
+}
+// A pessoa entra no cartão escolhido? (sem cartão = todos)
+export const passaCartao = (m, k) => !k || !!(m && m[k]);

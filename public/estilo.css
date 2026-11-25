@@ -2154,3 +2154,17 @@ details.sgnums[open]>summary{margin-bottom:8px}
 .co-tempo li::before{content:"";position:absolute;left:-7px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
 .co-tempo-d{flex:0 0 86px;font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px;padding-top:1px}
 @media (max-width:640px){.co-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.co-card{padding:10px 12px}.co-card b{font-size:24px}}
+/* RH › Frequência (telas/administrativo.js): Dia | Semana | Mês, cartões que filtram e conferência para fechar a folha. */
+.fq-modo{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
+.fq-navdia{display:inline-flex;align-items:center;gap:6px}.fq-navdia b{min-width:140px;text-align:center}
+.fq-cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.fq-card{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer;min-height:64px}
+.fq-card b{font-size:24px;line-height:1.1}.fq-card span{font-size:12.5px;color:var(--ink-2)}
+.fq-card:hover{border-color:var(--line)}.fq-card.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--surface-2)}
+.fq-card.fq-atencao b,.fq-card.fq-semjus b,.fq-card.fq-FT b{color:var(--st-nreal)}.fq-card.fq-AT b{color:var(--st-atr)}.fq-card.fq-HE b{color:var(--st-extra)}
+.fq-cks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.fq-ck{display:flex;gap:10px;align-items:flex-start}.fq-ck>b{flex:0 0 24px;height:24px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:13px}
+.fq-ck.ok>b{background:var(--st-real)}.fq-ck.pend>b{background:var(--st-nreal)}
+@media (max-width:860px){.fq-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.fq-card{padding:8px 10px;min-height:56px}.fq-card b{font-size:20px}.fq-navdia b{min-width:0}}
+details.efrec>summary{padding:14px 16px;cursor:pointer;list-style-position:inside}details.efrec>summary b{font-size:15px}
