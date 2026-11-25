@@ -622,7 +622,7 @@ cache.feriasAtivas = []; cache.desligados = []; cache.uso = null;
 let admPronto = false;
 const sitProxy = k => new Proxy({}, { get: (_, m) => S[k].sitByMonth[m] || {} });
 const jusProxy = k => new Proxy({}, { get: (_, m) => ((S[k].sitExtra || {})[m] || {}).jus || {} });
-function admPersist() { try { localStorage.setItem(LSA, JSON.stringify({ ferias: cache.adm.ferias, comps: cache.adm.comps })); } catch (e) { /* sem espaço */ } }
+function admPersist() { try { localStorage.setItem(LSA, JSON.stringify({ ferias: cache.adm.ferias, comps: cache.adm.comps, regras: cache.adm.regras || {} })); } catch (e) { /* sem espaço */ } }
 const admCh = () => { cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino })); admPersist(); changed(); };
 async function iniciarAdm() {
   for (const k of SET_KEYS) cache.adm.colabs[k] = Object.values(S[k].colabs).flat();
@@ -634,7 +634,7 @@ async function iniciarAdm() {
   if (admPronto) return;
   admPronto = true;
   let salvo = null; try { salvo = JSON.parse(localStorage.getItem(LSA) || 'null'); } catch (e) { /* ignora */ }
-  if (salvo && salvo.comps) Object.assign(cache.adm, { ferias: salvo.ferias || [], comps: salvo.comps });
+  if (salvo && salvo.comps) Object.assign(cache.adm, { ferias: salvo.ferias || [], comps: salvo.comps, regras: salvo.regras || {} });
   else {
     try {
       const [fp, fb, fe] = await Promise.all(['seed-freq-patio.json', 'seed-freq-bateria.json', 'seed-ferias.json'].map(seed_));
@@ -659,6 +659,7 @@ export async function admSetJus(conj, comp, p, data, val) {
 }
 export async function admSalvarComp(conj, comp, dados) { cache.adm.comps[conj + '|' + comp] = { ...(cache.adm.comps[conj + '|' + comp] || {}), ...dados, conj, competencia: comp }; admCh(); }
 export async function admSalvarGrupos(conj, comp, grupos) { cache.adm.comps[conj + '|' + comp].grupos = grupos; admCh(); }
+export async function feriasRegrasSalvar(r) { cache.adm.regras = { ...(cache.adm.regras || {}), ...r }; admCh(); }
 export async function feriasSalvar(id, dados) { const nid = id || 'fe' + Date.now().toString(36); const i = cache.adm.ferias.findIndex(f => f.id === nid); if (i >= 0) cache.adm.ferias[i] = { ...cache.adm.ferias[i], ...dados }; else cache.adm.ferias.push({ id: nid, ...dados }); cache.adm.ferias = [...cache.adm.ferias]; admCh(); return nid; }
 // Treinamentos de exemplo (Segurança): pessoas fictícias, com validades espalhadas em volta de hoje.
 cache.treinos = []; cache.tLoaded = false;

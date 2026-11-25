@@ -1017,6 +1017,8 @@ function startAdm(on) {
   fichasRH = {};
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   dataSubs.push(ouvirIncremental('ferias', (l, ok) => { cache.adm.ferias = l; cache.adm.fLoaded = ok; cache.adm.loaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
+  // adm/feriasRegras: { maxTurma } (RH › Férias: máximo da mesma área e turma de férias ao mesmo tempo)
+  on(doc(db, 'adm', 'feriasRegras'), s => { cache.adm.regras = (s.exists() && s.data()) || {}; changed(); });
   on(collection(db, 'gcolab'), qs => { fichasRH = Object.fromEntries(qs.docs.map(d => [d.id, d.data().itens || []])); cache.adm.rh = Object.values(fichasRH).flat(); cache.adm.rhLoaded = true; changed(); });
   for (const k of SET_KEYS) if (freqDe(me, k)) on(collection(db, C('colaboradores', k)), qs => { cache.adm.colabs[k] = qs.docs.flatMap(d => d.data().itens || []); changed(); });
   admOn = true;
@@ -1070,6 +1072,7 @@ export async function feriasSalvar(id, dados) {
   track(setDoc(ref, x, { merge: true })); gravarResumoFerias();
   return ref.id;
 }
+export function feriasRegrasSalvar(r) { cache.adm.regras = { ...(cache.adm.regras || {}), ...r }; return track(setDoc(doc(db, 'adm', 'feriasRegras'), { ...r, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }, { merge: true })); }
 export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); track(setDoc(doc(db, 'ferias', id), marcaApagado(), { merge: true })); gravarResumoFerias(); }
 // Treinamentos, NRs e ASO (RH): um documento por treinamento feito. A conta da situação fica em contas/treinos.js.
 export function treinoSalvar(id, dados) {

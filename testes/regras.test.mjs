@@ -785,7 +785,10 @@ test('acesso Administrativo: lê e grava folha e férias; lê pessoas e presenç
   await assertSucceeds(updateDoc(doc(d, 'freqcomp', 'patio|2026-10'), { grupos: [{ nome: 'G', pessoas: [] }] }));
   await assertSucceeds(getDocs(collection(d, 'ferias')));
   await assertSucceeds(setDoc(doc(d, 'ferias', 'f2'), { nome: 'OUTRA', inicio: null }));
+  await assertSucceeds(setDoc(doc(d, 'ferias', 'f2'), { nome: 'OUTRA', inicio: '2026-12-01', avisoEm: '2026-10-30', mesPlanejado: '2026-12' }, { merge: true }));
+  await assertFails(setDoc(doc(d, 'ferias', 'f2'), { avisoEm: '30/10/2026' }, { merge: true }));
   await assertSucceeds(setDoc(doc(d, 'adm', 'feriasAtivas'), { itens: [] }));
+  await assertSucceeds(setDoc(doc(d, 'adm', 'feriasRegras'), { maxTurma: 3 }));
   await assertSucceeds(getDoc(doc(d, 'colaboradores', 'RECEBIMENTO')));
   await assertSucceeds(getDoc(doc(d, 'gcolab', 'RECEBIMENTO')));
   await assertSucceeds(getDoc(doc(d, 'situacao', '2026-10')));
