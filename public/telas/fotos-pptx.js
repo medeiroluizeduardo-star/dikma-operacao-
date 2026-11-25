@@ -79,8 +79,10 @@ export async function gerarPptx(o) {
     ]
   });
   // Texto da barra azul (título do slide) e a linha de baixo (detalhe).
+  // Slides internos (com a barra e a faixa); o número da página ("5 / 14") entra no fim, quando o total é conhecido.
+  const internas = []; const interno = () => { const s = pptx.addSlide({ masterName: 'DIKMA' }); internas.push(s); return s; };
   const titulo = (s, t, sub) => {
-    s.addText(t, { x: 3.7, y: 0.06, w: W - 3.85, h: 0.63, fontFace: FONTE_FORTE, fontSize: 24, bold: true, color: COR.branco, valign: 'middle', fit: 'shrink', margin: 0 });
+    s.addText(t, { x: 3.7, y: 0.06, w: W - 4.75, h: 0.63, fontFace: FONTE_FORTE, fontSize: 24, bold: true, color: COR.branco, valign: 'middle', fit: 'shrink', margin: 0 });
     if (sub) s.addText(sub, { x: 3.7, y: 0.74, w: W - 3.85, h: 0.22, fontFace: FONTE, fontSize: 11, color: COR.cinza, valign: 'top', margin: 0, fit: 'shrink' });
   };
   const ret = (s, x, y, w, h, cor, raio) => s.addShape(raio ? pptx.ShapeType.roundRect : pptx.ShapeType.rect, { x, y, w, h, fill: { color: cor }, line: { color: cor, width: 0 }, ...(raio ? { rectRadius: raio } : {}) });
@@ -148,81 +150,6 @@ export async function gerarPptx(o) {
     txt(s, `${nomeTipo || o.nomeConj}${o.fora ? ` · ${nTxt(o.fora)} fotos fora deste arquivo pelo limite de ${FA.MAX_FOTOS_PPTX}` : ''} · gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)} · Dikma Gestão`, 6.32, 5.92, 6.6, 0.26, { fontSize: 9.5, color: COR.cinza, fit: 'shrink' });
   }
 
-  // ---- registros fotográficos ----
-  // Fotos à esquerda (a marca Antes/Durante/Depois fica numa etiqueta em cima da foto) e, à direita, um cartão com
-  // os dados do registro: data, local, atividade (ou o motivo da queda / o serviço da OM), rota e área, colaborador
-  // e a situação colorida.
-  const total = rel.grupos.reduce((n, g) => n + g.fotos.length, 0); let feitas = 0;
-  const rotDesc = o.tipo === 'qz' ? 'Motivo da queda / descrição' : o.tipo === 'om' ? 'Serviço da OM' : 'Atividade';
-  const COR_MARCA = { Antes: COR.laranja, Durante: COR.navy, Depois: COR.R };
-  const campo = (rot, val, op = {}) => [
-    { text: rot.toUpperCase(), options: { fontSize: 10, bold: true, color: COR.laranja, charSpacing: 0.6, breakLine: true } },
-    { text: val || '—', options: { fontSize: op.fs || 14, bold: !!op.bold, color: COR.tinta, breakLine: true, paraSpaceAfter: 14 } }
-  ];
-  const pags = FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE); let nPag = 0;
-  if (!pags.length) {
-    const s = pptx.addSlide({ masterName: 'DIKMA' }); titulo(s, 'Registros fotográficos', periodo + filtro);
-    txt(s, 'Nenhum registro fotográfico no período.', 0.5, 3, W - 1, 0.6, { fontSize: 18, color: COR.cinza, align: 'center' });
-  }
-  for (const pag of pags) {
-    nPag++;
-    const s = pptx.addSlide({ masterName: 'DIKMA' });
-    const g = pag.grupos[0]; const so = pag.grupos.length === 1; const um = so && g.itens.length <= 1;
-    const colabs = [...new Set(pag.grupos.flatMap(x => x.colabs))];
-    const parte = pag.parte && pag.parte[1] > 1 ? ` (parte ${pag.parte[0]} de ${pag.parte[1]})` : '';
-    titulo(s, corta(`Local: ${so ? g.local || g.rota || '—' : g.rota || '—'}`, 90));
-    // cartão da direita
-    const cx0 = 8.78, cw = W - cx0 - 0.45;
-    ret(s, cx0, 0.95, cw, 5.62, COR.creme, 0.05);
-    const desc = so ? (um ? g.titulo : g.itens.map(x => x.ativ).filter(Boolean).slice(0, 6).map(t => '• ' + corta(t, 60)).join('\n') + (g.itens.length > 6 ? `\ne mais ${g.itens.length - 6}` : ''))
-      : pag.grupos.map((x, j) => `${j + 1}. ${corta(x.itens.length > 1 ? `${x.itens.length} atividades` : x.titulo, 60)}`).join('\n');
-    const painel = [
-      ...campo('Data do registro', `${diaSemana(g.dia)} · ${FA.dBR(g.dia)}${parte}`, { bold: true }),
-      ...campo(so ? rotDesc : 'Atividades neste slide', corta(desc, 420), { bold: um, fs: um ? 15 : 13 }),
-      ...campo('Rota · área', `${g.rota || '—'} · ${AREA_S[g.area] || nomeProprio(g.area) || '—'}`),
-      ...campo(colabs.length > 1 ? 'Colaboradores' : 'Colaborador', corta(colabs.map(nomeProprio).join(', ') || '—', 120))
-    ];
-    txt(s, painel, cx0 + 0.25, 1.15, cw - 0.5, 4.6, { valign: 'top', fit: 'shrink' });
-    if (so && g.sit && !qz) {
-      txt(s, 'SITUAÇÃO', cx0 + 0.25, 5.62, 1.6, 0.2, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
-      const c = COR[g.sit] || COR.P; ret(s, cx0 + 0.25, 5.86, 1.75, 0.4, c, 0.08);
-      txt(s, SIT[g.sit] || g.sit, cx0 + 0.25, 5.86, 1.75, 0.4, { fontSize: 12, bold: true, color: COR.branco, align: 'center' });
-    }
-    txt(s, `${nPag} de ${pags.length}`, cx0 + cw - 1.3, 6.06, 1.05, 0.2, { fontSize: 9, color: COR.cinza, align: 'right' });
-    // fotos
-    const leg = 0.3;
-    const pos = FA.gradeFotos(pag.fotos.length, { x: 0.45, y: 0.95, w: 8.1, h: 5.65 }, leg, 0.2);
-    for (let j = 0; j < pag.fotos.length; j++) {
-      const { f, g: gf } = pag.fotos[j]; const cx = pos[j]; const st = FA.statusFoto(f);
-      o.progresso && o.progresso(feitas, total, `Fotos ${feitas + 1} de ${total}`);
-      let dados = null;
-      try { dados = st === 'arquivada' ? f.thumb : await o.carregarFoto(f); } catch (e) { dados = null; }
-      if (!dados && f.thumb) dados = f.thumb;
-      const e = FA.encaixar(f.w || 4, f.h || 3, { x: cx.x + 0.05, y: cx.y + 0.05, w: cx.w - 0.1, h: cx.h - 0.1 });
-      if (dados) {
-        s.addShape(pptx.ShapeType.rect, { x: e.x - 0.05, y: e.y - 0.05, w: e.w + 0.1, h: e.h + 0.1, fill: { color: COR.branco }, line: { color: COR.linha, width: 0.75 }, shadow: { type: 'outer', blur: 4, offset: 1.5, angle: 90, color: '000000', opacity: 0.18 } });
-        s.addImage({ data: dados, x: e.x, y: e.y, w: e.w, h: e.h, altText: `Foto: ${gf.titulo || ''}` });
-      } else {
-        ret(s, cx.x, cx.y, cx.w, cx.h, COR.creme, 0.06);
-        txt(s, 'Foto não encontrada no banco', cx.x, cx.y, cx.w, cx.h, { fontSize: 12, color: COR.cinza, align: 'center' });
-      }
-      const marca = FA.marcaDaFoto(f, gf.fotos);
-      if (marca && dados) {
-        ret(s, e.x + 0.1, e.y + 0.1, 1.05, 0.32, COR_MARCA[marca] || COR.navy, 0.06);
-        txt(s, marca.toUpperCase(), e.x + 0.1, e.y + 0.1, 1.05, 0.32, { fontFace: FONTE_FORTE, fontSize: 10.5, bold: true, color: COR.branco, align: 'center', charSpacing: 0.8 });
-      }
-      const extra = st === 'arquivada' ? ' · miniatura (foto completa arquivada)' : !dados || dados === f.thumb ? ' · miniatura' : '';
-      const ref = so ? '' : `Atividade ${pag.grupos.indexOf(gf) + 1} · `;
-      txt(s, [
-        { text: ref, options: { bold: true, color: COR.navy } },
-        { text: hora(f.at) ? `${hora(f.at)}` : FA.ddmm(f.dia), options: { color: COR.navy } },
-        ...(!marca || dados ? [] : [{ text: ' · ' + marca }]),
-        { text: extra }
-      ], cx.x, e.y + e.h + 0.08, cx.w, 0.24, { fontSize: 10.5, color: COR.cinza, align: 'center', valign: 'top', fit: 'shrink' });
-      feitas++;
-    }
-  }
-
   // ---- painel de resultados (dashboard) ----
   const porDia = FA.fotosPorPeriodo(todos, rel.de, rel.fim || rel.ate);
   const graficoDias = (s, x, y, w, h) => {
@@ -236,7 +163,7 @@ export async function gerarPptx(o) {
   if (!qz) {
     // 1) painel geral
     {
-      const s = pptx.addSlide({ masterName: 'DIKMA' });
+      const s = interno();
       titulo(s, 'Painel de resultados', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${filtro}`);
       const nums = [[nTxt(i.prog), 'Programadas', COR.P, 'no período'], [nTxt(i.R), 'Realizadas', COR.R, i.prog ? `${pctTxt(i.cumpr)} das programadas` : ''],
         [nTxt(i.N), 'Não realizadas', COR.N, i.P ? `${nTxt(i.P)} sem apontamento` : ''], [nTxt(i.E), 'Extras', COR.E, 'fora da programação'],
@@ -268,7 +195,7 @@ export async function gerarPptx(o) {
     if (rel.porRota.length) {
       const pr = FA.paginar(rel.porRota, 12);
       pr.forEach((pg, n) => {
-        const s = pptx.addSlide({ masterName: 'DIKMA' });
+        const s = interno();
         titulo(s, 'Painel por rota', `${periodo}${filtro}${pr.length > 1 ? ` · parte ${n + 1} de ${pr.length}` : ''}`);
         const cols = [['Rota', 2.85, 'left'], ['Programadas', 1.2], ['Realizadas', 1.1], ['Não realizadas', 1.25], ['Extras', 0.8], ['Cumprimento', 2.55, 'barra'], ['Com foto', 2.55, 'barra']];
         const xs = []; let xx = 0.5; for (const c of cols) { xs.push(xx); xx += c[1]; }
@@ -295,7 +222,7 @@ export async function gerarPptx(o) {
     }
     // 3) pontos de atenção
     {
-      const s = pptx.addSlide({ masterName: 'DIKMA' });
+      const s = interno();
       titulo(s, 'Pontos de atenção', `${periodo}${filtro}`);
       const ch = 5.5, y = 1.05, cw = (W - 1.15) / 2;
       cartao(s, 0.5, y, cw, ch);
@@ -316,7 +243,7 @@ export async function gerarPptx(o) {
     }
   } else {
     // Queda zero e OMs: números dos registros, fotos por dia e os locais com mais registros
-    const s = pptx.addSlide({ masterName: 'DIKMA' });
+    const s = interno();
     titulo(s, 'Painel de registros', `${periodo}${filtro}`);
     const nums = [[nTxt(reg.fotos), 'Registros fotográficos', COR.navy], [nTxt(reg.ocorrencias), o.tipo === 'om' ? 'OMs com foto' : 'Ocorrências', COR.laranja],
       [nTxt(reg.dias), 'Dias com registro', COR.P], [nTxt(reg.locais), 'Locais', COR.E], [nTxt(reg.pessoas), 'Colaboradores', COR.R]];
@@ -329,6 +256,98 @@ export async function gerarPptx(o) {
     barras(s, FA.contarPor(todos, g => g.local || g.rota, 8, g => g.fotos.length), { x: 0.87 + w1, y: y2 + 0.8, w: W - 1.6 - w1, h: h2 - 1.0, cor: COR.navy, rotW: 0.5 });
   }
 
+  // ---- registros fotográficos ----
+  // Fotos à esquerda (a marca Antes/Durante/Depois fica numa etiqueta em cima da foto) e, à direita, um cartão com
+  // os dados do registro: data, local, atividade (ou o motivo da queda / o serviço da OM), rota e área, colaborador
+  // e a situação colorida.
+  const total = rel.grupos.reduce((n, g) => n + g.fotos.length, 0); let feitas = 0;
+  const rotDesc = o.tipo === 'qz' ? 'Motivo da queda / descrição' : o.tipo === 'om' ? 'Serviço da OM' : 'Atividade';
+  const COR_MARCA = { Antes: COR.laranja, Durante: COR.navy, Depois: COR.R };
+  const campo = (rot, val, op = {}) => [
+    { text: rot.toUpperCase(), options: { fontSize: 10, bold: true, color: COR.laranja, charSpacing: 0.6, breakLine: true } },
+    { text: val || '—', options: { fontSize: op.fs || 14, bold: !!op.bold, color: COR.tinta, breakLine: true, paraSpaceAfter: 14 } }
+  ];
+  const pags = FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE); let nPag = 0;
+  if (!pags.length) {
+    const s = interno(); titulo(s, 'Registros fotográficos', periodo + filtro);
+    txt(s, 'Nenhum registro fotográfico no período.', 0.5, 3, W - 1, 0.6, { fontSize: 18, color: COR.cinza, align: 'center' });
+  }
+  for (const pag of pags) {
+    nPag++;
+    const s = interno();
+    const g = pag.grupos[0]; const so = pag.grupos.length === 1; const um = so && g.itens.length <= 1;
+    const colabs = [...new Set(pag.grupos.flatMap(x => x.colabs))];
+    const parte = pag.parte && pag.parte[1] > 1 ? ` (parte ${pag.parte[0]} de ${pag.parte[1]})` : '';
+    // título: o local; slide com várias atividades da mesma rota: "ROTA 4 · 2 atividades"
+    titulo(s, corta(so ? `Local: ${g.local || g.rota || '—'}` : `${g.rota || '—'} · ${pag.grupos.length} atividades`, 90), `Registro ${nPag} de ${pags.length}`);
+    const desc = so ? (um ? g.titulo : g.itens.map(x => x.ativ).filter(Boolean).slice(0, 6).map(t => '• ' + corta(t, 60)).join('\n') + (g.itens.length > 6 ? `\ne mais ${g.itens.length - 6}` : ''))
+      : pag.grupos.map((x, j) => `${j + 1}. ${corta(x.itens.length > 1 ? `${x.itens.length} atividades` : x.titulo, 60)}`).join('\n');
+    const info = [
+      ['Data do registro', `${diaSemana(g.dia)} · ${FA.dBR(g.dia)}${parte}`, { bold: true }],
+      [so ? rotDesc : 'Atividades neste slide', desc, { bold: um, fs: um ? 15 : 13 }],
+      ['Rota · área', `${g.rota || '—'} · ${AREA_S[g.area] || nomeProprio(g.area) || '—'}`],
+      [colabs.length > 1 ? 'Colaboradores' : 'Colaborador', corta(colabs.map(nomeProprio).join(', ') || '—', 120)]
+    ];
+    const comSit = so && g.sit && !qz;
+    const selo = (x, y, w) => {
+      txt(s, 'SITUAÇÃO', x, y, w, 0.2, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
+      const c = COR[g.sit] || COR.P; ret(s, x, y + 0.24, Math.min(w, 1.75), 0.4, c, 0.08);
+      txt(s, SIT[g.sit] || g.sit, x, y + 0.24, Math.min(w, 1.75), 0.4, { fontSize: 12, bold: true, color: COR.branco, align: 'center' });
+    };
+    // Duas fotos deitadas (o Antes e o Depois, quase sempre): fotos grandes lado a lado e os dados numa faixa embaixo.
+    // Nos outros casos: fotos à esquerda e o cartão com os dados à direita.
+    const faixa = FA.fotosEmFaixa(pag.fotos.map(x => x.f));
+    let caixaFotos;
+    if (faixa) {
+      const fy = 5.38, fh = 1.22; ret(s, 0.45, fy, W - 0.9, fh, COR.creme, 0.05);
+      const cols = comSit ? [2.0, 4.0, 2.3, 1.9] : [2.15, 5.4, 2.45, 2.0]; let x = 0.7;
+      info.forEach(([rot, val, op = {}], j) => {
+        txt(s, [...campo(rot, corta(val, 220), { ...op, fs: Math.min(op.fs || 13, 13) })], x, fy + 0.12, cols[j] - 0.2, fh - 0.2, { valign: 'top', fit: 'shrink' });
+        x += cols[j];
+      });
+      if (comSit) selo(x, fy + 0.14, W - 0.7 - x);
+      caixaFotos = { x: 0.45, y: 0.95, w: W - 0.9, h: 4.3 };
+    } else {
+      const cx0 = 8.78, cw = W - cx0 - 0.45;
+      ret(s, cx0, 0.95, cw, 5.62, COR.creme, 0.05);
+      txt(s, info.flatMap(([rot, val, op]) => campo(rot, corta(val, 420), op)), cx0 + 0.25, 1.15, cw - 0.5, 4.6, { valign: 'top', fit: 'shrink' });
+      if (comSit) selo(cx0 + 0.25, 5.62, cw - 0.5);
+      caixaFotos = { x: 0.45, y: 0.95, w: 8.1, h: 5.65 };
+    }
+    // fotos
+    const leg = 0.3;
+    const pos = FA.gradeFotos(pag.fotos.length, caixaFotos, leg, 0.2);
+    for (let j = 0; j < pag.fotos.length; j++) {
+      const { f, g: gf } = pag.fotos[j]; const cx = pos[j]; const st = FA.statusFoto(f);
+      o.progresso && o.progresso(feitas, total, `Fotos ${feitas + 1} de ${total}`);
+      let dados = null;
+      try { dados = st === 'arquivada' ? f.thumb : await o.carregarFoto(f); } catch (e) { dados = null; }
+      if (!dados && f.thumb) dados = f.thumb;
+      const e = FA.encaixar(f.w || 4, f.h || 3, { x: cx.x + 0.05, y: cx.y + 0.05, w: cx.w - 0.1, h: cx.h - 0.1 });
+      if (dados) {
+        s.addShape(pptx.ShapeType.rect, { x: e.x - 0.05, y: e.y - 0.05, w: e.w + 0.1, h: e.h + 0.1, fill: { color: COR.branco }, line: { color: COR.linha, width: 0.75 }, shadow: { type: 'outer', blur: 4, offset: 1.5, angle: 90, color: '000000', opacity: 0.18 } });
+        s.addImage({ data: dados, x: e.x, y: e.y, w: e.w, h: e.h, altText: `Foto: ${gf.titulo || ''}` });
+      } else {
+        ret(s, cx.x, cx.y, cx.w, cx.h, COR.creme, 0.06);
+        txt(s, 'Foto não encontrada no banco', cx.x, cx.y, cx.w, cx.h, { fontSize: 12, color: COR.cinza, align: 'center' });
+      }
+      const marca = FA.marcaDaFoto(f, gf.fotos);
+      if (marca && dados) {
+        ret(s, e.x + 0.1, e.y + 0.1, 1.05, 0.32, COR_MARCA[marca] || COR.navy, 0.06);
+        txt(s, marca.toUpperCase(), e.x + 0.1, e.y + 0.1, 1.05, 0.32, { fontFace: FONTE_FORTE, fontSize: 10.5, bold: true, color: COR.branco, align: 'center', charSpacing: 0.8 });
+      }
+      const extra = st === 'arquivada' ? ' · miniatura (foto completa arquivada)' : !dados || dados === f.thumb ? ' · miniatura' : '';
+      const ref = so ? '' : `Atividade ${pag.grupos.indexOf(gf) + 1} · `;
+      txt(s, [
+        { text: ref, options: { bold: true, color: COR.navy } },
+        { text: hora(f.at) ? `${hora(f.at)}` : FA.ddmm(f.dia), options: { color: COR.navy } },
+        ...(!marca || dados ? [] : [{ text: ' · ' + marca }]),
+        { text: extra }
+      ], cx.x, e.y + e.h + 0.08, cx.w, 0.24, { fontSize: 10.5, color: COR.cinza, align: 'center', valign: 'top', fit: 'shrink' });
+      feitas++;
+    }
+  }
+
   // ---- anexos: listas das não realizadas e das realizadas sem foto ----
   const cab = (t, opt = {}) => ({ text: t, options: { bold: true, color: COR.branco, fill: { color: COR.navy }, fontSize: 10, align: opt.align || 'left', valign: 'middle' } });
   const cel = (t, opt = {}) => ({ text: String(t ?? ''), options: { fontSize: 10, color: opt.cor || COR.tinta, align: opt.align || 'left', bold: !!opt.bold, valign: 'middle', fill: opt.fill ? { color: opt.fill } : undefined } });
@@ -337,7 +356,7 @@ export async function gerarPptx(o) {
     if (!lista.length) return;
     const pgs = FA.paginar(lista, 13); const usar = pgs.slice(0, max);
     usar.forEach((pg, n) => {
-      const s = pptx.addSlide({ masterName: 'DIKMA' });
+      const s = interno();
       titulo(s, tituloT, `${nTxt(lista.length)} no período${usar.length > 1 ? ` · parte ${n + 1} de ${usar.length}` : ''}${n === usar.length - 1 && pgs.length > usar.length ? ` · mostrando ${nTxt(usar.length * 13)} (veja a lista completa no sistema)` : ''}`);
       const rows = [cols.map(([t]) => cab(t))];
       pg.forEach((x, j) => rows.push(linha(x).map(t => cel(t, { fill: j % 2 ? COR.cremeClaro : undefined }))));
@@ -356,6 +375,10 @@ export async function gerarPptx(o) {
     txt(s, 'Obrigado pela atenção!', 0.75, 2.4, 5.0, 1.4, { fontFace: FONTE_FORTE, fontSize: 40, bold: true, color: COR.navy, fit: 'shrink' });
     if (img.dikma) s.addImage({ data: img.dikma, x: 0.75, y: 5.4, w: 3.9, h: 1.3 });
   }
+
+  // número da página em todos os slides internos (a capa é a 1 e o encerramento, a última)
+  const nSlides = internas.length + 2;
+  internas.forEach((s, j) => txt(s, `${j + 2} / ${nSlides}`, W - 1.0, 0.06, 0.85, 0.63, { fontSize: 11, color: COR.branco, align: 'right' }));
 
   o.progresso && o.progresso(total, total, 'Montando o arquivo…');
   return pptx.write({ outputType: 'blob' });

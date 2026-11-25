@@ -347,6 +347,9 @@ export function gradeFotos(n, caixa = { x: 0.5, y: 1.75, w: 12.33, h: 5.1 }, leg
   for (let i = 0; i < n; i++) { const c = i % cols, r = Math.floor(i / cols); out.push({ x: caixa.x + c * (w + gap), y: caixa.y + r * (h + gap), w, h: h - leg, leg }); }
   return out;
 }
+// Slide com exatamente 2 fotos deitadas (ou sem tamanho, que conta como 4:3): fotos grandes lado a lado e os dados
+// numa faixa embaixo, em vez do cartão à direita (que deixaria as fotos pequenas).
+export function fotosEmFaixa(fotos) { return (fotos || []).length === 2 && fotos.every(f => (f.w || 4) >= (f.h || 3)); }
 // Encaixa a foto (largura × altura em pixels) na caixa sem deformar, centralizada.
 export function encaixar(pw, ph, cx) {
   const r = pw > 0 && ph > 0 ? pw / ph : 4 / 3; let w = cx.w, h = w / r;
