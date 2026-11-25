@@ -6,6 +6,8 @@
 // funciona sem sinal (o registro e as fotos ficam na fila do aparelho e sobem quando a conexão voltar).
 import { MESES_L, SETS, add, addMonth, today } from '../contas/cal.js';
 import { campoBusca } from '../ui/busca.js';
+import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
+import { relatorioSeg, periodoSeg, mesesDoPeriodo } from '../contas/seg-resumo.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { ESQUELETO } from '../ui/movimento.js';
 import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg, PERG_CARTAO, VALIDA_CARTAO, validaCartao, pendenteCartao, painelSeg } from '../contas/segcalc.js';
@@ -634,6 +636,16 @@ export function criarSeguranca() {
     h += recolhido(`Interações por pessoa · ${mesNome(U.pMes)}`, p.porPessoa.length ? barras(p.porPessoa.slice(0, 10), 'var(--marca)') : '<p class="muted small m0">Nenhuma interação no mês.</p>');
     return `<div class="sgp">${h}</div>`;
   }
+
+  // Indicadores › Segurança: "Imprimir resumo" e "Exportar para o Excel" no padrão dos outros resumos (contas/seg-resumo.js),
+  // perguntando antes o período (dia, semana ou mês; começa no mês aberto na tela).
+  registrarRelatorio('sgpainel', per => {
+    // Período em mês ainda não lido: começa a ler e pede para tentar de novo (na demonstração já está tudo em memória).
+    const falta = S().meses.size ? mesesDoPeriodo(periodoSeg(per, U.pMes)).filter(m => !S().meses.has(m)) : [];
+    if (falta.length) { DB.segWatch(falta); return null; }
+    const tr = (veTreinos(ME) || temIndU(ME)) && (DB.cache.treinos || []).length ? painelTreinos(DB.cache.treinos, hoje()) : null;
+    return relatorioSeg({ inter: S().inter, anom: S().anom, cartao: S().cartao, per, mesTela: U.pMes, hoje: hoje(), area: U.area, areas: L().areas.map(a => a.nome), onde: quemVe(), agora: agoraTxt(), treinos: tr });
+  }, { periodo: () => ({ tipo: 'mes', data: U.pMes === hoje().slice(0, 7) ? hoje() : U.pMes + '-01' }) });
 
   // ---------- Administração › Segurança: listas dos formulários ----------
   let CFG = null; // rascunho até salvar
