@@ -192,22 +192,26 @@ para o administrador; a arquivada abre só a miniatura, com o lote da exportaç�
 Gerado no navegador com a PptxGenJS (tamanho 16:9, cores da marca: azul `#272662`, laranja `#F05A26`, logotipo
 branco). Não grava nada no banco.
 
+Todos os slides internos têm o número da página no canto da barra azul ("5 / 14").
+
 1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e
    % com foto; na Queda zero e nas OMs: fotos, ocorrências e locais).
-2. **Registros fotográficos**: até 4 fotos por slide; a marca Antes/Durante/Depois fica numa etiqueta colorida em
-   cima da foto e a hora embaixo. À direita, um cartão com data, atividade (ou motivo da queda / serviço da OM), rota
-   e área, colaborador e a situação colorida, e o número do slide ("3 de 25"). A atividade com 4 fotos ou mais tem
-   slides só dela; atividades com poucas fotos do mesmo dia, área e rota dividem o slide ("Atividade 1", "2"…).
-3. **Painel de resultados** (dashboard, no fim): 6 cartões (programadas, realizadas, não realizadas, extras,
-   % de cumprimento = realizadas ÷ programadas contando os dias até hoje, % com foto pela contagem `ft` da semana),
-   rosca da situação das programadas, cumprimento por rota (da menor para a maior) e fotos por dia (por semana acima
-   de 35 dias).
-4. **Painel por rota**: tabela com barras de cumprimento e de foto (12 rotas por slide, com o total). Cores:
+2. **Painel de resultados** (logo depois da capa, para quem lê ver os números primeiro): 6 cartões (programadas,
+   realizadas, não realizadas, extras, % de cumprimento = realizadas ÷ programadas contando os dias até hoje, % com
+   foto pela contagem `ft` da semana), rosca da situação das programadas, cumprimento por rota (da menor para a maior)
+   e fotos por dia (por semana acima de 35 dias).
+3. **Painel por rota**: tabela com barras de cumprimento e de foto (12 rotas por slide, com o total). Cores:
    verde 90% ou mais, amarelo 70% a 89%, vermelho abaixo de 70% (`FA.semaforo`).
-5. **Pontos de atenção**: não realizadas por motivo e por rota, realizadas sem foto por rota.
+4. **Pontos de atenção**: não realizadas por motivo e por rota, realizadas sem foto por rota.
+5. **Registros fotográficos**: até 4 fotos por slide; a marca Antes/Durante/Depois fica numa etiqueta colorida em
+   cima da foto e a hora embaixo. Os dados (data, atividade ou motivo da queda / serviço da OM, rota e área,
+   colaborador e a situação colorida) ficam num cartão à direita; com exatamente 2 fotos deitadas
+   (`FA.fotosEmFaixa`), as fotos ficam grandes lado a lado e os dados numa faixa embaixo. Embaixo do título,
+   "Registro 3 de 25". A atividade com 4 fotos ou mais tem slides só dela; atividades com poucas fotos do mesmo dia,
+   área e rota dividem o slide (título "ROTA 4 · 2 atividades"; fotos com "Atividade 1", "2"…).
 6. **Anexos**: listas das não realizadas (com o motivo) e das realizadas sem foto (até 4 e 3 slides) e o encerramento.
 
-Queda zero e OMs: no lugar dos itens 3 a 6, um **Painel de registros** (fotos, ocorrências, dias, locais,
+Queda zero e OMs: no lugar dos itens 2 a 4 e 6, um **Painel de registros** (logo depois da capa: fotos, ocorrências, dias, locais,
 colaboradores, fotos por dia e locais com mais fotos). As contas do painel ficam em `contas/fotos-arquivo.js`
 (`fotosPorPeriodo`, `contarPor`, `resumoRegistros`) e usam todas as fotos do período, mesmo as que ficaram fora do
 arquivo pelo limite.

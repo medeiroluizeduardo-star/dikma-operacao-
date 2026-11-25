@@ -254,6 +254,11 @@ test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo 
   assert.equal(FA.gradeFotos(1, cx, 0.3, 0.2)[0].w, 10);
   assert.deepEqual(FA.gradeFotos(2, cx, 0.3, 0.2).map(p => [Math.round(p.x * 100) / 100, p.y]), [[0, 0], [5.1, 0]]);
   const g4 = FA.gradeFotos(4, cx, 0.3, 0.2); assert.equal(g4.length, 4); assert.equal(Math.round(g4[3].y * 100) / 100, 2.6);
+  // 2 fotos deitadas (ou sem tamanho): faixa embaixo; foto em pé ou outra quantidade: cartão à direita
+  assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, {}]), true);
+  assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, { w: 960, h: 1280 }]), false);
+  assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }]), false);
+  assert.equal(FA.fotosEmFaixa([{}, {}, {}]), false);
   // encaixar sem deformar: foto em pé numa caixa deitada fica centralizada
   const e = FA.encaixar(960, 1280, { x: 0, y: 0, w: 8, h: 4 });
   assert.equal(e.h, 4); assert.equal(e.w, 3); assert.equal(e.x, 2.5);
