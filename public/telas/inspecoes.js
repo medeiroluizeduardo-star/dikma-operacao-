@@ -31,7 +31,7 @@ export function criarInspecoes(c) {
       <label class="sel"><span>Tipo</span><select class="in" id="sgITipo"><option value="">Todos</option>${Object.entries(TIPOS_INSP).map(([k, t]) => `<option value="${k}" ${U.itipo === k ? 'selected' : ''}>${esc(t.nome)}</option>`).join('')}</select></label>
       ${c.busca('Local, item, observação…')}
       ${c.podeExportar() ? `<button class="btn" data-act="sgIExp" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}
-      ${c.podeRegistrar() ? `<button class="btn pri" data-act="sgINova" style="align-self:flex-end">${I.plus} Nova inspeção</button>` : ''}</div>`;
+      ${c.podeRegistrar() ? `<button class="btn pri sgnova" data-act="sgINova" style="align-self:flex-end">${I.plus} Nova inspeção</button>` : ''}</div>`;
     h += `<div class="kpis">
       <div class="kpi hero"><span class="lbl">Inspeções no mês</span><span class="v num">${r.n}</span><span class="s">${c.mesNome(U.mes)} · ${c.quemVe()}</span></div>
       ${Object.entries(TIPOS_INSP).map(([k, t]) => { const p = r.porTipo[k]; return `<div class="kpi"><span class="lbl">Nota ${esc(t.nome === 'Limpeza e qualidade da área' ? 'da área' : t.nome)}</span><span class="v num">${p.media == null ? '—' : p.media + '%'}</span><span class="s">${p.n ? `média de ${p.n} inspeç${p.n > 1 ? 'ões' : 'ão'}` : 'nenhuma no mês'}</span></div>`; }).join('')}

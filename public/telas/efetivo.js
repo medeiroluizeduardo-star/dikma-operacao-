@@ -183,15 +183,20 @@ function dimRotas(area) {
   const rows = rs.map(r => { const e = escalaRota(r, UI.ini); const dd = e.days.filter(d => d.prog > 0 && d.disp < d.nec).length; if (dd && r.rota !== 'GESTÃO') def++; ausT += e.days.reduce((n, d) => n + (d.aloc - d.disp), 0); return { r, e, dd }; });
   return { rs, rows, def, ausT };
 }
-function miniEscala(area) {
+function miniEscala(area, curta) {
   const cs = colabsDa(area).filter(c => !desligadoNoDia(c, TODAY));
   // folga (da escala ou lançada) e férias não são ausência: só tiram a pessoa da escala do dia (contagemDia, situacao.js)
   const ct = contarDia(cs, TODAY); const fe = ct.folga, fer = ct.ferias, aus = ct.ausentes;
-  const { def } = dimRotas(area);
   // letras de cada turno hoje, separadas em dia e noite
   const ciclos = Object.entries(escala().regimes).filter(([, r]) => r.tipo === 'ciclo').map(([k, r]) => ({ k, nome: k, tp: escala().turmasPeriodo(k, TODAY) })).filter(x => x.tp.D.length || x.tp.N.length);
   // presentes hoje por período (só quem está em turno)
   const perHoje = ct.periodo;
+  // Celular: uma linha só com o que importa no dia (presentes, ausentes e quadro), para a lista subir.
+  if (curta) {
+    const tc = ciclos.length ? `<div class="hojeturma scrollx"><span class="muted small">Hoje:</span>${ciclos.map(x => `<span class="tchip">${esc(x.nome)}${x.tp.D.length ? ` · <i class="peri D">D</i> ${x.tp.D.join(' ')}` : ''}${x.tp.N.length ? ` · <i class="peri N">N</i> ${x.tp.N.join(' ')}` : ''}</span>`).join('')}</div>` : '';
+    return `${tc}<div class="efres" role="group" aria-label="Resumo de hoje"><span><b class="num">${cs.length - fe - fer - aus}</b>/${cs.length - fe - fer} presentes</span><span><b class="num${aus ? ' bad' : ''}">${aus}</b> ausente${aus === 1 ? '' : 's'}</span><span><b class="num">${cs.length}</b> no quadro</span></div>`;
+  }
+  const { def } = dimRotas(area);
   return `${ciclos.length ? `<div class="hojeturma"><span class="muted small">Trabalham hoje:</span>${ciclos.map(x => `<span class="tchip">${esc(x.nome)}${x.tp.D.length ? ` · <i class="peri D">D</i> dia ${x.tp.D.join(' ')}` : ''}${x.tp.N.length ? ` · <i class="peri N">N</i> noite ${x.tp.N.join(' ')}` : ''}</span>`).join('')}${[0, 6].includes(pd(TODAY).getDay()) || escala().feriados.has(TODAY) ? '<span class="tchip mut">ADM de folga</span>' : '<span class="tchip">ADM</span>'}</div>` : ''}<div class="mini"><div><b class="num">${cs.length}</b><span>No quadro</span></div><div><b class="num">${cs.length - fe - fer}</b><span>Escalados hoje</span></div><div><b class="num">${cs.length - fe - fer - aus}</b><span>Presentes hoje</span></div><div><b class="num" style="color:${aus ? 'var(--st-nreal)' : 'inherit'}">${aus}</b><span>Ausentes hoje</span></div>${perHoje.D + perHoje.N ? `<div><b class="num">${perHoje.D}<small class="perx"> · ${perHoje.N}</small></b><span>Turno dia · noite</span></div>` : ''}${fer ? `<div><b class="num">${fer}</b><span>De férias</span></div>` : ''}<div><b class="num" style="color:${def ? 'var(--st-nreal)' : 'inherit'}">${def}</b><span>Rotas com déficit na semana</span></div></div>`;
 }
 // Regime e turma da pessoa; quem pode mexer no cadastro toca para escolher a letra.
@@ -292,8 +297,14 @@ export function vEsDia() {
   if (UI.eRota !== '*' && !opts.includes(UI.eRota)) UI.eRota = '*';
   // Busca: com texto, mostra quem casar em todas as rotas da área escolhida no topo.
   const q = UI.eQ || '';
+  // Filtro rápido: só quem faltou ou atrasou, ou só quem está sem justificativa (lista corrida, como na busca).
+  const fil = ['aus', 'sem'].includes(UI.eFil) ? UI.eFil : '';
+  const faltou = c => { const x = sitDia(c, dia); return !x.auto && (AUSENCIA.has(x.v) || PARCIAL.has(x.v)); };
+  const semJ = c => { const x = sitDia(c, dia); return !x.auto && JUS_CODS.includes(x.v) && dia <= TODAY && (DB.sitInfo(c.id + '|' + dia).jus || {}).cod !== x.v; };
+  const doFil = fil === 'aus' ? faltou : fil === 'sem' ? semJ : null;
+  const plano = !!q.trim() || !!fil;
   const kC = c => semAcento([c.nome, c.funcao, c.rota, c.regime, AREA_S[c.area]].filter(Boolean).join(' '));
-  const todas = UI.eRota === '*' || UI.eAgr === 'lider' || UI.eAgr === 'periodo' || UI.eAgr === 'gestao' || !!q.trim();
+  const todas = UI.eRota === '*' || UI.eAgr === 'lider' || UI.eAgr === 'periodo' || UI.eAgr === 'gestao' || plano;
   const ordem = new Map(rs.map((r, i) => [r.area + '|' + r.rota, i]));
   // Agrupar por rota (padrão) ou por líder (o líder vem da ficha do Efetivo; nomes do mesmo líder viram um só)
   const lid = liderDosColabs(); const porLider = UI.eAgr === 'lider' && !!lid;
@@ -305,9 +316,9 @@ export function vEsDia() {
   const dRef = dia;
   const grpPer = c => { const s = sitDia(c, dRef); if (s.v === 'DS') return '5|Desligados'; if (s.auto || s.v === 'F' || s.v === 'FE') return '4|Folga ou férias'; const pr = periodoDe(c, dRef); if (pr) return pr === 'N' ? '2|Turno noturno' : '1|Turno diurno'; return escala().regimes[regimeDe(c, dRef)] && escala().regimes[regimeDe(c, dRef)].tipo === 'ciclo' ? '3|Turno sem turma' : '0|Administrativo'; };
   // Gestão mostra só a gestão; Rota mostra só o pessoal das rotas (a gestão fica na opção Gestão). Busca, período e líder mostram todos.
-  const porRota = !q.trim() && !porGrupo && !porGestao;
-  let cs = q.trim() ? colabsDa(area).filter(c => casa(kC(c), q)) : UI.eRota === '*' || porGrupo || porGestao ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
-  if (porGestao && !q.trim()) cs = cs.filter(c => nivelG(c)); else if (porRota) cs = cs.filter(c => !nivelG(c));
+  const porRota = !plano && !porGrupo && !porGestao;
+  let cs = plano ? colabsDa(area).filter(c => (!q.trim() || casa(kC(c), q)) && (!doFil || doFil(c))) : UI.eRota === '*' || porGrupo || porGestao ? colabsDa(area) : COLABS.filter(c => c.area + '|' + c.rota === UI.eRota);
+  if (porGestao && !plano) cs = cs.filter(c => nivelG(c)); else if (porRota) cs = cs.filter(c => !nivelG(c));
   // Mover de rota no dia: quem saiu fica na rota de origem com "foi para"; quem veio aparece também no destino ("veio da").
   // Pendente: a pessoa segue na origem, marcada. Só no agrupar por rota a pessoa aparece nas duas rotas.
   const movs = new Map(movDoDia(dia).map(v => [v.id, v]));
@@ -335,13 +346,13 @@ export function vEsDia() {
   };
   // agrupa por rota quando mostra várias rotas; com muitas rotas, os grupos começam fechados (toque para abrir)
   let ant = '';
-  const nGrupos = todas && !q.trim() ? new Set(cs.map(gk)).size : 0;
+  const nGrupos = todas && !plano ? new Set(cs.map(gk)).size : 0;
   const recolhe = nGrupos > 4;
   const efAb = new Set(UI.efAbertas || []);
   const linhas = cs.map(c => {
     const g = gk(c); let cab = '';
     const fechado = recolhe && !efAb.has(g);
-    if (todas && !q.trim() && g !== ant) {
+    if (todas && !plano && g !== ant) {
       ant = g; const doG = cs.filter(x => gk(x) === g);
       const rot = porPer ? `${g.slice(2)}${['1', '2'].includes(g[0]) ? ` · turma ${[...new Set(doG.map(x => turmaDe(x)).filter(Boolean))].sort().join(', ')}` : ''}` : porLider ? (g === 'L|~' ? 'Sem líder na ficha' : 'LÍDER ' + g.slice(2)) : g.startsWith('G|') ? NOME_G[g.slice(2)] : c.rota;
       const ctG = contarDia(conta(doG), dia);
@@ -351,21 +362,40 @@ export function vEsDia() {
     }
     if (fechado) return cab;
     const nm = podeMoverP(c, dia) ? `<button type="button" class="btn ghost link movnome" data-act="movPessoa" data-id="${esc(c.id)}" title="Mover de rota neste dia"><b>${esc(title(c.nome))}</b></button>` : `<b>${esc(title(c.nome))}</b>`;
-    return cab + `<tr><td class="fnome">${nm}${seloMov(c)}<div class="muted small">${q.trim() || porGrupo || (porGestao && nivelG(c)) ? `${esc(c.rota)}${area === 'TODAS' && !ehAreaGeral(c.area) ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${celula(c)}</tr>`;
+    return cab + `<tr><td class="fnome">${nm}${seloMov(c)}<div class="muted small">${plano || porGrupo || (porGestao && nivelG(c)) ? `${esc(c.rota)}${area === 'TODAS' && !ehAreaGeral(c.area) ? ' · ' + AREA_S[c.area] : ''} · ` : ''}${turmaTag(c)}${isMobile() && c.funcao ? ' · ' + esc(title(c.funcao)) : ''}</div></td>${mob ? '' : `<td class="muted small">${esc(title(c.funcao))}</td>`}${celula(c)}</tr>`;
   }).join('');
   // No celular a faixa do Efetivo fica compacta (4 à vista) e os turnos de hoje numa linha que desliza, para a lista subir.
-  const faixaEf = miniEscala(area).replace('<div class="hojeturma">', '<div class="hojeturma scrollx">').replace('<div class="mini">', '<div class="mini compacta">');
+  const faixaEf = mob ? miniEscala(area, true) : miniEscala(area).replace('<div class="hojeturma">', '<div class="hojeturma scrollx">').replace('<div class="mini">', '<div class="mini compacta">');
   // Escolha do dia: os 7 dias da semana do topo, um toque por dia (hoje marcado)
   const diasNav = `<div class="body pt0 efdias" role="group" aria-label="Dia mostrado">${DAYS.map((d, k) => { const dt = add(UI.ini, k); return `<button type="button" class="efdia${dt === dia ? ' on' : ''}${dt === TODAY ? ' hoje' : ''}" data-act="efDia" data-d="${dt}" aria-pressed="${dt === dia}" aria-label="${DIA_NOME[k]} ${ddmm(dt)}${dt === TODAY ? ' (hoje)' : ''}"><span>${d.slice(0, 3)}</span><b>${dt.slice(8)}</b></button>`; }).join('')}</div>`;
   // Celular primeiro: quem falta confirmar, as rotas com falta de gente, os pedidos de movimentação; depois a lista e o envio.
   return faixaEf + (ehHoje ? cardCheckin() : '') + cardFalta(area, dia, kDia) + cardMovs(area) + `<div class="card efcard"><header><h2>Escala do dia · ${DIA_NOME[kDia]}, ${ddmm(dia)}${ehHoje ? ' (hoje)' : ''}</h2><p>${area !== 'TODAS' && travadoEf(DB.efDia(SK, dia, area)) ? 'Dia validado pelo RH: somente leitura' : canEditSit(area === 'TODAS' ? (myArea() || AREAS[0]) : area) ? 'Toque na situação para mudar · ✓ = presente · toque no nome para mover de rota neste dia' : 'Somente leitura'}</p></header>
-  ${diasNav}${linhaEf(area, dia)}
+  ${diasNav}${linhaEf(area, dia)}${chipsFil(area, dia, fil, faltou, semJ)}
   <div class="body lbar efbar efbar1">${caixaBusca('fEQ', q, 'Buscar colaborador, função ou rota')}${q.trim() ? `<span class="muted small"><b>${cs.length}</b> encontrado${cs.length === 1 ? '' : 's'} em ${area === 'TODAS' ? 'todas as áreas' : AREA_S[area]}</span><button class="btn sm ghost" data-act="limparEQ">Limpar busca</button>` : `<label class="sel"><span>Agrupar por</span><select class="in" id="fEAgr"><option value="rota" ${!porGrupo && !porGestao ? 'selected' : ''}>Rota</option><option value="gestao" ${porGestao ? 'selected' : ''}>Gestão (${colabsDa(area).filter(c => nivelG(c)).length} pessoas)</option><option value="periodo" ${porPer ? 'selected' : ''}>Dia e noite (${dRef === TODAY ? 'hoje' : ddmm(dRef)})</option>${lid ? `<option value="lider" ${porLider ? 'selected' : ''}>Líder</option>` : ''}</select></label>${porGrupo || porGestao ? '' : `<label class="sel efrota"><span>Rota</span><select class="in" id="fERota"><option value="*" ${UI.eRota === '*' ? 'selected' : ''}>Todas as rotas (${colabsDa(area).filter(c => !nivelG(c)).length} pessoas)</option>${rs.map(r => `<option value="${esc(r.area + '|' + r.rota)}" ${r.area + '|' + r.rota === UI.eRota ? 'selected' : ''}>${esc(r.rota)}${area === 'TODAS' ? ' · ' + AREA_S[r.area] : ''}</option>`).join('')}</select></label>`}`}${!framed && !isMobile() ? `<button class="btn sm" data-act="expEsdia" title="A semana inteira, de todas as rotas da área escolhida" style="margin-left:auto">${I.dl} Exportar semana</button>` : ''}</div>
   ${recolhe ? `<div class="body pt0 pb0 efabre"><button class="btn ghost link" data-act="efTodas">${efAb.size ? (porGrupo ? 'Recolher todos os grupos' : 'Recolher todas as rotas') : (porGrupo ? 'Abrir todos os grupos' : 'Abrir todas as rotas')}</button><span class="muted small">${nGrupos} ${porGrupo ? 'grupos · toque num grupo' : 'rotas · toque numa rota'} para ver as pessoas</span></div>` : ''}
   <details class="legdet body pb0 pt0"><summary>Legenda das siglas</summary><div class="legend sitleg"><span><span class="sit P">${I.ok}</span> Presente</span><span><span class="sit F auto">F</span> Folga pela escala</span><span><span class="sit FT cobm">FT<i class="cobi">⇄</i></span> Com substituto</span><span><span class="sit P">${I.ok}${marcaPer('D')}</span> Turno diurno</span><span><span class="sit P">${I.ok}${marcaPer('N')}</span> Turno noturno (conta no dia em que começa)</span><span><span class="sit HE">HE<sup>D</sup></span> Hora extra (D Dikma · A ArcelorMittal)</span>${SITS.filter(s => s[0] !== 'P').map(s => `<span><span class="sit ${s[0]}">${s[0]}</span> ${s[1]}</span>`).join('')}<span><span class="sit FT semjus">FT</span> Sem justificativa: toque para justificar</span></div></details>
   <div class="tw"><table class="efd efdia1"><thead><tr><th>Colaborador</th>${mob ? '' : '<th>Função</th>'}<th>Situação</th></tr></thead><tbody>
-  ${cs.length ? linhas : `<tr><td colspan="${nCol}" class="empty">${q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
-  </tbody>${cs.length ? `<tfoot><tr><th colspan="${nCol - 1}">Presentes</th><td class="num"><b class="${ctDia.presentes < ctDia.escalados ? 'menos' : ctDia.escalados ? 'cheio' : ''}">${ctDia.presentes}</b><span class="muted">/${ctDia.escalados}</span></td></tr></tfoot>` : ''}</table></div></div>${cardEf(area, dia)}`;
+  ${cs.length ? linhas : `<tr><td colspan="${nCol}" class="empty">${fil && !q.trim() ? (fil === 'aus' ? 'Ninguém faltou ou atrasou neste dia.' : 'Nenhuma falta ou atraso sem justificativa neste dia.') : q.trim() ? 'Ninguém encontrado com essa busca.' : 'Nenhum colaborador nesta rota.'}</td></tr>`}
+  </tbody>${cs.length ? `<tfoot><tr><th colspan="${nCol - 1}">Presentes</th><td class="num"><b class="${ctDia.presentes < ctDia.escalados ? 'menos' : ctDia.escalados ? 'cheio' : ''}">${ctDia.presentes}</b><span class="muted">/${ctDia.escalados}</span></td></tr></tfoot>` : ''}</table></div></div>${cardEf(area, dia)}${mob ? barraEf(area, dia, kDia, ctDia) : ''}`;
+}
+// Filtro rápido acima da lista: todos, só quem faltou ou atrasou, só quem está sem justificativa (com a contagem do dia).
+function chipsFil(area, dia, fil, faltou, semJ) {
+  const cs = colabsDa(area); const nA = cs.filter(faltou).length; const nS = dia <= TODAY ? cs.filter(semJ).length : 0;
+  const b = (v, txt, n, tom) => `<button type="button" class="effil-b${fil === v ? ' on' : ''}" data-act="efFil" data-f="${v}" aria-pressed="${fil === v}">${txt}${n != null ? ` <span class="badge num${n && tom ? ' ' + tom : ''}">${n}</span>` : ''}</button>`;
+  return `<div class="body pt0 pb0 effil" role="group" aria-label="Mostrar">${b('', 'Todos')}${b('aus', isMobile() ? 'Faltas' : 'Faltas e atrasos', nA, 'warn')}${dia <= TODAY ? b('sem', 'Sem justificativa', nS, 'bad') : ''}</div>`;
+}
+// Celular: barra presa no rodapé com o dia (anterior e próximo), os presentes e o envio do efetivo, sem precisar rolar.
+function barraEf(area, dia, k, ct) {
+  if (k < 0) return '';
+  const ant = k > 0 ? add(UI.ini, k - 1) : '', prox = k < DAYS.length - 1 ? add(UI.ini, k + 1) : '';
+  const seta = (d, txt, dir) => `<button type="button" class="btn ghost efpe-s" ${d ? `data-act="efDia" data-d="${d}"` : 'disabled'} aria-label="${txt}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="${dir < 0 ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'}"/></svg></button>`;
+  let acao = '';
+  if (dia <= TODAY) {
+    const as = areasEf(area);
+    if (as.length === 1) { const doc = DB.efDia(SK, dia, as[0]); if (podeEf('enviado', doc, quemEf(as[0])) && !(doc && doc.st === 'enviado')) acao = `<button type="button" class="btn pri sm" data-act="efEnviar" data-ef="${esc(as[0])}">${rotEnv(doc)}</button>`; }
+    if (!acao && as.length) acao = `<button type="button" class="btn sm" data-act="efIrEnvio">Envio ao RH</button>`;
+  }
+  return `<div class="efpe" role="group" aria-label="Dia mostrado">${seta(ant, 'Dia anterior', -1)}<div class="efpe-d"><b>${DIA_NOME[k].slice(0, 3)} ${ddmm(dia)}${dia === TODAY ? ' · hoje' : ''}</b>${ct ? `<small><b class="num">${ct.presentes}</b>/${ct.escalados} presentes</small>` : ''}</div>${seta(prox, 'Próximo dia', 1)}${acao}</div>`;
 }
 /* ---------------- MOVER DE ROTA NO DIA ---------------- */
 // Vale só naquele dia e não muda o cadastro (contas/mover-rota.js; campo mov da presença do mês). O líder pede para
@@ -386,7 +416,10 @@ function cardFalta(area, dia, k) {
   if (k < 0) return '';
   const fal = rotasDa(area).filter(r => r.rota !== 'GESTÃO').map(r => ({ r, d: escalaRota(r, UI.ini).days[k] })).filter(x => x.d.prog > 0 && x.d.disp < x.d.nec).sort((a, b) => (a.d.disp - a.d.nec) - (b.d.disp - b.d.nec));
   if (!fal.length) return `<div class="card efalta"><div class="body row-gap">${etiqueta('Todas as rotas com gente suficiente', 'ok')}<span class="muted small">${ddmm(dia)} · necessário × disponível do Dimensionamento</span></div></div>`;
-  return `<div class="card efalta"><header><h2>Rotas com falta de gente</h2><p>${ddmm(dia)} · disponível / necessário · toque para ver a rota e mover alguém</p></header><div class="body stackcol">${fal.map(({ r, d }) => `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(r.rota)}</b>${area === 'TODAS' ? `<span class="muted small">${esc(AREA_S[r.area] || r.area)}</span>` : ''}${etiqueta(`faltam ${d.nec - d.disp}`, 'critico')}</div><div class="muted small">${d.disp} disponíve${d.disp === 1 ? 'l' : 'is'} de ${d.nec} necessário${d.nec === 1 ? '' : 's'} · ${d.prog} atividade${d.prog === 1 ? '' : 's'}</div></div><button type="button" class="btn sm" data-erota="${esc(r.area + '|' + r.rota)}">Ver a rota</button></div>`).join('')}</div></div>`;
+  const corpo = `<div class="body stackcol">${fal.map(({ r, d }) => `<div class="efenv"><div class="minw"><div class="row-gap"><b>${esc(r.rota)}</b>${area === 'TODAS' ? `<span class="muted small">${esc(AREA_S[r.area] || r.area)}</span>` : ''}${etiqueta(`faltam ${d.nec - d.disp}`, 'critico')}</div><div class="muted small">${d.disp} disponíve${d.disp === 1 ? 'l' : 'is'} de ${d.nec} necessário${d.nec === 1 ? '' : 's'} · ${d.prog} atividade${d.prog === 1 ? '' : 's'}</div></div><button type="button" class="btn sm" data-erota="${esc(r.area + '|' + r.rota)}">Ver a rota</button></div>`).join('')}</div>`;
+  // Celular: uma linha só ("3 rotas com falta de gente"); toque para abrir a lista. Computador: o quadro inteiro.
+  if (isMobile()) return `<details class="card efalta efalta-d"><summary><span class="minw"><b>${fal.length} rota${fal.length === 1 ? '' : 's'} com falta de gente</b><span class="muted small">${ddmm(dia)} · toque para ver e mover alguém</span></span>${etiqueta(`faltam ${fal.reduce((n, { d }) => n + d.nec - d.disp, 0)}`, 'critico')}</summary>${corpo}</details>`;
+  return `<div class="card efalta"><header><h2>Rotas com falta de gente</h2><p>${ddmm(dia)} · disponível / necessário · toque para ver a rota e mover alguém</p></header>${corpo}</div>`;
 }
 // Pedidos pendentes da semana: quem aprova vê Aprovar e Recusar; quem pediu vê os seus.
 function cardMovs(area) {
@@ -508,3 +541,5 @@ acoes.limparEQ = (t, d) => { UI.eQ = ''; render(); { const n = $('fEQ'); if (n) 
 acoes.efTodas = (t, d) => { const ks = [...document.querySelectorAll('[data-efg]')].map(b => b.dataset.efg); UI.efAbertas = (UI.efAbertas || []).length ? [] : ks; render(); };
 acoes.expEsdia = (t, d) => { exportEsdia(); };
 acoes.efDia = (t, d) => { UI.eDia = d.d; render(); };
+acoes.efFil = (t, d) => { UI.eFil = d.f || ''; render(); };
+acoes.efIrEnvio = () => { const c = document.querySelector('.efenvcard'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
