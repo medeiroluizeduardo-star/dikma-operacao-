@@ -1,6 +1,7 @@
 // Dikma Gestão — módulo EFETIVO: Ficha de Acompanhamento de Funcionário (FO-RED-COQ-004).
 // Telas: Painel, Colaboradores (cadastro + controle da ficha, com a ficha individual e as ocorrências), Impressão e Tipos.
 // Assinatura: na tela (colaborador e responsável assinam com o dedo), por foto da via em papel, ou registro de recusa.
+import { MOTIVOS_DEM } from '../contas/colab-rh.js';
 import { pd, add, pad, today, MESES_L, SETS, setDaArea, AREA_S, ehAreaGeral } from '../contas/cal.js';
 import { AREA_GERAL, AREA_OP, ehAreaAtiv, veTodasFichas, areasFichaDe } from '../contas/pessoas.js';
 import { criarImportador } from './importar.js';
@@ -376,12 +377,15 @@ export function criarGestao(X) {
       <label class="sel"><span>Função</span><input class="in" id="ncFun" list="dlFun" autocomplete="off" value="${esc(c.funcao || (L.patio && L.patio.funcao) || (L.op && L.op.funcao) || '')}" placeholder="Escolha da lista ou digite"><datalist id="dlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>
       <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="ncTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('ncLid', nomeLider(c.lider), opcoesLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
       <label class="sel"><span>Demissão</span><input class="in" type="date" id="ncDem" value="${c.dem || ''}"></label>
+      <label class="sel"><span>Motivo do desligamento (se tiver demissão)</span><select class="in" id="ncDemMot"><option value="">—</option>${MOTIVOS_DEM.map(m => `<option ${c.demMot === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
       <label class="switch"><input type="checkbox" id="ncAnt" ${c.intAnt ? 'checked' : ''}><span>Integração feita antes do sistema ("Anterior")</span></label>`, 'Salvar', async () => {
-      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim(), matArc: $('ncArc').value.trim().toUpperCase() };
+      const n = { ...c, mat: $('ncMat').value.trim().replace(/\.0$/, ''), nome: $('ncNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('ncFun').value.trim().toUpperCase(), turma: $('ncTur').value.trim().toUpperCase(), lider: nomeLider($('ncLid').value), adm: $('ncAdm').value || null, dem: $('ncDem').value || null, demMot: $('ncDem').value ? $('ncDemMot').value : '', intAnt: $('ncAnt').checked, area: $('ncArea').value, setor: $('ncSetor').value.trim(), subsetor: $('ncSub').value.trim(), matArc: $('ncArc').value.trim().toUpperCase() };
       if (!n.matArc) delete n.matArc;
       if (!n.mat || !n.nome) throw new Error('Informe matrícula Dikma e nome.');
       if (n.matArc) { const o = G().colabs.find(x => x.matArc && String(x.matArc) === n.matArc && String(x.mat) !== n.mat); if (o) throw new Error(`A matrícula Arcelor ${n.matArc} já é de ${title(o.nome)}.`); }
       if (n.dem && n.adm && n.dem < n.adm) throw new Error('A demissão não pode ser antes da admissão.');
+      if (n.dem && n.dem !== c.dem && !n.demMot) throw new Error('Escolha o motivo do desligamento.');
+      if (!n.dem) delete n.demMot;
       const o = { area: n.area, rota: $('ncRota').value, regime: $('ncReg').value, op: !!($('ncOp') && $('ncOp').checked), escala: $('ncEsc') ? $('ncEsc').value : 'ADM', turma: $('ncTurOp') ? $('ncTurOp').value : '', desde: ($('ncDesde') && $('ncDesde').value) || TODAY };
       // a letra da turma/escala da ficha vale a partir da data da troca (os dias antes ficam como eram)
       if (mat) { const h = anotarTroca(c, n, ['turma'], o.desde); if (h.length) n.escHist = h; else delete n.escHist; }

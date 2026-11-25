@@ -2143,3 +2143,14 @@ details.sgnums[open]>summary{margin-bottom:8px}
 .fp-max{display:flex;align-items:center;gap:8px;flex-wrap:wrap;align-self:end;min-height:44px}
 .fp-dias{display:block}
 @media (max-width:640px){.fp-acoes{margin-left:0;width:100%}}
+/* RH › Colaboradores (telas/colaboradores.js): quadro de pessoas que filtra e linha do tempo da ficha. */
+.co-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3);margin-bottom:var(--s3)}
+.co-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:var(--s4);border:1px solid var(--line-2);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;text-align:left;cursor:pointer;min-height:44px}
+.co-card .co-card-t{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.co-card b{font-size:32px;line-height:1}.co-card .co-card-d{font-size:12.5px;color:var(--ink-3)}
+.co-card.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}.co-card.alerta b{color:var(--st-atr)}
+.co-tempo{list-style:none;margin:0;padding:0 0 0 4px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:14px}
+.co-tempo li{display:flex;gap:14px;align-items:flex-start;padding-left:14px;position:relative}
+.co-tempo li::before{content:"";position:absolute;left:-7px;top:5px;width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.co-tempo-d{flex:0 0 86px;font-variant-numeric:tabular-nums;color:var(--ink-2);font-size:13px;padding-top:1px}
+@media (max-width:640px){.co-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.co-card{padding:10px 12px}.co-card b{font-size:24px}}

@@ -17,6 +17,7 @@ import { criarLiderancaDaFicha } from '../contas/folha-ficha.js';
 import { cadastrosDuplicados } from '../contas/duplicados.js';
 import { anotarTroca } from '../contas/escala.js';
 import { indiceFeriasPessoa, situacaoPeriodo, resumoFeriasPessoa, deFeriasHoje, feriasEmBreve, limiteProximo, feriasSemCadastro } from '../contas/ferias.js';
+import { UNIDADES, unidadeDe, cadastroFalta, CAMPOS_CADASTRO, experiencia, experienciaVence, MOTIVOS_DEM, desligadoNoMes, admitidoNoMes, linhaDoTempo } from '../contas/colab-rh.js';
 import { campoBusca } from '../ui/busca.js';
 import { abas, dados, etiqueta, tabela, vazio, carregando, botaoAcao } from '../ui/padrao.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -63,7 +64,22 @@ function etqFerias(c) {
   if (r.limite && limiteProximo(feriasDe(c), TODAY)) return etiqueta(`${r.limite < TODAY ? 'Limite vencido' : 'Limite'} ${dBR(r.limite)}`, 'critico');
   return '';
 }
-const situacao = c => (!ativo(c) ? etiqueta('Desligado', 'neutro') : (etqFerias(c) || (emExp(c) ? etiqueta('Em experiência', 'info') : etiqueta('Ativo', 'ok'))));
+const etqExp = c => { const e = experiencia(c, TODAY); return e ? etiqueta(`Experiência até ${ddmm(e.prox)}`, e.faltam <= 15 ? 'atencao' : 'info') : etiqueta('Em experiência', 'info'); };
+const situacao = c => (!ativo(c) ? etiqueta(c.demMot ? `Desligado · ${c.demMot}` : 'Desligado', 'neutro') : (etqFerias(c) || (emExp(c) ? etqExp(c) : etiqueta('Ativo', 'ok'))));
+// Coluna que muda com o filtro: férias, o que falta no cadastro, a experiência ou a admissão.
+function colExtra(f, c) {
+  if (f.startsWith('fer')) return ['Férias', txtFerias(c) || '—'];
+  if (f === 'incompleto') return ['Falta no cadastro', esc(falta(c).join(', ')) || '—'];
+  if (f === 'exp' || f === 'expVence') { const e = experiencia(c, TODAY); return ['Experiência', e ? `${e.periodo}º período até ${dBR(e.prox)} <span class="muted small">· ${e.faltam} dia${e.faltam === 1 ? '' : 's'}</span>` : '—']; }
+  if (f === 'deslMes' || f === 'desl') return ['Demissão', c.dem ? `${dBR(c.dem)}${c.demMot ? `<div class="muted small">${esc(c.demMot)}</div>` : ''}` : '—'];
+  return ['Admissão', dBR(c.adm) || '—'];
+}
+// Cadastro completo: função e turma podem vir das Atividades / Equipamentos quando a ficha não tem.
+let LOTc = null, LOTk = null;
+const lotDe = c => { const L = lista(); if (LOTk !== L) { LOTc = PES.lotacoes(L); LOTk = L; } return LOTc.get(String(c.mat)) || {}; };
+const falta = c => { const l = lotDe(c); const at = l.patio || {}; return cadastroFalta({ ...c, funcao: c.funcao || at.funcao, turma: c.turma || at.turma || (l.op && l.op.turma) }); };
+const pctCad = c => Math.round(100 * (CAMPOS_CADASTRO.length - falta(c).length) / CAMPOS_CADASTRO.length);
+let ULTIMA = { l: [], area: () => '' }; // a lista da tela, para o Exportar lista
 
 // Cadastro repetido (contas/duplicados.js): fichas com o mesmo nome ou matrícula, ou matrícula diferente da Escala do dia.
 let DUP = null, DUPk = [];
@@ -73,7 +89,11 @@ const FILTROS = [['ativos', 'Ativos', ativo], ['exp', 'Em experiência', emExp],
   ['ferAgora', 'De férias agora', c => ativo(c) && deFeriasHoje(feriasDe(c), TODAY)],
   ['ferProx', 'Férias nos próximos 60 dias', c => ativo(c) && feriasEmBreve(feriasDe(c), TODAY)],
   ['ferLim', 'Data limite em 60 dias, sem férias marcadas', c => ativo(c) && limiteProximo(feriasDe(c), TODAY)],
+  ['expVence', 'Experiência vence em 15 dias', c => ativo(c) && experienciaVence(c, TODAY)],
+  ['incompleto', 'Cadastro incompleto', c => ativo(c) && falta(c).length > 0],
+  ['admMes', 'Admitidos no mês', c => admitidoNoMes(c, TODAY.slice(0, 7))],
   ['dup', 'Cadastro repetido', c => ativo(c) && dupMats().has(String(c.mat))],
+  ['deslMes', 'Desligados no mês', c => desligadoNoMes(c, TODAY.slice(0, 7))],
   ['desl', 'Desligados', c => !ativo(c)], ['todos', 'Todos', () => true]];
 // Coluna de férias da lista (quando o filtro é de férias).
 function txtFerias(c) {
@@ -85,15 +105,18 @@ function txtFerias(c) {
 function vLista() {
   const L = lista(); const lot = PES.lotacoes(L);
   const areaDe = c => (lot.get(String(c.mat)) || {}).area || c.area || AREA_GERAL;
-  const areas = [...new Set(L.filter(ativo).map(areaDe))].sort((a, b) => PES.areaNome(a).localeCompare(PES.areaNome(b)));
+  const unDe = c => unidadeDe(c, areaDe(c));
+  const areas = [...new Set(L.filter(c => ativo(c) && (!C.un || unDe(c) === C.un)).map(areaDe))].sort((a, b) => PES.areaNome(a).localeCompare(PES.areaNome(b)));
   if (C.fa && !areas.includes(C.fa)) C.fa = '';
-  const base = L.filter(c => !C.fa || areaDe(c) === C.fa);
+  if (C.un && !UNIDADES.includes(C.un)) C.un = '';
+  const base = L.filter(c => (!C.fa || areaDe(c) === C.fa) && (!C.un || unDe(c) === C.un));
   const f = FILTROS.find(x => x[0] === C.f) || FILTROS[0];
   const q = C.q.trim().toLowerCase();
   const l = base.filter(f[2]).filter(c => !q || `${c.mat} ${c.matArc || ''} ${c.nome} ${c.funcao || ''}`.toLowerCase().includes(q)).sort((a, b) => String(a.nome).localeCompare(String(b.nome)));
   const n = fn => base.filter(fn).length;
   const filtros = `<div class="p-form co-filtros">
     <label class="p-campo co-busca"><span>Buscar</span><input type="search" id="coQ" placeholder="Nome, matrícula ou função" value="${esc(C.q)}"></label>
+    <label class="p-campo"><span>Unidade</span><select id="coUn"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${C.un === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label>
     <label class="p-campo"><span>Área de atuação</span><select id="coFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${C.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
     <label class="p-campo"><span>Mostrar</span><select id="coF">${FILTROS.map(([k, t, fn]) => `<option value="${k}" ${f[0] === k ? 'selected' : ''}>${t} (${n(fn)})</option>`).join('')}</select></label>
   </div>`;
@@ -101,7 +124,13 @@ function vLista() {
   const exp = !framed && ferPronto() && ferLista().length ? `<button class="btn" data-act="coExpFerias">${I.dl} Exportar férias</button>` : '';
   const imp = podeEditarDP() && !framed ? '<button class="btn" data-act="coImpDP" title="CPF, endereço, telefone, rota de ônibus e matrícula Arcelor a partir da planilha do RH">Importar dados pessoais</button>' : '';
   const botoes = podeEditar() || completo() || exp || imp ? `<div class="row-gap co-acoes">${podeEditar() ? botaoAcao('Novo colaborador', 'data-act="coNovo"', I.plus) : ''}${completo() ? '<button class="btn" data-act="coLideres" title="Trocar ou renomear o líder de várias pessoas de uma vez">Líderes</button>' : ''}${exp}${imp}</div>` : '';
-  let h = `<div class="card"><div class="body stackcol">${filtros}${botoes}</div></div>`;
+  // Números do quadro (tocar filtra a lista).
+  const nf = k => { const x = FILTROS.find(y => y[0] === k); return x ? n(x[2]) : 0; };
+  const nExp = n(emExp), nVence = nf('expVence');
+  const cards = [['ativos', 'Ativos', nf('ativos'), ''], ['exp', 'Em experiência', nExp, nVence ? `${nVence} vence${nVence > 1 ? 'm' : ''} em 15 dias` : ''], ['incompleto', 'Cadastro incompleto', nf('incompleto'), ''], ['deslMes', 'Desligados no mês', nf('deslMes'), `${nf('admMes')} admitido${nf('admMes') === 1 ? '' : 's'} no mês`]];
+  const painel = `<div class="co-cards" role="group" aria-label="Quadro de pessoas">${cards.map(([k, t, v, d]) => `<button type="button" class="co-card${f[0] === k ? ' on' : ''}${k === 'incompleto' && v ? ' alerta' : ''}" data-act="coCard" data-f="${k}" aria-pressed="${f[0] === k}"><span class="co-card-t">${t}</span><b class="num">${v}</b>${d ? `<span class="co-card-d">${d}</span>` : ''}</button>`).join('')}</div>`;
+  const expL = !framed && l.length ? `<button class="btn" data-act="coExpLista" title="A lista como está na tela (filtros e busca)">${I.dl} Exportar lista</button>` : '';
+  let h = `${painel}<div class="card"><div class="body stackcol">${filtros}${botoes}${expL ? `<div class="row-gap">${expL}</div>` : ''}</div></div>`;
   const D = dups();
   if (D.length && f[0] === 'dup') h += `<div class="aviso"><b>Cadastro repetido</b>: a mesma pessoa aparece duas vezes na Frequência. Abra a ficha certa e corrija a matrícula (ou desligue a ficha repetida). A troca de letra e de escala também é feita aqui, na ficha.<ul class="m0">${D.map(d => `<li>${d.mats.filter(Boolean).map(m => `<button type="button" class="btn ghost link" data-act="coFicha" data-mat="${esc(m)}">${esc(title(d.nome))} · ${esc(m)}</button>`).join(' · ') || esc(title(d.nome))}: ${esc(d.motivo)}</li>`).join('')}</ul></div>`;
   else if (D.length) h += `<div class="aviso">${D.length} ${D.length === 1 ? 'cadastro repetido' : 'cadastros repetidos'} (a pessoa aparece duas vezes na Frequência). <button type="button" class="btn sm" data-act="irDuplicados">Ver e corrigir</button></div>`;
@@ -114,10 +143,12 @@ function vLista() {
   const lim = Math.min(UI.more || 200, l.length);
   const nome = c => `<button type="button" class="btn ghost link co-nome" data-act="coFicha" data-mat="${esc(c.mat)}">${esc(title(c.nome))}</button>${c.funcao ? `<div class="muted small">${esc(title(c.funcao))}</div>` : ''}`;
   const cel = isMobile();
-  const colunas = cel ? [{ t: 'Colaborador' }, { t: 'Situação' }] : [{ t: 'Colaborador' }, { t: 'Matrícula Dikma' }, { t: 'Matrícula Arcelor' }, { t: 'Área de atuação' }, { t: 'Líder imediato' }, { t: ferF ? 'Férias' : 'Admissão' }, { t: 'Situação' }];
+  ULTIMA = { l, area: c => (lot.get(String(c.mat)) || {}).txt || PES.areaNome(c.area), un: unDe };
+  const extraF = !ferF && f[0] !== 'ativos' && f[0] !== 'todos' && f[0] !== 'dup' && f[0] !== 'semArc' && f[0] !== 'admMes';
+  const colunas = cel ? [{ t: 'Colaborador' }, { t: 'Situação' }] : [{ t: 'Colaborador' }, { t: 'Matrícula Dikma' }, { t: 'Matrícula Arcelor' }, { t: 'Área de atuação' }, { t: 'Líder imediato' }, { t: colExtra(f[0], {})[0] }, { t: 'Situação' }];
   const linhas = l.slice(0, lim).map(c => (cel
-    ? [`${nome(c)}<div class="muted small mono">${esc(c.mat)}${c.matArc ? ' · Arcelor ' + esc(c.matArc) : ''}</div>${ferF ? `<div class="small">${txtFerias(c)}</div>` : ''}`, situacao(c)]
-    : [nome(c), `<span class="mono">${esc(c.mat)}</span>`, c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : '<span class="p-falta">—</span>', esc((lot.get(String(c.mat)) || {}).txt || PES.areaNome(c.area)), c.lider ? esc(title(c.lider)) : '<span class="p-falta">—</span>', ferF ? txtFerias(c) || '—' : dBR(c.adm) || '—', situacao(c)]));
+    ? [`${nome(c)}<div class="muted small mono">${esc(c.mat)}${c.matArc ? ' · Arcelor ' + esc(c.matArc) : ''}</div>${ferF || extraF ? `<div class="small">${colExtra(f[0], c)[1]}</div>` : ''}`, situacao(c)]
+    : [nome(c), `<span class="mono">${esc(c.mat)}</span>`, c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : '<span class="p-falta">—</span>', esc((lot.get(String(c.mat)) || {}).txt || PES.areaNome(c.area)), c.lider ? esc(title(c.lider)) : '<span class="p-falta">—</span>', colExtra(f[0], c)[1], situacao(c)]));
   h += `<p class="muted small co-total">${l.length} ${l.length === 1 ? 'pessoa' : 'pessoas'}</p>${tabela(colunas, linhas, { rotulo: 'Colaboradores' })}`;
   if (l.length > lim) h += `<div class="row-gap"><button class="btn center" data-act="more" data-n="${lim + 200}">Mostrar mais ${Math.min(200, l.length - lim)} (faltam ${l.length - lim})</button></div>`;
   return h;
@@ -127,11 +158,14 @@ function vFicha(c) {
   registrarAcesso(c, 'rh');
   const L = lista(); const lot = PES.lotacao(c); const ld = criarLiderancaDaFicha(L)(c);
   const at = lot.ativ ? lot.ativ.x : null, op = lot.op;
-  const aba = ['dados', 'lot', 'fer', ...(podeVerDP() ? ['pes'] : [])].includes(C.aba) ? C.aba : 'dados';
-  const corpo = aba === 'pes' ? vDadosPessoais(c) : aba === 'fer' ? vFeriasFicha(c) : aba === 'dados'
+  const aba = ['dados', 'lot', 'fer', 'hist', ...(podeVerDP() ? ['pes'] : [])].includes(C.aba) ? C.aba : 'dados';
+  const corpo = aba === 'pes' ? vDadosPessoais(c) : aba === 'fer' ? vFeriasFicha(c) : aba === 'hist' ? vLinhaTempo(c) : aba === 'dados'
     ? dados([
       ['Nome completo', esc(c.nome)], ['Matrícula Dikma', `<span class="mono">${esc(c.mat)}</span>`], ['Matrícula Arcelor', c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : ''],
-      ['Admissão', c.adm ? `${dBR(c.adm)} <span class="muted small">· ${tempoCasa(c.adm)} de casa</span>` : ''], ['Demissão', dBR(c.dem)],
+      ['Admissão', c.adm ? `${dBR(c.adm)} <span class="muted small">· ${tempoCasa(c.adm)} de casa</span>` : ''],
+      ...((e => (e ? [['Experiência', `1º período até ${dBR(e.fim1)} · 2º até ${dBR(e.fim2)} ${etiqueta(`${e.faltam} dia${e.faltam === 1 ? '' : 's'} para o fim do ${e.periodo}º`, e.faltam <= 15 ? 'atencao' : 'info')}`]] : []))(experiencia(c, TODAY))),
+      ['Demissão', c.dem ? `${dBR(c.dem)}${c.demMot ? ` <span class="muted small">· ${esc(c.demMot)}</span>` : ''}` : ''],
+      ['Cadastro', (fl => (fl.length ? `${pctCad(c)}% completo <span class="muted small">· falta: ${esc(fl.join(', '))}</span>` : `${etiqueta('Completo', 'ok')}`))(falta(c))],
       ['Função', esc(title(c.funcao || (at && at.funcao) || ''))], ['Área (RH)', esc(c.setor || '')], ['Setor (RH)', esc(c.subsetor || '')]])
     : dados([
       ['Área de atuação', esc(lot.txt || PES.areaNome(lot.area))], ['Rota', at && ehAreaAtiv(at.area) ? esc(at.rota) : ''],
@@ -149,7 +183,7 @@ function vFicha(c) {
       <p class="muted m0">Matrícula Dikma <b class="mono">${esc(c.mat)}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}</p>
       <div class="row-gap co-etq">${situacao(c)}${c.adm && emExp(c) ? etiqueta(`${dias(c.adm, TODAY)} dias de casa`, 'info') : ''}</div></div>
       ${botoes ? `<div class="row-gap">${botoes}</div>` : ''}</div>
-    ${abas([['dados', 'Dados'], ...(podeVerDP() ? [['pes', 'Dados pessoais']] : []), ['lot', 'Lotação e liderança'], ['fer', 'Férias']], aba, 'co-aba', 'Ficha do colaborador')}
+    ${abas([['dados', 'Dados'], ...(podeVerDP() ? [['pes', 'Dados pessoais']] : []), ['lot', 'Lotação e liderança'], ['fer', 'Férias'], ['hist', 'Linha do tempo']], aba, 'co-aba', 'Ficha do colaborador')}
     ${corpo}
     ${aba === 'lot' && lot.outros && lot.outros.length ? `<div class="aviso small">Esta pessoa está cadastrada em ${lot.outros.length + 1} lugares das Atividades (${esc(lot.txt.replace(/ \+ Equipamentos$/, ''))}) e por isso aparece em mais de uma Escala do dia.${completo() ? ' Toque em Editar, escolha a área de atuação certa e salve: ela fica só nesse lugar.' : ' Peça ao administrador para abrir Editar e salvar a ficha: ela fica só na área escolhida.'}</div>` : ''}
     ${aba === 'lot' ? '<p class="muted small m0">O supervisor imediato é o líder da ficha do líder (o mesmo que agrupa a Frequência). Área de atuação e rota vêm das Atividades e dos Equipamentos.</p>' : ''}
@@ -176,6 +210,13 @@ function vFeriasFicha(c) {
   return `${resumo}${novo ? `<div class="row-gap">${novo}</div>` : ''}${tabela(colunas, linhas, { rotulo: 'Férias de ' + title(c.nome) })}`;
 }
 
+// Linha do tempo: o que já existe no sistema (admissão, fim da experiência, trocas de turma, férias e desligamento).
+function vLinhaTempo(c) {
+  const ev = linhaDoTempo(c, ferPronto() ? feriasDe(c) : [], TODAY);
+  if (!ev.length) return vazio('Nada registrado ainda', 'A admissão, as trocas de turma, as férias e o desligamento aparecem aqui.');
+  return `<ol class="co-tempo">${ev.map(x => `<li><span class="co-tempo-d">${dBR(x.data)}</span><div><b>${esc(x.t)}</b>${x.d ? `<div class="muted small">${esc(x.d)}</div>` : ''}</div></li>`).join('')}</ol>${ferPronto() ? '' : '<p class="muted small m0">Carregando as férias…</p>'}`;
+}
+
 export function vColaboradores() {
   if (!pronto()) return carregando();
   if (C.mat) { const c = lista().find(x => String(x.mat) === String(C.mat)); if (c) return vFicha(c); C.mat = null; }
@@ -197,13 +238,15 @@ function formRH(mat) {
     ${mat ? '' : `<label class="sel"><span>Nome completo</span><input class="in" id="coNome" value=""></label>
     <label class="sel"><span>Função</span><input class="in" id="coFun" list="coDlFun" autocomplete="off" placeholder="Escolha da lista ou digite"><datalist id="coDlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>`}
     <div class="row2"><label class="sel"><span>Admissão</span><input class="in" type="date" id="coAdm" value="${c.adm || ''}"></label><label class="sel"><span>Demissão</span><input class="in" type="date" id="coDem" value="${c.dem || ''}"></label></div>
+    ${campoMotivoDem(c, 'coDemMot')}
     <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="coSetor" list="coDlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio">${dl('coDlSetor', 'setor')}</label>
     <label class="sel"><span>Setor (RH)</span><input class="in" id="coSub" list="coDlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento">${dl('coDlSub', 'subsetor')}</label></div>
     <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="coTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('coLid', nomeLider(c.lider), opLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
     ${mat ? `<label class="sel"><span>A troca de turma / turno vale a partir de</span><input class="in" type="date" id="coDesde" value="${TODAY}"></label>` : ''}
     ${mat ? '<p class="muted small m0">A letra da turma e a escala de turno valem pelo campo "Turma / turno" desta ficha (ex.: C, TURMA C, 4X4 C ou ADM). Nome, função, área de atuação e rota mudam também Atividades e Equipamentos: quem altera é o administrador.</p>' : ''}`, 'Salvar', async () => {
-    const n = { ...c, matArc: $('coArc').value.trim().toUpperCase(), adm: $('coAdm').value || null, dem: $('coDem').value || null, setor: $('coSetor').value.trim(), subsetor: $('coSub').value.trim(), turma: $('coTur').value.trim().toUpperCase(), lider: nomeLider($('coLid').value) };
+    const n = { ...c, matArc: $('coArc').value.trim().toUpperCase(), adm: $('coAdm').value || null, dem: $('coDem').value || null, demMot: $('coDem').value ? $('coDemMot').value : '', setor: $('coSetor').value.trim(), subsetor: $('coSub').value.trim(), turma: $('coTur').value.trim().toUpperCase(), lider: nomeLider($('coLid').value) };
     if (!mat) Object.assign(n, { mat: $('coMat').value.trim().replace(/\.0$/, ''), nome: $('coNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('coFun').value.trim().toUpperCase() });
+    if (n.dem && n.dem !== c.dem && !n.demMot) throw new Error('Escolha o motivo do desligamento.');
     validar(n, mat);
     if (mat) { const h = anotarTroca(c, n, ['turma'], ($('coDesde') && $('coDesde').value) || TODAY); if (h.length) n.escHist = h; else delete n.escHist; }
     if (!n.matArc) delete n.matArc;
@@ -213,11 +256,14 @@ function formRH(mat) {
   });
 }
 // Conferências comuns aos dois formulários (também usada pelo formulário completo da Gestão).
+// Motivo do desligamento (aparece na ficha, na lista e na linha do tempo). Usado também no formulário da Gestão.
+export const campoMotivoDem = (c, id) => `<label class="sel"><span>Motivo do desligamento (se tiver demissão)</span><select class="in" id="${id}"><option value="">—</option>${MOTIVOS_DEM.map(m => `<option ${c.demMot === m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>`;
 export function validar(n, mat, L = lista()) {
   if (!n.mat || !n.nome) throw new Error('Informe matrícula Dikma e nome.');
   if (!mat && L.some(x => String(x.mat) === String(n.mat))) throw new Error('Já existe um colaborador com essa matrícula Dikma.');
   if (n.matArc) { const o = L.find(x => x.matArc && String(x.matArc) === String(n.matArc) && String(x.mat) !== String(n.mat)); if (o) throw new Error(`A matrícula Arcelor ${n.matArc} já é de ${title(o.nome)}.`); }
   if (n.dem && n.adm && n.dem < n.adm) throw new Error('A demissão não pode ser antes da admissão.');
+  if (!n.dem) delete n.demMot;
 }
 // Administrador: o formulário completo da Gestão (área, rota, função e escala, que vão para os outros módulos).
 const comGestao = fn => carregarModulo('GE').then(m => { if (m) fn(m); });
@@ -230,6 +276,13 @@ acoes.coLideres = () => { if (completo()) comGestao(m => m.lideres()); };
 acoes.coFer = (t, d) => comFerias(m => m.formFerias(d.id));
 acoes.coFerNova = (t, d) => { const c = lista().find(x => String(x.mat) === String(d.mat)); if (c) comFerias(m => m.formFerias(null, { nome: c.nome, mat: c.mat, setor: c.setor || '' })); };
 acoes.coExpFerias = () => comFerias(m => m.exportarFerias());
+acoes.coCard = (t, d) => { C.f = C.f === d.f ? 'ativos' : d.f; UI.more = 0; render(); };
+acoes.coExpLista = async () => {
+  const { baixarExcel } = await import('../ui/exportar.js');
+  const sit = c => (!ativo(c) ? 'Desligado' : emExp(c) ? 'Em experiência' : 'Ativo');
+  baixarExcel('colaboradores', [{ nome: 'Colaboradores', linhas: [['Nome', 'Matrícula Dikma', 'Matrícula Arcelor', 'Unidade', 'Área de atuação', 'Função', 'Turma / turno', 'Líder imediato', 'Admissão', 'Fim da experiência', 'Demissão', 'Motivo do desligamento', 'Situação', 'Cadastro (%)', 'Falta no cadastro'],
+    ...ULTIMA.l.map(c => { const e = experiencia(c, TODAY); return [title(c.nome), c.mat, c.matArc || '', ULTIMA.un ? ULTIMA.un(c) : '', ULTIMA.area(c), title(c.funcao || ''), c.turma || '', title(c.lider || ''), dBR(c.adm), e ? dBR(e.prox) : '', dBR(c.dem), c.demMot || '', sit(c), pctCad(c), falta(c).join(', ')]; })] }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+};
 acoes.coImpDP = () => { if (podeEditarDP()) importarDP(lista()); };
 acoes.dpEditar = (t, d) => { const c = lista().find(x => String(x.mat) === String(d.mat)); if (c) editarDP(c); };
 document.addEventListener('click', e => { const t = e.target.closest('[data-co-aba]'); if (!t || UI.view !== 'rcolab') return; C.aba = t.dataset.coAba; render(); });
@@ -240,5 +293,6 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'coFa') { C.fa = e.target.value; UI.more = 0; render(); }
+  if (e.target.id === 'coUn') { C.un = e.target.value; C.fa = ''; UI.more = 0; render(); }
   if (e.target.id === 'coF') { C.f = e.target.value; UI.more = 0; render(); }
 });
