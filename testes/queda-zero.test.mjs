@@ -94,3 +94,19 @@ test('painel do mês: lançamentos só dos dias do mês e somas por local, motiv
   assert.equal(r.porEquip[0][0], 'Caçamba de caminhão');
   assert.deepEqual(resumoQZ([]), { ...resumoQZ([]), total: 0, n: 0, dias: 0, media: 0 });
 });
+
+test('resumo por dia ou semana: lançamentos só da faixa de datas, de qualquer semana carregada', async () => {
+  const { lancamentosFaixaQZ } = await import('../public/contas/queda-zero.js');
+  const w1 = { area: 'RECEBIMENTO', ini: '2026-10-26', mes: '2026-10', qz: {
+    'Z|0|a': { i: [], t: 1 }, // 26/10
+    'Z|6|b': { i: [], t: 2 } // 01/11
+  } };
+  const w2 = { area: 'PREPARAÇÃO', ini: '2026-11-02', mes: '2026-11', qz: { 'Z|0|c': { i: [], t: 3 }, 'Z|2|d': { i: [], t: 4 }, 'Z|3|e': null } };
+  // semana de segunda 26/10 a domingo 01/11
+  assert.deepEqual(lancamentosFaixaQZ([w1, w2, null], '2026-10-26', '2026-11-01').map(x => x.v.t), [1, 2]);
+  // um dia só
+  assert.deepEqual(lancamentosFaixaQZ([w1, w2], '2026-11-04', '2026-11-04').map(x => x.dt), ['2026-11-04']);
+  // filtro de área
+  assert.equal(lancamentosFaixaQZ([w1, w2], '2026-11-01', '2026-11-08', 'PREPARAÇÃO').length, 2);
+  assert.equal(lancamentosFaixaQZ([w1, w2], '2026-11-01', '2026-11-08', 'RECEBIMENTO').length, 1);
+});

@@ -127,6 +127,18 @@ export function lancamentosMesQZ(semanas, ym, area = 'TODAS') {
   }
   return out;
 }
+// Lançamentos de uma faixa de datas (um dia ou uma semana de segunda a domingo), em qualquer semana carregada.
+export function lancamentosFaixaQZ(semanas, ini, fim, area = 'TODAS') {
+  const out = [];
+  for (const w of semanas) {
+    if (!w || !w.ini || (area !== 'TODAS' && w.area !== area)) continue;
+    for (let k = 0; k < 7; k++) {
+      const dt = addDias(w.ini, k); if (dt < ini || dt > fim) continue;
+      for (const x of qzDoDia(w, k)) out.push({ v: x.v, area: w.area, dt });
+    }
+  }
+  return out;
+}
 const addDias = (ini, k) => { const d = new Date(ini + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + k); return d.toISOString().slice(0, 10); };
 // Soma por chave, do maior para o menor: [[nome, toneladas, lançamentos]].
 const somar = (lancs, chave) => {
