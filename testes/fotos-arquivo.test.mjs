@@ -254,6 +254,11 @@ test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo 
   assert.equal(FA.gradeFotos(1, cx, 0.3, 0.2)[0].w, 10);
   assert.deepEqual(FA.gradeFotos(2, cx, 0.3, 0.2).map(p => [Math.round(p.x * 100) / 100, p.y]), [[0, 0], [5.1, 0]]);
   const g4 = FA.gradeFotos(4, cx, 0.3, 0.2); assert.equal(g4.length, 4); assert.equal(Math.round(g4[3].y * 100) / 100, 2.6);
+  // período anterior (os mesmos dias logo antes) e a variação em pontos
+  assert.deepEqual(FA.periodoAnterior('2026-11-16', '2026-11-22'), { de: '2026-11-09', ate: '2026-11-15' });
+  assert.deepEqual(FA.periodoAnterior('2026-11-01', '2026-11-03'), { de: '2026-10-29', ate: '2026-10-31' });
+  assert.equal(FA.variacaoPts(86, 82), '▲ 4 pts'); assert.equal(FA.variacaoPts(80, 82.4), '▼ 2 pts'); assert.equal(FA.variacaoPts(83, 82), '▲ 1 pt');
+  assert.equal(FA.variacaoPts(82, 82), '= igual'); assert.equal(FA.variacaoPts(82, null), ''); assert.equal(FA.variacaoPts(null, 50), '');
   // 2 fotos deitadas (ou sem tamanho): faixa embaixo; foto em pé ou outra quantidade: cartão à direita
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, {}]), true);
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, { w: 960, h: 1280 }]), false);

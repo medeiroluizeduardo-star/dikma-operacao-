@@ -192,6 +192,11 @@ para o administrador; a arquivada abre só a miniatura, com o lote da exportaç�
 Gerado no navegador com a PptxGenJS (tamanho 16:9, cores da marca: azul `#272662`, laranja `#F05A26`, logotipo
 branco). Não grava nada no banco.
 
+Comparação (só Atividades): na capa e nos cartões de Cumprimento e Com foto do painel aparece a diferença em pontos
+para o período anterior com os mesmos dias ("▲ 4 pts sobre a semana anterior"; `FA.periodoAnterior`,
+`FA.variacaoPts`). Só os percentuais se comparam (as quantidades mudam se o período ainda não terminou). A tela
+reaproveita as semanas já lidas e só lê do banco os meses que faltam (em geral, nenhum).
+
 Todos os slides internos têm o número da página no canto da barra azul ("5 / 14").
 
 1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e
