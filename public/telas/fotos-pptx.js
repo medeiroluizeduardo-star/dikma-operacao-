@@ -274,6 +274,35 @@ export async function gerarPptx(o) {
     { text: rot.toUpperCase(), options: { fontSize: 10, bold: true, color: COR.laranja, charSpacing: 0.6, breakLine: true } },
     { text: val || '—', options: { fontSize: op.fs || 14, bold: !!op.bold, color: COR.tinta, breakLine: true, paraSpaceAfter: 14 } }
   ];
+  // Destaques (escolhidos na tela, até 4): um slide com as fotos grandes, a marca e o local/data embaixo de cada uma.
+  const dest = (o.destaques || []).slice(0, FA.MAX_DESTAQUES);
+  if (dest.length) {
+    const s = interno(); titulo(s, dest.length > 1 ? 'Destaques do período' : 'Destaque do período', periodo + filtro);
+    const pos = FA.gradeFotos(dest.length, { x: 0.5, y: 1.05, w: W - 1, h: 5.55 }, 0.5, 0.25);
+    for (let j = 0; j < dest.length; j++) {
+      const { f, g: gf } = dest[j]; const cx = pos[j];
+      let dados = null;
+      try { dados = FA.statusFoto(f) === 'arquivada' ? f.thumb : await o.carregarFoto(f); } catch (e) { dados = null; }
+      if (!dados) dados = f.thumb || null;
+      const e = FA.encaixar(f.w || 4, f.h || 3, { x: cx.x + 0.05, y: cx.y + 0.05, w: cx.w - 0.1, h: cx.h - 0.1 });
+      if (dados) {
+        s.addShape(pptx.ShapeType.rect, { x: e.x - 0.05, y: e.y - 0.05, w: e.w + 0.1, h: e.h + 0.1, fill: { color: COR.branco }, line: { color: COR.linha, width: 0.75 }, shadow: { type: 'outer', blur: 4, offset: 1.5, angle: 90, color: '000000', opacity: 0.18 } });
+        s.addImage({ data: dados, x: e.x, y: e.y, w: e.w, h: e.h, altText: `Foto em destaque: ${gf.titulo || ''}` });
+        const marca = FA.marcaDaFoto(f, gf.fotos);
+        if (marca) {
+          ret(s, e.x + 0.1, e.y + 0.1, 1.05, 0.32, COR_MARCA[marca] || COR.navy, 0.06);
+          txt(s, marca.toUpperCase(), e.x + 0.1, e.y + 0.1, 1.05, 0.32, { fontFace: FONTE_FORTE, fontSize: 10.5, bold: true, color: COR.branco, align: 'center', charSpacing: 0.8 });
+        }
+      } else {
+        ret(s, cx.x, cx.y, cx.w, cx.h, COR.creme, 0.06);
+        txt(s, 'Foto não encontrada no banco', cx.x, cx.y, cx.w, cx.h, { fontSize: 12, color: COR.cinza, align: 'center' });
+      }
+      txt(s, [
+        { text: corta(gf.local || gf.rota || '—', 60), options: { bold: true, color: COR.navy, breakLine: true } },
+        { text: `${diaSemana(gf.dia)} · ${FA.dBR(gf.dia)}${hora(f.at) ? ' · ' + hora(f.at) : ''} · ${corta(gf.titulo || '', 70)}` }
+      ], cx.x, (dados ? e.y + e.h : cx.y + cx.h) + 0.06, cx.w, 0.44, { fontSize: 10.5, color: COR.cinza, align: 'center', valign: 'top', fit: 'shrink' });
+    }
+  }
   const pags = FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE); let nPag = 0;
   if (!pags.length) {
     const s = interno(); titulo(s, 'Registros fotográficos', periodo + filtro);

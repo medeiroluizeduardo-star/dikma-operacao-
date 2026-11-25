@@ -360,6 +360,15 @@ export function gradeFotos(n, caixa = { x: 0.5, y: 1.75, w: 12.33, h: 5.1 }, leg
   for (let i = 0; i < n; i++) { const c = i % cols, r = Math.floor(i / cols); out.push({ x: caixa.x + c * (w + gap), y: caixa.y + r * (h + gap), w, h: h - leg, leg }); }
   return out;
 }
+// Escolha das fotos do relatório (feita na tela, guardada só no aparelho): `fora` = ids tirados do relatório,
+// `dest` = ids de destaque. Os destaques vão num slide próprio, até MAX_DESTAQUES, na ordem do relatório.
+export const MAX_DESTAQUES = 4;
+export function noRelatorio(fotos, fora) { return fora && fora.size ? (fotos || []).filter(f => !fora.has(f.id)) : fotos || []; }
+export function destaques(grupos, dest, max = MAX_DESTAQUES) {
+  const out = []; if (!dest || !dest.size) return out;
+  for (const g of grupos || []) for (const f of g.fotos) if (dest.has(f.id) && out.length < max) out.push({ f, g });
+  return out;
+}
 // Slide com exatamente 2 fotos deitadas (ou sem tamanho, que conta como 4:3): fotos grandes lado a lado e os dados
 // numa faixa embaixo, em vez do cartão à direita (que deixaria as fotos pequenas).
 export function fotosEmFaixa(fotos) { return (fotos || []).length === 2 && fotos.every(f => (f.w || 4) >= (f.h || 3)); }
