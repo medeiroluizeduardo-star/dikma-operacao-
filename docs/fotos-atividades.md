@@ -206,6 +206,9 @@ Observações do período: campo de texto livre no quadro do relatório (guardad
 `dikma-fotos-observacoes`); preenchido, vira o slide "Observações do período" antes do encerramento, com o
 responsável embaixo (`FA.limparObs`, até 1.500 caracteres).
 
+Sumário (só Atividades): o 2º slide lista as partes do relatório (painéis, destaques, registros, anexos,
+observações) com a página e um link clicável para cada uma.
+
 Todos os slides internos têm o número da página no canto da barra azul ("5 / 14").
 
 1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e

@@ -85,6 +85,8 @@ export async function gerarPptx(o) {
   // Texto da barra azul (título do slide) e a linha de baixo (detalhe).
   // Slides internos (com a barra e a faixa); o número da página ("5 / 14") entra no fim, quando o total é conhecido.
   const internas = []; const interno = () => { const s = pptx.addSlide({ masterName: 'DIKMA' }); internas.push(s); return s; };
+  // Partes do relatório para o sumário: nome, explicação e a página onde começam (a próxima a ser criada).
+  const secoes = []; const secao = (t, d) => secoes.push({ t, d, pag: internas.length + 2 });
   const titulo = (s, t, sub) => {
     s.addText(t, { x: 3.7, y: 0.06, w: W - 4.75, h: 0.63, fontFace: FONTE_FORTE, fontSize: 24, bold: true, color: COR.branco, valign: 'middle', fit: 'shrink', margin: 0 });
     if (sub) s.addText(sub, { x: 3.7, y: 0.74, w: W - 3.85, h: 0.22, fontFace: FONTE, fontSize: 11, color: COR.cinza, valign: 'top', margin: 0, fit: 'shrink' });
@@ -156,6 +158,9 @@ export async function gerarPptx(o) {
     txt(s, `${nomeTipo || o.nomeConj}${o.fora ? ` · ${nTxt(o.fora)} fotos fora deste arquivo pelo limite de ${FA.MAX_FOTOS_PPTX}` : ''} · gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)} · Dikma Gestão`, 6.32, 5.92, 6.6, 0.26, { fontSize: 9.5, color: COR.cinza, fit: 'shrink' });
   }
 
+  // ---- sumário (só no relatório de atividades, que tem várias partes): links preenchidos no fim ----
+  const sumario = qz ? null : interno();
+
   // ---- painel de resultados (dashboard) ----
   const porDia = FA.fotosPorPeriodo(todos, rel.de, rel.fim || rel.ate);
   const graficoDias = (s, x, y, w, h) => {
@@ -169,6 +174,7 @@ export async function gerarPptx(o) {
   if (!qz) {
     // 1) painel geral
     {
+      secao('Painel de resultados', 'Programadas, realizadas, cumprimento por rota e fotos por dia');
       const s = interno();
       titulo(s, 'Painel de resultados', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${filtro}`);
       const nums = [[nTxt(i.prog), 'Programadas', COR.P, 'no período'], [nTxt(i.R), 'Realizadas', COR.R, i.prog ? `${pctTxt(i.cumpr)} das programadas` : ''],
@@ -201,6 +207,7 @@ export async function gerarPptx(o) {
     // 2) painel por rota: tabela com barras coloridas
     if (rel.porRota.length) {
       const pr = FA.paginar(rel.porRota, 12);
+      secao('Painel por rota', 'Cumprimento e fotos de cada rota');
       pr.forEach((pg, n) => {
         const s = interno();
         titulo(s, 'Painel por rota', `${periodo}${filtro}${pr.length > 1 ? ` · parte ${n + 1} de ${pr.length}` : ''}`);
@@ -229,6 +236,7 @@ export async function gerarPptx(o) {
     }
     // 3) pontos de atenção
     {
+      secao('Pontos de atenção', 'Não realizadas por motivo e por rota, realizadas sem foto');
       const s = interno();
       titulo(s, 'Pontos de atenção', `${periodo}${filtro}`);
       const ch = 5.5, y = 1.05, cw = (W - 1.15) / 2;
@@ -277,6 +285,7 @@ export async function gerarPptx(o) {
   // Destaques (escolhidos na tela, até 4): um slide com as fotos grandes, a marca e o local/data embaixo de cada uma.
   const dest = (o.destaques || []).slice(0, FA.MAX_DESTAQUES);
   if (dest.length) {
+    secao(dest.length > 1 ? 'Destaques do período' : 'Destaque do período', 'As fotos escolhidas em destaque');
     const s = interno(); titulo(s, dest.length > 1 ? 'Destaques do período' : 'Destaque do período', periodo + filtro);
     const pos = FA.gradeFotos(dest.length, { x: 0.5, y: 1.05, w: W - 1, h: 5.55 }, 0.5, 0.25);
     for (let j = 0; j < dest.length; j++) {
@@ -304,6 +313,7 @@ export async function gerarPptx(o) {
     }
   }
   const pags = FA.paginasFotos(rel.grupos, FA.FOTOS_POR_SLIDE); let nPag = 0;
+  secao('Registros fotográficos', `${nTxt(pags.length)} ${pags.length === 1 ? 'slide' : 'slides'} com as fotos, Antes e Depois`);
   if (!pags.length) {
     const s = interno(); titulo(s, 'Registros fotográficos', periodo + filtro);
     txt(s, 'Nenhum registro fotográfico no período.', 0.5, 3, W - 1, 0.6, { fontSize: 18, color: COR.cinza, align: 'center' });
@@ -391,6 +401,7 @@ export async function gerarPptx(o) {
   const tabela = (lista, tituloT, cols, linha, max = 4) => {
     if (!lista.length) return;
     const pgs = FA.paginar(lista, 13); const usar = pgs.slice(0, max);
+    secao(tituloT.replace('Anexo · ', 'Anexo: '), `${nTxt(lista.length)} no período`);
     usar.forEach((pg, n) => {
       const s = interno();
       titulo(s, tituloT, `${nTxt(lista.length)} no período${usar.length > 1 ? ` · parte ${n + 1} de ${usar.length}` : ''}${n === usar.length - 1 && pgs.length > usar.length ? ` · mostrando ${nTxt(usar.length * 13)} (veja a lista completa no sistema)` : ''}`);
@@ -405,6 +416,7 @@ export async function gerarPptx(o) {
   // ---- observações do período (texto livre do responsável) ----
   const obs = String(o.observacoes || '').trim();
   if (obs) {
+    secao('Observações do período', 'Comentários do responsável');
     const s = interno(); titulo(s, 'Observações do período', periodo + filtro);
     ret(s, 0.5, 1.05, W - 1, 5.5, COR.creme, 0.06); ret(s, 0.5, 1.25, 0.08, 5.1, COR.laranja);
     const pars = obs.split(/\n/);
@@ -420,6 +432,21 @@ export async function gerarPptx(o) {
     else ret(s, 8.9, 0, W - 8.9, H, COR.navy);
     txt(s, 'Obrigado pela atenção!', 0.75, 2.4, 5.0, 1.4, { fontFace: FONTE_FORTE, fontSize: 40, bold: true, color: COR.navy, fit: 'shrink' });
     if (img.dikma) s.addImage({ data: img.dikma, x: 0.75, y: 5.4, w: 3.9, h: 1.3 });
+  }
+
+  // sumário: cada parte com a página e um link para ela (clicável na apresentação e no PDF)
+  if (sumario) {
+    titulo(sumario, 'Sumário', `${periodo}${filtro}`);
+    const lh = Math.min(0.62, 5.3 / Math.max(1, secoes.length));
+    secoes.forEach((x, j) => {
+      const y = 1.15 + j * lh;
+      ret(sumario, 0.9, y + 0.06, 0.55, lh - 0.14, j % 2 ? COR.navy : COR.laranja, 0.05);
+      txt(sumario, String(j + 1), 0.9, y + 0.06, 0.55, lh - 0.14, { fontFace: FONTE_FORTE, fontSize: 15, bold: true, color: COR.branco, align: 'center' });
+      txt(sumario, [{ text: x.t, options: { bold: true, color: COR.navy, hyperlink: { slide: x.pag, tooltip: `Ir para ${x.t}` } } }, { text: '   ' + x.d, options: { fontSize: 11, color: COR.cinza } }],
+        1.65, y, 9.6, lh, { fontSize: 16, fit: 'shrink' });
+      txt(sumario, `página ${x.pag}`, W - 2.2, y, 1.4, lh, { fontSize: 12, color: COR.cinza, align: 'right' });
+      if (j < secoes.length - 1) sumario.addShape(pptx.ShapeType.line, { x: 1.65, y: y + lh, w: W - 2.45, h: 0, line: { color: COR.linha, width: 0.5 } });
+    });
   }
 
   // número da página em todos os slides internos (a capa é a 1 e o encerramento, a última)
