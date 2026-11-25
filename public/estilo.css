@@ -2082,3 +2082,58 @@ button.ffase{cursor:pointer;min-height:22px}
 .velo th{font-size:11px;color:var(--ink-3);font-weight:600}
 .velo .num{text-align:right;font-variant-numeric:tabular-nums}
 .velo .mut{color:var(--ink-3);font-size:12px;margin:6px 0;white-space:normal}
+
+/* Escala do dia no celular (lista primeiro): resumo numa linha, rotas com falta recolhidas, filtro rápido e barra do rodapé */
+.efres{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:baseline;padding:10px 14px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--e1);font-size:12.5px;color:var(--ink-3)}
+.efres b{font-family:var(--f-display);font-size:19px;color:var(--ink);margin-right:2px}
+.efres b.bad{color:var(--st-nreal)}
+details.efalta-d>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;cursor:pointer}
+details.efalta-d>summary::-webkit-details-marker{display:none}
+details.efalta-d>summary .minw{display:flex;flex-direction:column;gap:1px}
+details.efalta-d[open]>summary{border-bottom:1px solid var(--line-2)}
+.effil{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.effil-b{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);font:inherit;font-size:13px;font-weight:600;border-radius:999px;padding:5px 11px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;min-height:36px}
+.effil-b.on{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.effil-b .badge{background:var(--surface-2);color:var(--ink-2);font-size:11px;font-weight:700;border-radius:10px;padding:0 6px;line-height:17px}
+.effil-b .badge.warn{background:var(--st-atr);color:#fff}.effil-b .badge.bad{background:var(--st-nreal);color:#fff}
+.efpe{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:6;display:flex;align-items:center;gap:4px;margin-top:10px;padding:6px 8px;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--e3,0 8px 24px rgba(0,0,0,.15))}
+.efpe-s{width:40px;height:40px;padding:0;display:grid;place-items:center;flex:none}
+.efpe-s svg{width:20px;height:20px}
+.efpe-d{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;line-height:1.2;text-align:center}
+.efpe-d small{font-size:12px;color:var(--ink-3)}
+.efpe-d small b{color:var(--ink);font-size:13px}
+.efpe .btn.sm{flex:none;white-space:nowrap}
+
+/* Segurança no celular (lista primeiro): atenção em botões curtos, números recolhidos, botão fixo Registrar e lista compacta */
+.sgfab{display:none}
+.sgat{display:flex;flex-wrap:wrap;gap:6px}
+.sgat-b{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-left-width:3px;background:var(--surface);color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:500;border-radius:10px;padding:6px 10px;cursor:pointer;min-height:36px;text-align:left}
+.sgat-b b{font-family:var(--f-display);font-size:16px;color:var(--ink)}
+.sgat-b.critico{border-left-color:var(--st-nreal)}.sgat-b.critico b{color:var(--st-nreal)}
+.sgat-b.atencao{border-left-color:var(--st-atr)}.sgat-b.atencao b{color:var(--st-atr)}
+.sgat-b.info{border-left-color:var(--marca)}
+.sgat-ok{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--st-real);font-weight:600}
+.sgat-ok svg{width:18px;height:18px}
+details.sgnums>summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--ink-2);padding:4px 2px}
+details.sgnums[open]>summary{margin-bottom:8px}
+.sgfab-ic{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--surface-2);flex:none}
+.sgfab-ic svg{width:18px;height:18px}
+@media (max-width:860px){
+  .sgnova{display:none!important}
+  .sgfab{display:inline-flex;align-items:center;gap:6px;position:fixed;right:16px;bottom:calc(84px + env(safe-area-inset-bottom,0px));z-index:45;border:0;border-radius:999px;padding:12px 18px 12px 14px;background:var(--accent);color:var(--accent-ink,#fff);font:inherit;font-size:15px;font-weight:700;box-shadow:0 8px 20px -6px color-mix(in srgb,var(--accent) 70%,transparent),var(--e3,0 8px 24px rgba(0,0,0,.2));cursor:pointer}
+  .sgfab svg{width:18px;height:18px}
+  #view:has(.sgfab){padding-bottom:64px}
+  /* lista compacta: título e descrição, depois data, situação, responsável e prazo na mesma linha, sem rótulos */
+  table.tcard.sgtab tr{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;padding:10px 12px}
+  table.tcard.sgtab td{flex:0 1 auto;font-size:12.5px}
+  table.tcard.sgtab td.tc-t,table.tcard.sgtab td.tc-full{flex:1 1 100%}
+  table.tcard.sgtab td[data-l]::before{display:none}
+  table.tcard.sgtab td[data-l="Data"],table.tcard.sgtab td[data-l="Responsável"],table.tcard.sgtab td[data-l="Tipo"]{color:var(--ink-2)}
+  table.tcard.sgtab td[data-l="Prazo"]::before,table.tcard.sgtab td[data-l="Responsável"]::before{display:inline;content:attr(data-l) ": ";font-size:12px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink-3)}
+  table.tcard.sgtab td[data-l="Fotos"]{flex:none;order:8}
+  table.tcard.sgtab td[data-l="Fotos"] .sgfotos:empty{display:none}
+  table.tcard.sgtab .sgdesc{max-width:none}
+  table.tcard.sgtab td.tc-acao{display:flex;gap:6px;flex:1 1 200px}
+  table.tcard.sgtab td.tc-acao .btn{flex:1 1 0;width:auto;min-width:0}
+  table.tcard.sgtab td.tc-acao .btn+.btn{margin-left:0}
+}

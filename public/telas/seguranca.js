@@ -6,6 +6,8 @@
 // funciona sem sinal (o registro e as fotos ficam na fila do aparelho e sobem quando a conexão voltar).
 import { MESES_L, SETS, add, addMonth, today } from '../contas/cal.js';
 import { campoBusca } from '../ui/busca.js';
+import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
+import { relatorioSeg, periodoSeg, mesesDoPeriodo } from '../contas/seg-resumo.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { ESQUELETO } from '../ui/movimento.js';
 import { listasSeg, conjDaArea, perfilSeg, supConjs, registraSeg, trataTudoSeg, trataAnom, editaProprio, STATUS_SEG, abertaSeg, vencidaSeg, comigoSeg, diasTratamento, indicadoresSeg, normNomeSeg, SEG_PADRAO, PRAZO_EDICAO_H, fotosDoReg, PERG_CARTAO, VALIDA_CARTAO, validaCartao, pendenteCartao, painelSeg } from '../contas/segcalc.js';
@@ -15,7 +17,7 @@ import { ME, UI, isAdmin, salvarUI, modsDe } from '../nucleo/estado.js';
 import { temIndU, conjsInd } from '../contas/acessos.js';
 import { acoes } from '../nucleo/acoes.js';
 import { I } from '../ui/icones.js';
-import { toast, formSheet } from '../ui/janelas.js';
+import { toast, formSheet, sheet } from '../ui/janelas.js';
 import { render, schedule, isMobile, trocarTela } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 import { telaTreinos } from './treinos.js';
@@ -107,6 +109,8 @@ export function criarSeguranca() {
   const pillSit = a => (vencidaSeg(a, hoje()) ? '<span class="pill bad">Prazo vencido</span>' : a.status === 'concluida' ? '<span class="pill ok">Concluída</span>' : a.status === 'tratamento' ? '<span class="pill warn">Em tratamento</span>' : '<span class="pill neu">Aberta</span>');
   const pillCartao = c => (c.status === 'validado' ? `<span class="pill ok">Validado${c.valid && VALIDA_CARTAO[c.valid.tipo] ? ' · ' + (c.valid.tipo === 'lider' ? 'Líder' : 'Seg. do Trabalho') : ''}</span>` : '<span class="pill warn">Falta validar</span>');
   const minis = (r, n = 3) => (r.fotos || []).slice(0, n).map((id, i) => ((r.minis || [])[i] ? `<button type="button" class="sgmini" data-act="sgFoto" data-id="${esc(id)}" data-i="${i}" data-reg="${esc(r.id)}" aria-label="Ver a foto ${i + 1}"><img src="${(r.minis || [])[i]}" alt=""></button>` : '')).join('') + ((r.fotos || []).length > n ? `<span class="muted small">+${r.fotos.length - n}</span>` : '');
+  // Celular: os números do mês ficam recolhidos numa linha (a lista vem primeiro); no computador, a faixa de sempre.
+  const numeros = html => (isMobile() ? `<details class="sgnums"><summary>Números de ${mesNome(U.mes)}</summary>${html}</details>` : html);
   const vazio = (t, s, bt = '') => `<div class="empty"><b>${t}</b><span>${s}</span>${bt}</div>`;
   const casaQ = (r, campos) => { const q = normNomeSeg(U.q); if (!q) return true; const t = normNomeSeg(campos.map(k => [].concat(r[k] || []).join(' ')).join(' ')); return q.split(' ').every(p => t.includes(p)); };
   const porData = (a, b) => (b.data + (b.hora || '')).localeCompare(a.data + (a.hora || '')) || (+b.em || 0) - (+a.em || 0);
@@ -449,13 +453,13 @@ export function criarSeguranca() {
     const ind = indicadoresSeg({ inter: l, anom: [], mes: U.mes, hoje: hoje() });
     let h = `<div class="filters">${selMes('sgMes', U.mes)}${selArea()}${busca('Local, responsável, desvio…')}
       ${podeExportar() ? `<button class="btn" data-act="expSegInter" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}
-      ${podeRegistrar() ? `<button class="btn pri" data-act="sgNova" data-tipo="inter" style="align-self:flex-end">${I.plus} Nova interação</button>` : ''}</div>`;
+      ${podeRegistrar() ? `<button class="btn pri sgnova" data-act="sgNova" data-tipo="inter" style="align-self:flex-end">${I.plus} Nova interação</button>` : ''}</div>`;
     h += rascBanner('inter');
-    h += `<div class="kpis">
+    h += numeros(`<div class="kpis">
       <div class="kpi hero"><span class="lbl">Interações</span><span class="v num">${l.length}</span><span class="s">${mesNome(U.mes)} · ${quemVe()}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Com desvio</span><span class="v num">${ind.comDesvio}</span><span class="s">${l.length ? Math.round(ind.comDesvio / l.length * 100) : 0}% das interações</span></div>
       <div class="kpi"><span class="lbl">Desvio mais visto</span><span class="v vsm">${ind.desvios.length ? esc(ind.desvios[0][0]) : '—'}</span><span class="s">${ind.desvios.length ? `${ind.desvios[0][1]} vez${ind.desvios[0][1] > 1 ? 'es' : ''}` : 'nenhum desvio'}</span></div>
-      <div class="kpi"><span class="lbl">Pessoas</span><span class="v num">${ind.porPessoa.length}</span><span class="s">responsáveis com registro</span></div></div>`;
+      <div class="kpi"><span class="lbl">Pessoas</span><span class="v num">${ind.porPessoa.length}</span><span class="s">responsáveis com registro</span></div></div>`);
     if (!l.length) return h + `<div class="card">${vazio(todas.length ? 'Nada encontrado com estes filtros' : `Nenhuma interação em ${mesNome(U.mes)}`, todas.length ? 'Mude a área ou a busca.' : podeRegistrar() ? 'Registre a primeira pelo botão Nova interação.' : 'Os registros aparecem aqui assim que forem feitos.', !todas.length && podeRegistrar() ? `<button class="btn pri" data-act="sgNova" data-tipo="inter">${I.plus} Nova interação</button>` : '')}</div>`;
     h += `<div class="card"><div class="tw"><table class="tcard sgtab"><thead><tr><th>Data</th><th>Local</th><th>Tipo</th><th>Desvios</th><th>Responsável</th><th>Fotos</th><th></th></tr></thead><tbody>
       ${l.map(r => `<tr><td data-l="Data" class="nowrap">${dm(r.data)}</td><td class="tc-t"><b>${esc(r.local)}</b><small class="muted"> · ${esc(r.area)}</small></td><td data-l="Tipo">${esc(r.tipoAtiv)}</td>
@@ -481,13 +485,13 @@ export function criarSeguranca() {
     h += `<div class="filters"><div class="sgsit" role="tablist" aria-label="Situação">${CSITS.map(([k, n]) => `<button type="button" role="tab" data-act="sgCSit" data-sgsit="${k}" aria-selected="${U.csit === k}">${n}${k === 'pendentes' && pend.length ? ` <span class="badge num">${pend.length}</span>` : ''}</button>`).join('')}</div>
       ${U.csit !== 'pendentes' ? selMes('sgMes', U.mes) : ''}${selArea()}${busca('Nome, motivo…')}
       ${podeExportar() ? `<button class="btn" data-act="expSegCartao" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}
-      ${podeRegistrar() ? `<button class="btn pri" data-act="sgNova" data-tipo="cartao" style="align-self:flex-end">${I.plus} Novo cartão</button>` : ''}</div>`;
+      ${podeRegistrar() ? `<button class="btn pri sgnova" data-act="sgNova" data-tipo="cartao" style="align-self:flex-end">${I.plus} Novo cartão</button>` : ''}</div>`;
     h += rascBanner('cartao');
-    h += `<div class="kpis">
+    h += numeros(`<div class="kpis">
       <div class="kpi hero"><span class="lbl">Cartões no mês</span><span class="v num">${doMes.length}</span><span class="s">${mesNome(U.mes)} · ${quemVe()}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Falta validar</span><span class="v num">${pend.length}</span><span class="s">${pend.length ? 'esperam o líder ou a segurança' : 'todos validados'}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-real)"></i>Validados</span><span class="v num">${doMes.filter(c => c.status === 'validado').length}</span><span class="s">em ${mesNome(U.mes)}</span></div>
-      <div class="kpi"><span class="lbl">O que mais faltou</span><span class="v vsm">${top ? esc(title(top[0].replace('?', ''))) : '—'}</span><span class="s">${top ? `${top[1]} vez${top[1] > 1 ? 'es' : ''} no mês` : 'nada marcado no mês'}</span></div></div>`;
+      <div class="kpi"><span class="lbl">O que mais faltou</span><span class="v vsm">${top ? esc(title(top[0].replace('?', ''))) : '—'}</span><span class="s">${top ? `${top[1]} vez${top[1] > 1 ? 'es' : ''} no mês` : 'nada marcado no mês'}</span></div></div>`);
     if (!l.length) return h + `<div class="card">${vazio(U.csit === 'pendentes' ? 'Nenhum cartão esperando validação' : `Nenhum Cartão Amarelo em ${mesNome(U.mes)}`, U.q || U.area ? 'Mude a área ou a busca.' : podeRegistrar() ? 'Registre pelo botão Novo cartão.' : 'Os cartões aparecem aqui assim que forem registrados.')}</div>`;
     h += `<div class="card"><div class="tw"><table class="tcard sgtab"><thead><tr><th>Data</th><th>Comunicado por</th><th>Motivo</th><th>Situação</th><th></th></tr></thead><tbody>
       ${l.map(c => `<tr><td data-l="Data" class="nowrap">${dm(c.data)}</td>
@@ -522,16 +526,16 @@ export function criarSeguranca() {
     let h = `<div class="filters"><div class="sgsit" role="tablist" aria-label="Situação">${SITS.map(([k, n]) => `<button type="button" role="tab" data-act="sgSit" data-sgsit="${k}" aria-selected="${U.sit === k}">${n}${cont[k] ? ` <span class="badge num${k === 'vencidas' ? ' bad' : ''}">${cont[k]}</span>` : ''}</button>`).join('')}</div>
       ${['concluidas', 'todas'].includes(U.sit) ? selMes('sgMes', U.mes) : ''}${selArea()}${busca('Local, descrição, causa…')}
       ${podeExportar() ? `<button class="btn" data-act="expSegAnom" style="align-self:flex-end">${I.dl} Exportar</button>` : ''}
-      ${podeRegistrar() ? `<button class="btn pri" data-act="sgNova" data-tipo="anom" style="align-self:flex-end">${I.plus} Nova anomalia</button>` : ''}</div>`;
+      ${podeRegistrar() ? `<button class="btn pri sgnova" data-act="sgNova" data-tipo="anom" style="align-self:flex-end">${I.plus} Nova anomalia</button>` : ''}</div>`;
     h += rascBanner('anom');
     // O que pede atenção agora (antes ficava no Painel, que foi para Indicadores): no topo da fila.
-    h += `<section class="card sgp-card sgatencao"><header><h2>Precisa de atenção</h2><p>Agora · ${esc(U.area ? title(U.area) : quemVe())}</p></header><div class="body">${atencao(U.area)}</div></section>`;
-    h += `<div class="kpis compacta">
+    h += isMobile() ? atencaoCurta(U.area) : `<section class="card sgp-card sgatencao"><header><h2>Precisa de atenção</h2><p>Agora · ${esc(U.area ? title(U.area) : quemVe())}</p></header><div class="body">${atencao(U.area)}</div></section>`;
+    h += numeros(`<div class="kpis compacta">
       <div class="kpi hero"><span class="lbl">Em aberto</span><span class="v num">${ab.length}</span><span class="s">${ab.filter(a => a.status === 'tratamento').length} em tratamento · ${quemVe()}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-nreal)"></i>Prazo vencido</span><span class="v num">${venc.length}</span><span class="s">${venc.length ? 'precisam de atenção' : 'nenhuma atrasada'}</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-atr)"></i>Sem responsável</span><span class="v num">${sem.length}</span><span class="s">ninguém assumiu ainda</span></div>
       <div class="kpi"><span class="lbl"><i class="dot" style="background:var(--st-real)"></i>Concluídas</span><span class="v num">${ind.concluidasNoMes}</span><span class="s">em ${mesNome(U.mes)}</span></div>
-      <div class="kpi"><span class="lbl">Tempo médio</span><span class="v vsm">${ind.tempoMedio == null ? '—' : fmtDias(ind.tempoMedio)}</span><span class="s">do registro à conclusão</span></div></div>`;
+      <div class="kpi"><span class="lbl">Tempo médio</span><span class="v vsm">${ind.tempoMedio == null ? '—' : fmtDias(ind.tempoMedio)}</span><span class="s">do registro à conclusão</span></div></div>`);
     if (!l.length) return h + `<div class="card">${vazio(U.sit === 'vencidas' ? 'Nenhuma anomalia com prazo vencido' : U.sit === 'comigo' ? 'Nenhuma anomalia com você' : U.sit === 'abertas' ? 'Nenhuma anomalia em aberto' : 'Nenhuma anomalia neste período', U.q || U.area ? 'Mude a área ou a busca.' : U.sit === 'abertas' ? 'Tudo tratado por aqui.' : 'Troque a situação ou o mês para ver outras.')}</div>`;
     h += `<div class="card"><div class="tw"><table class="tcard sgtab"><thead><tr><th>Data</th><th>Anomalia</th><th>Situação</th><th>Responsável</th><th>Prazo</th><th>Fotos</th><th></th></tr></thead><tbody>
       ${l.map(a => { const tr = a.trat || {}; const v = vencidaSeg(a, hoje()); const pode = trataAnom(ME, a);
@@ -564,7 +568,7 @@ export function criarSeguranca() {
   const irBtn = (v, sit, txt = 'Ver') => `<button type="button" class="btn sm" data-act="sgIr" data-v="${v}"${sit ? ` data-sgsit="${sit}"` : ''}>${txt}</button>`;
 
   // O que pede ação agora (respeita a área escolhida): cada linha leva direto para a fila certa.
-  function atencao(area) {
+  function itensAtencao(area) {
     const d = hoje(), em2 = add(d, 2), daA = l => l.filter(x => !area || x.area === area);
     const ab = daA(S().anom).filter(abertaSeg);
     const l = [
@@ -575,9 +579,19 @@ export function criarSeguranca() {
       ['atencao', daA(S().cartao).filter(c => pendenteCartao(c) && validaCartao(ME, c)).length, 'Cartão Amarelo para validar', 'Cartões Amarelos para validar', 'sgcartao', 'pendentes']
     ];
     if (veTreinos(ME) && (DB.cache.treinos || []).length) { const t = painelTreinos(DB.cache.treinos, d).total; l.push(['critico', t.vencido, 'treinamento ou ASO vencido', 'treinamentos ou ASO vencidos', 'sgtrein', '']); }
-    const itens = l.filter(x => x[1] > 0);
+    return l.filter(x => x[1] > 0);
+  }
+  function atencao(area) {
+    const itens = itensAtencao(area);
     if (!itens.length) return `<div class="sgp-ok">${I.ok}<div><b>Nada pendente agora</b><span>Sem prazo vencido, sem anomalia sem dono e sem cartão esperando validação.</span></div></div>`;
     return `<ul class="sgp-at">${itens.map(([s, n, um, varios, v, sit]) => `<li class="${s}"><b class="num">${n}</b><span>${n === 1 ? um : varios}</span>${irBtn(v, sit)}</li>`).join('')}</ul>`;
+  }
+
+  // Celular: o que pede atenção vira uma faixa de botões curtos (cada um leva à fila certa), para a lista subir.
+  function atencaoCurta(area) {
+    const itens = itensAtencao(area);
+    if (!itens.length) return `<div class="sgat-ok">${I.ok}<span>Nada pendente agora</span></div>`;
+    return `<div class="sgat" role="group" aria-label="Precisa de atenção">${itens.map(([s, n, um, varios, v, sit]) => `<button type="button" class="sgat-b ${s}" data-act="sgIr" data-v="${v}"${sit ? ` data-sgsit="${sit}"` : ''}><b class="num">${n}</b>${n === 1 ? um : varios}</button>`).join('')}</div>`;
   }
 
   function vPainel() {
@@ -622,6 +636,16 @@ export function criarSeguranca() {
     h += recolhido(`Interações por pessoa · ${mesNome(U.pMes)}`, p.porPessoa.length ? barras(p.porPessoa.slice(0, 10), 'var(--marca)') : '<p class="muted small m0">Nenhuma interação no mês.</p>');
     return `<div class="sgp">${h}</div>`;
   }
+
+  // Indicadores › Segurança: "Imprimir resumo" e "Exportar para o Excel" no padrão dos outros resumos (contas/seg-resumo.js),
+  // perguntando antes o período (dia, semana ou mês; começa no mês aberto na tela).
+  registrarRelatorio('sgpainel', per => {
+    // Período em mês ainda não lido: começa a ler e pede para tentar de novo (na demonstração já está tudo em memória).
+    const falta = S().meses.size ? mesesDoPeriodo(periodoSeg(per, U.pMes)).filter(m => !S().meses.has(m)) : [];
+    if (falta.length) { DB.segWatch(falta); return null; }
+    const tr = (veTreinos(ME) || temIndU(ME)) && (DB.cache.treinos || []).length ? painelTreinos(DB.cache.treinos, hoje()) : null;
+    return relatorioSeg({ inter: S().inter, anom: S().anom, cartao: S().cartao, per, mesTela: U.pMes, hoje: hoje(), area: U.area, areas: L().areas.map(a => a.nome), onde: quemVe(), agora: agoraTxt(), treinos: tr });
+  }, { periodo: () => ({ tipo: 'mes', data: U.pMes === hoje().slice(0, 7) ? hoje() : U.pMes + '-01' }) });
 
   // ---------- Administração › Segurança: listas dos formulários ----------
   let CFG = null; // rascunho até salvar
@@ -697,7 +721,19 @@ export function criarSeguranca() {
   });
   document.addEventListener('input', e => { if (e.target.id === 'sgQ') { U.q = e.target.value; clearTimeout(window._sgq); window._sgq = setTimeout(schedule, 220); } });
 
+  // Celular: botão fixo "Registrar" nas abas de registro; escolhe o tipo em um toque (os botões do topo somem no celular).
+  const fab = () => (podeRegistrar() && !framed ? `<button type="button" class="sgfab" data-act="sgRegistrar">${I.plus}<span>Registrar</span></button>` : '');
+  acoes.sgRegistrar = () => sheet('Registrar', 'O que você quer registrar?', [
+    { ic: `<span class="sgfab-ic">${I.anomalia || ''}</span>`, t: 'Anomalia', d: 'Condição ou ato inseguro para tratar', v: 'anom' },
+    { ic: `<span class="sgfab-ic">${I.conversa || ''}</span>`, t: 'Interação', d: 'Conversa de segurança em campo', v: 'inter' },
+    { ic: `<span class="sgfab-ic">${I.cartao || ''}</span>`, t: 'Cartão Amarelo', d: 'Direito ao Trabalho Seguro', v: 'cartao' },
+    { ic: `<span class="sgfab-ic">${I.lupa || ''}</span>`, t: 'Inspeção', d: 'Checklist de 5S, segurança ou área', v: 'insp' }
+  ], o => (o.v === 'insp' ? acoes.sgINova() : abrirForm(o.v)));
   function renderTela(v) {
+    if (['sginter', 'sganom', 'sgcartao', 'sginsp'].includes(v) && S().on && S().loaded) return telaRegistro(v) + fab();
+    return telaRegistro(v);
+  }
+  function telaRegistro(v) {
     if (v === 'sgtrein') return telaTreinos().view(); // a mesma tela do RH (telas/treinos.js)
     if (!S().on || !S().loaded) { if (!S().on && v !== 'sgconfig') return vazio('Sem acesso à Segurança', 'Fale com o administrador do sistema.'); if (!S().loaded && v !== 'sgconfig') return ESQUELETO; }
     if (v === 'sginter') return vInter();
