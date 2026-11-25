@@ -84,8 +84,19 @@ async function gerarRelatorio() {
     progresso(0, 0, 'Carregando a biblioteca do PowerPoint…');
     const [img] = await Promise.all([mod.imagensModelo(), mod.carregarBiblioteca()]);
     const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: FA.doTipo(A.fotos, A.tipo), de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota, areas: A.area ? [A.area] : null });
+    // comparação com o período anterior (só atividades): reaproveita as semanas já lidas e lê só os meses que faltam
+    let anterior = null;
+    if (A.tipo === 'ativ') {
+      try {
+        const pa = FA.periodoAnterior(p.de, p.ate); const ja = FA.mesesDasSemanas(p.de, p.ate);
+        const faltam = FA.mesesDasSemanas(pa.de, pa.ate).filter(m => !ja.includes(m));
+        const semAnt = { ...semanas, ...(faltam.length ? await DB.semanasPeriodo(k, faltam) : {}) };
+        const ra = FA.montarRelatorio({ semanas: semAnt, plano: planoDe(k), fotos: [], de: pa.de, ate: pa.ate, hoje: TODAY, rota: A.rota, areas: A.area ? [A.area] : null });
+        if (ra.ind && ra.ind.prog) anterior = { ...pa, cumpr: ra.ind.cumpr, pctFoto: ra.ind.pctFoto };
+      } catch (e) { anterior = null; }
+    }
     const lim = FA.limitarFotos(rel.grupos, FA.MAX_FOTOS_PPTX);
-    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
+    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, anterior, tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${sufixoFiltro()}.pptx`;
     mod.baixarBlob(blob, nome);

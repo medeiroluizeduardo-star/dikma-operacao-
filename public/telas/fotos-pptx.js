@@ -69,6 +69,10 @@ export async function gerarPptx(o) {
   pptx.layout = 'LAYOUT_WIDE'; pptx.author = o.responsavel || o.autor || 'Dikma Gestão'; pptx.company = 'Dikma'; pptx.title = `Relatório fotográfico${qz ? ' · ' + nomeTipo : ''} · ${o.nomeConj}`;
   pptx.subject = `Período ${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
   const periodo = `${FA.dBR(rel.de)} a ${FA.dBR(rel.ate)}`;
+  // Comparação com o período anterior (só atividades; vem pronta da tela em o.anterior = { de, ate, cumpr, pctFoto }).
+  const ant = !qz && o.anterior ? o.anterior : null;
+  const nomeAnt = ant && FA.ehSemanaCheia(ant.de, ant.ate) ? 'semana anterior' : 'período anterior';
+  const compara = campoAnt => { const v = ant ? FA.variacaoPts(i[campoAnt], ant[campoAnt]) : ''; return !v ? '' : v === '= igual' ? `= igual à ${nomeAnt}` : `${v} sobre a ${nomeAnt}`; };
   const filtro = `${o.area ? ' · ' + o.area : ''}${rel.rota ? ' · ' + rel.rota : ''}`;
   pptx.defineSlideMaster({
     title: 'DIKMA', background: { color: COR.branco },
@@ -98,7 +102,7 @@ export async function gerarPptx(o) {
     ret(s, x, y, w, h, COR.creme, 0.06); ret(s, x, y + 0.14, 0.07, h - 0.28, cor);
     txt(s, valor, x + 0.22, y + 0.08, w - 0.3, h * 0.5, { fontFace: FONTE_FORTE, fontSize: 28, bold: true, color: cor, valign: 'bottom', fit: 'shrink' });
     txt(s, nome.toUpperCase(), x + 0.22, y + h * 0.56, w - 0.3, 0.24, { fontSize: 9.5, bold: true, color: COR.navy, charSpacing: 0.5, fit: 'shrink' });
-    if (nota) txt(s, nota, x + 0.22, y + h * 0.56 + 0.22, w - 0.3, 0.2, { fontSize: 8.5, color: COR.cinza, fit: 'shrink' });
+    if (nota) txt(s, nota, x + 0.22, y + h * 0.56 + 0.22, w - 0.3, 0.2, { fontSize: 8.5, color: /^[▲▼]/.test(nota) ? corVar(nota) : COR.cinza, fit: 'shrink' });
   };
   // Lista de barras horizontais (desenhadas, para ler fácil): nome · barra · valor.
   const barras = (s, itens, { x, y, w, h, cor, fmt = nTxt, max, rotW = 0.42, linhaMax = 0.46 }) => {
@@ -114,6 +118,7 @@ export async function gerarPptx(o) {
     });
   };
   const corPct = p => COR[FA.semaforo(p) || 'semNum'];
+  const corVar = t => (String(t).startsWith('▲') ? COR.ok : String(t).startsWith('▼') ? COR.critico : COR.cinza);
   const legendaFaixas = (s, x, y, w) => txt(s, [
     { text: '■ ', options: { color: COR.ok } }, { text: `${FA.FAIXA_OK}% ou mais    ` },
     { text: '■ ', options: { color: COR.atencao } }, { text: `${FA.FAIXA_ATENCAO}% a ${FA.FAIXA_OK - 1}%    ` },
@@ -140,11 +145,12 @@ export async function gerarPptx(o) {
     txt(s, linhas.flat(), 6.32, 3.65, 6.6, 0.95, { fontSize: 14, color: COR.navy, valign: 'top', fit: 'shrink', paraSpaceAfter: 2 });
     // os 3 números principais
     const tres = qz ? [[nTxt(reg.fotos), 'registros fotográficos'], [nTxt(reg.ocorrencias), o.tipo === 'om' ? 'OMs com foto' : 'ocorrências'], [nTxt(reg.locais), 'locais']]
-      : [[nTxt(reg.fotos), 'registros fotográficos'], [pctTxt(i.cumpr), 'de cumprimento'], [pctTxt(i.pctFoto), 'das atividades com foto']];
-    tres.forEach(([v, t], j) => {
+      : [[nTxt(reg.fotos), 'registros fotográficos'], [pctTxt(i.cumpr), 'de cumprimento', compara('cumpr')], [pctTxt(i.pctFoto), 'das atividades com foto', compara('pctFoto')]];
+    tres.forEach(([v, t, cmp], j) => {
       const x = 6.32 + j * 2.22; ret(s, x, 4.78, 2.07, 1.0, COR.branco, 0.06);
       txt(s, v, x + 0.15, 4.84, 1.8, 0.52, { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: j === 0 ? COR.navy : COR.laranja, fit: 'shrink' });
-      txt(s, t, x + 0.15, 5.36, 1.8, 0.34, { fontSize: 10, color: COR.navy, valign: 'top', fit: 'shrink' });
+      txt(s, cmp ? [{ text: t, options: { breakLine: true } }, { text: cmp, options: { fontSize: 8.5, color: corVar(cmp) } }] : t,
+        x + 0.15, 5.36, 1.8, 0.38, { fontSize: 10, color: COR.navy, valign: 'top', fit: 'shrink' });
     });
     const g = o.geradoEm || new Date();
     txt(s, `${nomeTipo || o.nomeConj}${o.fora ? ` · ${nTxt(o.fora)} fotos fora deste arquivo pelo limite de ${FA.MAX_FOTOS_PPTX}` : ''} · gerado em ${g.toLocaleDateString('pt-BR')} às ${hora(g)} · Dikma Gestão`, 6.32, 5.92, 6.6, 0.26, { fontSize: 9.5, color: COR.cinza, fit: 'shrink' });
@@ -167,7 +173,8 @@ export async function gerarPptx(o) {
       titulo(s, 'Painel de resultados', `${periodo}${rel.fim < rel.ate ? ` · contado até ${FA.dBR(rel.fim)}` : ''}${filtro}`);
       const nums = [[nTxt(i.prog), 'Programadas', COR.P, 'no período'], [nTxt(i.R), 'Realizadas', COR.R, i.prog ? `${pctTxt(i.cumpr)} das programadas` : ''],
         [nTxt(i.N), 'Não realizadas', COR.N, i.P ? `${nTxt(i.P)} sem apontamento` : ''], [nTxt(i.E), 'Extras', COR.E, 'fora da programação'],
-        [pctTxt(i.cumpr), 'Cumprimento', corPct(i.cumpr), 'realizadas ÷ programadas'], [pctTxt(i.pctFoto), 'Com foto', corPct(i.pctFoto), `${nTxt(i.comFoto)} de ${nTxt(i.exigem)} atividades`]];
+        [pctTxt(i.cumpr), 'Cumprimento', corPct(i.cumpr), compara('cumpr') || 'realizadas ÷ programadas'],
+        [pctTxt(i.pctFoto), 'Com foto', corPct(i.pctFoto), compara('pctFoto') || `${nTxt(i.comFoto)} de ${nTxt(i.exigem)} atividades`]];
       const nw = (W - 1 - 5 * 0.15) / 6;
       nums.forEach(([v, t, c, n], j) => numero(s, 0.5 + j * (nw + 0.15), 1.05, nw, 1.12, v, t, c, n));
       const y2 = 2.35, h2 = 4.2;

@@ -292,6 +292,19 @@ export function periodoExtenso(de, ate) {
   return `${x.d} a ${y.d} de ${y.m} de ${y.a}`;
 }
 // Período de segunda a domingo (uma semana inteira)?
+// Comparação com o período anterior (só atividades, só os percentuais: as quantidades não se comparam quando o
+// período atual ainda não terminou). Período anterior = os mesmos dias logo antes de `de`.
+export function periodoAnterior(de, ate) {
+  const n = Math.round((new Date(ate + 'T12:00:00') - new Date(de + 'T12:00:00')) / 864e5) + 1;
+  return { de: add(de, -n), ate: add(de, -1) };
+}
+// Diferença em pontos percentuais: '▲ 4 pts', '▼ 1 pt', '= igual'; sem um dos números, ''.
+export function variacaoPts(atual, antes) {
+  if (atual == null || antes == null) return '';
+  const d = Math.round(atual - antes);
+  const pts = n => `${n} ${n === 1 ? 'pt' : 'pts'}`;
+  return d > 0 ? `▲ ${pts(d)}` : d < 0 ? `▼ ${pts(-d)}` : '= igual';
+}
 export const ehSemanaCheia = (de, ate) => add(de, 6) === ate && new Date(de + 'T12:00:00').getDay() === 1;
 // Antes / Durante / Depois pela hora: as fotos do grupo estão em ordem de hora; com uma só, não há marcação.
 export const marcaFoto = (i, n) => (n < 2 ? '' : i === 0 ? 'Antes' : i === n - 1 ? 'Depois' : 'Durante');
