@@ -34,3 +34,15 @@ test('contagem de filtros e rotas da área', () => {
   assert.deepEqual(rotasFreq(cs, 'A'), ['R1', 'R2']);
   assert.deepEqual(rotasFreq(cs, ''), ['R1', 'R2', 'R3']);
 });
+
+test('cartões da Frequência: marcas dos dias na tela e filtro do cartão', async () => {
+  const { marcasFreq, passaCartao } = await import('../public/contas/filtro-freq.js');
+  const m = marcasFreq([{ v: 'P' }, { v: 'FT', semJus: true }, { v: 'AT' }, { v: 'HE' }, { v: 'FE' }, { v: 'FE' }]);
+  assert.deepEqual({ ...m }, { FT: 1, AT: 1, HE: 1, FE: 2, semjus: 1, atencao: 1 });
+  assert.equal(marcasFreq([{ v: 'P' }]).atencao, 0);
+  assert.equal(marcasFreq([{ v: 'P' }], { semFicha: true }).atencao, 1);
+  assert.equal(marcasFreq([], { duplicado: true }).atencao, 1);
+  assert.ok(passaCartao(m, ''));
+  assert.ok(passaCartao(m, 'FE'));
+  assert.ok(!passaCartao(marcasFreq([{ v: 'P' }]), 'FT'));
+});
