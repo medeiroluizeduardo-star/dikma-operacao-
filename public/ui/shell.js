@@ -380,11 +380,15 @@ const VOLTA = { prog: ['Programação', 'prog'], gcolab: ['Colaboradores', 'user
 // Indicadores: em cada aba, "Imprimir resumo" (a página do resumo, quando a aba tem uma; senão imprime a própria aba) e
 // "Exportar para o Excel" (ui/indicadores-acoes.js; o Histórico usa a planilha de 12 meses dele).
 const RESUMO_DE = { painel: 'resumo', epainel: 'eresumo', fpainel: 'fresumo' };
+// Mesma conta de telas/fotos-relatorio.js › podeRelArea (aqui sem carregar o módulo, que é carregado só no clique).
+const podeRelFotos = () => !!ME && (isAdmin() || (['supervisor', 'coordenador', 'gestor'].includes(perfil('operacao')) && setsDe(ME, 'operacao').includes(SK)));
 function acoesInd(v, tem) {
   if (v.mod !== 'indicadores' || v.fora) return '';
   const r = RESUMO_DE[v.id];
   const pr = r && tem(r) ? `<button type="button" class="btn sm" data-go="${r}">${I.print} Imprimir resumo</button>` : `<button type="button" class="btn sm" data-act="indPrint">${I.print} Imprimir resumo</button>`;
-  return pr + `<button type="button" class="btn sm" data-act="${v.id === 'ihist' ? 'icExcel' : 'indExcel'}">${I.dl} Exportar para o Excel</button>`;
+  // Atividades: relatório fotográfico da área (supervisor, coordenador e gestor da Operação; telas/fotos-relatorio.js)
+  const rf = v.id === 'painel' && podeRelFotos() ? `<button type="button" class="btn sm" data-act="relFotosArea">${I.cam} Relatório fotográfico</button>` : '';
+  return pr + `<button type="button" class="btn sm" data-act="${v.id === 'ihist' ? 'icExcel' : 'indExcel'}">${I.dl} Exportar para o Excel</button>` + rf;
 }
 function atalhosDe(v) {
   const vs = viewsDoModulo(), tem = id => vs.some(x => x.id === id);

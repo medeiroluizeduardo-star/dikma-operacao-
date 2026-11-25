@@ -209,6 +209,12 @@ responsável embaixo (`FA.limparObs`, até 1.500 caracteres).
 Sumário (só Atividades): o 2º slide lista as partes do relatório (painéis, destaques, registros, anexos,
 observações) com a página e um link clicável para cada uma.
 
+Relatório da área (Indicadores › Atividades › "Relatório fotográfico"): supervisor, coordenador e gestor da
+Operação (e o administrador) geram o PowerPoint numa janela (tipo, semana, área, rota, observações e responsável),
+sem a lista de fotos, o .zip ou a lixeira. O supervisor só escolhe as áreas do cadastro dele. A montagem é a mesma
+de Administração › Fotos (`telas/fotos-relatorio.js › gerarArquivo`); o banco já deixa essas pessoas lerem as fotos
+(`firestore.rules › lePB`).
+
 Todos os slides internos têm o número da página no canto da barra azul ("5 / 14").
 
 1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e
