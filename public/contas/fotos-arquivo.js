@@ -295,7 +295,7 @@ export function periodoExtenso(de, ate) {
 // Comparação com o período anterior (só atividades, só os percentuais: as quantidades não se comparam quando o
 // período atual ainda não terminou). Período anterior = os mesmos dias logo antes de `de`.
 export function periodoAnterior(de, ate) {
-  const n = Math.round((new Date(ate + 'T12:00:00') - new Date(de + 'T12:00:00')) / 864e5) + 1;
+  const n = Math.round((new Date(ate + 'T12:00:00').getTime() - new Date(de + 'T12:00:00').getTime()) / 864e5) + 1;
   return { de: add(de, -n), ate: add(de, -1) };
 }
 // Diferença em pontos percentuais: '▲ 4 pts', '▼ 1 pt', '= igual'; sem um dos números, ''.
