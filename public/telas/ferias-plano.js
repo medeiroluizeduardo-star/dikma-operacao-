@@ -11,6 +11,7 @@ import { editaAdm } from '../contas/acessos.js';
 import { AREA_GERAL } from '../contas/pessoas.js';
 import { indiceFeriasPessoa } from '../contas/ferias.js';
 import { UNIDADES, unidadeDe } from '../contas/colab-rh.js';
+import { normNome } from '../contas/planilhas-adm.js';
 import { quadroDoMes, conflitosDoMes, pendenciasFerias, planoDoAno, pessoaDoPeriodo, turmaCurta, nomeMes, mesCurto, somarMeses, mesSugerido, MAX_TURMA_PADRAO } from '../contas/ferias-plano.js';
 import { abas, etiqueta, tabela, vazio, carregando, indicadores } from '../ui/padrao.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -19,7 +20,8 @@ import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
 import { imprimirRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
 
-const F = UI.fp || (UI.fp = { aba: 'mes', mes: TODAY.slice(0, 7), fa: '', un: '' });
+const F = UI.fp || (UI.fp = { aba: 'mes', mes: TODAY.slice(0, 7), fa: '', un: '', q: '' });
+if (F.q === undefined) F.q = '';
 const $ = id => document.getElementById(id);
 const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '');
 const ddmm = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
@@ -46,6 +48,10 @@ function ctx() {
   return CX;
 }
 const daArea = g => (!F.fa || (g && g.area) === F.fa) && (!F.un || (g && g.un) === F.un);
+// Busca por nome (ou matrícula): sem acento, maiúsculas e minúsculas tanto faz.
+const temBusca = () => !!String(F.q || '').trim();
+const casaNome = (nome, mat) => { const q = normNome(F.q || ''); const n = String(F.q || '').replace(/\D/g, ''); return (!!q && normNome(nome).includes(q)) || (!!n && String(mat || '').includes(n)); };
+const doNome = (p, f) => !temBusca() || casaNome((p && p.nome) || (f && f.nome) || '', (p && p.mat) || (f && f.mat));
 const nomePessoa = (p, f) => title((p && p.nome) || f.nome || '');
 const linkFicha = (p, f) => (p ? `<button type="button" class="btn ghost link" data-act="fpFicha" data-mat="${esc(p.mat)}">${esc(nomePessoa(p, f))}</button>` : `<b>${esc(nomePessoa(p, f))}</b> <span class="muted small">sem cadastro</span>`);
 const turmaTxt = g => [g.areaNome, g.turma ? `turma ${g.turma}` : ''].filter(Boolean).join(' · ');
@@ -53,7 +59,7 @@ const turmaTxt = g => [g.areaNome, g.turma ? `turma ${g.turma}` : ''].filter(Boo
 function pendencias() {
   const c = ctx();
   return pendenciasFerias({ cadastro: c.L, ferias: ferias(), hoje: TODAY, feriasDe: c.feriasDe, grupoDe: c.grupoDe, achar: c.achar, max: maxTurma() })
-    .filter(x => (x.tipo === 'conflito' ? daArea(x.g) : daArea(c.grupoDe(x.p, x.f))));
+    .filter(x => (x.tipo === 'conflito' ? daArea(x.g) && (!temBusca() || x.nomes.some(n => casaNome(n))) : daArea(c.grupoDe(x.p, x.f)) && doNome(x.p, x.f)));
 }
 
 export function vFerias() {
@@ -63,7 +69,7 @@ export function vFerias() {
   if (F.fa && !areas.includes(F.fa)) F.fa = '';
   const P = pendencias();
   const mesHoje = TODAY.slice(0, 7);
-  const doMesAtual = quadroDoMes({ ferias: ferias(), mes: mesHoje, achar: c.achar, grupoDe: c.grupoDe, hoje: TODAY }).filter(l => daArea(l.g));
+  const doMesAtual = quadroDoMes({ ferias: ferias(), mes: mesHoje, achar: c.achar, grupoDe: c.grupoDe, hoje: TODAY }).filter(l => daArea(l.g) && doNome(l.p, l.f));
   const agora = doMesAtual.filter(l => l.etapa.k === 'gozo').length;
   const saem = doMesAtual.filter(l => l.f.inicio && l.f.inicio.slice(0, 7) === mesHoje).length;
   const nLim = P.filter(x => ['vencido', 'lim30', 'lim60', 'depoisLimite'].includes(x.tipo)).length;
@@ -73,7 +79,7 @@ export function vFerias() {
     { rotulo: `Saem em ${mesCurto(mesHoje)}`, valor: String(saem) },
     { rotulo: 'Limite vencido ou em 60 dias', valor: String(nLim), situacao: nLim ? 'critico' : 'ok' },
     { rotulo: 'Avisos a entregar', valor: String(nAviso), situacao: nAviso ? 'atencao' : 'ok' }]);
-  const filtro = `<div class="p-form co-filtros"><label class="p-campo"><span>Unidade</span><select id="fpUn"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${F.un === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label><label class="p-campo"><span>Área de atuação</span><select id="fpFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${F.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
+  const filtro = `<div class="p-form co-filtros"><label class="p-campo co-busca"><span>Buscar</span><input type="search" id="fpQ" placeholder="Nome ou matrícula" value="${esc(F.q)}"></label><label class="p-campo"><span>Unidade</span><select id="fpUn"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${F.un === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label><label class="p-campo"><span>Área de atuação</span><select id="fpFa"><option value="">Todas as áreas</option>${areas.map(a => `<option value="${esc(a)}" ${F.fa === a ? 'selected' : ''}>${esc(PES.areaNome(a))}</option>`).join('')}</select></label>
     <div class="fp-max"><p class="m0 small"><b>Máximo por turma:</b> ${maxTurma()} ${maxTurma() === 1 ? 'pessoa' : 'pessoas'} da mesma área e turma de férias ao mesmo tempo</p>${edita() ? '<button type="button" class="btn sm ghost" data-act="fpMax">Alterar</button>' : ''}</div></div>`;
   const aba = ['mes', 'ano', 'pend'].includes(F.aba) ? F.aba : 'mes';
   const corpo = aba === 'ano' ? vAno() : aba === 'pend' ? vPend(P) : vMes();
@@ -83,18 +89,18 @@ export function vFerias() {
 }
 
 // ---- Mês ----
-function linhasDoMes(mes) { const c = ctx(); return quadroDoMes({ ferias: ferias(), mes, achar: c.achar, grupoDe: c.grupoDe, hoje: TODAY }).filter(l => daArea(l.g)); }
+function linhasDoMes(mes, todos = false) { const c = ctx(); return quadroDoMes({ ferias: ferias(), mes, achar: c.achar, grupoDe: c.grupoDe, hoje: TODAY }).filter(l => daArea(l.g) && (todos || doNome(l.p, l.f))); }
 const avisoTxt = l => (!l.f.inicio ? '' : l.f.avisoEm ? `Entregue ${ddmm(l.f.avisoEm)}` : ['gozo', 'gozada'].includes(l.etapa.k) ? '' : `Até ${ddmm(l.aviso)}${l.aviso < TODAY ? ' (atrasado)' : ''}`);
 const periodoTxt = l => (l.f.inicio ? `<span class="nowrap">${ddmm(l.f.inicio)} a ${ddmm(l.termino)}</span>${l.f.dias ? `<span class="muted small fp-dias">${l.f.dias} dias</span>` : ''}` : '<span class="muted">Sem data</span>');
 
 function vMes() {
   const mes = F.mes || TODAY.slice(0, 7); const ls = linhasDoMes(mes);
-  const conf = conflitosDoMes(ls, mes, maxTurma());
+  const conf = conflitosDoMes(linhasDoMes(mes, true), mes, maxTurma()).filter(x => !temBusca() || x.nomes.some(n => casaNome(n)));
   const nav = `<div class="row-gap fp-nav"><button type="button" class="btn sm" data-act="fpMes" data-d="-1" aria-label="Mês anterior">‹</button><b>${esc(nomeMes(mes))}</b><button type="button" class="btn sm" data-act="fpMes" data-d="1" aria-label="Próximo mês">›</button>${mes !== TODAY.slice(0, 7) ? '<button type="button" class="btn sm ghost" data-act="fpMes" data-d="0">Mês atual</button>' : ''}
     ${!framed ? `<span class="fp-acoes"><button type="button" class="btn sm" data-act="fpPdf">${I.dl} Programação do mês (PDF)</button><button type="button" class="btn sm ghost" data-act="fpXls">${I.dl} Excel</button></span>` : ''}</div>`;
   let h = nav;
   if (conf.length) h += `<div class="aviso"><b>Turma com gente demais de férias</b> (máximo ${maxTurma()}):<ul class="m0">${conf.map(x => `<li>${esc(turmaTxt(x.g))}: ${x.pico} ao mesmo tempo (${x.nomes.map(n => esc(title(n))).join(', ')})</li>`).join('')}</ul></div>`;
-  if (!ls.length) return h + vazio('Ninguém de férias neste mês', 'Troque o mês ou a área, ou planeje em Pendências.');
+  if (!ls.length) return h + (temBusca() ? vazio('Ninguém com esse nome de férias neste mês', 'Troque o mês ou apague a busca.') : vazio('Ninguém de férias neste mês', 'Troque o mês ou a área, ou planeje em Pendências.'));
   const cel = isMobile();
   const etq = l => etiqueta(l.etapa.t, l.etapa.s);
   const ab = l => `<button type="button" class="btn ghost link" data-act="fpAbrir" data-id="${esc(l.f.id)}">${periodoTxt(l)}</button>`;
@@ -108,8 +114,8 @@ function vMes() {
 // ---- Plano do ano ----
 function vAno() {
   const c = ctx();
-  const fer = ferias().filter(f => daArea(c.grupoDe(c.achar(f), f)));
-  const cad = c.L.filter(p => daArea(c.grupoDe(p)));
+  const fer = ferias().filter(f => daArea(c.grupoDe(c.achar(f), f)) && doNome(c.achar(f), f));
+  const cad = c.L.filter(p => daArea(c.grupoDe(p)) && doNome(p));
   const pl = planoDoAno({ cadastro: cad, ferias: fer, hoje: TODAY, feriasDe: c.feriasDe, grupoDe: c.grupoDe, achar: c.achar, max: maxTurma() });
   const mesBtn = m => `<button type="button" class="btn ghost link" data-act="fpIrMes" data-m="${m.mes}">${esc(nomeMes(m.mes))}</button>`;
   const alerta = m => [m.conflitos ? etiqueta(`${m.conflitos} turma${m.conflitos > 1 ? 's' : ''} acima do máximo`, 'atencao') : '', m.limites ? etiqueta(`${m.limites} limite${m.limites > 1 ? 's' : ''} sem férias`, 'critico') : ''].filter(Boolean).join(' ') || '<span class="muted">—</span>';
@@ -155,7 +161,7 @@ function relatorioMes(mes) {
   const semSub = ls.filter(l => l.f.inicio && !String(l.f.substituto || '').trim()).length;
   return {
     titulo: `Programação de férias · ${nomeMes(mes)}`, papel: 'PROGRAMAÇÃO DE FÉRIAS DO MÊS', arquivo: [nomeMes(mes).replace('/', '-'), F.fa || F.un ? area : ''].filter(Boolean),
-    meta: ['ArcelorMittal · Coqueria', `Mês: ${nomeMes(mes)}`, `Área: ${area}`, `Gerado em: ${agoraTxt()}`],
+    meta: ['ArcelorMittal · Coqueria', `Mês: ${nomeMes(mes)}`, `Área: ${area}`, ...(temBusca() ? [`Busca: ${F.q.trim()}`] : []), `Gerado em: ${agoraTxt()}`],
     kpis: [
       { rot: 'Períodos no mês', v: ls.length, fmt: 'int', det: `${ls.filter(l => !l.f.inicio).length} planejados sem data` },
       { rot: 'Saem no mês', v: ls.filter(l => l.f.inicio && l.f.inicio.slice(0, 7) === mes).length, fmt: 'int', det: 'começam neste mês' },
@@ -197,4 +203,9 @@ acoes.fpMax = () => {
   });
 };
 document.addEventListener('click', e => { const t = e.target.closest('[data-fp-aba]'); if (!t || UI.view !== 'rferias') return; F.aba = t.dataset.fpAba; render(); });
+document.addEventListener('input', e => {
+  if (e.target.id !== 'fpQ') return;
+  F.q = e.target.value; clearTimeout(window._fpq);
+  window._fpq = setTimeout(() => { const pos = e.target.selectionStart; render(); const n = $('fpQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } }, 250);
+});
 document.addEventListener('change', e => { if (e.target.id === 'fpFa') { F.fa = e.target.value; render(); } if (e.target.id === 'fpUn') { F.un = e.target.value; F.fa = ''; render(); } });
