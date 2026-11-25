@@ -266,6 +266,9 @@ test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo 
   assert.deepEqual(FA.destaques(gd, new Set(['f', 'b', 'c', 'd', 'e'])).map(x => x.f.id), ['b', 'c', 'd', 'e']);
   assert.equal(FA.destaques(gd, new Set(['c']))[0].g, gd[1]);
   assert.deepEqual(FA.destaques(gd, null), []);
+  // observações: tira espaços, junta linhas em branco e corta no limite
+  assert.equal(FA.limparObs('  Chuva na quarta  \r\n\n\n\n Área interditada  '), 'Chuva na quarta\n\nÁrea interditada');
+  assert.equal(FA.limparObs(null), ''); assert.equal(FA.limparObs('x'.repeat(2000)).length, FA.MAX_OBS);
   // 2 fotos deitadas (ou sem tamanho): faixa embaixo; foto em pé ou outra quantidade: cartão à direita
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, {}]), true);
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, { w: 960, h: 1280 }]), false);

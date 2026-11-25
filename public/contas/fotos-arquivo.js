@@ -363,6 +363,12 @@ export function gradeFotos(n, caixa = { x: 0.5, y: 1.75, w: 12.33, h: 5.1 }, leg
 // Escolha das fotos do relatório (feita na tela, guardada só no aparelho): `fora` = ids tirados do relatório,
 // `dest` = ids de destaque. Os destaques vão num slide próprio, até MAX_DESTAQUES, na ordem do relatório.
 export const MAX_DESTAQUES = 4;
+// Observações do período (texto livre do responsável): sem espaços sobrando, 3 ou mais linhas em branco seguidas
+// viram uma, até MAX_OBS caracteres. Vazio = sem slide.
+export const MAX_OBS = 1500;
+export function limparObs(t) {
+  return String(t || '').replace(/\r/g, '').split('\n').map(l => l.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, MAX_OBS);
+}
 export function noRelatorio(fotos, fora) { return fora && fora.size ? (fotos || []).filter(f => !fora.has(f.id)) : fotos || []; }
 export function destaques(grupos, dest, max = MAX_DESTAQUES) {
   const out = []; if (!dest || !dest.size) return out;

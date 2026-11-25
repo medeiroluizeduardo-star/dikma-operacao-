@@ -402,6 +402,16 @@ export async function gerarPptx(o) {
   if (!qz) tabela(rel.naoReal, 'Anexo · Atividades não realizadas', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.0], ['Atividade', 3.2], ['Motivo', 2.43]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, AREA_S[x.area] || x.area, x.rota, corta(x.local, 40), corta(x.ativ, 70), corta(x.motivo || '—', 60)]);
   if (!qz) tabela(rel.semFoto, 'Anexo · Realizadas sem foto', [['Data', 1.1], ['Área', 1.7], ['Rota', 1.9], ['Local', 2.3], ['Atividade', 4.13], ['Situação', 1.2]], x => [`${diaSemana(x.dia)} ${FA.ddmm(x.dia)}`, AREA_S[x.area] || x.area, x.rota, corta(x.local, 44), corta(x.ativ, 80), SIT[x.sit] || x.sit], 3);
 
+  // ---- observações do período (texto livre do responsável) ----
+  const obs = String(o.observacoes || '').trim();
+  if (obs) {
+    const s = interno(); titulo(s, 'Observações do período', periodo + filtro);
+    ret(s, 0.5, 1.05, W - 1, 5.5, COR.creme, 0.06); ret(s, 0.5, 1.25, 0.08, 5.1, COR.laranja);
+    const pars = obs.split(/\n/);
+    txt(s, pars.map((l, j) => ({ text: l || ' ', options: { breakLine: j < pars.length - 1 } })), 0.85, 1.3, W - 1.7, 4.6, { fontSize: 16, color: COR.tinta, valign: 'top', fit: 'shrink', paraSpaceAfter: 6, lineSpacingMultiple: 1.1 });
+    if (o.responsavel) txt(s, [{ text: 'Responsável: ', options: { bold: true } }, { text: nomeProprio(o.responsavel) }], 0.85, 6.0, W - 1.7, 0.35, { fontSize: 12, color: COR.navy });
+  }
+
   // ---- encerramento ----
   {
     const s = pptx.addSlide();
