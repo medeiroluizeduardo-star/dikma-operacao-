@@ -25,6 +25,11 @@ const A = { aba: 'periodo', tipo: 'ativ', conj: '', per: 'sem', de: SEM.de, ate:
   fotos: null, chave: '', lendo: false, erro: '', semanas: null, chaveSem: '',
   incluirExportadas: false, tarefa: null, zip: null, aviso: '',
   lix: null, lixChave: '', lixLendo: false, incluirRecentes: false };
+// Escolha das fotos do relatório (só deste aparelho, não muda nada no banco): fotos tiradas do relatório e fotos de
+// destaque (até 4 num slide "Destaques" logo depois do painel). Guardadas no navegador para não perder ao recarregar.
+const CHAVE_REL = 'dikma-fotos-relatorio';
+const REL = (() => { try { const o = JSON.parse(localStorage.getItem(CHAVE_REL) || '{}'); return { fora: new Set(o.fora || []), dest: new Set(o.dest || []) }; } catch (e) { return { fora: new Set(), dest: new Set() }; } })();
+const salvarRel = () => { try { localStorage.setItem(CHAVE_REL, JSON.stringify({ fora: [...REL.fora].slice(-2000), dest: [...REL.dest].slice(-200) })); } catch (e) { /* sem armazenamento: vale só nesta aba */ } };
 const conjAtual = () => { const ks = conjuntos(); if (!ks.includes(A.conj)) A.conj = ks[0] || 'patio'; return A.conj; };
 const periodo = () => (A.per === 'sem' ? SEM : A.per === 'ant' ? ANT : { de: A.de, ate: A.ate });
 const planoDe = k => new Map(Object.values((DB.dados(k) || {}).plano || {}).flat().map(p => [p.id, p]));
@@ -83,7 +88,7 @@ async function gerarRelatorio() {
     const [semanas, mod] = await Promise.all([semanasDoPeriodo(k, p), import('./fotos-pptx.js')]);
     progresso(0, 0, 'Carregando a biblioteca do PowerPoint…');
     const [img] = await Promise.all([mod.imagensModelo(), mod.carregarBiblioteca()]);
-    const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: FA.doTipo(A.fotos, A.tipo), de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota, areas: A.area ? [A.area] : null });
+    const rel = FA.montarRelatorio({ semanas, plano: planoDe(k), fotos: FA.noRelatorio(FA.doTipo(A.fotos, A.tipo), REL.fora), de: p.de, ate: p.ate, hoje: TODAY, rota: A.rota, areas: A.area ? [A.area] : null });
     // comparação com o período anterior (só atividades): reaproveita as semanas já lidas e lê só os meses que faltam
     let anterior = null;
     if (A.tipo === 'ativ') {
@@ -96,7 +101,7 @@ async function gerarRelatorio() {
       } catch (e) { anterior = null; }
     }
     const lim = FA.limitarFotos(rel.grupos, FA.MAX_FOTOS_PPTX);
-    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, anterior, tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
+    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, anterior, destaques: FA.destaques(rel.grupos, REL.dest), tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${sufixoFiltro()}.pptx`;
     mod.baixarBlob(blob, nome);
@@ -194,8 +199,18 @@ function cartaoFoto(f, { lixeira = false } = {}) {
   let bts = '';
   if (s === 'exportada') bts = `<button class="btn sm" data-act="faUm" data-a="lixeira" data-id="${esc(f.id)}">Lixeira</button>`;
   if (s === 'lixeira') bts = `<button class="btn sm" data-act="faUm" data-a="restaurar" data-id="${esc(f.id)}">Restaurar</button><button class="btn sm perigo" data-act="faUm" data-a="apagar" data-id="${esc(f.id)}" ${FA.podeApagarDefinitivo(f, Date.now(), { incluirRecentes: A.incluirRecentes }) ? '' : `disabled title="Na lixeira há menos de ${FA.LIXEIRA_DIAS} dias (marque “incluir as recentes”)"`}>Apagar de vez</button>`;
-  return `<div class="facard ${s}"><button class="famini" data-act="faVer" data-id="${esc(f.id)}" data-lx="${lixeira ? 1 : ''}" aria-label="Ver a foto">${f.thumb ? `<img src="${f.thumb}" alt="" loading="lazy">` : ''}</button>
-    <div class="fainfo">${selo(f)}<b>${esc(f.ativ || '')}</b><small>${DAYS[(new Date(f.dia + 'T12:00:00').getDay() + 6) % 7]} ${FA.dBR(f.dia)} · ${esc(f.rota || '')}${f.local ? ' · ' + esc(f.local) : ''}</small><small>${esc(title(f.porNome || ''))} · ${FA.fmtBytes(FA.bytesArquivo(f))}</small>${extra}${lx}${bts ? `<div class="row-gap">${bts}</div>` : ''}</div></div>`;
+  if (!lixeira && s !== 'lixeira') {
+    const fora = REL.fora.has(f.id), dest = REL.dest.has(f.id);
+    bts += `<button class="btn sm" data-act="faDest" data-id="${esc(f.id)}" aria-pressed="${dest}" ${fora ? 'disabled' : ''}>${dest ? '★ Destaque' : '☆ Destaque'}</button><button class="btn sm" data-act="faFora" data-id="${esc(f.id)}" aria-pressed="${fora}">${fora ? 'Voltar ao relatório' : 'Tirar do relatório'}</button>`;
+  }
+  return `<div class="facard ${s}${!lixeira && REL.fora.has(f.id) ? ' forarel' : ''}"><button class="famini" data-act="faVer" data-id="${esc(f.id)}" data-lx="${lixeira ? 1 : ''}" aria-label="Ver a foto">${f.thumb ? `<img src="${f.thumb}" alt="" loading="lazy">` : ''}</button>
+    <div class="fainfo">${selo(f)}${!lixeira && REL.fora.has(f.id) ? ' <span class="fstat lixeira">Fora do relatório</span>' : ''}<b>${esc(f.ativ || '')}</b><small>${DAYS[(new Date(f.dia + 'T12:00:00').getDay() + 6) % 7]} ${FA.dBR(f.dia)} · ${esc(f.rota || '')}${f.local ? ' · ' + esc(f.local) : ''}</small><small>${esc(title(f.porNome || ''))} · ${FA.fmtBytes(FA.bytesArquivo(f))}</small>${extra}${lx}${bts ? `<div class="row-gap">${bts}</div>` : ''}</div></div>`;
+}
+// Resumo das fotos tiradas do relatório e das de destaque no período (a escolha é feita na lista de fotos, embaixo).
+function marcadasRel(todas) {
+  const fora = todas.filter(f => REL.fora.has(f.id)).length; const dest = todas.filter(f => REL.dest.has(f.id) && !REL.fora.has(f.id)).length;
+  if (!fora && !dest) return '<p class="small muted m0">Na lista de fotos, embaixo, dá para tirar fotos ruins ou repetidas do relatório e marcar até 4 de destaque (só neste aparelho; não apaga nada).</p>';
+  return `<p class="small m0">${fora ? `<b>${plural(fora, 'foto fora', 'fotos fora')}</b> do relatório` : ''}${fora && dest ? ' · ' : ''}${dest ? `<b>${plural(dest, 'destaque', 'destaques')}</b>${dest > FA.MAX_DESTAQUES ? ` (entram ${FA.MAX_DESTAQUES})` : ''}` : ''} <button class="btn sm" data-act="faLimparRel">Limpar marcações</button></p>`;
 }
 function vTarefa() {
   const T = A.tarefa; if (!T) return '';
@@ -243,6 +258,7 @@ function vPeriodo(k) {
           : A.tipo === 'qz' ? 'Só as fotos da queda zero: capa com os números, painel de registros (fotos por dia e locais com mais fotos) e os registros fotográficos'
           : 'Só as fotos das atividades: capa, painel de resultados (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), painel por rota, pontos de atenção, os registros fotográficos e os anexos'} (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com data, local, rota, área e colaborador ao lado). No modelo visual da Dikma: a foto marcada no Apontar sai como Antes ou Depois; nas fotos sem marcação (antigas), com 2 fotos ou mais, a primeira (pela hora) sai como Antes e a última como Depois. Não muda nada no banco.</p>
         ${noRel > FA.MAX_FOTOS_PPTX ? `<p class="warn-t small m0"><b>${n0(noRel)} fotos no período:</b> entram ${FA.MAX_FOTOS_PPTX}, em rodízio entre as atividades do período. Para todas, escolha uma área, uma rota ou um período menor.</p>` : ''}
+        ${marcadasRel(todas)}
         <label class="sel"><span>Responsável na capa</span><input class="in" data-fa="resp" maxlength="60" value="${esc(responsavel())}" placeholder="Nome do responsável"></label>
         <div class="row-gap"><button class="btn pri" data-act="faPptx" ${dis || !noRel ? 'disabled' : ''}>${I.dl} Gerar relatório (.pptx)</button></div></div>
       <div class="faacao"><b>${I.cam} Exportar fotos (.zip)</b><p class="small muted m0">Pastas por período, colaborador e atividade, com <span class="mono">indice.csv</span> e conferência do SHA-256 de cada foto. Depois de salvar, confirme para marcar como exportadas.</p>
@@ -322,6 +338,9 @@ acoes.faVer = (t, d) => {
   verFotoGrande(s === 'arquivada' ? async () => f.thumb : () => DB.abrirEvidencia(f.id, k), f.thumb, 'Foto da atividade', s === 'arquivada' ? leg + ': aparece só a miniatura' : leg);
 };
 acoes.faAtualizar = () => recarregar();
+acoes.faFora = (t, d) => { if (REL.fora.has(d.id)) REL.fora.delete(d.id); else { REL.fora.add(d.id); REL.dest.delete(d.id); } salvarRel(); render(); };
+acoes.faDest = (t, d) => { if (REL.dest.has(d.id)) REL.dest.delete(d.id); else REL.dest.add(d.id); salvarRel(); render(); };
+acoes.faLimparRel = () => { const ids = new Set(daRota(A.fotos || []).map(f => f.id)); for (const id of ids) { REL.fora.delete(id); REL.dest.delete(id); } salvarRel(); render(); toast('Marcações do período limpas'); };
 document.addEventListener('change', e => {
   const t = e.target; const c = t && t.dataset && t.dataset.fa; if (!c) return;
   if (c === 'incluirExportadas' || c === 'incluirRecentes') { A[c] = t.checked; render(); return; }

@@ -259,6 +259,13 @@ test('relatório: limite de fotos (rodízio entre as atividades, espalhado pelo 
   assert.deepEqual(FA.periodoAnterior('2026-11-01', '2026-11-03'), { de: '2026-10-29', ate: '2026-10-31' });
   assert.equal(FA.variacaoPts(86, 82), '▲ 4 pts'); assert.equal(FA.variacaoPts(80, 82.4), '▼ 2 pts'); assert.equal(FA.variacaoPts(83, 82), '▲ 1 pt');
   assert.equal(FA.variacaoPts(82, 82), '= igual'); assert.equal(FA.variacaoPts(82, null), ''); assert.equal(FA.variacaoPts(null, 50), '');
+  // escolha das fotos: tirar do relatório e destaques (até 4, na ordem dos grupos)
+  assert.deepEqual(FA.noRelatorio([{ id: 'a' }, { id: 'b' }], new Set(['b'])).map(f => f.id), ['a']);
+  assert.equal(FA.noRelatorio([{ id: 'a' }], new Set()).length, 1);
+  const gd = [{ fotos: [{ id: 'a' }, { id: 'b' }] }, { fotos: [{ id: 'c' }, { id: 'd' }, { id: 'e' }, { id: 'f' }] }];
+  assert.deepEqual(FA.destaques(gd, new Set(['f', 'b', 'c', 'd', 'e'])).map(x => x.f.id), ['b', 'c', 'd', 'e']);
+  assert.equal(FA.destaques(gd, new Set(['c']))[0].g, gd[1]);
+  assert.deepEqual(FA.destaques(gd, null), []);
   // 2 fotos deitadas (ou sem tamanho): faixa embaixo; foto em pé ou outra quantidade: cartão à direita
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, {}]), true);
   assert.equal(FA.fotosEmFaixa([{ w: 1280, h: 960 }, { w: 960, h: 1280 }]), false);

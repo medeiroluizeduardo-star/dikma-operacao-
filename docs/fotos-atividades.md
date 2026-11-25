@@ -197,6 +197,11 @@ para o período anterior com os mesmos dias ("▲ 4 pts sobre a semana anterior"
 `FA.variacaoPts`). Só os percentuais se comparam (as quantidades mudam se o período ainda não terminou). A tela
 reaproveita as semanas já lidas e só lê do banco os meses que faltam (em geral, nenhum).
 
+Escolha das fotos: na lista "Fotos do período", cada foto tem "Tirar do relatório" e "☆ Destaque". A escolha fica
+só no aparelho (localStorage `dikma-fotos-relatorio`; não grava no banco nem muda o .zip). As tiradas não entram no
+relatório nem nos números de fotos; os destaques (até 4, `FA.destaques`) ganham o slide "Destaques do período" logo
+antes dos registros fotográficos e continuam também no seu slide normal.
+
 Todos os slides internos têm o número da página no canto da barra azul ("5 / 14").
 
 1. **Capa**: área (Pátio/Bateria), período, rota, responsável e os 3 números principais (fotos, % de cumprimento e
