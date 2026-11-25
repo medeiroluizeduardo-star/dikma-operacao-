@@ -30,6 +30,9 @@ const A = { aba: 'periodo', tipo: 'ativ', conj: '', per: 'sem', de: SEM.de, ate:
 const CHAVE_REL = 'dikma-fotos-relatorio';
 const REL = (() => { try { const o = JSON.parse(localStorage.getItem(CHAVE_REL) || '{}'); return { fora: new Set(o.fora || []), dest: new Set(o.dest || []) }; } catch (e) { return { fora: new Set(), dest: new Set() }; } })();
 const salvarRel = () => { try { localStorage.setItem(CHAVE_REL, JSON.stringify({ fora: [...REL.fora].slice(-2000), dest: [...REL.dest].slice(-200) })); } catch (e) { /* sem armazenamento: vale só nesta aba */ } };
+// Observações do período: texto livre que vira um slide antes do encerramento (guardado só neste aparelho).
+const CHAVE_OBS = 'dikma-fotos-observacoes';
+A.obs = (() => { try { return localStorage.getItem(CHAVE_OBS) || ''; } catch (e) { return ''; } })();
 const conjAtual = () => { const ks = conjuntos(); if (!ks.includes(A.conj)) A.conj = ks[0] || 'patio'; return A.conj; };
 const periodo = () => (A.per === 'sem' ? SEM : A.per === 'ant' ? ANT : { de: A.de, ate: A.ate });
 const planoDe = k => new Map(Object.values((DB.dados(k) || {}).plano || {}).flat().map(p => [p.id, p]));
@@ -101,7 +104,7 @@ async function gerarRelatorio() {
       } catch (e) { anterior = null; }
     }
     const lim = FA.limitarFotos(rel.grupos, FA.MAX_FOTOS_PPTX);
-    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, anterior, destaques: FA.destaques(rel.grupos, REL.dest), tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
+    const blob = await mod.gerarPptx({ rel: { ...rel, grupos: lim.grupos }, gruposTodos: rel.grupos, fora: lim.fora, anterior, destaques: FA.destaques(rel.grupos, REL.dest), observacoes: FA.limparObs(A.obs), tipo: A.tipo, nomeConj: SETS[k].nome, area: A.area ? nomeArea(A.area) : SETS[k].local, responsavel: responsavel().trim(), autor: ME.nome || ME.login || '', geradoEm: new Date(), img,
       carregarFoto: f => DB.abrirEvidencia(f.id, k), progresso });
     const nome = `relatorio-fotos${sufixoTipo()}-${k}-${p.de}_a_${p.ate}${sufixoFiltro()}.pptx`;
     mod.baixarBlob(blob, nome);
@@ -259,6 +262,7 @@ function vPeriodo(k) {
           : 'Só as fotos das atividades: capa, painel de resultados (programadas, realizadas, não realizadas, extras, % de cumprimento e % com foto), painel por rota, pontos de atenção, os registros fotográficos e os anexos'} (até ${FA.FOTOS_POR_SLIDE} fotos por slide, com data, local, rota, área e colaborador ao lado). No modelo visual da Dikma: a foto marcada no Apontar sai como Antes ou Depois; nas fotos sem marcação (antigas), com 2 fotos ou mais, a primeira (pela hora) sai como Antes e a última como Depois. Não muda nada no banco.</p>
         ${noRel > FA.MAX_FOTOS_PPTX ? `<p class="warn-t small m0"><b>${n0(noRel)} fotos no período:</b> entram ${FA.MAX_FOTOS_PPTX}, em rodízio entre as atividades do período. Para todas, escolha uma área, uma rota ou um período menor.</p>` : ''}
         ${marcadasRel(todas)}
+        <label class="sel"><span>Observações do período (opcional)</span><textarea class="in" data-fa="obs" rows="3" maxlength="${FA.MAX_OBS}" placeholder="Ex.: chuva forte na quarta parou a limpeza da correia; área interditada pela Arcelor na sexta">${esc(A.obs)}</textarea></label>
         <label class="sel"><span>Responsável na capa</span><input class="in" data-fa="resp" maxlength="60" value="${esc(responsavel())}" placeholder="Nome do responsável"></label>
         <div class="row-gap"><button class="btn pri" data-act="faPptx" ${dis || !noRel ? 'disabled' : ''}>${I.dl} Gerar relatório (.pptx)</button></div></div>
       <div class="faacao"><b>${I.cam} Exportar fotos (.zip)</b><p class="small muted m0">Pastas por período, colaborador e atividade, com <span class="mono">indice.csv</span> e conferência do SHA-256 de cada foto. Depois de salvar, confirme para marcar como exportadas.</p>
@@ -345,6 +349,7 @@ document.addEventListener('change', e => {
   const t = e.target; const c = t && t.dataset && t.dataset.fa; if (!c) return;
   if (c === 'incluirExportadas' || c === 'incluirRecentes') { A[c] = t.checked; render(); return; }
   if (c === 'resp') { A.resp = t.value; return; }
+  if (c === 'obs') { A.obs = t.value; try { localStorage.setItem(CHAVE_OBS, A.obs); } catch (e) { /* sem armazenamento */ } return; }
   if (ocupado()) return;
   if (c === 'per') { A.per = t.value; if (A.per === 'datas' && (!A.de || !A.ate)) { A.de = SEM.de; A.ate = SEM.ate; } }
   else if (c === 'de' || c === 'ate') A[c] = t.value;
