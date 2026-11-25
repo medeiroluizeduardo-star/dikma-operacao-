@@ -140,6 +140,7 @@ function renderTela() {
   // Resumos: enquanto o arquivo chega, só o título e o esqueleto (o topo depende do tipo de resumo).
   if ((v === 'resumo' || v === 'fresumo' || v === 'eresumo') && !modulo('RE')) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; }
   if (arq === 'CO') return tela(comModulo('CO', m => m.vColaboradores()));
+  if (arq === 'FP') return tela(comModulo('FP', m => m.vFerias()));
   // Indicadores › Pessoas: o painel e o resumo da frequência usam a mesma tela do RH (administrativo.js).
   if (v === 'fpainel') return tela(comModulo('AD', m => m.painel()));
   if (v === 'fresumo') return tela(modulo('RE').vResumoOutro());

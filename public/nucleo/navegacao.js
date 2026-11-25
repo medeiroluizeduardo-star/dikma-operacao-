@@ -75,6 +75,8 @@ export const VIEWS = [
   { id: 'sgtrein', nome: 'Treinamentos e ASO', ic: 'capacete', grp: 'Registros', mod: 'seguranca', sup: true, req: () => veTreinos(ME), tela: 'SG' },
   // ---- RH: cadastro dos colaboradores com as férias na ficha (colaboradores.js) e frequência (administrativo.js). Importar abre pela Folha de frequência ----
   { id: 'rcolab', nome: 'Colaboradores', ic: 'users', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'CO' },
+  // Férias: controle do mês, plano do ano e pendências (telas/ferias-plano.js); os períodos continuam na ficha de cada um.
+  { id: 'rferias', nome: 'Férias', ic: 'ferias', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'FP' },
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência', mod: 'rh', req: temRH },
   { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
   // ---- Indicadores: os painéis de todos os módulos, só para ver (acesso.indicadores, escolhido por pessoa em Usuários) ----
@@ -139,6 +141,7 @@ export const SUB_G = {
 };
 export const SUB_A = {
   rcolab: 'Cadastro único: dados, matrículas Dikma e Arcelor, área, rota, liderança e férias',
+  rferias: 'Quem sai em cada mês, plano do ano, aviso de 30 dias, data limite e turmas com gente demais',
   afreq: 'Faltas, atestados e horas extras de 16 a 15, por grupo, e o efetivo enviado pelos líderes',
   aimport: 'Planilhas de frequência e de férias'
 };
@@ -194,14 +197,13 @@ export function abaMarcada(id) {
   return id;
 }
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { cfpainel: 'cfproc', sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab', aferias: 'rcolab' };
+const VIEW_NOVA = { cfpainel: 'cfproc', sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab', aferias: 'rferias' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
   if (v0 === 'gocorr' && UI.g) { UI.g.mat = null; UI.g.filtro = 'pend'; }
   if (v0 === 'gcomigo' && UI.g) { UI.g.mat = null; UI.g.filtro = 'comigo'; }
   if (v0 === 'epar' && UI.e) { UI.e.aba = 'par'; UI.e.pf = 'aberta'; }
-  if (v0 === 'aferias' && UI.co) { UI.co.mat = null; UI.co.f = 'ferAgora'; }
 }
 // Em que módulo fica a aba (null = Avisos no celular, que existe em todos).
 export function moduloDaView(id) {
@@ -229,7 +231,7 @@ const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
   gestao: () => ['prog', 'gtrat', 'gcolab', 'causas', 'esdim', 'eaval'],
   seguranca: () => ['sganom', 'sginter', 'sginsp', 'sgcartao', 'sgtrein'],
-  rh: () => ['rcolab', 'afreq'],
+  rh: () => ['rcolab', 'rferias', 'afreq'],
   indicadores: () => ['ivisao', 'painel', 'epainel', 'qpainel', 'sgpainel', 'fpainel', 'gpainel'],
   administracao: () => ['cfgeral', 'cfescala', 'usuarios', 'config', 'plano', 'econfig', 'gtipos', 'cffotos']
 };

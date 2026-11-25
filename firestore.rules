@@ -849,7 +849,7 @@ service cloud.firestore {
       return fTxtNum(d, ch, 'mat', 30) && fTxt(d, ch, 'nome', 150) && fTxt(d, ch, 'setor', 80) && fTxt(d, ch, 'funcao', 120) && fTxt(d, ch, 'horario', 40)
         && fDia(d, ch, 'inicio') && fDia(d, ch, 'termino') && fDia(d, ch, 'retorno') && fDia(d, ch, 'limite') && fDia(d, ch, 'admissao')
         && fNum(d, ch, 'dias', 0, 365) && fTxt(d, ch, 'substituto', 300) && fTxt(d, ch, 'obs', 500) && fTxt(d, ch, 'aba', 120)
-        && fTxt(d, ch, 'mesPlanejado', 7) && fSim(d, ch, 'apagado') && d.keys().size() <= 30; }
+        && fTxt(d, ch, 'mesPlanejado', 7) && fDia(d, ch, 'avisoEm') && fSim(d, ch, 'apagado') && d.keys().size() <= 30; }
     match /ferias/{id} {
       allow read: if acAdm() || indAlgum();
       allow create: if admEdita() && request.resource.data.get('nome', '') is string && request.resource.data.get('nome', '').size() > 0 && feriasOk(request.resource.data, novos());
