@@ -3,6 +3,7 @@
 // vendor/pptxgen.bundle.js e entra por uma tag <script> criada aqui (a política de segurança só aceita scripts do
 // próprio site; nada inline). O conteúdo (indicadores, grupos de fotos, limite) vem de fotos-arquivo.js.
 import { DAYS, AREA_S } from '../contas/cal.js';
+import { motivoBase } from '../contas/justificativa.js';
 import * as FA from '../contas/fotos-arquivo.js';
 
 let carregando = null;
@@ -244,7 +245,7 @@ export async function gerarPptx(o) {
       txt(s, [{ text: nTxt(rel.naoReal.length), options: { fontFace: FONTE_FORTE, fontSize: 26, bold: true, color: rel.naoReal.length ? COR.N : COR.R } }, { text: '  não realizadas', options: { fontFace: FONTE_FORTE, fontSize: 14, bold: true, color: COR.navy } }], 0.72, y + 0.12, cw - 0.44, 0.55);
       if (rel.naoReal.length) {
         txt(s, 'MOTIVOS INFORMADOS', 0.72, y + 0.8, cw - 0.44, 0.24, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
-        barras(s, FA.contarPor(rel.naoReal, x => x.motivo, 5), { x: 0.72, y: y + 1.05, w: cw - 0.44, h: 2.1, cor: COR.N, rotW: 0.5, linhaMax: 0.42 });
+        barras(s, FA.contarPor(rel.naoReal, x => motivoBase(x.motivo) || x.motivo, 5), { x: 0.72, y: y + 1.05, w: cw - 0.44, h: 2.1, cor: COR.N, rotW: 0.5, linhaMax: 0.42 });
         txt(s, 'ROTAS COM MAIS NÃO REALIZADAS', 0.72, y + 3.3, cw - 0.44, 0.24, { fontSize: 9, bold: true, color: COR.laranja, charSpacing: 0.6 });
         barras(s, FA.contarPor(rel.naoReal, x => x.rota, 4), { x: 0.72, y: y + 3.55, w: cw - 0.44, h: 1.75, cor: COR.N, rotW: 0.5, linhaMax: 0.42 });
       } else txt(s, 'Todas as atividades programadas e apontadas foram realizadas.', 0.72, y + 1.2, cw - 0.44, 0.6, { fontSize: 13, color: COR.R });
