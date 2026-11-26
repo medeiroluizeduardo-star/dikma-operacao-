@@ -14,6 +14,14 @@ Decidido pelo Eduardo em 22/11/2026.
 - A planilha usada na importação não fica guardada no sistema nem no repositório.
 - Código: `public/contas/dados-pessoais.js` (testes em `testes/dados-pessoais.test.mjs`), `public/telas/dados-pessoais.js`, `DB.dpLer`/`dpSalvar`/`dpImportar` em `public/nucleo/data.js`.
 
+## Minha agenda (Gestão)
+- Compromissos, tarefas e anotações de cada pessoa ficam em `agenda/{id}`, com o dono no campo `uid`. Só o dono lê, grava e apaga: nem o administrador vê a agenda dos outros (`firestore.rules` › `agenda`). A cópia de segurança diária inclui a coleção (como o resto do banco).
+- Exceção escolhida pelo dono: uma **anotação** pode ser compartilhada só para leitura com até 20 pessoas (campo `comp`, pelo usuário de login). Quem recebe não altera nem apaga.
+- Lixeira: o que a pessoa apaga fica 30 dias com `apagadoEm` e depois some de vez (a tela apaga ao abrir).
+- Avisos no celular: a rotina dos avisos (servidor) lê os itens com data perto de hoje e os que se repetem, só de quem ligou o aviso, e manda o título e a hora apenas para o aparelho do dono.
+- A aba começa desligada para todos; o administrador liga por perfil (Administração › Perfis) ou por pessoa (Usuários › exceções).
+- Código: `public/contas/agenda.js` (testes em `testes/agenda.test.mjs`), `public/telas/agenda.js`, `DB.agendaWatch`/`agendaSalvar`/`agendaApagar` em `public/nucleo/data.js`.
+
 ## Prazos de guarda
 | O quê | Prazo | O que sai |
 |---|---|---|

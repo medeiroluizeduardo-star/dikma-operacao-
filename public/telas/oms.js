@@ -20,6 +20,7 @@ import { formSheet, toast } from '../ui/janelas.js';
 import { render } from '../ui/shell.js';
 import { baixarExcel } from '../ui/exportar.js';
 import { imprimirProgramacao, excelProgramacao } from './oms-programacao.js';
+import { botaoLembrar } from '../ui/lembrar.js';
 import { semanaDaProgramacao } from '../contas/oms-programacao.js';
 
 const MES = today().slice(0, 7);
@@ -395,6 +396,7 @@ function abrir(id) {
     <details class="om-det om-mais"><summary>Mais ações</summary><div class="row-gap om-acoes">
       <button type="button" class="btn sm" data-act="omImprimir" data-id="${esc(o.id)}">${I.dl} Imprimir ou salvar em PDF</button>
       ${planejaOmU(ME, SK) ? `<button type="button" class="btn sm" data-act="omRepetir" data-id="${esc(o.id)}">Repetir esta OM</button>` : ''}
+      ${botaoLembrar({ m: 'operacao', v: 'oms', act: 'omAbrir', id: o.id, col: SK, r: `OM: ${o.titulo}`.slice(0, 200) }, `OM: ${o.titulo}`)}
       ${mais.map(a => bt(a, ` sm${['cancelar', 'apagar', 'recusar'].includes(a) ? ' ghost' : ''}`)).join('')}</div></details>`;
   formSheet(o.titulo, `${o.numero ? 'OM ' + esc(o.numero) + ' · ' : ''}${esc(areaNome(o.area))} · ${esc(nomeSit(o))}`, html, 'Fechar', async () => {}, {});
   const f = document.getElementById('fSheet'); if (!f) return;
@@ -402,6 +404,7 @@ function abrir(id) {
   const s = f.querySelector('[type=submit]'); if (s) s.classList.remove('pri');
   // A janela não deixa o clique subir até a página: os botões das ações são ligados aqui.
   f.querySelectorAll('[data-act="omAcao"]').forEach(b => b.addEventListener('click', () => acoes.omAcao(b, b.dataset)));
+  f.querySelectorAll('[data-act="agLembrar"]').forEach(b => b.addEventListener('click', () => acoes.agLembrar(b, b.dataset)));
   f.querySelectorAll('[data-act="omImprimir"]').forEach(b => b.addEventListener('click', () => imprimir(b.dataset.id)));
   f.querySelectorAll('[data-act="omRepetir"]').forEach(b => b.addEventListener('click', () => { document.getElementById('layer').innerHTML = ''; editar('', o); }));
   pintarFotosOm(o); carregarFotosOm(o.id).then(() => pintarFotosOm(o));

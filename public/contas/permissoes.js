@@ -41,7 +41,7 @@ export function doPerfil(mod, papel, v, cfg) {
   if (v.livre) return !!papel;
   if (!papel || !configuravel(mod, papel, v)) return false;
   const c = valorCfg(cfg, mod, papel, v.id);
-  return typeof c === 'boolean' ? c : true;
+  return typeof c === 'boolean' ? c : !v.desligada; // aba desligada de fábrica (ex.: Minha agenda): só com o "ligado" gravado
 }
 // O que esta pessoa vê na aba v (Avisos no celular: no módulo mod): exceção dela, senão o perfil dela naquele módulo.
 export function podeVer(u, v, cfg, mod) {
@@ -86,7 +86,6 @@ export const ITENS = [
   { id: 'i_operacao', mod: 'operacao', nome: 'Lançar e editar em Equipamentos', d: 'Alocações, paradas, equipe e inspeções', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   { id: 'i_efetivo', mod: 'operacao', nome: 'Lançar na Escala do dia', d: 'Faltas, atestados, coberturas, horas extras e check-in do turno', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },
   ...comunsDe('operacao', ['gestor', 'coordenador', 'supervisor', 'tecnico', 'lider', 'leitor']),
-  { id: 'i_acoes', mod: 'gestao', nome: 'Criar e acompanhar tratativas', d: 'Ações, planos 5W2H e atas em Tratativas, e o plano de ação em Causas e ações', quem: ['gestor', 'coordenador', 'supervisor'] },
   { id: 'i_fichas', mod: 'gestao', nome: 'Registrar ocorrências nas fichas', d: 'Fichas de acompanhamento dos colaboradores', quem: ['gestor', 'coordenador', 'supervisor', 'lider', 'administrativo'] },
   { id: 'i_medicao', mod: 'gestao', nome: 'Lançar na Medição', d: 'Marcar lançado, ocultar e digitar registros em Gestão › Medição', quem: ['gestor', 'coordenador'] },
   { id: 'i_aval', mod: 'gestao', nome: 'Lançar a Avaliação mensal dos operadores', d: 'Notas do mês em Equipamentos', quem: ['gestor', 'coordenador', 'supervisor', 'lider'] },

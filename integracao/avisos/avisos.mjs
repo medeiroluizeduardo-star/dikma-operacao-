@@ -11,7 +11,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota, escalaDaFicha } = await import('./lib/escala.mjs');
@@ -173,9 +173,18 @@ const oms7 = [];
     for (const st of ['planejada', 'aprovada']) (await db.collection('oms').where('status', '==', st).get()).forEach(x => oms7.push({ id: x.id, ...x.data() }));
     (await db.collection('oms').where('hFim', '>=', add(hj, -7)).get()).forEach(x => { const o = x.data(); if (o.status === 'finalizada') oms7.push({ id: x.id, ...o }); });
   } }
+// Gestão › Minha agenda: só de quem tem aparelho com aviso e a preferência ligada. Lê os itens com data de 60 dias atrás
+// até amanhã e os que se repetem (o compromisso repetido usa a próxima data). Título e hora vão só para o dono.
+const agenda = [];
+{ const quem = new Set(comToken.filter(uid => (avisos[uid].prefs || {}).agenda !== false));
+  if (quem.size) {
+    const vistos = new Set(); const pega = x => { const it = x.data(); if (!vistos.has(x.id) && quem.has(it.uid)) { vistos.add(x.id); agenda.push({ id: x.id, ...it }); } };
+    (await db.collection('agenda').where('data', '>=', add(hoje, -60)).where('data', '<=', add(hoje, 1)).get()).forEach(pega);
+    (await db.collection('agenda').where('rep', 'in', ['dia', 'util', 'semana', 'mes']).get()).forEach(pega);
+  } }
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
 const omsCfg = (await db.doc('config/oms').get()).data() || null;
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, oms7, omsCfg, agora: new Date() });
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, oms7, omsCfg, agenda, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

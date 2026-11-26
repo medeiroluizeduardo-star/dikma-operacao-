@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -361,4 +361,32 @@ test('resumo das OMs às 7h: uma vez por dia, só a quem tem algo a fazer', () =
   assert.deepEqual(m.map(x => x.uid), ['tec']); assert.match(m[0].titulo, /OMs hoje: 1 para aprovar/);
   const enviados = Object.fromEntries(r.marcar.map(k => [k, '2026-11-24']));
   assert.equal(planejar({ ...base, enviados, agora: new Date('2026-11-24T08:05:00') }).msgs.filter(x => x.tag === 'oms').length, 0, 'uma vez por dia');
+});
+
+test('Minha agenda: às 7h o dia e as atrasadas; compromisso com hora na rodada antes dele; só para o dono e uma vez', () => {
+  const agenda = [
+    { id: 'a1', uid: 'liderRec', tipo: 'compromisso', titulo: 'Reunião com o cliente', data: HOJE, hora: '08:00' },
+    { id: 'a2', uid: 'liderRec', tipo: 'tarefa', titulo: 'Conferir justificativas', data: '2026-10-12' },
+    { id: 'a3', uid: 'liderRec', tipo: 'tarefa', titulo: 'Feita', data: HOJE, feito: true },
+    { id: 'a4', uid: 'liderRec', tipo: 'nota', titulo: 'Anotação' },
+    { id: 'a5', uid: 'semAviso', tipo: 'tarefa', titulo: 'Sem aparelho', data: HOJE },
+    { id: 'a6', uid: 'liderPrep', tipo: 'compromisso', titulo: 'DDS', data: '2026-10-07', hora: '07:45', rep: 'semana' }
+  ];
+  const ag = (hora, min = 5, extra = {}) => planejar({ usuarios, avisos, paradas: [], ocorr: [], sets: {}, enviados: {}, agenda, agora: new Date(`${HOJE}T${String(hora).padStart(2, '0')}:${String(min).padStart(2, '0')}:00`), hoje: HOJE, ...extra });
+  const de = (r, uid) => r.msgs.filter(m => m.uid === uid && m.tag === 'agenda');
+  const r7 = ag(7);
+  const dia = de(r7, 'liderRec');
+  assert.equal(dia.length, 2, 'o dia e o compromisso das 8h (faltam 55 min)');
+  assert.match(dia[0].titulo, /Sua agenda hoje: 1 item/);
+  assert.match(dia[0].corpo, /08:00 Reunião com o cliente/);
+  assert.match(dia[0].corpo, /1 tarefa atrasada/);
+  assert.equal(dia[1].titulo, 'Às 08:00: Reunião com o cliente');
+  assert.equal(de(r7, 'semAviso').length, 0, 'sem aparelho, nada');
+  assert.ok(de(r7, 'liderPrep').some(m => m.titulo === 'Às 07:45: DDS'), 'compromisso repetido toda semana cai hoje');
+  const r6 = ag(6);
+  assert.equal(de(r6, 'liderRec').filter(m => /Sua agenda/.test(m.titulo)).length, 0, 'antes das 7h, sem o resumo do dia');
+  const env = Object.fromEntries(r7.marcar.map(k => [k, HOJE]));
+  assert.equal(de(ag(7, 30, { enviados: env }), 'liderRec').length, 0, 'não repete');
+  const off = planejar({ usuarios, avisos: { ...avisos, liderRec: { tokens: ['t'], prefs: { agenda: false } } }, paradas: [], ocorr: [], sets: {}, enviados: {}, agenda, agora: new Date(`${HOJE}T07:05:00`), hoje: HOJE });
+  assert.equal(de(off, 'liderRec').length, 0, 'preferência desligada');
 });
