@@ -1,5 +1,6 @@
 // Telas de Atividades: Painel, Aprovação, Causas e ações, Etiquetas QR, Programação, Pendências e Folha do líder.
-import { SETS, AREA_S, DAYS, DL, MOTIVOS, pd, add, ddmm, weeksOfMonth, weekOf, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
+import { motivoBase } from '../contas/justificativa.js';
+import { SETS, AREA_S, DAYS, DL, pd, add, ddmm, weeksOfMonth, weekOf, weekLabel, monthLabel, addMonth } from '../contas/cal.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import * as M from '../ui/movimento.js';
 import { DB, TODAY, CUR_WEEK, framed, esc, pct, title, fmtAt, n0, $ } from '../nucleo/base.js';
@@ -157,7 +158,7 @@ function pedirDevolucao(x) {
 /* ---------------- CAUSAS E AÇÕES ---------------- */
 // Pareto das justificativas das não realizadas (mês e área do topo), semana a semana, por rota, e o plano de ação de cada causa.
 const OUTRAS = 'Outras justificativas (escritas)';
-const causaDe = m => (MOTIVOS.includes(m) ? m : OUTRAS);
+const causaDe = m => motivoBase(m) || OUTRAS;
 const podeAcao = area => acompanha() && podeItem('i_acoes') && (area === 'TODAS' ? todasAreas() : (todasAreas() || myAreas().includes(area)));
 // Ações das causas: as antigas (acoes/ do conjunto aberto) e as das Tratativas com origem Atividades neste conjunto.
 function acoesDasCausas() {
@@ -176,7 +177,7 @@ export function contarCausas(docs, rota) {
 export const REINCIDE = 3;
 export function reincidencias(docs) {
   const n = new Map();
-  for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = d.m[id + '|' + k]; if (!m || !MOTIVOS.includes(m)) continue; const key = p.area + '|' + p.rota + '|' + m; n.set(key, (n.get(key) || 0) + 1); } });
+  for (const d of docs) d.ids.forEach((id, i) => { const p = PL.get(id); if (!p) return; for (let k = 0; k < 7; k++) if (d.d[i][k] === 'N') { const m = motivoBase(d.m[id + '|' + k]); if (!m) continue; const key = p.area + '|' + p.rota + '|' + m; n.set(key, (n.get(key) || 0) + 1); } });
   return [...n].filter(([, v]) => v >= REINCIDE).map(([k, v]) => { const [area, rota, causa] = k.split('|'); return { area, rota, causa, n: v }; }).sort((a, b) => b.n - a.n);
 }
 // Quantas vezes a causa apareceu por semana nas 4 semanas antes e depois de uma data (só os meses carregados)
@@ -368,7 +369,7 @@ export function vPend() {
     </div></div></details>`;
   }
   h += '</div>';
-  const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) { const key = MOTIVOS.includes(v) ? v : 'Outras justificativas (escritas)'; mot[key] = (mot[key] || 0) + 1; }
+  const mot = {}; for (const d of docsFor({ area })) for (const v of Object.values(d.m)) { const key = motivoBase(v) || 'Outras justificativas (escritas)'; mot[key] = (mot[key] || 0) + 1; }
   const mt = Object.entries(mot).sort((a, b) => b[1] - a[1]); const mx = Math.max(1, ...mt.map(x => x[1]));
   h += `<div class="stackcol"><div class="card"><header><h2>Por que não foi feito</h2><p>Justificativas das não realizadas</p></header><div class="body">${mt.length ? `<div class="bars">${mt.map(([m, n]) => `<div class="barrow mot"><span class="n">${esc(m)}</span><div class="stack clear"><i style="width:${n / mx * 100}%;background:var(--st-nreal)"></i></div><span class="p num">${n}</span></div>`).join('')}</div>` : '<div class="empty">Sem registros.</div>'}</div></div>
 </div></div>`;

@@ -13,14 +13,27 @@ import { metaFoto } from '../contas/fotos.js';
 import { statusFoto } from '../contas/fotos-arquivo.js';
 import { reduzirFotoAtividade, verFotoGrande } from '../ui/fotos.js';
 import { cfgF } from './fotos.js';
+import { campoBusca, semAcento } from '../ui/busca.js';
 import { registrarRelatorio, agoraTxt } from '../ui/indicadores-acoes.js';
 import { QZ_EQUIP, QZ_PRODUTOS, QZ_MAX_LINHAS, calcQZ, valorQZ, resultadoQZ, fatorQZ, fmtT, textoQZ, qzDoDia, totalDiaQZ, chaveNovaQZ, QZ_LOCAIS, QZ_MOTIVOS, QZ_NOME_MAX, listaQZ, novoNomeQZ, pidFotoQZ, fotosQZ, lancamentosMesQZ, lancamentosFaixaQZ, resumoQZ } from '../contas/queda-zero.js';
 
 const num = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+// Campos com busca ao digitar (o mesmo modelo de Operador e Equipamento na aba Equipamentos): ui/busca.js.
+const opcoesEquipQZ = () => QZ_EQUIP.map(x => ({ v: x.id, t: x.nome, d: `Coque ${num(x.coque)} t · Carvão ${num(x.carvao)} t cada` }));
+const opcoesTexto = lista => () => lista.map(x => ({ v: x, t: x }));
+// Valor do campo de busca: o escolhido; ou o texto digitado, quando é igual a um da lista (salvar antes de sair do campo).
+function valorBusca(id, opcoes) {
+  const h = $(id), q = $(id + '_q'); if (!h) return '';
+  if (h.value) return h.value;
+  const t = semAcento((q && q.value) || '').trim(); if (!t) return '';
+  const o = opcoes().find(x => semAcento(x.t) === t || semAcento(x.v) === t); return o ? o.v : '';
+}
+let nLinQZ = 0;
 function linhaQZ(l = {}) {
   const e = l.e || '', p = l.p || 'coque', q = l.q != null ? String(l.q).replace('.', ',') : '';
-  return `<div class="qzlin" data-qzlin>
-    <label class="sel"><span>Equipamento</span><select class="in" data-qze><option value="">Escolha…</option>${QZ_EQUIP.map(x => `<option value="${x.id}"${x.id === e ? ' selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
+  const id = 'qze' + (++nLinQZ);
+  return `<div class="qzlin" data-qzlin data-qze="${id}">
+    <div class="sel"><span>Equipamento</span>${campoBusca(id, e, opcoesEquipQZ, { placeholder: 'Digite: retro, bobcat, caçamba…' })}</div>
     <label class="sel"><span>Produto</span><select class="in" data-qzp>${QZ_PRODUTOS.map(([v, t]) => `<option value="${v}"${v === p ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
     <label class="sel"><span>Quantidade</span><input class="in" data-qzq inputmode="decimal" autocomplete="off" maxlength="7" placeholder="0" value="${esc(q)}"></label>
     <div class="qzres"><span class="muted small" data-qzf></span><b data-qzr></b></div>
@@ -39,7 +52,7 @@ export function blocoQZ(inicial, aberto = false) {
 // Liga os campos do bloco e devolve ler() → { itens, t, erro } (itens vazio = nada preenchido).
 export function ligarQZ() {
   const box = $('qzBox'); if (!box) return () => ({ itens: [], t: 0, erro: '' });
-  const linhas = () => [...box.querySelectorAll('[data-qzlin]')].map(d => ({ d, e: d.querySelector('[data-qze]').value, p: d.querySelector('[data-qzp]').value, q: d.querySelector('[data-qzq]').value }));
+  const linhas = () => [...box.querySelectorAll('[data-qzlin]')].map(d => ({ d, e: valorBusca(d.dataset.qze, opcoesEquipQZ), p: d.querySelector('[data-qzp]').value, q: d.querySelector('[data-qzq]').value }));
   const pintar = () => {
     const ls = linhas();
     for (const l of ls) {
@@ -54,7 +67,7 @@ export function ligarQZ() {
   };
   box.addEventListener('input', pintar); box.addEventListener('change', pintar);
   box.addEventListener('click', e => {
-    if (e.target.closest('#qzMais')) { $('qzLinhas').insertAdjacentHTML('beforeend', linhaQZ()); pintar(); const s = box.querySelectorAll('[data-qze]'); s[s.length - 1].focus(); return; }
+    if (e.target.closest('#qzMais')) { $('qzLinhas').insertAdjacentHTML('beforeend', linhaQZ()); pintar(); const s = box.querySelectorAll('[data-qzlin] input[role=combobox]'); s[s.length - 1].focus(); return; }
     const rm = e.target.closest('[data-qzrm]'); if (rm) { rm.closest('[data-qzlin]').remove(); pintar(); }
   });
   pintar();
@@ -127,23 +140,16 @@ function ligarFotosQZ(doc, k, key) {
 }
 const areaQZ = () => { const a = areaScope(); return a === 'TODAS' ? (AREAS.includes(UI.apArea) ? UI.apArea : AREAS[0]) : a; };
 const docAtual = () => DB.cache.semanas[areaQZ() + '|' + UI.ini];
-// Campo de lista (local ou motivo) com "+ Novo…": escolher na lista ou cadastrar um nome novo (vale para todos).
-const NOVO = '__novo__';
+// Local e motivo: busca ao digitar na lista; o que não está na lista pode ser escrito e entra para todos (config/quedazero).
 function campoLista(id, rotulo, nomeItem, lista, atual) {
   const opc = lista.includes(atual) || !atual ? lista : [atual, ...lista];
-  return `<label class="sel"><span>${rotulo} (opcional)</span><select class="in" id="${id}"><option value="">Escolha…</option>${opc.map(x => `<option${x === atual ? ' selected' : ''}>${esc(x)}</option>`).join('')}<option value="${NOVO}">+ Novo ${nomeItem}…</option></select></label>
-    <label class="sel" id="${id}NovoL" hidden><span>Nome do novo ${nomeItem}</span><input class="in" id="${id}Novo" maxlength="${QZ_NOME_MAX}" autocomplete="off"></label>`;
+  return `<div class="sel"><span>${rotulo} (opcional)</span>${campoBusca(id, atual || '', opcoesTexto(opc), { livre: true, vazio: '—', placeholder: 'Digite para buscar ou escrever' })}</div>`;
 }
-function ligarLista(id) {
-  const s = $(id); if (!s) return;
-  const f = () => { const novo = s.value === NOVO; $(id + 'NovoL').hidden = !novo; if (novo) $(id + 'Novo').focus(); };
-  s.addEventListener('change', f);
-}
-// Valor escolhido; um nome novo entra na lista de todos (config/quedazero). Erro de digitação vira exceção (a janela mostra).
+// Valor escolhido ou digitado; um nome novo entra na lista de todos (config/quedazero). Erro de digitação vira exceção (a janela mostra).
 function lerLista(id, lista, tipo) {
-  const v = $(id).value;
-  if (v !== NOVO) return v;
-  const x = novoNomeQZ($(id + 'Novo').value, lista); if (x.erro) throw new Error(x.erro);
+  const v = (($(id + '_q') || {}).value || '').replace(/\s+/g, ' ').trim();
+  if (!v) return '';
+  const x = novoNomeQZ(v, lista); if (x.erro) throw new Error(x.erro);
   if (!x.existe) Promise.resolve(DB.salvarItemQZ(tipo, x.nome)).catch(() => toast('Não foi possível cadastrar o novo nome na lista'));
   return x.nome;
 }
@@ -160,7 +166,7 @@ export function editarQZ(doc, k, key) {
   const locais = listaQZ(QZ_LOCAIS, L.locais), motivos = listaQZ(QZ_MOTIVOS, L.motivos);
   let ler = null;
   formSheet(atual ? 'Corrigir queda zero' : 'Lançar queda zero', `${esc(AREA_S[doc.area] || doc.area)} · ${DAYS[k]} ${ddmm(diasDe(doc)[k])}${ativ ? `<br>Lançada junto da atividade: ${esc(ativ)}` : ''}`,
-    blocoQZ(atual, true) + `<label class="sel"><span>Rota (opcional)</span><select class="in" id="qzRota"><option value="">Sem rota</option>${rotas.map(x => `<option${x === rota0 ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>${campoLista('qzLoc', 'Local (transportador)', 'local', locais, atual && atual.l)}${campoLista('qzMot', 'Motivo', 'motivo', motivos, atual && atual.m)}<label class="sel"><span>Observação (opcional)</span><input class="in" id="qzObs" maxlength="120" autocomplete="off" placeholder="Ex.: perto da torre" value="${esc((atual && atual.o) || '')}"></label>` + blocoFotosQZ()
+    blocoQZ(atual, true) + `<div class="sel"><span>Rota (opcional)</span>${campoBusca('qzRota', rota0, opcoesTexto(rotas), { vazio: '—', placeholder: 'Sem rota · digite para buscar' })}</div>${campoLista('qzLoc', 'Local (transportador)', 'local', locais, atual && atual.l)}${campoLista('qzMot', 'Motivo', 'motivo', motivos, atual && atual.m)}<label class="sel"><span>Observação (opcional)</span><input class="in" id="qzObs" maxlength="120" autocomplete="off" placeholder="Ex.: perto da torre" value="${esc((atual && atual.o) || '')}"></label>` + blocoFotosQZ()
     + (atual ? `<button type="button" class="btn sm danger" id="qzApagar">${I.lixo} Apagar este lançamento</button>` : ''), 'Salvar', async () => {
       const r = ler(); if (r.erro) throw new Error(r.erro);
       if (!fts.pronto()) throw new Error('Espere as fotos ficarem prontas.');
@@ -170,7 +176,7 @@ export function editarQZ(doc, k, key) {
         gravarQZ(doc, key, k, null, rotulo0); toast('Lançamento apagado'); render(); return;
       }
       const o = ($('qzObs').value || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-      const rota = $('qzRota').value || '';
+      const rota = valorBusca('qzRota', opcoesTexto(rotas));
       const l = lerLista('qzLoc', locais, 'locais'), m = lerLista('qzMot', motivos, 'motivos');
       const imgs = fts.novas(); const nf = fts.tem() + imgs.length;
       const novo = { ...valorQZ(r), ...(rota ? { r: rota } : {}), ...(l ? { l } : {}), ...(m ? { m } : {}), ...(o ? { o } : {}), ...(nf ? { f: nf } : {}) };
@@ -181,7 +187,7 @@ export function editarQZ(doc, k, key) {
       });
       gravarQZ(doc, chave, k, novo, `${AREA_S[doc.area] || doc.area}${rota ? ' · ' + rota : ''}`, fotos); toast(`Queda zero: ${fmtT(r.t)}${fotos.length ? ` · ${fotos.length} foto${fotos.length > 1 ? 's' : ''}` : ''}`); render();
     });
-  ler = ligarQZ(); ligarLista('qzLoc'); ligarLista('qzMot');
+  ler = ligarQZ();
   const fts = ligarFotosQZ(doc, k, key);
   const ap = $('qzApagar');
   if (ap) ap.addEventListener('click', () => {

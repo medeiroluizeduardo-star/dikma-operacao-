@@ -11,6 +11,7 @@ import { sheet, formSheet, toast } from '../ui/janelas.js';
 import { render, desenharLogo } from '../ui/shell.js';
 import { precisaFotos, passoFotos, passoFotosCel, montarFotos, verFotosCel, verFotosLocal, cfgF } from './fotos.js';
 import { exigeFoto, fotosDaCel, FASES_FOTO } from '../contas/fotos.js';
+import { motivoBase, lerMotivo, montarMotivo, faltaDetalhe, DETALHE_MOTIVO } from '../contas/justificativa.js';
 import { resumoExec, agruparLocais, mesmoLocal, fotosDoLocal, SITUACAO } from '../contas/execucao.js';
 
 /* ---------------- APONTAR ---------------- */
@@ -68,7 +69,12 @@ export function vApontar() {
     if (mv.length) h += `<p class="aviso">${mv.map(v => v.para === rk ? `<b>${esc(nm(v))}</b> veio da ${esc(partesRota(v.de).rota)} neste dia` : `<b>${esc(nm(v))}</b> foi para a ${esc(partesRota(v.para).rota)} neste dia`).join('<br>')}</p>`; }
   const grupos = agruparLocais(items.map(x => ({ ...x, local: x.p.local })));
   const aberto = UI.apLocal && grupos.find(g => mesmoLocal(g.local, UI.apLocal));
-  if (aberto) return vLocal(doc, k, area, aberto, edit, varias);
+  if (aberto) {
+    // Próximo local: o seguinte da lista que ainda tem algo a fazer; senão, o seguinte.
+    const ix = grupos.indexOf(aberto); const depois = grupos.slice(ix + 1);
+    const prox = depois.find(g => g.itens.some(x => doc.d[x.i][k] === 'P')) || depois[0] || null;
+    return vLocal(doc, k, area, aberto, edit, varias, prox);
+  }
   if (UI.apRasc) UI.apRasc = null; // saiu do local: o rascunho não salvo fica para trás (a tela já perguntou)
   if (grupos.length) h += `<p class="muted small m0 aplead">${grupos.length === 1 ? '1 local' : `${grupos.length} locais`} nesta rota. Toque no local para abrir o checklist${edit ? ', marcar o que foi feito e juntar as fotos' : ''}.</p>`;
   h += '<div class="lclista">';
@@ -120,13 +126,13 @@ const localAberto = () => {
   const itens = doc.ids.map((id, i) => ({ i, p: PL.get(id) })).filter(x => x.p && x.p.rota === UI.aRota && doc.d[x.i][k] !== '_' && mesmoLocal(x.p.local, UI.apLocal));
   return itens.length ? { doc, k, g: { local: itens[0].p.local, itens } } : null;
 };
-function vLocal(doc, k, area, g, edit, varias) {
+function vLocal(doc, k, area, g, edit, varias, prox) {
   const r = rascDe(doc, k, g.local); const passou = add(UI.ini, k) < TODAY;
   const res = resumoExec(g.itens.map(x => efetivo(doc, k, r, x.i)), passou); const sit = SITUACAO[res.situ];
   const nSalvas = temFotos(doc, k, g); const exig = fotosExigidas(doc, k, g, r); const cfg = cfgF();
   const faltaF = Math.max(0, exig - nSalvas - r.imgs.length); const mud = mudancas(doc, k, r); const dirty = mud.length > 0 || r.imgs.length > 0;
   const pendAp = g.itens.filter(x => efetivo(doc, k, r, x.i) === 'P').length;
-  let h = `<div class="apbar lchead"><div class="row-between"><button type="button" class="btn ghost sm" data-act="ckVoltar">← Locais da rota</button><span class="pill ${sit.c}">${sit.t}</span></div>
+  let h = `<div class="apbar lchead"><div class="row-between"><button type="button" class="btn sm ckvoltar" data-act="ckVoltar">← Voltar aos locais</button><span class="pill ${sit.c}">${sit.t}</span></div>
     <div><h2 class="lc-tit">${esc(g.local)}</h2><p class="muted small m0">${esc(UI.aRota)}${varias ? ` · ${AREA_S[area]}` : ''} · ${DAYS[k]} ${ddmm(add(UI.ini, k))} · ${res.prev} atividade${res.prev === 1 ? '' : 's'} previstas</p></div>
     <div class="lc-bar ${res.situ === 'afazer' ? '' : res.faixa}"><span class="meter"><i style="width:${res.pct || 0}%"></i></span><span class="lc-p num ${res.situ === 'afazer' ? '' : res.faixa}">${res.pct == null ? '—' : res.pct + '%'}</span></div>
     <p class="muted small m0 num">Execução: ${res.feitas} feita${res.feitas === 1 ? '' : 's'} de ${res.prev} · ${res.nao} não feita${res.nao === 1 ? '' : 's'} · ${res.pend} a fazer</p>
@@ -147,13 +153,25 @@ function vLocal(doc, k, area, g, edit, varias) {
     ${r.imgs.length ? `<div class="sgfotos">${r.imgs.map((f, j) => `<div class="sgfth"><img src="${f.thumb}" alt="Foto nova ${j + 1}"><button type="button" class="btn sm ghost" data-act="ckFotoRm" data-k="${j}" aria-label="Tirar a foto nova ${j + 1}">✕</button>${FASES_FOTO[f.fase] ? `<button type="button" class="ffase ${f.fase}" data-act="ckFotoFase" data-k="${j}" aria-label="Foto nova ${j + 1}: ${FASES_FOTO[f.fase]}. Tocar para trocar" title="Tocar para trocar">${FASES_FOTO[f.fase]}</button>` : ''}</div>`).join('')}</div>` : ''}
     ${edit ? `<div class="row-gap">${maxNovas ? `<button type="button" class="btn" data-act="ckFoto" data-k="antes">${I.cam} Foto do antes</button><button type="button" class="btn" data-act="ckFoto" data-k="depois">${I.cam} Foto do depois</button>` : `<span class="muted small">Chegou ao máximo de fotos.${nSalvas ? ' Para trocar uma, toque em <b>Ver as salvas</b> e use <b>Apagar</b>.' : ''}</span>`}${r.imgs.length ? `<span class="muted small">${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''} nova${r.imgs.length > 1 ? 's' : ''}: sobe${r.imgs.length > 1 ? 'm' : ''} ao salvar</span>` : ''}</div>` : nSalvas ? '' : '<p class="muted small m0">Nenhuma foto neste local.</p>'}
     ${faltaF && edit ? `<p class="fcont falta m0">Falta${faltaF > 1 ? 'm' : ''} ${faltaF} foto${faltaF > 1 ? 's' : ''} do local para salvar.</p>` : ''}</div></div>`;
-  if (edit) h += `<div class="lcsalvar"><button type="button" class="btn pri" data-act="ckSalvar"${!dirty || faltaF ? ' disabled' : ''}>Salvar apontamento do local</button><span class="muted small">${dirty ? `${mud.length ? `${mud.length} mudança${mud.length > 1 ? 's' : ''}` : ''}${mud.length && r.imgs.length ? ' e ' : ''}${r.imgs.length ? `${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''}` : ''} para salvar` : 'Tudo salvo'}</span></div>`;
+  // Barra fixa no pé: Voltar, Salvar e ir para o próximo local (salva antes, se tiver algo marcado).
+  const pTxt = prox ? `Próximo: ${prox.local}` : '';
+  h += `<div class="lcsalvar"><button type="button" class="btn" data-act="ckVoltar" aria-label="Voltar aos locais da rota">←<span class="lcs-t"> Voltar</span></button>${edit ? `<button type="button" class="btn pri" data-act="ckSalvar"${!dirty || faltaF ? ' disabled' : ''}>Salvar</button>` : ''}${prox ? `<button type="button" class="btn lcprox" data-act="ckProx" data-k="${esc(prox.local)}" title="${esc(pTxt)}" aria-label="${edit && dirty ? 'Salvar e ir para o próximo local' : 'Ir para o próximo local'}: ${esc(prox.local)}"><span class="lcs-t">${edit && dirty ? 'Salvar e próximo' : 'Próximo local'}</span> →</button>` : ''}<span class="muted small lcs-st">${!edit ? '' : dirty ? `${mud.length ? `${mud.length} mudança${mud.length > 1 ? 's' : ''}` : ''}${mud.length && r.imgs.length ? ' e ' : ''}${r.imgs.length ? `${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''}` : ''} para salvar` : 'Tudo salvo'}${prox ? ` · próximo: <b>${esc(prox.local)}</b>` : ''}</span></div>`;
   return h;
 }
 const comLocal = f => (t, d) => { const x = localAberto(); if (!x || !canEdit(x.doc.area)) return; const r = rascDe(x.doc, x.k, x.g.local); f(x, r, d); };
-acoes.apLocal = (t, d) => { UI.apLocal = d.k; UI.apRasc = null; UI.confirm = null; render(); scrollTo(0, 0); };
-acoes.ckVoltar = () => { const x = localAberto(); if (x && canEdit(x.doc.area) && UI.apRasc && sujo(x.doc, x.k, UI.apRasc)) { UI.confirm = 'sairLocal'; render(); return; } UI.apLocal = null; UI.apRasc = null; UI.confirm = null; render(); };
-acoes.ckDescartar = () => { UI.apLocal = null; UI.apRasc = null; UI.confirm = null; render(); };
+// Voltar do celular (ou do navegador): abrir um local entra no histórico; o Voltar fecha o local e mostra a lista.
+const marcarLocalHist = () => { const st = history.state || {}; if (!st.loc) history.pushState({ ...st, loc: 1 }, ''); };
+const tirarLocalHist = () => { if ((history.state || {}).loc) history.back(); };
+function sairDoLocal() { UI.apLocal = null; UI.apRasc = null; UI.confirm = null; render(); tirarLocalHist(); }
+const rascSujo = () => { const x = localAberto(); return !!(x && canEdit(x.doc.area) && UI.apRasc && sujo(x.doc, x.k, UI.apRasc)); };
+// Chamado pelo Voltar do aparelho (eventos.js). true = ficou no local (há marcações sem salvar: pergunta antes).
+export function voltarDoLocal() {
+  if (rascSujo()) { history.pushState({ ...(history.state || {}), loc: 1 }, ''); UI.confirm = 'sairLocal'; render(); scrollTo(0, 0); return true; }
+  UI.apLocal = null; UI.apRasc = null; UI.confirm = null; return false;
+}
+acoes.apLocal = (t, d) => { UI.apLocal = d.k; UI.apRasc = null; UI.confirm = null; marcarLocalHist(); render(); scrollTo(0, 0); };
+acoes.ckVoltar = () => { if (rascSujo()) { UI.confirm = 'sairLocal'; render(); scrollTo(0, 0); return; } sairDoLocal(); };
+acoes.ckDescartar = () => sairDoLocal();
 acoes.ckR = comLocal(({ doc, k }, r, d) => { const i = +d.k; r.v[i] = efetivo(doc, k, r, i) === 'R' ? 'P' : 'R'; UI.confirm = null; render(); });
 acoes.ckN = comLocal(({ doc, k }, r, d) => {
   const i = +d.k; if (efetivo(doc, k, r, i) === 'N') { r.v[i] = 'P'; UI.confirm = null; render(); return; }
@@ -169,12 +187,13 @@ acoes.ckFoto = comLocal(({ doc, k, g }, r, d) => {
   passoFotos({ titulo: 'Fotos do local', sub: `<b>${esc(g.local)}</b><br>${esc(UI.aRota)} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}`, cfg: { obrig: true, min: Math.max(1, exig - tem), max: cfg.max }, tem, lote: g.itens.length > 1 ? g.itens.length : 0, rotuloOk: 'Juntar ao local', fase: d && d.k,
     aoConfirmar: imgs => { if (UI.apRasc === r) r.imgs.push(...imgs); render(); }, aoCancelar: () => render() });
 });
-acoes.ckSalvar = comLocal(({ doc, k, g }, r) => {
+// Salva o checklist do local aberto. Devolve false quando falta algo (foto ou justificativa) e fica no local.
+function salvarLocal({ doc, k, g }, r) {
   const mud = mudancas(doc, k, r);
-  if (!mud.length && !r.imgs.length) { UI.apLocal = null; UI.apRasc = null; UI.confirm = null; render(); return; }
+  if (!mud.length && !r.imgs.length) return true;
   const falta = fotosExigidas(doc, k, g, r) - temFotos(doc, k, g) - r.imgs.length;
-  if (falta > 0) { UI.confirm = null; toast(`Falta${falta > 1 ? 'm' : ''} ${falta} foto${falta > 1 ? 's' : ''} do local para salvar`); render(); return; }
-  if (mud.some(x => x.v === 'N' && !x.m)) { toast('Falta a justificativa de uma atividade não feita'); render(); return; }
+  if (falta > 0) { UI.confirm = null; toast(`Falta${falta > 1 ? 'm' : ''} ${falta} foto${falta > 1 ? 's' : ''} do local para salvar`); render(); return false; }
+  if (mud.some(x => x.v === 'N' && !x.m)) { toast('Falta a justificativa de uma atividade não feita'); render(); return false; }
   const ch = mud.map(x => localChange(doc, x.i, k, x.v, x.m));
   const fotos = r.imgs.length ? montarFotos(doc, k, g.itens.map(x => x.i), r.imgs, 'R') : null;
   gravarApont(doc, ch, fotos);
@@ -182,8 +201,16 @@ acoes.ckSalvar = comLocal(({ doc, k, g }, r) => {
   const nR = mud.filter(x => x.v === 'R').length, nN = mud.filter(x => x.v === 'N').length;
   DB.log(`${g.local} · ${UI.aRota} · ${DAYS[k]} ${ddmm(add(UI.ini, k))}: checklist salvo (${nR} feita${nR === 1 ? '' : 's'}, ${nN} não feita${nN === 1 ? '' : 's'}${r.imgs.length ? `, ${r.imgs.length} foto${r.imgs.length > 1 ? 's' : ''}` : ''}) · execução ${res.pct == null ? '—' : res.pct + '%'}`, 'operacao');
   toast(`${g.local}: salvo · execução ${res.pct == null ? '—' : res.pct + '%'}${r.imgs.length ? ` · ${r.imgs.length === 1 ? '1 foto' : r.imgs.length + ' fotos'}` : ''}`);
-  UI.apLocal = null; UI.apRasc = null; UI.confirm = null; desenharLogo(); render(); scrollTo(0, 0);
-});
+  desenharLogo();
+  return true;
+}
+acoes.ckSalvar = comLocal((x, r) => { if (!salvarLocal(x, r)) return; sairDoLocal(); scrollTo(0, 0); });
+// Próximo local: salva o que foi marcado (se tiver) e abre o próximo sem passar pela lista.
+acoes.ckProx = (t, d) => {
+  const x = localAberto(); if (!x) return;
+  if (canEdit(x.doc.area) && UI.apRasc && !salvarLocal(x, rascDe(x.doc, x.k, x.g.local))) return;
+  UI.apLocal = d.k; UI.apRasc = null; UI.confirm = null; marcarLocalHist(); render(); scrollTo(0, 0);
+};
 acoes.ferInfo = (t, d) => { const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; const [i, k] = String(d.k).split('|').map(Number); if (doc && doc.ids[i]) cellMenu(doc, i, k); };
 const chipIc = c => `<span class="chip ${c}">${CHIP[c]}</span>`;
 export function cellMenu(doc, i, k) {
@@ -220,13 +247,26 @@ export function cellMenu(doc, i, k) {
 // Justificativa de por que a atividade não foi feita: um motivo da lista ou escrito pela pessoa (obrigatória).
 export function pedirJustificativa(doc, i, k, ok, agora) {
   const p = PL.get(doc.ids[i]); const atual = agora != null ? agora : doc.m[p.id + '|' + k] || '';
+  const base = motivoBase(atual);
   const sub = `${esc(p.ativ)} · ${esc(p.rota)} · ${DAYS[k]} ${ddmm(add(doc.ini, k))}${atual ? `<br>Agora: <b>${esc(atual)}</b>` : ''}`;
-  sheet('Por que não foi feita?', sub, [...MOTIVOS.map(t => ({ t, cur: t === atual })), { t: 'Escrever a justificativa…', d: 'Explique com as suas palavras', outro: true, larga: true, cur: !!atual && !MOTIVOS.includes(atual) }], o => {
+  const de = t => (DETALHE_MOTIVO[t] ? DETALHE_MOTIVO[t].campos.map(c => c.rot).join(' e ') : '');
+  const voltar = () => pedirJustificativa(doc, i, k, ok, agora);
+  sheet('Por que não foi feita?', sub, [...MOTIVOS.map(t => ({ t, d: de(t) ? `Pede: ${de(t).toLowerCase()}` : '', cur: t === base })), { t: 'Escrever a justificativa…', d: 'Explique com as suas palavras', outro: true, larga: true, cur: !!atual && !base }], o => {
+    // Motivo que pede detalhe: o líder escreve (obrigatório). "Voltar" retorna à lista de motivos.
+    if (!o.outro && DETALHE_MOTIVO[o.t]) {
+      const d = DETALHE_MOTIVO[o.t]; const v0 = base === o.t ? lerMotivo(atual) : {};
+      formSheet(d.titulo, `<b>${esc(o.t)}</b> · ${esc(p.ativ)}`, d.campos.map(c => `<label class="sel"><span>${esc(c.rot)} <b class="obr" aria-hidden="true">*</b></span><input class="in" id="jsd_${c.k}" maxlength="${c.max}" autocomplete="off" placeholder="${esc(c.ex)}" value="${esc(v0[c.k] || '')}"></label>`).join('') + '<p class="muted small m0">Obrigatório. Aparece na Aprovação, nos resumos e no Excel.</p>', 'Salvar', async () => {
+        const v = {}; for (const c of d.campos) v[c.k] = ($('jsd_' + c.k).value || '');
+        const falta = faltaDetalhe(o.t, v); if (falta) throw new Error(falta);
+        ok(montarMotivo(o.t, v));
+      }, { cancelarTxt: '← Voltar', aoCancelar: voltar });
+      return;
+    }
     if (!o.outro) return ok(o.t);
-    formSheet('Justificativa', esc(p.ativ), `<label class="sel"><span>Por que não foi feita</span><textarea class="in" id="jsTxt" rows="6" maxlength="500" placeholder="Ex.: caminhão de vácuo quebrado desde as 8h">${MOTIVOS.includes(atual) ? '' : esc(atual)}</textarea></label><p class="muted small m0"><span id="jsCont">0</span> de 500 caracteres. O supervisor vê na Aprovação.</p>`, 'Salvar', async () => {
+    formSheet('Justificativa', esc(p.ativ), `<label class="sel"><span>Por que não foi feita</span><textarea class="in" id="jsTxt" rows="6" maxlength="500" placeholder="Ex.: caminhão de vácuo quebrado desde as 8h">${base ? '' : esc(atual)}</textarea></label><p class="muted small m0"><span id="jsCont">0</span> de 500 caracteres. O supervisor vê na Aprovação.</p>`, 'Salvar', async () => {
       const t = ($('jsTxt').value || '').replace(/\s+/g, ' ').trim(); if (t.length < 5) throw new Error('Escreva a justificativa (pelo menos 5 letras).');
       ok(t);
-    });
+    }, { cancelarTxt: '← Voltar', aoCancelar: voltar });
     { const t = $('jsTxt'), n = $('jsCont'); if (t && n) { const f = () => { n.textContent = t.value.length; }; t.addEventListener('input', f); f(); } }
   }, { grade: false });
 }

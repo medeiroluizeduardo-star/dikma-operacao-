@@ -63,7 +63,7 @@ const FORMS = {
       { k: 'desvios', rot: 'HOUVE DESVIOS? SE SIM, QUAL DESVIO?', t: 'checks', ops: L => L.desvios, sn: 1, snFalta: 'Marque pelo menos um desvio.' },
       { k: 'desc', rot: 'DESCRIÇÃO', t: 'area', max: 3000 },
       { k: 'acao', rot: 'AÇÃO IMEDIATA', t: 'area', max: 3000 },
-      { k: 'resp', rot: 'RESPONSÁVEL', t: 'text', obr: 1, max: 120, eu: 1 },
+      { k: 'resp', rot: 'RESPONSÁVEL', t: 'text', obr: 1, max: 120, eu: 1, pessoas: 1 },
       P_MAT, P_FOTOS]
   },
   anom: {
@@ -75,7 +75,7 @@ const FORMS = {
       { k: 'acao', rot: 'AÇÃO IMEDIATA', t: 'area', obr: 1, max: 3000 },
       { k: 'causas', rot: 'POSSÍVEIS CAUSAS', t: 'area', obr: 1, max: 3000 },
       { k: 'sugest', rot: 'SUGESTÕES', ajuda: 'O QUE PODE SER FEITO PARA MELHORAR?', t: 'area', obr: 1, max: 3000 },
-      { k: 'comunic', rot: 'COMUNICADO POR?', t: 'text', obr: 1, max: 120, eu: 1 },
+      { k: 'comunic', rot: 'COMUNICADO POR?', t: 'text', obr: 1, max: 120, eu: 1, pessoas: 1 },
       P_MAT, P_FOTOS]
   },
   // Cartão Amarelo: os campos do cartão de papel. A validação (Líder imediato ou Seg. do Trabalho) vem depois, em abrirValidar.
@@ -91,6 +91,10 @@ const FORMS = {
   }
 };
 const MAX_FOTOS = 5;
+// Blocos do formulário (visual): cada pergunta cai num bloco pelo assunto; a ordem das perguntas não muda.
+const SECAO_SEG = { data: 'quando', hora: 'quando', area: 'quando', local: 'quando', regime: 'quando', resp: 'quem', comunic: 'quem', mat: 'quem', fotos: 'fotos' };
+const SECOES_SEG = { quando: 'Quando e onde', fato: 'O que aconteceu', quem: 'Quem registra', fotos: 'Fotos' };
+const secaoDe = c => SECAO_SEG[c.k] || 'fato';
 const tipoDaCol = col => (col === 'seginter' ? 'inter' : col === 'segcartao' ? 'cartao' : 'anom');
 
 export function criarSeguranca() {
@@ -146,6 +150,8 @@ export function criarSeguranca() {
     return [...m.values()].sort((a, b) => a.nome.localeCompare(b.nome));
   }
 
+  // Pessoas para a busca dos campos de nome (lidas a cada busca: as fichas podem chegar depois de abrir o formulário).
+  const opcoesPessoas = () => fichasColab().map(f => ({ v: f.nome, t: f.nome, d: f.mat ? 'Matrícula ' + f.mat : '' }));
   // ---------- fotos: reduzidas no aparelho (JPEG ~1280 px e miniatura ~320 px) ----------
   async function reduzirFoto(file) {
     if (!/^image\//.test(file.type || 'image/')) throw new Error('Escolha uma foto (imagem).');
@@ -182,7 +188,10 @@ export function criarSeguranca() {
     const id = 'sgf_' + c.k; const L0 = cfg;
     let ctl = '';
     if (c.t === 'date' || c.t === 'time') ctl = `<input class="in" type="${c.t}" id="${id}" value="${esc(v || '')}" ${c.t === 'date' ? `max="${add(hoje(), 1)}"` : ''}>`;
-    else if (c.t === 'text') ctl = `<input class="in" id="${id}" value="${esc(v || '')}" maxlength="${c.max || 200}" autocomplete="off" ${c.num ? 'inputmode="numeric"' : ''} ${c.sug || c.pessoas ? `list="sgl_${c.k}"` : ''}>${c.sug ? `<datalist id="sgl_${c.k}"></datalist>` : c.pessoas ? `<datalist id="sgl_${c.k}">${fichasColab().map(f => `<option value="${esc(f.nome)}">${esc(f.mat)}</option>`).join('')}</datalist>` : ''}`;
+    // Local e pessoas: busca ao digitar (lista abaixo do campo), como Operador e Equipamento na Operação; aceita texto novo.
+    else if (c.t === 'text' && c.sug) ctl = campoBusca(id, v || '', () => { const a = valorDe(P_AREA); return (a ? sugestoesLocal(a) : []).map(x => ({ v: x, t: x })); }, { livre: true, maiusculas: true, placeholder: 'Digite a rota ou o local' });
+    else if (c.t === 'text' && c.pessoas) ctl = campoBusca(id, v || '', opcoesPessoas, { livre: true, placeholder: 'Digite o nome ou a matrícula' });
+    else if (c.t === 'text') ctl = `<input class="in" id="${id}" value="${esc(v || '')}" maxlength="${c.max || 200}" autocomplete="off" ${c.num ? 'inputmode="numeric"' : ''}>`;
     else if (c.t === 'area') ctl = `<textarea class="in" id="${id}" rows="3" maxlength="${c.max || 3000}">${esc(v || '')}</textarea>`;
     else if (c.t === 'radio') ctl = `<div class="sgops" role="radiogroup" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="radio" name="${id}" value="${esc(o)}" ${o === v ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>`;
     else if (c.t === 'checks') { const sel = new Set(v || []); ctl = `<div class="sgops chk" role="group" aria-labelledby="sgr_${c.k}">${c.ops(L0).map(o => `<label class="sgop"><input type="checkbox" name="${id}" value="${esc(o)}" ${sel.has(o) ? 'checked' : ''}><span>${esc(o)}</span></label>`).join('')}</div>${c.k !== 'desvios' ? '' : `<label class="sel sgoutro" id="sgOutroW" ${sel.has('OUTROS') ? '' : 'hidden'}><span>Qual outro desvio?</span><input class="in" id="sgf_desvioOutro" maxlength="200" value="${esc((F && F.outro) || '')}"></label>`}`; }
@@ -193,6 +202,18 @@ export function criarSeguranca() {
     }
     return `<div class="sgq" id="q_${c.k}"><div class="sgq-rot" id="sgr_${c.k}"><span class="sgq-n">${i + 1}</span><span class="minw"><b>${esc(c.rot)}</b>${c.obr ? '<span class="obr" title="Obrigatória"> *</span>' : ''}${c.ajuda ? `<small>${esc(c.ajuda)}</small>` : ''}</span></div>${ctl}<p class="sgq-erro" id="e_${c.k}" role="alert" hidden></p></div>`;
   }
+  // Perguntas agrupadas em blocos (Quando e onde, O que aconteceu, Quem registra, Fotos); data e hora lado a lado.
+  function blocosForm(def, v, cfg) {
+    let h = '', sec = '';
+    def.campos.forEach((c, i) => {
+      const s2 = secaoDe(c);
+      if (s2 !== sec) { h += `${sec ? '</div></section>' : ''}<section class="sgsec"><h4 class="sgsec-t">${esc(SECOES_SEG[s2])}</h4><div class="sgsec-c">`; sec = s2; }
+      const prox = def.campos[i + 1];
+      if (c.t === 'date' && prox && prox.t === 'time') { h += `<div class="sgpar">${campoHtml(c, i, v[c.k], cfg)}`; return; }
+      h += campoHtml(c, i, v[c.k], cfg) + (c.t === 'time' && def.campos[i - 1] && def.campos[i - 1].t === 'date' ? '</div>' : '');
+    });
+    return h + (sec ? '</div></section>' : '');
+  }
   const simEm = (c, raiz = document) => !!raiz.querySelector(`input[name="sgsn_${c.k}"][value="Sim"]:checked`);
   const valorDe = (c, raiz = document) => {
     const id = 'sgf_' + c.k;
@@ -200,7 +221,7 @@ export function criarSeguranca() {
     if (c.t === 'checks') return [...raiz.querySelectorAll(`input[name="${id}"]:checked`)].map(x => x.value);
     if (c.t === 'fotos') return null;
     if (c.sn && !simEm(c, raiz)) return c.t === 'checks' ? [] : '';
-    const el = raiz.querySelector('#' + id); return el ? el.value.trim() : '';
+    const el = raiz.querySelector('#' + id + (c.sug || c.pessoas ? '_q' : '')); return el ? el.value.trim() : '';
   };
   const lerValores = def => { const o = {}; for (const c of def.campos) if (c.t !== 'fotos') o[c.k] = valorDe(c); if (def === FORMS.inter) o.desvioOutro = (($('sgf_desvioOutro') || {}).value || '').trim(); return o; };
   // Sugestões do LOCAL: as rotas da área (quem tem as Atividades) e os locais já usados nos registros da área.
@@ -210,9 +231,21 @@ export function criarSeguranca() {
     [...S().inter, ...S().anom].filter(r => r.area === area && r.local).forEach(r => l.add(String(r.local).toUpperCase()));
     return [...l].sort();
   }
-  function atualizarSugestoes() {
-    const dl = $('sgl_local'); if (!dl) return; const area = valorDe(P_AREA);
-    dl.innerHTML = (area ? sugestoesLocal(area) : []).map(x => `<option value="${esc(x)}"></option>`).join('');
+  // Quanto do formulário já foi respondido (obrigatórias) e o número verde em cada pergunta respondida.
+  function respondida(c) {
+    if (c.t === 'fotos') return F.reg ? true : F.fotos.length > 0;
+    if (c.sn && !simEm(c)) return !!document.querySelector(`input[name="sgsn_${c.k}"]:checked`);
+    const v = valorDe(c); return Array.isArray(v) ? v.length > 0 : !!v;
+  }
+  function pintarProgresso(def) {
+    if (!F) return; let n = 0, ok = 0;
+    for (const c of def.campos) {
+      const r = !!respondida(c); const q = $('q_' + c.k); if (q) q.classList.toggle('feita', r);
+      if (c.obr && (c.t !== 'fotos' || !F.reg)) { n++; if (r) ok++; }
+    }
+    const t = $('sgProgT'), i = $('sgProgI'); if (!t || !i) return;
+    i.style.width = (n ? ok / n * 100 : 100) + '%'; i.parentElement.parentElement.classList.toggle('pronto', ok === n);
+    t.textContent = ok === n ? 'Tudo pronto para enviar' : `${ok} de ${n} obrigatórias respondidas`;
   }
   function pintarFotos() {
     const l = $('sgFotosL'); if (!l || !F) return;
@@ -229,12 +262,13 @@ export function criarSeguranca() {
     const cfg = L();
     const aviso = rasc ? `<div class="sgrasc" role="status">${I.ok}<span>Rascunho recuperado de ${umDia(rasc.em)}${rasc.semFotos ? ` · as ${rasc.semFotos} foto(s) não couberam no aparelho, escolha de novo` : ''}.</span><button type="button" class="btn sm ghost" data-sgf="descartar">Descartar rascunho</button></div>` : '';
     const corpo = `${aviso}${reg ? `<p class="muted small m0">Correção do seu registro: vale por ${PRAZO_EDICAO_H} horas depois de enviado${tipo === 'anom' ? ' e enquanto a anomalia estiver aberta' : tipo === 'cartao' ? ' e enquanto o cartão não for validado' : ''}.</p>` : '<p class="muted small m0">* obrigatória · o rascunho fica guardado neste aparelho enquanto você preenche.</p>'}
-      ${def.campos.map((c, i) => campoHtml(c, i, v[c.k], cfg)).join('')}`;
+      ${blocosForm(def, v, cfg)}`;
     const rodape = `<p class="err" id="sgErr" role="alert" hidden></p><div class="row-gap"><button class="btn pri big" type="submit">${reg ? 'Salvar correção' : 'Enviar registro'}</button><button class="btn" type="button" data-sgclose>${reg ? 'Cancelar' : 'Fechar e guardar rascunho'}</button></div>`;
-    const fo = folha({ titulo: reg ? `Corrigir ${def.curto}` : def.nome, sub: reg ? `${dBR(reg.data)} · ${esc(reg.local || '')}` : 'Segurança', corpo, rodape, form: true, aoFechar: () => { if (F && !F.enviado && !F.reg && F.mexeu) toast('Rascunho guardado neste aparelho'); F = null; } });
+    const prog = '<div class="sgprog" aria-live="polite"><span class="meter"><i id="sgProgI"></i></span><span class="small" id="sgProgT"></span></div>';
+    const fo = folha({ titulo: reg ? `Corrigir ${def.curto}` : def.nome, sub: (reg ? `${dBR(reg.data)} · ${esc(reg.local || '')}` : 'Segurança') + prog, corpo, rodape, form: true, aoFechar: () => { if (F && !F.enviado && !F.reg && F.mexeu) toast('Rascunho guardado neste aparelho'); F = null; } });
     const el = fo.el;
-    pintarFotos(); atualizarSugestoes();
-    const salvarLogo = () => { if (!F || F.reg) return; F.mexeu = true; clearTimeout(F.salvarT); F.salvarT = setTimeout(() => { if (F) gravarRasc(tipo, lerValores(def), F.fotos); }, 250); };
+    pintarFotos(); pintarProgresso(def);
+    const salvarLogo = () => { pintarProgresso(def); if (!F || F.reg) return; F.mexeu = true; clearTimeout(F.salvarT); F.salvarT = setTimeout(() => { if (F) gravarRasc(tipo, lerValores(def), F.fotos); }, 250); };
     el.addEventListener('input', e => { if (e.target.id === 'sgf_fotos_in') return; limparErro(e.target); salvarLogo(); });
     el.addEventListener('change', async e => {
       const t = e.target;
@@ -242,10 +276,9 @@ export function criarSeguranca() {
         const fs = [...t.files]; t.value = '';
         if (F.fotos.length + fs.length > MAX_FOTOS) toast(`No máximo ${MAX_FOTOS} fotos por registro`);
         for (const f of fs.slice(0, Math.max(0, MAX_FOTOS - F.fotos.length))) { try { F.fotos.push(await reduzirFoto(f)); } catch (err) { toast(err.message || 'Não foi possível usar esta foto'); } }
-        pintarFotos(); limparErro($('sgFotosL')); F.mexeu = true; gravarRasc(tipo, lerValores(def), F.fotos); return;
+        pintarFotos(); limparErro($('sgFotosL')); F.mexeu = true; gravarRasc(tipo, lerValores(def), F.fotos); pintarProgresso(def); return;
       }
-      if (t.name === 'sgf_area') atualizarSugestoes();
-      if (t.id === 'sgf_comunic') { const f = fichasColab().find(x => normNomeSeg(x.nome) === normNomeSeg(t.value)); if (f && f.mat && $('sgf_mat')) { $('sgf_mat').value = f.mat; limparErro($('sgf_mat')); } }
+      if (t.id === 'sgf_comunic' || t.id === 'sgf_resp') { const f = fichasColab().find(x => normNomeSeg(x.nome) === normNomeSeg(t.value)); if (f && f.mat && $('sgf_mat')) { $('sgf_mat').value = f.mat; limparErro($('sgf_mat')); } }
       if (t.name && t.name.startsWith('sgsn_')) {
         const w = $('sgsnc_' + t.name.slice(5)); if (w) w.hidden = t.value !== 'Sim';
         const x = w && !w.hidden && w.querySelector('input.in,textarea'); if (x && !x.closest('[hidden]')) x.focus({ preventScroll: true });
@@ -254,7 +287,7 @@ export function criarSeguranca() {
       limparErro(t); salvarLogo();
     });
     folhaAcao = b => {
-      if (b.dataset.sgf === 'tirarFoto') { F.fotos.splice(+b.dataset.i, 1); pintarFotos(); gravarRasc(tipo, lerValores(def), F.fotos); }
+      if (b.dataset.sgf === 'tirarFoto') { F.fotos.splice(+b.dataset.i, 1); pintarFotos(); gravarRasc(tipo, lerValores(def), F.fotos); pintarProgresso(def); }
       if (b.dataset.sgf === 'descartar') { apagarRasc(tipo); F.mexeu = false; fo.fechar(); abrirForm(tipo); }
     };
     el.onsubmit = e => { e.preventDefault(); enviar(def, fo); };

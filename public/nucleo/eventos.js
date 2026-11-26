@@ -15,7 +15,7 @@ import { sitDia, curto, removerCobertura } from '../calc/presenca.js';
 import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, moduloDaView, ensureModulo, barraDe, irParaModuloDa, trocarModulo, trocarConjunto } from './navegacao.js';
 import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
 import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela, SELOS, numSelo } from '../ui/shell.js';
-import { apArea, cellMenu, pedirJustificativa, apply } from '../telas/apontar.js';
+import { apArea, cellMenu, pedirJustificativa, apply, voltarDoLocal } from '../telas/apontar.js';
 import { lancarEfetivo, irEscala, PER_NOME, equipeCheckin, editaDia } from '../telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
 import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
@@ -285,6 +285,8 @@ if (DB.marcarUso) ['pointerdown', 'keydown'].forEach(ev => document.addEventList
     if (HIST_IGNORA) { HIST_IGNORA = false; return; }
     if (L.children.length) { L.innerHTML = ''; return; }
     const st = e.state || {};
+    // Checklist de um local aberto no Apontar: o Voltar fecha o local (ou pergunta, se tem marcação sem salvar).
+    if (UI.apLocal && UI.view === 'apontar' && !st.loc) { if (voltarDoLocal()) return; if (!st.v) { render(); scrollTo(0, 0); return; } }
     if (!st.v || !ME) return;
     if (st.m && st.m !== UI.modulo && modsDe(ME).includes(st.m)) UI.modulo = st.m;
     UI.view = st.v; UI.confirm = null; ensureModulo(); aplicarSet();
