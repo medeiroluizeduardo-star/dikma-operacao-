@@ -1735,6 +1735,17 @@ test('Gestão › Minha agenda (agenda/{id}): cada pessoa lê e grava só os pr�
   await assertFails(setDoc0(ref('geAdmv', 'ag8'), item('geAdmv', { outra: 1 })), 'campo fora da lista');
   await assertSucceeds(setDoc0(ref('admin', 'ag9'), item('admin', { tipo: 'nota', data: '', hora: '', fixa: true })), 'o administrador usa a própria agenda');
   await assertFails(deleteDoc(ref('admin')), 'o administrador não apaga a agenda de outra pessoa');
+  await assertSucceeds(setDoc0(ref('geAdmv', 'ag10'), item('geAdmv', { tipo: 'tarefa', rep: 'semana', prio: 'alta', etq: 'Pátio', passos: [{ t: 'Separar', ok: true }], link: { m: 'operacao', v: 'oms', act: 'omAbrir', id: 'om1', col: 'patio', r: 'OM: troca' }, apagadoEm: '' })), 'tarefa com repetição, prioridade, etiqueta, passos e ligação');
+  await assertFails(setDoc0(ref('geAdmv', 'ag11'), item('geAdmv', { rep: 'ano' })), 'repetição fora da lista');
+  await assertFails(setDoc0(ref('geAdmv', 'ag12'), item('geAdmv', { link: { v: 'oms', outro: 'x' } })), 'ligação com campo fora da lista');
+  // Anotação compartilhada só para leitura.
+  await assertSucceeds(setDoc0(ref('geAdmv', 'nc1'), item('geAdmv', { tipo: 'nota', data: '', hora: '', comp: ['geGestorSo'], compL: ['gestor'] })), 'compartilha uma anotação');
+  await assertSucceeds(getDoc(ref('geGestorSo', 'nc1')), 'quem recebeu lê');
+  await assertSucceeds(getDocs(query(collection(db('geGestorSo'), 'agenda'), where('comp', 'array-contains', 'geGestorSo'))), 'quem recebeu lista as compartilhadas com ele');
+  await assertFails(setDoc0(ref('geGestorSo', 'nc1'), { titulo: 'Mudei', ...mk('geGestorSo') }, { merge: true }), 'quem recebeu não altera');
+  await assertFails(deleteDoc(ref('geGestorSo', 'nc1')), 'quem recebeu não apaga');
+  await assertFails(getDoc(ref('coordG', 'nc1')), 'quem não recebeu não lê');
+  await assertFails(setDoc0(ref('geAdmv', 'nc2'), item('geAdmv', { comp: ['geGestorSo'] })), 'só anotação pode ser compartilhada');
   await assertSucceeds(deleteDoc(ref('geAdmv')), 'o dono apaga');
 });
 

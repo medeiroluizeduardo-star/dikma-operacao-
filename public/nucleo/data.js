@@ -403,7 +403,7 @@ function stopData() {
   monthSubs.clear();
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
-  if (agSub) { try { agSub(); } catch (e) { /* já fechado */ } } agSub = null; agUid = ''; cache.agenda = { d: {}, loaded: false };
+  agParar();
   for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
   if (omsCfgSub) { try { omsCfgSub(); } catch (e) { /* já fechado */ } } omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
   for (const f of omRecSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omRecSubs.clear(); cache.omsRec = {};
@@ -764,25 +764,33 @@ export function tratSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'tratativas', id), x, { merge: true }));
 }
 export function tratApagar(id) { delete cache.trat.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'tratativas', id)); return track(b.commit()); }
-// Gestão › Minha agenda (agenda/{id}, campo uid = dono; contas/agenda.js). Lê só os itens da própria pessoa, quando a
-// tela abre; as regras do banco recusam qualquer item de outra pessoa (nem o administrador lê).
-let agSub = null, agUid = ''; cache.agenda = { d: {}, loaded: false };
+// Gestão › Minha agenda (agenda/{id}, campo uid = dono; contas/agenda.js). Lê os itens da própria pessoa e as anotações
+// compartilhadas com ela (comp contém o uid dela), quando a tela abre; as regras do banco recusam o resto.
+let agSub = null, agCompSub = null, agUid = ''; cache.agenda = { d: {}, loaded: false }; cache.agendaComp = { d: {}, loaded: false };
+function agParar() {
+  for (const f of [agSub, agCompSub]) if (f) { try { f(); } catch (e) { /* já fechado */ } }
+  agSub = null; agCompSub = null; agUid = ''; cache.agenda = { d: {}, loaded: false }; cache.agendaComp = { d: {}, loaded: false };
+}
 export function agendaWatch() {
   if (!me) return;
   if (agSub && agUid === me.uid) return;
-  if (agSub) { try { agSub(); } catch (e) { /* já fechado */ } }
-  agUid = me.uid;
-  agSub = onSnapshot(query(collection(db, 'agenda'), where('uid', '==', me.uid)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data({ serverTimestamps: 'estimate' }) }; }); cache.agenda = { d, loaded: true }; changed(); },
+  agParar(); agUid = me.uid;
+  const ler = qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data({ serverTimestamps: 'estimate' }) }; }); return d; };
+  agSub = onSnapshot(query(collection(db, 'agenda'), where('uid', '==', me.uid)), qs => { cache.agenda = { d: ler(qs), loaded: true }; changed(); },
     e => { cache.agenda = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; agSub = parada; aposErro(e, () => { if (agSub === parada) agSub = null; }); changed(); });
+  agCompSub = onSnapshot(query(collection(db, 'agenda'), where('comp', 'array-contains', me.uid)), qs => { cache.agendaComp = { d: ler(qs), loaded: true }; changed(); },
+    () => { cache.agendaComp = { d: {}, loaded: true }; changed(); });
 }
 export const agendaNovoId = () => doc(collection(db, 'agenda')).id;
-// novo = true na criação (grava o dono e quando foi criado); depois, só os campos do formulário.
+// novo = true na criação (grava o dono e quando foi criado); depois, só os campos mandados.
 export function agendaSalvar(id, dados, novo = false) {
-  const x = novo ? { ...dados, uid: me.uid, criadoEm: new Date().toISOString(), ...marca() } : { ...dados, ...marca() };
+  const x = novo ? { ...dados, uid: me.uid, donoNome: me.nome || me.login || '', criadoEm: new Date().toISOString(), ...marca() } : { ...dados, ...marca() };
   cache.agenda.d[id] = { ...(cache.agenda.d[id] || {}), id, ...x, atualizadoEm: new Date().toISOString() }; changed();
   return track(setDoc(doc(db, 'agenda', id), x, { merge: true }));
 }
 export function agendaApagar(id) { delete cache.agenda.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'agenda', id)); return track(b.commit()); }
+// Compartilhar anotação: o uid de quem tem este usuário (logins/{login} é aberto para leitura de um por vez).
+export async function uidDoLogin(login) { const s = await getDoc(doc(db, 'logins', normLogin(login))); return s.exists() ? s.data().uid || '' : ''; }
 // Administração › Processos e rotina (contas/processos.js): processos/config (os processos e desde quando a rotina conta) e
 // rotina/{pid}_{data} (o que foi marcado). Só o administrador lê e grava; lidos quando a tela abre.
 let procSub = null, rotSub = null; cache.proc = { cfg: null, docs: {}, loaded: false, rotLoaded: false };

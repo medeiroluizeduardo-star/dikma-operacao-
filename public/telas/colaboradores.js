@@ -25,6 +25,7 @@ import { I } from '../ui/icones.js';
 import { formSheet, toast } from '../ui/janelas.js';
 import { render, isMobile } from '../ui/shell.js';
 import { registrarAcesso, botaoQuemAbriu } from '../ui/acessos-ficha.js';
+import { botaoLembrar } from '../ui/lembrar.js';
 import { podeVerDP, podeEditarDP, vDadosPessoais, editarDP, importarDP } from './dados-pessoais.js';
 
 const C = UI.co;
@@ -175,7 +176,8 @@ function vFicha(c) {
   const botoes = [
     podeEditar() ? botaoAcao('Editar', `data-act="coEditar" data-mat="${esc(c.mat)}"`) : '',
     temFichas(ME) && modsDe(ME).includes('gestao') ? `<button class="btn" data-act="irFicha" data-mat="${esc(c.mat)}">${I.ficha} Ficha de acompanhamento</button>` : '',
-    botaoQuemAbriu(c)
+    botaoQuemAbriu(c),
+    botaoLembrar({ m: 'rh', v: 'rcolab', act: 'coFicha', mat: c.mat, r: `Ficha: ${title(c.nome)}` }, `Ficha: ${title(c.nome)}`, 'btn')
   ].join('');
   return `<div class="row-gap"><button class="btn" data-act="coVoltar">← Colaboradores</button></div>
   <div class="card"><div class="body stackcol">

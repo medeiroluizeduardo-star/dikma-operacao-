@@ -21,6 +21,7 @@ import { toast, formSheet, sheet } from '../ui/janelas.js';
 import { render, schedule, isMobile, trocarTela } from '../ui/shell.js';
 import { carregarImg, jpeg, verFotoGrande } from '../ui/fotos.js';
 import { telaTreinos } from './treinos.js';
+import { botaoLembrar } from '../ui/lembrar.js';
 import { criarInspecoes } from './inspecoes.js';
 import { veTreinos, painelTreinos, vigentes, situacaoTreino, diasAte, tipoOficial, areaDe, ehNA, ANTECEDENCIA } from '../contas/treinos.js';
 
@@ -336,7 +337,9 @@ export function criarSeguranca() {
     if (editaProprio(ME, r, Date.now(), tipo === 'anom') && (tipo !== 'cartao' || pendenteCartao(r))) botoes += `<button type="button" class="btn" data-sgf="editar">Corrigir</button>`;
     // Apagar: só o administrador (as regras também conferem). Leva as fotos do registro junto.
     if (isAdmin()) botoes += `<button type="button" class="btn danger" data-sgf="excluir">Excluir</button>`;
+    if (tipo === 'anom') botoes += botaoLembrar({ m: 'seguranca', v: 'sganom', act: 'sgVer', id: r.id, col, r: `Anomalia: ${r.local || r.area || ''}`.slice(0, 200) }, `Anomalia: ${r.local || r.area || ''}`, 'btn');
     const fo = folha({ titulo: def.nome.replace('Registro de ', '').replace(/^./, x => x.toUpperCase()), sub: `${dBR(r.data)}${r.hora ? ' às ' + esc(r.hora) : ''} · ${esc(r.area)}${r.local ? ' · ' + esc(r.local) : ''}`, corpo, rodape: `<div class="row-gap">${botoes}<button type="button" class="btn" data-sgclose>Fechar</button></div>` });
+    fo.el.querySelectorAll('[data-act="agLembrar"]').forEach(b => b.addEventListener('click', () => acoes.agLembrar(b, b.dataset)));
     folhaAcao = b => { if (b.dataset.sgf === 'tratar') { fo.fechar(); abrirTratar(r.id); } if (b.dataset.sgf === 'validar') { fo.fechar(); abrirValidar(r.id); } if (b.dataset.sgf === 'editar') { fo.fechar(); abrirForm(tipo, r); } if (b.dataset.sgf === 'excluir') { fo.fechar(); confirmarExclusao(col, r); } };
   }
   // Confirmação clara antes de apagar o registro e as fotos dele (não dá para desfazer).

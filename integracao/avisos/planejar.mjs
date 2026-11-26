@@ -11,9 +11,10 @@ import { EF_DESDE, idEf, aguardandoEf, horasEf } from './lib/efetivo-dia.mjs';
 import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 import { avisosOms, resumo7h } from './lib/oms.mjs';
 import { avisosProgramacao } from './lib/oms-programacao.mjs';
+import { avisosAgenda } from './lib/agenda.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true, agenda: true };
 // Administração › Processos e rotina (a rotina do analista, que antes vinha do Meu painel).
 export const ROTINA_URL = '/?m=administracao&v=cfproc';
 const up = s => String(s || '').toUpperCase();
@@ -346,6 +347,26 @@ export function planejar(d) {
       if (d.enviados[x.chave]) continue; marcar.add(x.chave);
       const a = alvo.find(y => y.uid === x.uid); if (!a || !a.prefs.oms) continue;
       msgs.push({ uid: x.uid, titulo: x.titulo, corpo: x.corpo, tag: 'oms', url: '/?m=operacao&v=oms' });
+    }
+  }
+  // 13) Gestão › Minha agenda (só para o dono, d.agenda = itens abertos de quem tem a preferência ligada): às 7h, o dia
+  //     (compromissos e tarefas) e as atrasadas, uma vez; compromisso com hora, na rodada em que faltam até 90 minutos.
+  if ((d.agenda || []).length && hora >= 6 && hora <= 22) {
+    const comAviso = new Set(alvo.filter(x => x.prefs.agenda).map(x => x.uid));
+    const s = n => (n > 1 ? 's' : '');
+    const curto = it => `${it.hora ? it.hora + ' ' : ''}${String(it.titulo || '').slice(0, 60)}`;
+    for (const a of avisosAgenda(d.agenda, hoje, hora * 60 + agora.getMinutes())) {
+      if (!comAviso.has(a.uid) || d.enviados[a.chave]) continue;
+      if (a.tipo === 'dia') {
+        if (hora < 7) continue;
+        marcar.add(a.chave);
+        const n = a.hoje.length, at = a.atrasadas.length; if (!n && !at) continue;
+        const linhas = []; if (n) linhas.push(a.hoje.slice(0, 3).map(curto).join(' · ') + (n > 3 ? ` · +${n - 3}` : '')); if (at) linhas.push(`${at} tarefa${s(at)} atrasada${s(at)}`);
+        msgs.push({ uid: a.uid, titulo: n ? `Sua agenda hoje: ${n} item${n > 1 ? 'ns' : ''}` : `Agenda: ${at} tarefa${s(at)} atrasada${s(at)}`, corpo: linhas.join('\n'), tag: 'agenda', url: '/?m=gestao&v=gagenda' });
+      } else {
+        marcar.add(a.chave);
+        msgs.push({ uid: a.uid, titulo: `Às ${a.it.hora}: ${String(a.it.titulo || '').slice(0, 80)}`, corpo: a.falta >= 60 ? `Daqui a cerca de ${Math.round(a.falta / 60)} h.` : `Daqui a ${a.falta} min.`, tag: 'agenda', url: '/?m=gestao&v=gagenda' });
+      }
     }
   }
   return { msgs, marcar: [...marcar] };
