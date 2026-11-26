@@ -222,6 +222,29 @@ export function tratSalvar(id, dados, novo = false) {
   cache.trat.d[id] = { ...(cache.trat.d[id] || {}), id, ...x }; changed(); return Promise.resolve();
 }
 export function tratApagar(id) { delete cache.trat.d[id]; changed(); return Promise.resolve(); }
+// Gestão › Minha agenda (agenda/{id}): na demonstração, em memória, com alguns itens do usuário que está entrando.
+{ const h = today(); const d = n => add(h, n); const em = n => d(n) + 'T10:00:00.000Z';
+  const it = (id, x) => ({ id, uid: '*', texto: '', data: '', hora: '', feito: false, fixa: false, criadoEm: em(-3), atualizadoEm: em(-3), ...x });
+  cache.agenda = { loaded: true, d: Object.fromEntries([
+    it('ag1', { tipo: 'compromisso', titulo: 'Reunião com o cliente sobre a medição', data: h, hora: '14:00', texto: 'Levar o comparativo de faltas e horas extras.' }),
+    it('ag2', { tipo: 'tarefa', titulo: 'Conferir as justificativas da semana', data: d(-1) }),
+    it('ag3', { tipo: 'tarefa', titulo: 'Enviar o relatório fotográfico', data: d(2) }),
+    it('ag4', { tipo: 'compromisso', titulo: 'DDS com a liderança do Pátio', data: d(5), hora: '07:30' }),
+    it('ag5', { tipo: 'tarefa', titulo: 'Revisar o plano de férias do próximo mês' }),
+    it('ag6', { tipo: 'tarefa', titulo: 'Pedir EPI novo para a equipe da Bateria', data: d(-4), feito: true }),
+    it('ag7', { tipo: 'nota', titulo: 'Ideias para a reunião de resultados', texto: 'Mostrar a evolução da queda zero.\nPerguntar sobre a parada da correia 3.', fixa: true }),
+    it('ag8', { tipo: 'nota', titulo: 'Telefones úteis', texto: 'Portaria, manutenção e almoxarifado: ver na lista da sala.' })
+  ].map(o => [o.id, o])) }; }
+// Na demonstração, os itens de exemplo valem para quem estiver entrando (uid '*').
+export function agendaWatch() { /* tudo já está em memória */ }
+let agN = 0;
+export const agendaNovoId = () => 'ag' + Date.now().toString(36) + (agN++);
+export function agendaSalvar(id, dados, novo = false) {
+  const agora = new Date().toISOString();
+  const x = novo ? { ...dados, uid: me.uid, criadoEm: agora } : dados;
+  cache.agenda.d[id] = { ...(cache.agenda.d[id] || {}), id, ...x, atualizadoEm: agora }; changed(); return Promise.resolve();
+}
+export function agendaApagar(id) { delete cache.agenda.d[id]; changed(); return Promise.resolve(); }
 // Administração › Processos e rotina: na demonstração, em memória, com a rotina valendo há 10 dias e algumas marcas.
 { const h = today(); const d = n => add(h, n);
   cache.proc = { loaded: true, rotLoaded: true, cfg: { desde: d(-10), itens: { P07: { dikma: 'Coordenação', arcelor: '' } } }, docs: {} };

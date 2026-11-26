@@ -15,6 +15,7 @@ import { acoes } from './acoes.js';
 // req(): condição pelo usuário logado · reqU(u): condição pelo usuário · ord: ordem na Administração.
 // fora: a aba não aparece no menu (abre por um botão da aba pai e por link) · pai: aba que fica marcada no menu.
 // livre: todo mundo que tem o módulo vê (não entra em Perfis e permissões).
+// desligada: sem nada configurado, nenhum perfil vê (o administrador liga em Perfis ou na exceção da pessoa).
 // junto: abas que ocupam um lugar só no menu (o da primeira que a pessoa vê), com um seletor no topo para trocar entre elas.
 // sup: aba da Segurança que o supervisor da área vê mesmo sem perfil na Segurança (ele trata as anomalias da área).
 // filtros: o que aparece no topo para escolher: m = mês, s = semana, a = área (ex.: 'msa'; sem filtros = nada).
@@ -54,14 +55,14 @@ export const VIEWS = [
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
   { id: 'etiquetas', nome: 'Etiquetas QR das rotas', ic: 'qr', grp: 'Atividades', mod: 'gestao', req: () => geSets() && (acompanha('gestao') || admDe('ativ')), fora: true, pai: 'prog', filtros: 'a', conj: true },
-  { id: 'causas', nome: 'Causas e ações', ic: 'causas', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'ma', conj: true },
   { id: 'esdim', nome: 'Dimensionamento', ic: 'organograma', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
   { id: 'esbal', nome: 'Balanço e ausências', ic: 'balanca', grp: 'Efetivo', mod: 'gestao', req: geSets, filtros: 'msa', conj: true, junto: 'efetivo' },
   { id: 'gcolab', nome: 'Fichas de acompanhamento', ic: 'ficha', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), tela: 'GE' },
   { id: 'gimpr', nome: 'Impressão das fichas', ic: 'print', grp: 'Fichas', mod: 'gestao', req: () => temFichas(ME), fora: true, pai: 'gcolab', tela: 'GE' },
-  // Tratativas: os planos de ação de todas as origens (Ações com 5W2H, Planos 5W2H e Atas de reunião; telas/tratativas.js).
-  // Vê quem tem a Gestão; cria e edita: Gestor, Coordenador e Supervisor (item "Criar e acompanhar tratativas").
-  { id: 'gtrat', nome: 'Tratativas', ic: 'alvo', grp: 'Acompanhamento', mod: 'gestao', req: () => isAdmin() || !!perfil('gestao'), tela: 'TR' },
+  // Minha agenda (telas/agenda.js): compromissos, tarefas e anotações de cada pessoa; só ela vê (firestore.rules › agenda).
+  // desligada: começa sem acesso para todos os perfis; o administrador liga em Perfis e permissões ou na exceção da pessoa.
+  // As abas Tratativas (gtrat) e Causas e ações (causas) saíram em 2026-11-26; os dados ficaram guardados no banco.
+  { id: 'gagenda', nome: 'Minha agenda', ic: 'agenda', grp: 'Pessoal', mod: 'gestao', desligada: true, tela: 'AG' },
   // Medição do contrato (era do Meu painel): faltas, horas extras, horas perdidas e ICCC/ICCP do mês, com o "lançado"
   // de todos (telas/medicao.js). Vê: Gestor, Coordenador e Administrativo; marca e digita: Gestor e Coordenador.
   { id: 'gmed', nome: 'Medição', ic: 'planilha', grp: 'Contrato', mod: 'gestao', req: () => geSets() && (isAdmin() || ['gestor', 'coordenador', 'administrativo'].includes(perfil('gestao'))), tela: 'MD' },
@@ -155,7 +156,7 @@ export const SUB_S = {
   sgconfig: 'Áreas, tipos de atividade, regimes e desvios dos formulários'
 };
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
-const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', causas: 'Causas', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfsaude: 'Saúde', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cflgpd: 'LGPD', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', eresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gtrat: 'Tratativas', cfproc: 'Processos', oms: 'OMs', ompainel: 'OMs' };
+const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfsaude: 'Saúde', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cflgpd: 'LGPD', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', eresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gagenda: 'Agenda', cfproc: 'Processos', oms: 'OMs', ompainel: 'OMs' };
 // Nome no seletor do topo das abas juntas (junto).
 export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
@@ -197,7 +198,7 @@ export function abaMarcada(id) {
   return id;
 }
 // Abas que foram juntadas ou tiradas: links antigos, avisos do celular e o que ficou salvo no aparelho caem na aba nova.
-const VIEW_NOVA = { cfpainel: 'cfproc', sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab', aferias: 'rferias' };
+const VIEW_NOVA = { cfpainel: 'cfproc', sgobra: 'sganom', gocorr: 'gcolab', gcontrole: 'gcolab', epar: 'elanc', apainel: 'afreq', relfoto: 'painel', escala: 'esdia', gcomigo: 'gcolab', gnovaoc: 'gcolab', aferias: 'rferias', gtrat: 'prog', causas: 'prog' };
 function normalizarView() {
   const v0 = UI.view; if (!VIEW_NOVA[v0]) return;
   UI.view = VIEW_NOVA[v0];
@@ -229,7 +230,7 @@ export const filtrosDe = id => { const f = aba(id).filtros || ''; return { mes: 
 // Barra de baixo (celular): até 4 atalhos do módulo + Mais, na ordem de uso. Nome e ícone são os do menu lateral.
 const BARRA = {
   operacao: () => (aprovador() && !isAdmin() ? ['apontar', 'aprovar', 'pend', 'esdia', 'elanc'] : ['apontar', 'pend', 'esdia', 'elanc', 'eequipe', 'einsp']),
-  gestao: () => ['prog', 'gtrat', 'gcolab', 'causas', 'esdim', 'eaval'],
+  gestao: () => ['prog', 'gcolab', 'esdim', 'gagenda', 'eaval'],
   seguranca: () => ['sganom', 'sginter', 'sginsp', 'sgcartao', 'sgtrein'],
   rh: () => ['rcolab', 'rferias', 'afreq'],
   indicadores: () => ['ivisao', 'painel', 'epainel', 'qpainel', 'sgpainel', 'fpainel', 'gpainel'],

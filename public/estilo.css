@@ -2168,3 +2168,26 @@ details.sgnums[open]>summary{margin-bottom:8px}
 @media (max-width:860px){.fq-cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.fq-card{padding:8px 10px;min-height:56px}.fq-card b{font-size:20px}.fq-navdia b{min-width:0}}
 details.efrec>summary{padding:14px 16px;cursor:pointer;list-style-position:inside}details.efrec>summary b{font-size:15px}
+/* Gestão › Minha agenda (telas/agenda.js) */
+.ag-grp{margin-bottom:var(--s4)}
+.ag-gt{font-size:14px;margin:0 0 var(--s2)}
+.ag-gt.atr{color:var(--critico)}
+.ag-lista{display:flex;flex-direction:column;gap:var(--s2)}
+.ag-it{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--line-2);border-radius:10px;background:var(--surface)}
+.ag-it.atr{border-left:3px solid var(--critico)}
+.ag-it.fechada{opacity:.72}
+.ag-it.fechada .ag-it-t b{text-decoration:line-through}
+.ag-it-t{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left;background:none;border:0;padding:var(--s1) 0;color:inherit;font:inherit;cursor:pointer}
+.ag-it-t b{overflow-wrap:anywhere}
+.ag-it-t small{color:var(--ink-3);font-size:12px;overflow-wrap:anywhere}
+.ag-ck{flex:0 0 auto;width:26px;height:26px;border-radius:7px;border:2px solid var(--line-2);background:var(--surface);display:grid;place-items:center;padding:0;cursor:pointer;color:var(--ok)}
+.ag-ck.on{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,var(--surface))}
+.ag-ck svg,.ag-ic svg{width:16px;height:16px}
+.ag-ic{flex:0 0 auto;width:26px;height:26px;display:grid;place-items:center;color:var(--marca)}
+.ag-notas{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--s3)}
+.ag-nota{display:flex;flex-direction:column;gap:var(--s2);text-align:left;padding:var(--s3);color:inherit;font:inherit;cursor:pointer;min-width:0}
+.ag-nota.fixa{border-color:var(--marca)}
+.ag-nota b{overflow-wrap:anywhere}
+.ag-txt{white-space:pre-line;color:var(--ink-2);font-size:13px;overflow-wrap:anywhere}
+.ag-pin{font-size:11px;font-weight:700;color:var(--marca);text-transform:uppercase}
+.ag-op{display:flex;gap:var(--s2);align-items:center;font-size:14px}

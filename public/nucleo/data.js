@@ -63,6 +63,8 @@
 //                             itens[{t, r: ok|no|na, obs, anom}], nota (0–100 ou null), obs, por, porNome, em }
 //   segcartao/{id}            Cartão Amarelo { data, mes, area, conj, faltou[], motivo, comoSeguro, comunic, mat, fotos[],
 //                             minis[], por, porNome, em, status: pendente|validado, valid{tipo: lider|seg, nome, mat, uid, em} }
+//   agenda/{id}               Gestão › Minha agenda { uid (dono), tipo: compromisso|tarefa|nota, titulo, texto, data, hora,
+//                             feito, fixa, criadoEm, atualizadoEm, atualizadoPor }  só o dono lê e grava (contas/agenda.js)
 //   segfotos/{id}             { reg, col, tipo: antes|depois, mini, dados, ordem, autor, por, conj, area, mes, em }  uma foto
 //                             por documento (até ~700 KB); a lista usa só as miniaturas que ficam no registro
 // Atividades Bateria: as mesmas coleções com o prefixo b_ (b_config/sistema, b_plano, b_colaboradores, b_situacao,
@@ -401,6 +403,7 @@ function stopData() {
   monthSubs.clear();
   for (const f of medSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } medSubs.clear(); cache.med = {};
   if (tratSub) { try { tratSub(); } catch (e) { /* já fechado */ } } tratSub = null; cache.trat = { d: {}, loaded: false };
+  if (agSub) { try { agSub(); } catch (e) { /* já fechado */ } } agSub = null; agUid = ''; cache.agenda = { d: {}, loaded: false };
   for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
   if (omsCfgSub) { try { omsCfgSub(); } catch (e) { /* já fechado */ } } omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
   for (const f of omRecSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omRecSubs.clear(); cache.omsRec = {};
@@ -761,6 +764,25 @@ export function tratSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'tratativas', id), x, { merge: true }));
 }
 export function tratApagar(id) { delete cache.trat.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'tratativas', id)); return track(b.commit()); }
+// Gestão › Minha agenda (agenda/{id}, campo uid = dono; contas/agenda.js). Lê só os itens da própria pessoa, quando a
+// tela abre; as regras do banco recusam qualquer item de outra pessoa (nem o administrador lê).
+let agSub = null, agUid = ''; cache.agenda = { d: {}, loaded: false };
+export function agendaWatch() {
+  if (!me) return;
+  if (agSub && agUid === me.uid) return;
+  if (agSub) { try { agSub(); } catch (e) { /* já fechado */ } }
+  agUid = me.uid;
+  agSub = onSnapshot(query(collection(db, 'agenda'), where('uid', '==', me.uid)), qs => { const d = {}; qs.forEach(x => { d[x.id] = { id: x.id, ...x.data({ serverTimestamps: 'estimate' }) }; }); cache.agenda = { d, loaded: true }; changed(); },
+    e => { cache.agenda = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; agSub = parada; aposErro(e, () => { if (agSub === parada) agSub = null; }); changed(); });
+}
+export const agendaNovoId = () => doc(collection(db, 'agenda')).id;
+// novo = true na criação (grava o dono e quando foi criado); depois, só os campos do formulário.
+export function agendaSalvar(id, dados, novo = false) {
+  const x = novo ? { ...dados, uid: me.uid, criadoEm: new Date().toISOString(), ...marca() } : { ...dados, ...marca() };
+  cache.agenda.d[id] = { ...(cache.agenda.d[id] || {}), id, ...x, atualizadoEm: new Date().toISOString() }; changed();
+  return track(setDoc(doc(db, 'agenda', id), x, { merge: true }));
+}
+export function agendaApagar(id) { delete cache.agenda.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'agenda', id)); return track(b.commit()); }
 // Administração › Processos e rotina (contas/processos.js): processos/config (os processos e desde quando a rotina conta) e
 // rotina/{pid}_{data} (o que foi marcado). Só o administrador lê e grava; lidos quando a tela abre.
 let procSub = null, rotSub = null; cache.proc = { cfg: null, docs: {}, loaded: false, rotLoaded: false };

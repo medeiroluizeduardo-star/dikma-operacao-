@@ -1712,6 +1712,32 @@ test('Gestão › Tratativas (tratativas/{id}): quem tem a Gestão lê; Gestor, 
   await assertSucceeds(deleteDoc(ref('geGestorSo')), 'quem criou apaga');
 });
 
+test('Gestão › Minha agenda (agenda/{id}): cada pessoa lê e grava só os próprios itens; nem o administrador vê os dos outros', async () => {
+  const ref = (u, id = 'ag1') => doc(db(u), 'agenda', id);
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const item = (u, x = {}) => ({ uid: u, tipo: 'compromisso', titulo: 'Reunião com o cliente', texto: 'Levar o comparativo', data: '2026-11-27', hora: '14:00', feito: false, fixa: false, criadoEm: '2026-11-26T10:00:00Z', ...mk(u), ...x });
+  await assertSucceeds(setDoc0(ref('geAdmv'), item('geAdmv')), 'quem tem a Gestão cria na própria agenda');
+  await assertSucceeds(getDoc(ref('geAdmv')), 'o dono lê');
+  await assertSucceeds(getDocs(query(collection(db('geAdmv'), 'agenda'), where('uid', '==', 'geAdmv'))), 'o dono lista os itens dele');
+  await assertSucceeds(setDoc0(ref('geAdmv'), { feito: true, ...mk('geAdmv') }, { merge: true }), 'o dono altera');
+  await assertFails(getDoc(ref('admin')), 'o administrador não lê a agenda de outra pessoa');
+  await assertFails(getDoc(ref('geGestorSo')), 'o gestor da Gestão não lê a agenda de outra pessoa');
+  await assertFails(getDocs(collection(db('geGestorSo'), 'agenda')), 'ninguém lista a agenda de todos');
+  await assertFails(getDocs(query(collection(db('geGestorSo'), 'agenda'), where('uid', '==', 'geAdmv'))), 'nem pedindo pelo uid de outra pessoa');
+  await assertFails(setDoc0(ref('geGestorSo'), { titulo: 'Mudei', ...mk('geGestorSo') }, { merge: true }), 'outra pessoa não altera');
+  await assertFails(setDoc0(ref('geAdmv'), { uid: 'geGestorSo', ...mk('geAdmv') }, { merge: true }), 'o dono não passa o item para outra pessoa');
+  await assertFails(setDoc0(ref('geGestorSo', 'ag2'), item('geAdmv', mk('geGestorSo'))), 'não cria na agenda de outra pessoa');
+  await assertFails(setDoc0(ref('rhSo', 'ag3'), item('rhSo')), 'sem a Gestão não cria');
+  await assertFails(setDoc0(ref('geAdmv', 'ag4'), { ...item('geAdmv'), atualizadoPor: 'geGestorSo' }), 'sem a própria marca de quem gravou');
+  await assertFails(setDoc0(ref('geAdmv', 'ag5'), item('geAdmv', { tipo: 'reuniao' })), 'tipo fora da lista');
+  await assertFails(setDoc0(ref('geAdmv', 'ag6'), item('geAdmv', { titulo: '' })), 'sem título');
+  await assertFails(setDoc0(ref('geAdmv', 'ag7'), item('geAdmv', { hora: '25:00' })), 'hora inválida');
+  await assertFails(setDoc0(ref('geAdmv', 'ag8'), item('geAdmv', { outra: 1 })), 'campo fora da lista');
+  await assertSucceeds(setDoc0(ref('admin', 'ag9'), item('admin', { tipo: 'nota', data: '', hora: '', fixa: true })), 'o administrador usa a própria agenda');
+  await assertFails(deleteDoc(ref('admin')), 'o administrador não apaga a agenda de outra pessoa');
+  await assertSucceeds(deleteDoc(ref('geAdmv')), 'o dono apaga');
+});
+
 test('Administração › Processos e rotina (processos/config, rotina/{id}): só o administrador lê e grava', async () => {
   const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
   const cfg = u => doc(db(u), 'processos', 'config');

@@ -21,8 +21,8 @@ const dm = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}` : '');
 const diaNome = s => `${WD[new Date(s + 'T12:00:00Z').getUTCDay()]}, ${dm(s)}`;
 const v$ = id => (document.getElementById(id) || {}).value || '';
 // Abas que cada processo pode abrir (atalho no cartão e na tarefa).
-const ABAS = { '': 'Nenhuma', gmed: 'Gestão › Medição', cfarqfotos: 'Relatórios e arquivo de fotos', prog: 'Gestão › Programação', quedazero: 'Operação › Queda zero', elanc: 'Operação › Lançamentos e paradas', sganom: 'Segurança › Anomalias', gtrat: 'Gestão › Tratativas', ivisao: 'Indicadores › Visão geral' };
-const NOME_ABA = { gmed: 'Abrir Medição', cfarqfotos: 'Abrir fotos', prog: 'Abrir Programação', quedazero: 'Abrir Queda zero', elanc: 'Abrir Lançamentos', sganom: 'Abrir Anomalias', gtrat: 'Abrir Tratativas', ivisao: 'Abrir Indicadores' };
+const ABAS = { '': 'Nenhuma', gmed: 'Gestão › Medição', cfarqfotos: 'Relatórios e arquivo de fotos', prog: 'Gestão › Programação', quedazero: 'Operação › Queda zero', elanc: 'Operação › Lançamentos e paradas', sganom: 'Segurança › Anomalias', ivisao: 'Indicadores › Visão geral' };
+const NOME_ABA = { gmed: 'Abrir Medição', cfarqfotos: 'Abrir fotos', prog: 'Abrir Programação', quedazero: 'Abrir Queda zero', elanc: 'Abrir Lançamentos', sganom: 'Abrir Anomalias', ivisao: 'Abrir Indicadores' };
 
 /* ---------- dados ---------- */
 let gravouDesde = false;
@@ -80,13 +80,13 @@ function vDono(desde) {
 function vProcessos() {
   const { procs, docs, desde } = tudo(); const an = andamento(procs, docs, TODAY, desde);
   const freq = p => (p.freq === 'semanal' ? `Toda ${DIAS[p.dia] ? DIAS[p.dia].toLowerCase() : '?'}` : p.freq === 'mensal' ? `Fechamento do mês (${dm(ultimoUtilDoMes(TODAY))})` : FREQ[p.freq]);
-  return `<p class="ic-placar">Os processos do analista com os passos e os responsáveis. A rotina de cada dia sai da frequência de cada um; P09 e os "sob demanda" viram ações nas Tratativas quando aparecem.</p>
+  return `<p class="ic-placar">Os processos do analista com os passos e os responsáveis. A rotina de cada dia sai da frequência de cada um; P09 e os "sob demanda" são feitos quando aparecem.</p>
   <div class="pr-procs">${procs.map(p => { const a = an[p.id] || { n: 0, feitas: 0, nfeitas: 0 };
     return `<article class="card pr-proc${p.ativo ? '' : ' fechada'}"><header><div class="row-gap"><span class="mono">${esc(p.id)}</span>${conjEtq(p.conj)}${etiqueta('Prioridade ' + (PRIO[p.prio] || '').toLowerCase(), p.prio === 'alta' ? 'atencao' : 'neutro')}${p.ativo ? '' : etiqueta('Desligado', 'neutro')}</div><h2>${esc(p.nome)}</h2><p>${esc(freq(p))}${p.por ? ' · ' + esc(p.por) : ''}</p></header><div class="body">
       ${p.passos.length ? `<ol class="pr-passos">${p.passos.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : '<p class="muted small m0">Sem passos cadastrados.</p>'}
       <div class="pr-resp"><div><span class="eyebrow">Dikma</span><b>${esc(p.dikma || '') || '<span class="muted">não definido</span>'}</b></div><div><span class="eyebrow">Arcelor</span><b>${esc(p.arcelor || '') || '<span class="muted">não definido</span>'}</b></div>
       ${p.freq !== 'demanda' ? `<div><span class="eyebrow">Últimos ${JANELA} dias</span><b>${a.feitas} de ${a.n} feitas</b>${a.nfeitas ? `<small class="muted"> · ${a.nfeitas} não feita${a.nfeitas > 1 ? 's' : ''}</small>` : ''}</div>` : ''}</div>
-      <div class="row-gap"><button type="button" class="btn sm" data-act="prAcao" data-id="${esc(p.id)}">${I.plus} Ação nas Tratativas</button>${p.aba && NOME_ABA[p.aba] ? `<button type="button" class="btn sm ghost" data-go="${esc(p.aba)}">${esc(NOME_ABA[p.aba])}</button>` : ''}<button type="button" class="btn sm ghost" data-act="prEditar" data-id="${esc(p.id)}">Editar</button></div></div></article>`; }).join('')}</div>`;
+      <div class="row-gap">${p.aba && NOME_ABA[p.aba] ? `<button type="button" class="btn sm ghost" data-go="${esc(p.aba)}">${esc(NOME_ABA[p.aba])}</button>` : ''}<button type="button" class="btn sm ghost" data-act="prEditar" data-id="${esc(p.id)}">Editar</button></div></div></article>`; }).join('')}</div>`;
 }
 function vTela() {
   if (!isAdmin()) return vazio('Só para o administrador', 'Processos e rotina é a rotina do analista.');
@@ -152,12 +152,6 @@ acoes.prTodas = (el, d) => {
 };
 acoes.prEditar = (t, d) => editarProcesso(d.id);
 acoes.prNovo = () => editarProcesso('');
-// Ação avulsa de um processo (ex.: uma OM do P09): abre a ação nova das Tratativas já preenchida.
-acoes.prAcao = async (el, d) => {
-  const p = tudo().procs.find(x => x.id === d.id); if (!p) return;
-  const TR = await import('./tratativas.js');
-  TR.abrirAcao('', { titulo: '', origem: 'processos', ref: `${p.id} · ${p.nome}`.slice(0, 120), conj: p.conj, por: p.por, resp: ME.nome || '', inicio: TODAY, prazo: maisDias(TODAY, 7) });
-};
 document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-pr-aba]'); if (b) { U().aba = b.dataset.prAba; salvarUI(); render(); } });
 document.addEventListener('change', e => { if (e.target && e.target.id === 'prDono') { const uid = e.target.value; const u = (DB.cache.usuarios || []).find(x => x.uid === uid); DB.procSalvarCfg({ dono: uid, donoNome: u ? u.nome || u.login || '' : '' }).then(() => toast(uid ? 'Os avisos da rotina vão para ' + (u ? u.nome : 'essa pessoa') : 'Os avisos da rotina vão para todos os administradores')); } });
 

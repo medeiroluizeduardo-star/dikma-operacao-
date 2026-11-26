@@ -17,7 +17,7 @@ import { render, schedule, isMobile } from '../ui/shell.js';
 // Criadas por inicio.js (PES, AV) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
 export let PES = null, AV = null, EQ = null, AD = null, GE = null, SG = null;
 // Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), e Resumos (RE).
-let CF = null, RE = null, CO = null, IC = null, MD = null, TR = null, PR = null, FN = null, OM = null, OI = null, FP = null;
+let CF = null, RE = null, CO = null, IC = null, MD = null, TR = null, AG = null, PR = null, FN = null, OM = null, OI = null, FP = null;
 
 // Pessoas e Avisos no celular (antes de abrir o link recebido).
 export function criarModulos() {
@@ -49,6 +49,8 @@ const CARGA = {
   MD: () => import('../telas/medicao.js').then(m => { MD = m; }),
   // TR: Gestão › Tratativas (ações, planos 5W2H e atas de reunião)
   TR: () => import('../telas/tratativas.js').then(m => { TR = m; }),
+  // AG: Gestão › Minha agenda (compromissos, tarefas e anotações de cada pessoa)
+  AG: () => import('../telas/agenda.js').then(m => { AG = m; }),
   // PR: Administração › Processos e rotina (rotina do analista)
   PR: () => import('../telas/processos.js').then(m => { PR = m; }),
   // OM: Operação › Solicitações de OM
@@ -65,7 +67,7 @@ const CARGA = {
   FP: () => import('../telas/ferias-plano.js').then(m => { FP = m; }),
   GE: () => import('../telas/gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
-const pronto = { OM: () => OM, OI: () => OI, FN: () => FN, PR: () => PR, TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO, FP: () => FP };
+const pronto = { AG: () => AG, OM: () => OM, OI: () => OI, FN: () => FN, PR: () => PR, TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO, FP: () => FP };
 const pedidos = {};
 // Baixa (uma vez só) o arquivo da tela; quando chega, a tela é redesenhada. Devolve uma promessa.
 export function carregarModulo(k) {

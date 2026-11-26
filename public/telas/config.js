@@ -570,7 +570,7 @@ acoes.permSalvar = async (t, d) => {
   const R = rascunhoPerm(); const out = {};
   for (const g of GRUPOS_ABAS) for (const [p] of PERFIS_MOD[g.mod]) {
     const k = chavePerm(g.mod, p); const o = {};
-    for (const v of abasDoModulo(g.mod)) if (configuravel(g.mod, p, v)) { const on = permR(R, g.mod, p, v.id); if (!on) o[v.id] = false; else if (g.mod === 'administracao') o[v.id] = true; }
+    for (const v of abasDoModulo(g.mod)) if (configuravel(g.mod, p, v)) { const on = permR(R, g.mod, p, v.id); if (!on) o[v.id] = false; else if (g.mod === 'administracao' || v.desligada) o[v.id] = true; }
     for (const it of ITENS) if (it.mod === g.mod && itemDoPapel(p, it)) { const on = permR(R, g.mod, p, it.id); if (!on) o[it.id] = false; else if ((it.off || []).includes(p)) o[it.id] = true; } // item desligado de fábrica: grava o 'ligado'
     out[k] = o;
   }
