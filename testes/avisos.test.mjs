@@ -11,7 +11,7 @@ before(async () => {
   // a rotina copia as contas do site para lib/ antes de rodar; aqui faz o mesmo
   const lib = path.join(raiz, 'integracao', 'avisos', 'lib');
   const { copiarDoSite } = await import(path.join(raiz, 'integracao', 'avisos', 'lib-site.mjs'));
-  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda'], lib);
+  copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda', 'atestados'], lib);
   ({ planejar } = await import(path.join(raiz, 'integracao', 'avisos', 'planejar.mjs')));
   ({ weekOf } = await import(path.join(lib, 'cal.mjs')));
 });
@@ -389,4 +389,24 @@ test('Minha agenda: às 7h o dia e as atrasadas; compromisso com hora na rodada 
   assert.equal(de(ag(7, 30, { enviados: env }), 'liderRec').length, 0, 'não repete');
   const off = planejar({ usuarios, avisos: { ...avisos, liderRec: { tokens: ['t'], prefs: { agenda: false } } }, paradas: [], ocorr: [], sets: {}, enviados: {}, agenda, agora: new Date(`${HOJE}T07:05:00`), hoje: HOJE });
   assert.equal(de(off, 'liderRec').length, 0, 'preferência desligada');
+});
+
+test('Atestados: RH recebe "a conferir" e INSS; quem lançou, sem foto ou recusado; só números, uma vez por dia', () => {
+  const us = conv({ ...usuarios, rh: { papel: 'administrativo', modulos: ['frequencia'], acesso: { rh: 'administrativo' }, escopos: [], nome: 'RH' } });
+  const av = { ...avisos, rh: tok };
+  const atestados = [
+    { id: 'a1', nome: 'FULANO DA SILVA', tipo: 'Atestado médico', ini: '2026-10-13', dias: 1, fim: '2026-10-13', emis: '2026-10-13', diaLanc: '2026-10-13', st: 'conferir', nf: 0, por: 'liderRec' },
+    { id: 'a2', nome: 'CICLANO SOUZA', tipo: 'Atestado médico', ini: '2026-10-10', dias: 1, fim: '2026-10-10', emis: '2026-10-10', diaLanc: '2026-10-10', st: 'recusado', nf: 1, por: 'liderPrep' }
+  ];
+  const at = (hora, enviados = {}) => planejar({ usuarios: us, avisos: av, paradas: [], ocorr: [], sets: {}, enviados, atestados, agora: new Date(`${HOJE}T${String(hora).padStart(2, '0')}:10:00`), hoje: HOJE });
+  assert.equal(at(7).msgs.filter(m => m.tag === 'atestados').length, 0, 'antes das 8h não avisa');
+  const r = at(9); const m = r.msgs.filter(x => x.tag === 'atestados');
+  const rh = m.filter(x => x.uid === 'rh'); assert.equal(rh.length, 1); assert.match(rh[0].titulo, /1 atestado a conferir/); assert.equal(rh[0].url, '/?m=rh&v=ratest');
+  assert.ok(m.some(x => x.uid === 'admin'), 'o administrador também recebe');
+  assert.match(m.find(x => x.uid === 'liderRec').titulo, /1 sem foto/);
+  assert.match(m.find(x => x.uid === 'liderPrep').titulo, /1 recusado pelo RH/);
+  assert.ok(!m.some(x => x.uid === 'leitor'), 'quem não é do RH nem lançou não recebe');
+  assert.ok(!JSON.stringify(m).match(/FULANO|CICLANO|médico/i), 'sem nomes e sem o tipo');
+  const env = Object.fromEntries(r.marcar.map(k => [k, true]));
+  assert.equal(at(10, env).msgs.filter(x => x.tag === 'atestados').length, 0, 'uma vez por dia');
 });

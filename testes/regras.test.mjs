@@ -1943,3 +1943,65 @@ test('Indicadores do contrato (config/indicadores): quem tem Indicadores lê; s�
   await assertFails(setDoc0(ref('indEq'), { metas: { xyz: 1 } }, { merge: true }), 'meta que não existe');
   await assertFails(deleteDoc(ref('indEq')), 'Gestor não apaga');
 });
+
+test('Atestados (atestados e atestadosFoto): dado de saúde; só o RH · Administrativo, o administrador e quem lançou leem', async () => {
+  const ref = (u, id = 'at1') => doc(db(u), 'atestados', id);
+  const mk = u => ({ atualizadoPor: u, atualizadoEm: serverTimestamp() });
+  const novo = (u, x = {}) => ({ conj: 'patio', area: 'RECEBIMENTO', cid: 'C1', mat: '1001', nome: 'PESSOA TESTE', tipo: 'Atestado médico', ini: '2026-11-10', fim: '2026-11-12', dias: 3,
+    horas: null, emis: '2026-11-10', obs: '', nf: 1, minis: ['data:image/jpeg;base64,AAAA'], st: 'conferir', por: u, porNome: u, em: serverTimestamp(), diaLanc: '2026-11-10', ...mk(u), ...x });
+  const foto = (u, aid = 'at1', x = {}) => ({ aid, por: u, conj: 'patio', area: 'RECEBIMENTO', ordem: 0, dados: 'data:image/jpeg;base64,AAAA', em: serverTimestamp(), ...x });
+  // Lançar: o líder da área, em nome próprio, "a conferir", com a foto no mesmo lote.
+  { const f = db('liderNovo'); const b = writeBatch0(f); b.set(doc(f, 'atestados', 'at1'), novo('liderNovo')); b.set(doc(f, 'atestadosFoto', 'f1'), foto('liderNovo')); await assertSucceeds(b.commit(), 'o líder lança o atestado com a foto'); }
+  await assertFails(setDoc0(ref('liderPrep', 'at2'), novo('liderPrep')), 'líder de outra área não lança na área do outro');
+  await assertFails(setDoc0(ref('liderNovo', 'at3'), novo('liderNovo', { st: 'conferido' })), 'não nasce conferido');
+  await assertFails(setDoc0(ref('liderNovo', 'at4'), novo('outro')), 'não lança em nome de outra pessoa');
+  await assertFails(setDoc0(ref('liderNovo', 'at5'), novo('liderNovo', { tipo: 'Gripe' })), 'tipo fora da lista');
+  await assertFails(setDoc0(ref('liderNovo', 'at6'), novo('liderNovo', { dias: 45 })), 'mais de 30 dias');
+  await assertFails(setDoc0(ref('liderNovo', 'at7'), novo('liderNovo', { cid10: 'J11' })), 'campo fora da lista (ex.: CID)');
+  await assertFails(setDoc0(ref('cliPatio', 'at8'), novo('cliPatio')), 'o cliente (somente leitura) não lança');
+  // Ler: quem lançou, o RH · Administrativo e o administrador. Supervisor, cliente e RH · Somente leitura, não.
+  await assertSucceeds(getDoc(ref('liderNovo')), 'quem lançou lê');
+  await assertSucceeds(getDocs(query(collection(db('liderNovo'), 'atestados'), where('por', '==', 'liderNovo'))), 'quem lançou lista os dele');
+  await assertSucceeds(getDoc(ref('rhSo')), 'o RH · Administrativo lê');
+  await assertSucceeds(getDocs(query(collection(db('rhSo'), 'atestados'), where('ini', '>=', '2026-01-01'))), 'o RH lista todos');
+  await assertSucceeds(getDoc(ref('admin')), 'o administrador lê');
+  for (const u of ['supPatio', 'cliPatio', 'rhLeitorNovo', 'liderPrep', 'gestorP']) await assertFails(getDoc(ref(u)), `${u} não lê o atestado`);
+  await assertFails(getDocs(collection(db('supPatio'), 'atestados')), 'ninguém de fora lista todos');
+  // Foto: as mesmas pessoas.
+  await assertSucceeds(getDoc(doc(db('liderNovo'), 'atestadosFoto', 'f1')), 'quem lançou vê a foto');
+  await assertSucceeds(getDocs(query(collection(db('liderNovo'), 'atestadosFoto'), where('aid', '==', 'at1'), where('por', '==', 'liderNovo'))), 'quem lançou lista as fotos dele');
+  await assertSucceeds(getDocs(query(collection(db('rhSo'), 'atestadosFoto'), where('aid', '==', 'at1'))), 'o RH vê as fotos');
+  for (const u of ['supPatio', 'cliPatio', 'rhLeitorNovo']) await assertFails(getDoc(doc(db(u), 'atestadosFoto', 'f1')), `${u} não vê a foto`);
+  await assertFails(setDoc0(doc(db('liderPrep'), 'atestadosFoto', 'f2'), foto('liderPrep')), 'outra pessoa não põe foto no atestado dos outros');
+  await assertFails(setDoc0(doc(db('liderNovo'), 'atestadosFoto', 'f3'), foto('liderNovo', 'naoexiste')), 'foto sem atestado');
+  await assertFails(setDoc0(doc(db('liderNovo'), 'atestadosFoto', 'f4'), foto('liderNovo', 'at1', { dados: 'data:image/png;base64,AAAA' })), 'só JPEG');
+  await assertFails(updateDoc0(doc(db('rhSo'), 'atestadosFoto', 'f1'), { ordem: 1 }), 'ninguém altera a foto');
+  // Quem lançou muda enquanto o RH não conferiu, mas não confere.
+  await assertSucceeds(setDoc0(ref('liderNovo'), { dias: 2, fim: '2026-11-11', ...mk('liderNovo') }, { merge: true }), 'quem lançou corrige os dias');
+  await assertFails(setDoc0(ref('liderNovo'), { st: 'conferido', ...mk('liderNovo') }, { merge: true }), 'quem lançou não confere');
+  await assertFails(setDoc0(ref('liderNovo'), { nome: 'OUTRA', ...mk('liderNovo') }, { merge: true }), 'quem lançou não troca a pessoa');
+  await assertFails(setDoc0(ref('supPatio'), { obs: 'x', ...mk('supPatio') }, { merge: true }), 'outra pessoa não altera');
+  // O RH confere, recusa e marca o original.
+  await assertFails(setDoc0(ref('rhLeitorNovo'), { st: 'conferido', ...mk('rhLeitorNovo') }, { merge: true }), 'RH · Somente leitura não confere');
+  await assertSucceeds(setDoc0(ref('rhSo'), { st: 'recusado', motRec: 'Foto ilegível', confPor: 'rhSo', confNome: 'RH', confEm: '2026-11-11T10:00:00Z', ...mk('rhSo') }, { merge: true }), 'o RH recusa');
+  await assertSucceeds(setDoc0(ref('liderNovo'), { st: 'conferir', motRec: '', nf: 1, ...mk('liderNovo') }, { merge: true }), 'quem lançou corrige e reenvia o recusado');
+  await assertFails(setDoc0(ref('rhSo'), { st: 'conferido', confPor: 'outro', ...mk('rhSo') }, { merge: true }), 'confere só em nome próprio');
+  await assertSucceeds(setDoc0(ref('rhSo'), { st: 'conferido', orig: true, confPor: 'rhSo', confNome: 'RH', confEm: '2026-11-11T10:00:00Z', ...mk('rhSo') }, { merge: true }), 'o RH confere e marca o original');
+  await assertFails(setDoc0(ref('liderNovo'), { obs: 'mudei', ...mk('liderNovo') }, { merge: true }), 'depois de conferido, quem lançou não muda');
+  await assertFails(deleteDoc(doc(db('liderNovo'), 'atestadosFoto', 'f1')), 'depois de conferido, quem lançou não apaga a foto');
+  await assertFails(deleteDoc(ref('liderNovo')), 'depois de conferido, quem lançou não apaga');
+  await assertFails(setDoc0(ref('rhSo'), { por: 'rhSo', ...mk('rhSo') }, { merge: true }), 'ninguém troca quem lançou');
+  // Apagar: quem lançou (antes de conferido), o RH e o administrador.
+  await assertSucceeds(setDoc0(ref('liderNovo', 'at9'), novo('liderNovo')), 'lança outro');
+  await assertFails(deleteDoc(ref('supPatio', 'at9')), 'o supervisor não apaga');
+  await assertSucceeds(deleteDoc(ref('liderNovo', 'at9')), 'quem lançou apaga o que ainda não foi conferido');
+  await assertSucceeds(deleteDoc(doc(db('rhSo'), 'atestadosFoto', 'f1')), 'o RH apaga a foto');
+  await assertSucceeds(deleteDoc(ref('admin')), 'o administrador apaga');
+  // Regras (prazo e INSS): todos leem; o RH · Administrativo e o administrador gravam.
+  await assertSucceeds(setDoc0(doc(db('rhSo'), 'config', 'atestados'), { prazoH: 72, inssDias: 15, inssJanela: 60, ...mk('rhSo') }), 'o RH grava as regras');
+  await assertFails(setDoc0(doc(db('rhSo'), 'config', 'atestados'), { prazoH: 1, ...mk('rhSo') }), 'prazo fora do limite');
+  await assertFails(setDoc0(doc(db('liderNovo'), 'config', 'atestados'), { prazoH: 72, ...mk('liderNovo') }), 'o líder não grava as regras');
+  await assertSucceeds(getDoc(doc(db('liderNovo'), 'config', 'atestados')), 'todos leem as regras');
+  // Quem abriu a foto fica no mesmo registro das fichas.
+  await assertSucceeds(setDoc0(doc(db('rhSo'), 'acessosFicha', 'rhSo|1001|atestado|2026-11-26'), { at: serverTimestamp(), uid: 'rhSo', nome: 'rhSo', mat: '1001', pessoa: 'PESSOA TESTE', ficha: 'atestado', dia: '2026-11-26' }), 'registra quem abriu a foto');
+});

@@ -248,6 +248,37 @@ export function agendaSalvar(id, dados, novo = false) {
   cache.agenda.d[id] = { ...(cache.agenda.d[id] || {}), id, ...x, atualizadoEm: agora }; changed(); return Promise.resolve();
 }
 export function agendaApagar(id) { delete cache.agenda.d[id]; changed(); return Promise.resolve(); }
+// Atestados (demonstração): em memória, com alguns exemplos criados na primeira abertura (pessoas de exemplo do Pátio).
+cache.atest = { d: {}, loaded: false }; cache.atCfg = { loaded: true, d: null };
+const atFotosMock = new Map(); let atN = 0;
+export function atWatch() {
+  if (cache.atest.loaded) return;
+  const pes = Object.values(S.patio.colabs || {}).flat().slice(0, 6); const h = today(); const d = n => add(h, n);
+  const ex = (i, x) => { const c = pes[i]; if (!c) return null; return { id: 'at' + i, conj: 'patio', area: c.area, cid: c.id, mat: c.mat || '', nome: c.nome, porNome: 'Líder (exemplo)', por: me ? me.uid : '*', em: Date.now() - 864e5, minis: [], nf: 0, obs: '', horas: null, ...x }; };
+  const l = [
+    ex(0, { tipo: 'Atestado médico', ini: d(-1), dias: 2, fim: d(0), emis: d(-1), diaLanc: d(-1), st: 'conferir' }),
+    ex(1, { tipo: 'Atestado odontológico', ini: d(-6), dias: 1, fim: d(-6), emis: d(-6), diaLanc: d(-2), st: 'conferir' }),
+    ex(2, { tipo: 'Declaração de comparecimento', ini: d(-3), dias: 1, fim: d(-3), emis: d(-3), diaLanc: d(-3), horas: 3, st: 'conferido', orig: true, confNome: 'RH (exemplo)', confEm: Date.now() - 2 * 864e5 }),
+    ex(3, { tipo: 'Atestado médico', ini: d(-20), dias: 10, fim: d(-11), emis: d(-20), diaLanc: d(-20), st: 'conferido', orig: false, confNome: 'RH (exemplo)', confEm: Date.now() - 10 * 864e5 }),
+    ex(3, { id: 'at3b', tipo: 'Atestado médico', ini: d(-8), dias: 7, fim: d(-2), emis: d(-8), diaLanc: d(-7), st: 'conferir' }),
+    ex(4, { tipo: 'Acompanhamento de familiar', ini: d(-4), dias: 1, fim: d(-4), emis: d(-4), diaLanc: d(-4), st: 'recusado', motRec: 'Foto ilegível: mande outra foto do atestado.' })
+  ].filter(Boolean);
+  for (const a of l) {
+    if (a.st !== 'recusado' && a.id !== 'at1') { const f = fotoExemplo('ATESTADO', '#7a8aa0', 640, 860, 0.7); const m = fotoExemplo('ATESTADO', '#7a8aa0', 180, 240, 0.6); a.minis = [m]; a.nf = 1; atFotosMock.set('af' + a.id, { id: 'af' + a.id, aid: a.id, ordem: 0, dados: f, por: a.por }); }
+  }
+  cache.atest = { loaded: true, rh: true, d: Object.fromEntries(l.map(a => [a.id, a])) };
+}
+export const atNovoId = () => 'atn' + Date.now().toString(36) + (atN++);
+export function atSalvar(id, dados, novo = false, fotos = []) {
+  const x = novo ? { ...dados, por: me.uid, porNome: me.nome, em: Date.now(), st: 'conferir' } : dados;
+  cache.atest.d[id] = { ...(cache.atest.d[id] || {}), id, ...x };
+  for (const f of fotos) { const fid = 'af' + Date.now().toString(36) + (atN++); atFotosMock.set(fid, { id: fid, aid: id, ordem: f.ordem, dados: f.dados, por: me.uid }); }
+  changed(); return Promise.resolve();
+}
+export async function atFotos(aid) { return [...atFotosMock.values()].filter(f => f.aid === aid).sort((a, b) => a.ordem - b.ordem); }
+export async function atApagarFoto(aid, fid, patch) { if (fid) atFotosMock.delete(fid); cache.atest.d[aid] = { ...(cache.atest.d[aid] || {}), ...patch }; changed(); }
+export async function atApagar(id, fotoIds = []) { for (const f of fotoIds) atFotosMock.delete(f); delete cache.atest.d[id]; changed(); }
+export const atCfgSalvar = c => { cache.atCfg = { loaded: true, d: { ...(cache.atCfg.d || {}), ...c } }; changed(); return Promise.resolve(); };
 export async function uidDoLogin(login) { const u = cache.usuarios.find(x => x.login === normLogin(login)); return u ? u.uid : ''; }
 // Administração › Processos e rotina: na demonstração, em memória, com a rotina valendo há 10 dias e algumas marcas.
 { const h = today(); const d = n => add(h, n);
@@ -415,7 +446,7 @@ export async function historicoLer(n = 500) { const ms = modsHistorico(me); retu
 // LGPD: quem abriu a ficha de quem (no ?demo fica só na memória). Igual ao data.js: uma linha por usuário, pessoa, ficha e dia.
 const acessosMock = new Map();
 export function acessoFicha(mat, pessoa, ficha) {
-  if (!me || !mat || !['rh', 'gestao'].includes(ficha)) return;
+  if (!me || !mat || !['rh', 'gestao', 'atestado'].includes(ficha)) return;
   const dia = today(), id = [me.uid, mat, ficha, dia].join('|');
   if (!acessosMock.has(id)) acessosMock.set(id, { id, at: new Date(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || ''), ficha, dia });
 }
@@ -430,15 +461,18 @@ export async function dpImportar(itens, arc) {
   if (arc && arc.length) { const m = new Map(arc.map(a => [String(a.mat), a.para])); cache.g.colabs = (cache.g.colabs || []).map(c => (m.has(String(c.mat)) ? { ...c, matArc: m.get(String(c.mat)) } : c)); gch(); }
 }
 // LGPD › descarte por prazo (demonstração): as mesmas leituras e gravações de data.js, sobre o que está em memória.
-export async function lgpdLer(limAcesso) {
+export async function lgpdLer(limAcesso, limAt = '0000-00-00') {
   const sit = []; for (const k of SET_KEYS) for (const [m, v] of Object.entries(S[k].sitByMonth || {})) sit.push({ id: m, col: (k === 'bateria' ? 'b_' : '') + 'situacao', v, jus: ((S[k].sitExtra || {})[m] || {}).jus || {} });
   const comps = Object.entries((cache.adm && cache.adm.comps) || {}).filter(([, c]) => c).map(([id, c]) => ({ id, ...c }));
-  return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), dps: [...dpMock.values()], fichas: (cache.g && cache.g.colabs) || [] }));
+  return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), dps: [...dpMock.values()], fichas: (cache.g && cache.g.colabs) || [],
+    atest: Object.values(cache.atest.d || {}).filter(a => (a.fim || a.ini) < limAt), atFotos: [...atFotosMock.values()].map(f => ({ id: f.id, aid: f.aid })) }));
 }
 export async function lgpdGravar(ops) {
   for (const o of ops) {
     if (o.tipo === 'acesso') acessosMock.delete(o.id);
     else if (o.tipo === 'dp') dpMock.delete(o.id);
+    else if (o.tipo === 'atfoto') atFotosMock.delete(o.id);
+    else if (o.tipo === 'atlimpa') { if (cache.atest.d[o.id]) cache.atest.d[o.id] = { ...cache.atest.d[o.id], minis: [], nf: 0, obs: null, fotosApagadasEm: Date.now() }; }
     else if (o.tipo === 'aso') cache.treinos = cache.treinos.filter(t => t.id !== o.id);
     else if (o.tipo === 'obs') {
       const k = o.col.startsWith('b_') ? 'bateria' : 'patio';

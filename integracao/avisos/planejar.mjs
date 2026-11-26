@@ -12,9 +12,10 @@ import { resumoTreinos, ANTECEDENCIA } from './lib/treinos.mjs';
 import { avisosOms, resumo7h } from './lib/oms.mjs';
 import { avisosProgramacao } from './lib/oms-programacao.mjs';
 import { avisosAgenda } from './lib/agenda.mjs';
+import { avisosAtestados } from './lib/atestados.mjs';
 
 const ATIVOS = ['admin', 'gestor', 'coordenador', 'supervisor', 'lider', 'administrativo', 'leitor'];
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true, agenda: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, justificativas: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true, agenda: true, atestados: true };
 // Administração › Processos e rotina (a rotina do analista, que antes vinha do Meu painel).
 export const ROTINA_URL = '/?m=administracao&v=cfproc';
 const up = s => String(s || '').toUpperCase();
@@ -367,6 +368,25 @@ export function planejar(d) {
         marcar.add(a.chave);
         msgs.push({ uid: a.uid, titulo: `Às ${a.it.hora}: ${String(a.it.titulo || '').slice(0, 80)}`, corpo: a.falta >= 60 ? `Daqui a cerca de ${Math.round(a.falta / 60)} h.` : `Daqui a ${a.falta} min.`, tag: 'agenda', url: '/?m=gestao&v=gagenda' });
       }
+    }
+  }
+  // Atestados (contas/atestados.js), a partir das 8h, uma vez por dia. Só números: nunca nome, tipo ou observação.
+  //   RH · Administrativo e administrador: a conferir (quantos fora do prazo) e pessoas para encaminhar ao INSS;
+  //   quem lançou: atestado ainda sem foto (lançado antes de hoje) ou recusado pelo RH.
+  if (d.atestados) {
+    const r = avisosAtestados({ lista: d.atestados, hoje, hora, cfg: d.atCfg });
+    if (r.rh) for (const x of alvo) {
+      const chave = `${r.rh.chave}|${x.uid}`;
+      if (!x.prefs.atestados || d.enviados[chave] || !['admin', 'administrativo'].includes(usuarioEm(x.u, 'rh').papel)) continue;
+      marcar.add(chave);
+      const l = []; if (r.rh.prazo) l.push(`${r.rh.prazo} fora do prazo`); if (r.rh.inss) l.push(`${r.rh.inss} pessoa${r.rh.inss > 1 ? 's' : ''} para encaminhar ao INSS`);
+      msgs.push({ uid: x.uid, titulo: r.rh.n ? `${r.rh.n} atestado${r.rh.n > 1 ? 's' : ''} a conferir` : 'Atestados: encaminhar ao INSS', corpo: (l.length ? l.join(' · ') + '\n' : '') + 'Toque para abrir RH › Atestados.', tag: 'atestados', url: '/?m=rh&v=ratest' });
+    }
+    for (const a of r.autores) {
+      const x = alvo.find(y => y.uid === a.uid); if (!x || !x.prefs.atestados || d.enviados[a.chave]) continue;
+      marcar.add(a.chave);
+      const l = []; if (a.recusados) l.push(`${a.recusados} recusado${a.recusados > 1 ? 's' : ''} pelo RH`); if (a.semFoto) l.push(`${a.semFoto} sem foto`);
+      msgs.push({ uid: a.uid, titulo: `Atestados que você lançou: ${l.join(' e ')}`, corpo: 'Toque para abrir e juntar a foto ou corrigir.', tag: 'atestados', url: '/?m=operacao&v=esatest' });
     }
   }
   return { msgs, marcar: [...marcar] };

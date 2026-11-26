@@ -134,6 +134,11 @@ function renderTela() {
   if (arq === 'MD') return tela(comModulo('MD', m => m.renderView(v)));
   if (arq === 'TR') return tela(comModulo('TR', m => m.renderView(v)));
   if (arq === 'AG') return tela(comModulo('AG', m => m.renderView(v)));
+  if (arq === 'AT') {
+    // Operação › Atestados usa o filtro de mês e área: precisa do conjunto carregado e do mês escolhido.
+    if (v === 'esatest') { if (!DB.cache.configLoaded || !DB.cache.config) { renderNav(); pintarTopo(aba(v).nome || '', ''); pintar('view', M.ESQUELETO); return; } ensurePeriod(); }
+    return tela(comModulo('AT', m => m.renderView(v)));
+  }
   if (arq === 'PR') return tela(comModulo('PR', m => m.renderView(v)));
   if (arq === 'OM') return tela(comModulo('OM', m => m.renderView(v)));
   if (arq === 'OI') return tela(comModulo('OI', m => m.renderView(v)));
@@ -189,6 +194,16 @@ function renderNav() {
   // RH: efetivos enviados pelos líderes esperando validação (os meses que a Frequência já abriu)
   const efr = UI.modulo === 'rh' && editaAdm(ME) && DB.efDocs ? ['patio', 'bateria'].reduce((n, k) => n + aguardandoEf(DB.efDocs(k)).length, 0) : 0;
   if (efr) SELOS.afreq = { n: efr, txt: 'efetivos aguardando validação' };
+  // Atestados: o RH vê quantos estão a conferir; quem lança, os dele recusados ou sem foto (contas/atestados.js).
+  const atRH = editaAdm(ME), atOp = UI.modulo === 'operacao' && (isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(perfil('operacao')));
+  if (DB.atWatch && ((UI.modulo === 'rh' && atRH) || atOp)) DB.atWatch(atRH);
+  if (DB.cache.atest && DB.cache.atest.loaded) {
+    const la = Object.values(DB.cache.atest.d || {}).filter(a => !a.apagado);
+    const nc = UI.modulo === 'rh' && atRH ? la.filter(a => (a.st || 'conferir') === 'conferir').length : 0;
+    if (nc) SELOS.ratest = { n: nc, txt: 'atestados a conferir' };
+    const nm = atOp ? la.filter(a => a.por === ME.uid && (a.st === 'recusado' || (!a.nf && !a.fotosApagadasEm && a.st !== 'conferido'))).length : 0;
+    if (nm) SELOS.esatest = { n: nm, txt: 'atestados seus recusados ou sem foto' };
+  }
   const ms = modsMenu();
   const cur = MODS[UI.modulo];
   const linha = (m, atual) => `<span class="mi">${MOD_IC[m]}</span><span class="mt"><b>${MODS[m].nome}</b><small>${atual ? MODS[m].sub : subMod(m)}</small></span>`; // no botão: o conjunto aberto; na lista: a área inteira
@@ -355,9 +370,10 @@ function renderTop() {
   if (SUB_S[v.id]) { pintarTopo(v.nome, SUB_S[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
   if (v.id === 'fpainel') { pintarTopo(v.nome, 'Presença, ocorrências e férias da folha de 16 a 15', seletorJuntas(v) + (AD ? AD.topo('fpainel') : '') + atalhosDe(v)); return; }
   if (v.id === 'fresumo' || v.id === 'eresumo' || (v.id === 'resumo' && !['ativ', 'he', 'escala'].includes(resTipo()))) { pintarTopo(v.nome, `${resTipo() === 'oper' ? 'Equipamentos' : 'Frequência'} · pronto para imprimir`, (resTipo() === 'freq' && conjsRes().length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${conjsRes().map(k => `<button type="button" role="tab" data-rconj="${k}" aria-selected="${rConj() === k}">${SETS[k].curto}</button>`).join('')}</div>` : '') + atalhosDe(v)); return; }
+  if (v.id === 'ratest') { pintarTopo(v.nome, 'Atestados lançados pelos líderes: conferir, recusar, original, INSS e a lista da folha', atalhosDe(v)); return; }
   if (UI.modulo === 'rh') { pintarTopo(v.nome, SUB_A[v.id] || '', (AD ? AD.topo(v.id) : '') + atalhosDe(v)); return; }
   if (SUB_G[v.id] || SUB_E[v.id]) { pintarTopo(v.nome, SUB_G[v.id] || SUB_E[v.id], seletorJuntas(v) + atalhosDe(v)); return; }
-  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', quedazero: 'Material caído recolhido no dia (coque e carvão), por local e motivo', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Quem está em cada rota, presença e movimentações do dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
+  const sub = { esjus: 'Faltas, atrasos e atestados do mês: o que já foi justificado e o que falta', esatest: 'Os atestados que você lançou, com a foto e a resposta do RH, e os dias de atestado por área', painel: 'Produtividade do período', qpainel: 'Material caído recolhido (coque e carvão)', quedazero: 'Material caído recolhido no dia (coque e carvão), por local e motivo', prog: 'Programado × realizado por atividade', apontar: 'Marque o que foi feito no dia', aprovar: 'Confira e aprove o que os líderes apontaram', causas: 'Por que as atividades não foram feitas, e o que está sendo feito', resumo: 'O dia, a semana ou o mês numa página, pronta para imprimir ou salvar em PDF', etiquetas: 'Cole no local: o líder aponta a câmera e abre a rota no Apontar', eshe: `Início, fim e horas de cada hora extra · ${SETS[SK].nome}`, pend: 'Atividades sem apontamento em dias que já passaram', imprimir: 'Folha semanal para marcação em campo', esdia: `Quem está em cada rota, presença e movimentações do dia · ${SETS[SK].nome}`, esdim: `Disponíveis × necessários por rota · ${SETS[SK].nome}`, esbal: `Quem está fora e o saldo da semana · ${SETS[SK].nome}` }[UI.view] || '';
   let ctr = '';
   const comFiltro = !!v.filtros && !(v.id === 'resumo' && resTipo() === 'escala'); // a Escala das áreas tem o filtro de área dela // filtros declarados na aba (VIEWS, navegacao.js)
   if (comFiltro && isMobile()) ctr = `<div class="fbar">${filtroCompacto()}</div>`;
