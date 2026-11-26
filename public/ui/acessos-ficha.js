@@ -6,7 +6,7 @@ import { isAdmin } from '../nucleo/estado.js';
 import { acoes } from '../nucleo/acoes.js';
 import { sheet, toast } from './janelas.js';
 
-const FICHA = { rh: 'Cadastro (RH)', gestao: 'Ficha de acompanhamento' };
+const FICHA = { rh: 'Cadastro (RH)', gestao: 'Ficha de acompanhamento', atestado: 'Foto do atestado' };
 const dhBR = d => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 
 export const registrarAcesso = (c, ficha) => { if (c && c.mat) DB.acessoFicha(c.mat, c.nome, ficha); };

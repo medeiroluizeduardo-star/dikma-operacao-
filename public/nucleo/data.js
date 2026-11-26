@@ -789,6 +789,51 @@ export function agendaSalvar(id, dados, novo = false) {
   return track(setDoc(doc(db, 'agenda', id), x, { merge: true }));
 }
 export function agendaApagar(id) { delete cache.agenda.d[id]; changed(); const b = writeBatch(db); b.delete(doc(db, 'agenda', id)); return track(b.commit()); }
+// ---------- Atestados (contas/atestados.js; firestore.rules › atestados) ----------
+// atestados/{id} (sem a foto completa; as miniaturas ficam em minis[]) e atestadosFoto/{id} (uma foto por documento).
+// O RH · Administrativo e o administrador escutam os dos últimos 13 meses; os outros, só os que eles mesmos lançaram
+// (o banco não deixa ler os dos outros). config/atestados = prazo de entrega e alerta do INSS (RH e administrador gravam).
+let atSub = null, atModo = '', atCfgSub = null;
+cache.atest = { d: {}, loaded: false }; cache.atCfg = { loaded: false, d: null };
+const tsMs = t => (t && t.toMillis ? t.toMillis() : t instanceof Date ? t.getTime() : typeof t === 'number' ? t : t ? Date.parse(t) || 0 : 0);
+const deAt = x => { const d = x.data({ serverTimestamps: 'estimate' }); return { id: x.id, ...d, em: tsMs(d.em), confEm: tsMs(d.confEm), fotosApagadasEm: tsMs(d.fotosApagadasEm) }; };
+export function atWatch(rh) {
+  if (!me) return;
+  if (!atCfgSub) atCfgSub = onSnapshot(doc(db, 'config', 'atestados'), s => { cache.atCfg = { loaded: true, d: s.exists() ? s.data() : null }; changed(); },
+    e => { cache.atCfg = { loaded: true, d: null }; atCfgSub = parada; aposErro(e, () => { if (atCfgSub === parada) atCfgSub = null; }); changed(); });
+  const modo = (rh ? 'rh|' : 'eu|') + me.uid;
+  if (atSub && atModo === modo) return;
+  if (atSub && atSub !== parada) { try { atSub(); } catch (e) { /* já fechado */ } }
+  atModo = modo; cache.atest = { d: {}, loaded: false };
+  const q = rh ? query(collection(db, 'atestados'), where('ini', '>=', addMonth(today().slice(0, 7), -13) + '-01')) : query(collection(db, 'atestados'), where('por', '==', me.uid));
+  atSub = onSnapshot(q, qs => { const d = {}; qs.forEach(x => { d[x.id] = deAt(x); }); cache.atest = { d, loaded: true, rh: !!rh }; changed(); },
+    e => { cache.atest = { d: {}, loaded: true, erro: e.code || e.message || 'erro' }; atSub = parada; aposErro(e, () => { if (atSub === parada) atSub = null; }); changed(); });
+}
+export const atNovoId = () => doc(collection(db, 'atestados')).id;
+// Grava o atestado e as fotos novas num lote só (sem sinal, sobe tudo junto). fotos = [{ dados, ordem }].
+export function atSalvar(id, dados, novo = false, fotos = []) {
+  const x = novo ? { ...dados, por: me.uid, porNome: me.nome || me.login || '', em: serverTimestamp(), st: 'conferir', ...marca() } : { ...dados, ...marca() };
+  cache.atest.d[id] = { ...(cache.atest.d[id] || {}), id, ...x, em: novo ? Date.now() : (cache.atest.d[id] || {}).em }; changed();
+  const b = writeBatch(db); b.set(doc(db, 'atestados', id), x, { merge: true });
+  for (const f of fotos) b.set(doc(collection(db, 'atestadosFoto')), { aid: id, por: me.uid, conj: dados.conj || (cache.atest.d[id] || {}).conj, area: dados.area || (cache.atest.d[id] || {}).area, ordem: f.ordem, dados: f.dados, em: serverTimestamp() });
+  return track(b.commit());
+}
+// Fotos completas de um atestado (só ao abrir). Quem não é do RH só lê as que ele mesmo pôs.
+export async function atFotos(aid, rh) {
+  const conds = [where('aid', '==', aid)]; if (!rh) conds.push(where('por', '==', me.uid));
+  const qs = await getDocs(query(collection(db, 'atestadosFoto'), ...conds));
+  return qs.docs.map(x => ({ id: x.id, ...x.data() })).sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+}
+// Apaga uma foto (o documento da foto e a miniatura do atestado, no mesmo lote).
+export function atApagarFoto(aid, fid, patch) {
+  cache.atest.d[aid] = { ...(cache.atest.d[aid] || {}), ...patch }; changed();
+  const b = writeBatch(db); if (fid) b.delete(doc(db, 'atestadosFoto', fid)); b.set(doc(db, 'atestados', aid), { ...patch, ...marca() }, { merge: true }); return gravarLote(b);
+}
+export function atApagar(id, fotoIds = []) {
+  delete cache.atest.d[id]; changed();
+  const b = writeBatch(db); for (const f of fotoIds) b.delete(doc(db, 'atestadosFoto', f)); b.delete(doc(db, 'atestados', id)); return gravarLote(b);
+}
+export const atCfgSalvar = c => { cache.atCfg = { loaded: true, d: { ...(cache.atCfg.d || {}), ...c } }; changed(); return track(setDoc(doc(db, 'config', 'atestados'), { ...c, ...marca() }, { merge: true })); };
 // Compartilhar anotação: o uid de quem tem este usuário (logins/{login} é aberto para leitura de um por vez).
 export async function uidDoLogin(login) { const s = await getDoc(doc(db, 'logins', normLogin(login))); return s.exists() ? s.data().uid || '' : ''; }
 // Administração › Processos e rotina (contas/processos.js): processos/config (os processos e desde quando a rotina conta) e
@@ -904,7 +949,7 @@ export function log(t, mod) {
 // de acompanhamento). Só o administrador lê; ninguém altera; apagar só o administrador (firestore.rules › acessosFicha).
 const acessosVistos = new Set();
 export function acessoFicha(mat, pessoa, ficha) {
-  if (!me || !mat || String(mat).includes('/') || !['rh', 'gestao'].includes(ficha)) return;
+  if (!me || !mat || String(mat).includes('/') || !['rh', 'gestao', 'atestado'].includes(ficha)) return;
   const dia = today(), id = [me.uid, mat, ficha, dia].join('|');
   if (acessosVistos.has(id)) return; acessosVistos.add(id);
   setDoc(doc(db, 'acessosFicha', id), { at: serverTimestamp(), uid: me.uid, nome: me.nome || '', mat: String(mat), pessoa: String(pessoa || '').slice(0, 120), ficha, dia }).catch(() => {});
@@ -954,11 +999,13 @@ export async function dpImportar(itens, arc) {
 
 // LGPD › descarte por prazo (Administração › LGPD; contas/lgpd.js diz o que passou do prazo). Lê a presença (Pátio e
 // Bateria), as folhas da Frequência, os ASO, os acessos às fichas com mais de 1 ano e o cadastro (demissão).
-export async function lgpdLer(limAcesso) {
+export async function lgpdLer(limAcesso, limAt = '0000-00-00') {
   const [sp, sb, comps, aso, acessos, fichas] = await Promise.all([limpezaLer('situacao'), limpezaLer('b_situacao'), limpezaLer('freqcomp'),
     limpezaLer('treinos', [['tipo', '==', 'ASO']]), limpezaLer('acessosFicha', [['dia', '<', limAcesso]]), limpezaLer('gcolab')]);
   const dps = await limpezaLer('dpessoais');
-  return { dps, sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
+  const atest = await limpezaLer('atestados', [['fim', '<', limAt]]);
+  const atFotosIds = atest.length ? (await limpezaLer('atestadosFoto')).filter(f => atest.some(a => a.id === f.aid)).map(f => ({ id: f.id, aid: f.aid })) : [];
+  return { dps, atest, atFotos: atFotosIds, sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
 }
 // ops: { tipo: 'obs', col, id, caminho[] } apaga a observação · { tipo: 'aso', id } apaga o ASO (marca de apagado do
 // incremental, sem as datas nem a observação) · { tipo: 'acesso', id } apaga a linha do registro de acesso.
@@ -969,6 +1016,8 @@ export async function lgpdGravar(ops) {
     else if (o.tipo === 'aso') b.set(doc(db, 'treinos', o.id), { ...marcaApagado(), realizado: null, validade: null, obs: null }, { merge: true });
     else if (o.tipo === 'acesso') b.delete(doc(db, 'acessosFicha', o.id));
     else if (o.tipo === 'dp') b.delete(doc(db, 'dpessoais', o.id));
+    else if (o.tipo === 'atfoto') b.delete(doc(db, 'atestadosFoto', o.id));
+    else if (o.tipo === 'atlimpa') b.set(doc(db, 'atestados', o.id), { minis: [], nf: 0, obs: null, fotosApagadasEm: serverTimestamp(), ...marca() }, { merge: true });
   }
   pending++; syncMudou();
   try { await b.commit(); } finally { pending--; syncMudou(); }

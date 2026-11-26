@@ -37,3 +37,18 @@ Administração › Visão geral › **LGPD**: ler o que passou do prazo, baixar
 - O ASO apagado vira "apagado" (as datas e a observação saem na hora); a rotina diária dos avisos apaga o documento de vez depois de 45 dias.
 - Cuidado: importar de novo uma planilha antiga de treinamentos traz os ASO antigos de volta.
 - Contas: `public/contas/lgpd.js` (testes em `testes/lgpd.test.mjs`); tela: `public/telas/lgpd.js`.
+
+## Atestados lançados pelos líderes (desde a v238)
+
+- Onde: o líder lança na **Operação › Escala do dia** (tocar no nome › Atestado): tipo, primeiro dia, data de emissão,
+  quantos dias (ou as horas da declaração de comparecimento), observação sem CID e até 2 fotos. O AT vai sozinho para os
+  dias do atestado. O RH confere em **RH › Atestados**; quem lançou acompanha em **Operação › Justificativas › Atestados**.
+- Banco: `atestados/{id}` (dados e miniaturas) e `atestadosFoto/{id}` (a foto completa, uma por documento), fora das
+  fotos das atividades: nunca entram no arquivo de fotos, no relatório fotográfico nem no PowerPoint.
+- Quem lê: **RH · Administrativo, administrador e quem lançou** (`firestore.rules` › atestados). Supervisor,
+  coordenador, gestor e cliente veem só o código AT na Escala do dia; a justificativa na Presença leva só o tipo, os
+  dias e o id do atestado, sem a observação.
+- Quem abriu a foto fica em `acessosFicha` (ficha = `atestado`), visto em "Quem abriu" na ficha do RH.
+- Prazo: a foto e a observação saem **12 meses depois do último dia** (Administração › LGPD, descarte manual com cópia).
+  As datas, o tipo e os dias ficam (frequência, folha e indicadores).
+- Avisos no celular: só números (nunca nome, tipo ou observação).

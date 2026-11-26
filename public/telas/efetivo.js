@@ -21,6 +21,8 @@ import { ocorrOpc, salvarJus, textoHE, horarioHE } from './horas-justificativas.
 import { estadoEf, podeEf, travadoEf, ultimaEf, horaEf } from '../contas/efetivo-dia.js';
 import { editaAdm } from '../contas/acessos.js';
 import { etiqueta, botaoAcao } from '../ui/padrao.js';
+import { abrirAtestado } from '../ui/atestado.js';
+import { DECLARACAO, diasDoAtestado } from '../contas/atestados.js';
 
 // Quem não está hoje (folga, férias, atestado, afastado, treinamento, falta). Desligado não conta como ausência.
 export function cardAusencias(area) {
@@ -112,7 +114,8 @@ export function lancarEfetivo(key) {
     else extras.push({ t: 'Definir substituto', d: 'Ninguém cobrindo', v: 'cob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
   }
   if (cobre) extras.push({ t: `Deixar de cobrir ${nomeDe(cobre)}`, v: 'sairCob', extra: true, ic: `<span class="opt-ic">${I.swap}</span>` });
-  if (!sx.auto && JUS_CODS.includes(sx.v)) { const j = info.jus && info.jus.cod === sx.v ? info.jus : null; extras.unshift({ t: j ? 'Editar a justificativa' : `Justificar ${(SIT_NOME[sx.v] || '').toLowerCase()}`, d: j ? textoJus(j) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: `<span class="opt-ic">${I.edit || '✎'}</span>` }); }
+  if (!sx.auto && sx.v === 'AT') { const j = info.jus && info.jus.cod === 'AT' ? info.jus : null; extras.unshift({ t: j && j.at ? 'Ver o atestado' : 'Lançar o atestado (com foto)', d: j && j.at ? `${textoJus({ mot: j.mot })}${j.dias > 1 ? ` · ${j.dias} dias` : ''} · detalhes e foto só com o RH e quem lançou` : j ? textoJus(j) : 'Ainda sem o atestado', v: 'atest', extra: true, ic: `<span class="opt-ic">${I.cam}</span>` }); }
+  else if (!sx.auto && JUS_CODS.includes(sx.v)) { const j = info.jus && info.jus.cod === sx.v ? info.jus : null; extras.unshift({ t: j ? 'Editar a justificativa' : `Justificar ${(SIT_NOME[sx.v] || '').toLowerCase()}`, d: j ? textoJus(j) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: `<span class="opt-ic">${I.edit || '✎'}</span>` }); }
   if (sx.v === 'HE') extras.push({ t: 'Hora extra a pedido de…', d: info.he ? `Agora: ${HE_ORIG[info.he]}` : 'Não informado', v: 'heo', extra: true, ic: '<span class="sit HE">HE</span>' }, { t: 'Horário da hora extra', d: textoHE(info.hed) || 'Informar início e fim', v: 'heh', extra: true, ic: `<span class="opt-ic">${I.relogio}</span>` });
   const k = (pd(dt).getDay() + 6) % 7; const domingo = add(dt, 6 - k);
   const depois = []; for (let i = 1; i <= 30; i++) depois.push(add(dt, i));
@@ -127,9 +130,13 @@ export function lancarEfetivo(key) {
       if (v === 'sairCob') { removerCobertura(cobre, dt); fimToque(); toast('Cobertura removida'); return; }
       if (v === 'heo') return passoHE(c, [dt], null, fimToque);
       if (v === 'heh') return horarioHE(c, [dt], fimToque);
+      if (v === 'atest') return verAtestadoDia(c, dt, info.jus, fimToque);
       if (v === 'jus') return pedirJus({ formSheet, nome: title(c.nome), dt, cod: sx.v, atual: info.jus, ocorr: info.jus && info.jus.ocorr ? null : ocorrOpc(c, sx.v), salvar: j => salvarJus(c, [dt], j), depois: fimToque });
     },
-    aoEscolher: (v, dias) => {
+    semAte: ['AT'],
+    aoEscolher: function escolher(v, dias, at) {
+      // Atestado: o formulário (tipo, emissão, dias, foto) diz os dias; o "até quando" se preenche sozinho.
+      if (v === 'AT' && !at) return abrirAtestado({ c, conj: SK, dt, aoSalvar: (x, it) => escolher('AT', diasAt(it), x) });
       const antes = dias.map(d => [d, DB.sit(id + '|' + d) || null, DB.sitInfo(id + '|' + d)]);
       // grava só o que difere da escala: presente num dia de folga fica gravado; folga num dia de folga, não
       const gravar = d => { if (!v) return null; const fe = folgaEscala(c, d); if (v === 'P') return fe ? 'P' : null; if (v === 'F' && fe) return null; return v; };
@@ -140,12 +147,53 @@ export function lancarEfetivo(key) {
       fimToque();
       const segue = () => { if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque); if (v === 'HE') return passoHE(c, dias, desfazer, fimToque); toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer }); };
       // falta, atraso, atestado…: pede a justificativa (pode deixar para depois) e segue para o substituto
+      if (at) {
+        salvarJusAt(c, dias, at);
+        // Desfazer tira também o atestado (e as fotos) que acabou de ser lançado.
+        const desf = () => { desfazer(); DB.atFotos(at.id, editaAdm(ME)).then(l => DB.atApagar(at.id, l.map(f => f.id))).catch(() => {}); };
+        if (gravar(dias[0])) return passoCobertura(c, dias[0], dias, desf, fimToque);
+        toast(`${curto(title(c.nome))}: atestado em ${dias.length > 1 ? dias.length + ' dias' : ddmm(dias[0])}`, { desfazer: desf }); return;
+      }
       if (JUS_CODS.includes(v) && gravar(dt)) return pedirJus({ formSheet, nome: title(c.nome), dt, cod: v, atual: antes[0][2].jus, ocorr: ocorrOpc(c, v), salvar: j => salvarJus(c, dias, j), depois: segue });
       if (AUS_COBRIVEL.has(v) && gravar(dt)) return passoCobertura(c, dt, dias, desfazer, fimToque);
       if (v === 'HE') return passoHE(c, dias, desfazer, fimToque);
       toast(dias.length > 1 ? `${curto(title(c.nome))}: ${nome.toLowerCase()} em ${dias.length} dias` : `${curto(title(c.nome))}: ${nome.toLowerCase()}`, { desfazer });
     }
   });
+}
+// ---- Atestado (ui/atestado.js; contas/atestados.js) ----
+// Na Presença fica só o código AT e uma justificativa curta (tipo, dias e o id do atestado), sem observação: a
+// Presença é lida por todos da Operação. Os detalhes e a foto ficam no atestado (só RH, administrador e quem lançou).
+const diasAt = it => (it.tipo === DECLARACAO ? [it.ini] : diasDoAtestado(it.ini, it.dias));
+function salvarJusAt(c, dias, at) {
+  const v = { cod: 'AT', mot: at.tipo, at: at.id, dias: dias.length, ...(at.horas ? { horas: at.horas } : {}), por: ME.uid, nomePor: ME.nome || ME.login || '', em: new Date().toISOString() };
+  dias.forEach(d => DB.setSitExtra('jus', c.id + '|' + d, v));
+}
+// Justificativas › "Justificar" num dia de AT: abre o atestado em vez da justificativa comum.
+export function abrirAtestadoDia(c, dt) { verAtestadoDia(c, dt, DB.sitInfo(c.id + '|' + dt).jus, () => render()); }
+// Tocou em "Ver o atestado" (ou "Lançar o atestado") num dia com AT.
+function verAtestadoDia(c, dt, jus, fimToque) {
+  if (DB.atWatch) DB.atWatch(editaAdm(ME));
+  const lista = (DB.cache.atest && DB.cache.atest.d) || {};
+  const a = jus && jus.at ? lista[jus.at] : null;
+  if (jus && jus.at && !a) {
+    if (!DB.cache.atest || !DB.cache.atest.loaded) { toast('Carregando o atestado… toque de novo em instantes'); return; }
+    formSheet('Atestado', esc(title(c.nome)), `<p class="m0">Lançado por <b>${esc(title(jus.nomePor || 'outra pessoa'))}</b>${jus.dias > 1 ? ` · ${jus.dias} dias` : ''}.</p><p class="muted small">Atestado é dado de saúde: os detalhes e a foto ficam só com o RH, o administrador e quem lançou.</p>`, 'Fechar', async () => {});
+    return;
+  }
+  if (a && a.st === 'conferido' && !editaAdm(ME)) {
+    formSheet('Atestado', esc(title(c.nome)), `<p class="m0">${esc(a.tipo)} · ${a.dias > 1 ? `${a.dias} dias` : '1 dia'} · <b>conferido pelo RH</b>.</p><p class="muted small">Depois de conferido, só o RH muda. Para ver a foto, abra Justificativas › Atestados.</p>`, 'Fechar', async () => {});
+    return;
+  }
+  // Editar (ou lançar, quando o AT veio sem atestado): os dias que saíram voltam ao automático; os novos recebem AT.
+  abrirAtestado({ c, conj: SK, dt, atual: a, rh: editaAdm(ME), aoSalvar: (x, it, antes) => {
+    const novos = diasAt(it); const velhos = antes ? diasAt({ tipo: x.tipo, ini: antes.ini, dias: antes.dias }) : [dt];
+    for (const d of velhos.filter(d => !novos.includes(d))) { const k = c.id + '|' + d; if (DB.sit(k) === 'AT') { DB.setSit(k, null); DB.setSitExtra('jus', k, null); removerCobertura(c.id, d); } }
+    for (const d of novos) { const k = c.id + '|' + d; if (DB.sit(k) !== 'AT') DB.setSit(k, 'AT'); DB.setSitExtra('he', k, null); DB.setSitExtra('hed', k, null); }
+    salvarJusAt(c, novos, x);
+    DB.log(`${title(c.nome)} · ${ddmm(novos[0])}${novos.length > 1 ? ' a ' + ddmm(novos[novos.length - 1]) : ''} → Atestado`, 'operacao');
+    toast(a ? 'Atestado atualizado' : 'Atestado lançado'); fimToque();
+  } });
 }
 // Depois de uma ausência: quem cobre (opcional). Se quem cobre está de folga pela escala, vira hora extra.
 function passoCobertura(c, dt, dias, desfazerBase, fimToque) {

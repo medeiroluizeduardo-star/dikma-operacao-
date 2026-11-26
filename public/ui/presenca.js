@@ -50,7 +50,7 @@ export const chipSit = (v, ok) => `<span class="sit ${v}">${v === 'P' ? ok || '�
 
 // o = { sheet, nome, dt, atual: { v, auto, motivo }, codigos: ['P','F',...], linhaInfo, extras: [{ t, d, v, ic }],
 //       depois: [datas seguintes que podem receber o mesmo código], fim: { t, v } (última opção do "até quando"),
-//       aoEscolher(cod, datas), aoExtra(v), ok: ícone de presente }
+//       aoEscolher(cod, datas), aoExtra(v), ok: ícone de presente, semAte: códigos que não perguntam "até quando" (AT: o atestado diz) }
 export function abrirLancamento(o) {
   const { sheet } = o; const at = o.atual || {};
   const agora = at.v ? `${NOMES_CODIGO[at.v] || at.v}${at.auto ? (at.motivo ? ` (${at.motivo})` : at.motivo === '' ? '' : ' (automático)') : ''}` : 'sem lançamento';
@@ -65,7 +65,7 @@ export function abrirLancamento(o) {
     if (x.extra) return o.aoExtra && o.aoExtra(x.v);
     const cod = x.v; const dep = (o.depois || []);
     // presente, hora extra e "automático" valem só no dia tocado (o comum); o resto pergunta até quando
-    if (!cod || cod === 'P' || cod === 'HE' || !dep.length) return o.aoEscolher(cod, [o.dt]);
+    if (!cod || cod === 'P' || cod === 'HE' || !dep.length || (o.semAte || []).includes(cod)) return o.aoEscolher(cod, [o.dt]);
     const passos = [2, 4, 6, 14, 29].filter(n => dep[n - 1]).map(n => ({ t: `${n + 1} dias`, d: `até ${diaSem(dep[n - 1])}, ${ddmm(dep[n - 1])}`, v: dep[n - 1] }));
     const fim = o.fim && dep.includes(o.fim.v) && !passos.some(p => p.v === o.fim.v) ? [{ t: o.fim.t, d: `${diaSem(o.fim.v)}, ${ddmm(o.fim.v)}`, v: o.fim.v }] : [];
     const ate = [{ t: 'Só este dia', d: `${diaSem(o.dt)}, ${ddmm(o.dt)}`, v: o.dt }, ...fim, ...passos].sort((a, b) => (a.v < b.v ? -1 : 1));

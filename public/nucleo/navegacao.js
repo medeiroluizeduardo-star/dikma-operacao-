@@ -51,6 +51,8 @@ export const VIEWS = [
   { id: 'esdia', nome: 'Escala do dia', ic: 'presenca', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'msa', conj: true },
   { id: 'eshe', nome: 'Banco de horas extras', ic: 'relogio', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
   { id: 'esjus', nome: 'Justificativas', ic: 'nota', grp: 'Efetivo', mod: 'operacao', req: opSets, filtros: 'ma', conj: true, junto: 'horas' },
+  // Atestados (telas/atestados.js): quem lança a presença vê os que lançou (foto e status do RH) e os dias de AT por área.
+  { id: 'esatest', nome: 'Atestados', ic: 'cam', grp: 'Efetivo', mod: 'operacao', req: () => opSets() && (isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(perfil('operacao'))), filtros: 'ma', conj: true, junto: 'horas', tela: 'AT' },
   // ---- Gestão: planejar, acompanhar e analisar ----
   { id: 'prog', nome: 'Programação', ic: 'prog', grp: 'Atividades', mod: 'gestao', req: geSets, filtros: 'msa', conj: true },
   { id: 'imprimir', nome: 'Folha do líder', ic: 'print', grp: 'Atividades', mod: 'gestao', req: geSets, fora: true, pai: 'prog', filtros: 'ms', conj: true },
@@ -79,6 +81,9 @@ export const VIEWS = [
   // Férias: controle do mês, plano do ano e pendências (telas/ferias-plano.js); os períodos continuam na ficha de cada um.
   { id: 'rferias', nome: 'Férias', ic: 'ferias', grp: 'Cadastro', mod: 'rh', req: temRH, tela: 'FP' },
   { id: 'afreq', nome: 'Folha de frequência', ic: 'freq', grp: 'Frequência', mod: 'rh', req: temRH },
+  // Atestados lançados pelos líderes (telas/atestados.js): conferir, recusar, original, INSS, lista da folha e indicador.
+  // Dado de saúde: só o RH · Administrativo e o administrador (o banco também só entrega a eles e a quem lançou).
+  { id: 'ratest', nome: 'Atestados', ic: 'cam', grp: 'Frequência', mod: 'rh', req: () => editaAdm(ME), tela: 'AT' },
   { id: 'aimport', nome: 'Importar planilhas', ic: 'planilha', grp: 'Frequência', mod: 'rh', req: () => editaAdm(ME), fora: true, pai: 'afreq' },
   // ---- Indicadores: os painéis de todos os módulos, só para ver (acesso.indicadores, escolhido por pessoa em Usuários) ----
   // Cada aba usa os dados do escopo da pessoa (Pátio, Bateria, Equipamentos); o "Vê" com área no cadastro vê só a dele.
@@ -158,7 +163,7 @@ export const SUB_S = {
 // Nome curto oficial de cada aba: o mesmo no menu lateral, na barra de baixo do celular e no "Mais". O título da tela usa o nome completo.
 const CURTO = { gcolab: 'Fichas', sgtrein: 'Treinamentos', afreq: 'Frequência', esdia: 'Escala', esbal: 'Balanço', esdim: 'Efetivo', eshe: 'Horas extras', etiquetas: 'Etiquetas', elanc: 'Lançamentos', eequipe: 'Equipe', einsp: 'Inspeções', eaval: 'Avaliação', eanal: 'Análises', resumo: 'Resumos', gimpr: 'Impressão', cfsaude: 'Saúde', cfconf: 'Conferência', cfescala: 'Escalas', cfuso: 'Uso do plano', cferros: 'Erros', cflimpa: 'Limpeza', cflgpd: 'LGPD', cfhist: 'Histórico', usuarios: 'Usuários', perfis: 'Perfis', aimport: 'Importar', gimport: 'Importar fichas', gtipos: 'Fichas', config: 'Rotas', plano: 'Plano padrão', gerador: 'Gerador de meses', cffotos: 'Fotos', cfarqfotos: 'Arquivo de fotos', sgpainel: 'Segurança', sgconfig: 'Segurança', fresumo: 'Resumo', eresumo: 'Resumo', fpainel: 'Pessoas', painel: 'Atividades', epainel: 'Equipamentos', eanal: 'Análises', qpainel: 'Queda zero', gpainel: 'Fichas', ivisao: 'Visão geral', ihist: 'Histórico', gmed: 'Medição', gagenda: 'Agenda', cfproc: 'Processos', oms: 'OMs', ompainel: 'OMs' };
 // Nome no seletor do topo das abas juntas (junto).
-export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
+export const NOME_JUNTO = { esdia: 'Escala do dia', eshe: 'Horas extras', esjus: 'Justificativas', esatest: 'Atestados', elanc: 'Lançamentos', eequipe: 'Equipe e frota', einsp: 'Inspeções', eaval: 'Avaliação mensal', eanal: 'Análises', usuarios: 'Usuários', perfis: 'Perfis', epainel: 'Indicadores', fpainel: 'Frequência', gpainel: 'Fichas', cffotos: 'Regras das fotos', cfarqfotos: 'Arquivo e relatórios', gtipos: 'Tipos de ocorrência', gimport: 'Importar planilha', esdim: 'Por rota', esbal: 'Balanço da semana' };
 // Nome do seletor (leitor de tela) de cada grupo de abas juntas.
 export const ROTULO_JUNTO = { ieq: 'Equipamentos', ipes: 'Pessoas', efetivo: 'Efetivo', fotos: 'Fotos', fichas: 'Fichas', horas: 'Horas e justificativas', opeq: 'Equipamentos', geeq: 'Equipamentos', acessos: 'Acessos' };
 // Nome no menu das abas juntas: o mesmo, qualquer que seja a primeira que a pessoa vê.

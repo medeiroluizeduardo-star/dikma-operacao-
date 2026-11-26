@@ -16,7 +16,7 @@ import { VIEWS, nomeCurto, MODS, abasDoMenu, modsMenu, mesmoItem, subMod, modulo
 import { sheet, formSheet, showErr, toggleEye, toast } from '../ui/janelas.js';
 import { menuModulos, TEMAS, temaAtual, IC_TEMA, temaSheet, render, syncPill, filtroSheet, abrirBusca, modSheet, alterarSenhaSheet, medirTopo, trocarTela, SELOS, numSelo } from '../ui/shell.js';
 import { apArea, cellMenu, pedirJustificativa, apply, voltarDoLocal } from '../telas/apontar.js';
-import { lancarEfetivo, irEscala, PER_NOME, equipeCheckin, editaDia } from '../telas/efetivo.js';
+import { lancarEfetivo, irEscala, PER_NOME, equipeCheckin, editaDia, abrirAtestadoDia } from '../telas/efetivo.js';
 import { ocorrOpc, salvarJus, horarioHE, heCfg } from '../telas/horas-justificativas.js';
 import { problemaSenha, senhaAleatoria } from '../contas/senha.js';
 import { AV, modulo } from './modulos.js';
@@ -116,7 +116,7 @@ document.addEventListener('click', async e => {
   if (d.tirafp) { const [i, k] = d.tirafp.split('|').map(Number); const doc = DB.cache.semanas[apArea() + '|' + UI.ini]; if (doc) tirarFora(doc, i, k); return; }
   if (d.rtipo) { UI.resTipo = d.rtipo; render(); return; }
   if (d.jusf) { UI.jusF = d.jusf; UI.more = 0; render(); return; }
-  if (d.jusk) { const [id, ds] = d.jusk.split('|'); const dias = ds.split(','); const dt = dias[0]; const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const x = sitDia(c, dt); const inf = DB.sitInfo(id + '|' + dt); pedirJus({ formSheet, nome: title(c.nome) + (dias.length > 1 ? ` · ${dias.length} dias (${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])})` : ''), dt, cod: x.v, atual: inf.jus, ocorr: inf.jus && inf.jus.ocorr ? null : ocorrOpc(c, x.v), salvar: j => salvarJus(c, dias, j), depois: () => render() }); return; }
+  if (d.jusk) { const [id, ds] = d.jusk.split('|'); const dias = ds.split(','); const dt = dias[0]; const c = COLABS.find(x => x.id === id); if (!c || !canEditSit(c.area)) return; const x = sitDia(c, dt); if (x.v === 'AT') { abrirAtestadoDia(c, dt); return; } const inf = DB.sitInfo(id + '|' + dt); pedirJus({ formSheet, nome: title(c.nome) + (dias.length > 1 ? ` · ${dias.length} dias (${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])})` : ''), dt, cod: x.v, atual: inf.jus, ocorr: inf.jus && inf.jus.ocorr ? null : ocorrOpc(c, x.v), salvar: j => salvarJus(c, dias, j), depois: () => render() }); return; }
   if (d.rper) { UI.rPer = d.rper; try { localStorage.setItem('dikma-rper', d.rper); } catch (x) { /* ignora */ } render(); return; }
   if (d.rdia) { UI.rDia = d.rdia; render(); return; }
   if (d.rdiao) { const n = add(UI.rDiaO || TODAY, +d.rdiao); UI.rDiaO = n > TODAY ? TODAY : n; render(); return; }

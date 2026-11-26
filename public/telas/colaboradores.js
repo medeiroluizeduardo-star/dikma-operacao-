@@ -27,6 +27,8 @@ import { render, isMobile } from '../ui/shell.js';
 import { registrarAcesso, botaoQuemAbriu } from '../ui/acessos-ficha.js';
 import { botaoLembrar } from '../ui/lembrar.js';
 import { podeVerDP, podeEditarDP, vDadosPessoais, editarDP, importarDP } from './dados-pessoais.js';
+import { atestadosDaPessoa, etiquetasAt, cfgAt, DECLARACAO } from '../contas/atestados.js';
+import { abrirDe as abrirAtestadoDe } from './atestados.js';
 
 const C = UI.co;
 const $ = id => document.getElementById(id);
@@ -159,8 +161,8 @@ function vFicha(c) {
   registrarAcesso(c, 'rh');
   const L = lista(); const lot = PES.lotacao(c); const ld = criarLiderancaDaFicha(L)(c);
   const at = lot.ativ ? lot.ativ.x : null, op = lot.op;
-  const aba = ['dados', 'lot', 'fer', 'hist', ...(podeVerDP() ? ['pes'] : [])].includes(C.aba) ? C.aba : 'dados';
-  const corpo = aba === 'pes' ? vDadosPessoais(c) : aba === 'fer' ? vFeriasFicha(c) : aba === 'hist' ? vLinhaTempo(c) : aba === 'dados'
+  const aba = ['dados', 'lot', 'fer', 'hist', ...(podeVerDP() ? ['pes'] : []), ...(veAtest() ? ['atest'] : [])].includes(C.aba) ? C.aba : 'dados';
+  const corpo = aba === 'pes' ? vDadosPessoais(c) : aba === 'atest' ? vAtestFicha(c) : aba === 'fer' ? vFeriasFicha(c) : aba === 'hist' ? vLinhaTempo(c) : aba === 'dados'
     ? dados([
       ['Nome completo', esc(c.nome)], ['Matrícula Dikma', `<span class="mono">${esc(c.mat)}</span>`], ['Matrícula Arcelor', c.matArc ? `<span class="mono">${esc(c.matArc)}</span>` : ''],
       ['Admissão', c.adm ? `${dBR(c.adm)} <span class="muted small">· ${tempoCasa(c.adm)} de casa</span>` : ''],
@@ -185,7 +187,7 @@ function vFicha(c) {
       <p class="muted m0">Matrícula Dikma <b class="mono">${esc(c.mat)}</b>${c.matArc ? ` · Arcelor <b class="mono">${esc(c.matArc)}</b>` : ''}</p>
       <div class="row-gap co-etq">${situacao(c)}${c.adm && emExp(c) ? etiqueta(`${dias(c.adm, TODAY)} dias de casa`, 'info') : ''}</div></div>
       ${botoes ? `<div class="row-gap">${botoes}</div>` : ''}</div>
-    ${abas([['dados', 'Dados'], ...(podeVerDP() ? [['pes', 'Dados pessoais']] : []), ['lot', 'Lotação e liderança'], ['fer', 'Férias'], ['hist', 'Linha do tempo']], aba, 'co-aba', 'Ficha do colaborador')}
+    ${abas([['dados', 'Dados'], ...(podeVerDP() ? [['pes', 'Dados pessoais']] : []), ['lot', 'Lotação e liderança'], ['fer', 'Férias'], ...(veAtest() ? [['atest', 'Atestados']] : []), ['hist', 'Linha do tempo']], aba, 'co-aba', 'Ficha do colaborador')}
     ${corpo}
     ${aba === 'lot' && lot.outros && lot.outros.length ? `<div class="aviso small">Esta pessoa está cadastrada em ${lot.outros.length + 1} lugares das Atividades (${esc(lot.txt.replace(/ \+ Equipamentos$/, ''))}) e por isso aparece em mais de uma Escala do dia.${completo() ? ' Toque em Editar, escolha a área de atuação certa e salve: ela fica só nesse lugar.' : ' Peça ao administrador para abrir Editar e salvar a ficha: ela fica só na área escolhida.'}</div>` : ''}
     ${aba === 'lot' ? '<p class="muted small m0">O supervisor imediato é o líder da ficha do líder (o mesmo que agrupa a Frequência). Área de atuação e rota vêm das Atividades e dos Equipamentos.</p>' : ''}
@@ -212,6 +214,19 @@ function vFeriasFicha(c) {
   return `${resumo}${novo ? `<div class="row-gap">${novo}</div>` : ''}${tabela(colunas, linhas, { rotulo: 'Férias de ' + title(c.nome) })}`;
 }
 
+// Aba Atestados da ficha (só o RH · Administrativo e o administrador: é dado de saúde). Os dos últimos 13 meses.
+const veAtest = () => editaAdm(ME);
+function vAtestFicha(c) {
+  if (DB.atWatch) DB.atWatch(true);
+  const b = DB.cache.atest || { loaded: false }; if (!b.loaded) return carregando();
+  const l = atestadosDaPessoa(Object.values(b.d || {}), c.mat, c.nome); const cfg = cfgAt(DB.cache.atCfg && DB.cache.atCfg.d);
+  if (!l.length) return vazio('Nenhum atestado nos últimos 13 meses', 'Os atestados aparecem aqui quando o líder lança AT na Escala do dia.');
+  const dd = s => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(2, 4)}`;
+  const dias = l.filter(a => a.st !== 'recusado' && a.tipo !== DECLARACAO).reduce((n, a) => n + (a.dias || 1), 0);
+  return `<p class="muted small m0">${l.length} atestado${l.length > 1 ? 's' : ''} · <b class="num">${dias}</b> dias (sem recusados e declarações)</p>${tabela([{ t: 'Período' }, { t: 'Tipo' }, { t: 'Situação' }],
+    l.map(a => [`<button type="button" class="btn ghost link" data-act="coAtest" data-id="${esc(a.id)}">${dd(a.ini)}${a.dias > 1 ? ' a ' + dd(a.fim) : ''}</button><div class="muted small">${a.tipo === DECLARACAO ? `${String(a.horas || '').replace('.', ',')} h` : `${a.dias || 1} dia${(a.dias || 1) > 1 ? 's' : ''}`}</div>`, esc(a.tipo), etiquetasAt(a, cfg).map(([t, x]) => etiqueta(t, x)).join(' ')]),
+    { rotulo: 'Atestados de ' + title(c.nome) })}`;
+}
 // Linha do tempo: o que já existe no sistema (admissão, fim da experiência, trocas de turma, férias e desligamento).
 function vLinhaTempo(c) {
   const ev = linhaDoTempo(c, ferPronto() ? feriasDe(c) : [], TODAY);
@@ -272,6 +287,7 @@ const comGestao = fn => carregarModulo('GE').then(m => { if (m) fn(m); });
 
 acoes.coFicha = (t, d) => { C.mat = d.mat; C.aba = 'dados'; render(); scrollTo(0, 0); };
 acoes.coVoltar = () => { C.mat = null; render(); };
+acoes.coAtest = (t, d) => { abrirAtestadoDe(d.id); UI.view = 'ratest'; render(); scrollTo(0, 0); };
 acoes.coEditar = (t, d) => (completo() ? comGestao(m => m.editarColab(d.mat)) : formRH(d.mat));
 acoes.coNovo = () => (completo() ? comGestao(m => m.editarColab(null)) : formRH(null));
 acoes.coLideres = () => { if (completo()) comGestao(m => m.lideres()); };

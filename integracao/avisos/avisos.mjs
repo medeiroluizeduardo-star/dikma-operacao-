@@ -11,7 +11,7 @@ process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 
 // As contas do dia (hoje.js e outras) ficam em public/ (são as mesmas do site). Copia como .mjs para o Node, seguindo os imports
 // (um arquivo novo importado por estes vem junto sozinho).
-copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda']);
+copiarDoSite(['cal', 'hoje', 'escala', 'pessoas', 'aprovacao', 'situacao', 'acessos', 'planilhas-adm', 'segcalc', 'feriados', 'treinos', 'efetivo-dia', 'processos', 'oms', 'oms-programacao', 'agenda', 'atestados']);
 const { SETS, SET_KEYS, weekOf, add, today, addMonth } = await import('./lib/cal.mjs');
 const { planejar } = await import('./planejar.mjs');
 const { criarEscala, fatorRota, escalaDaFicha } = await import('./lib/escala.mjs');
@@ -184,7 +184,11 @@ const agenda = [];
   } }
 const avisosCfg = (await db.doc('config/avisos').get()).data() || {};
 const omsCfg = (await db.doc('config/oms').get()).data() || null;
-const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, oms7, omsCfg, agenda, agora: new Date() });
+// Atestados (contas/atestados.js): os dos últimos 75 dias (a conferir, sem foto, recusados e a soma do INSS). Só números nos avisos.
+const atestados = []; let atCfg = null;
+{ (await db.collection('atestados').where('ini', '>=', add(hoje, -75)).get()).forEach(x => atestados.push({ id: x.id, ...x.data() }));
+  atCfg = (await db.doc('config/atestados').get()).data() || null; }
+const { msgs, marcar } = planejar({ avisosCfg, usuarios, avisos, paradas, ocorr, sets, enviados, painel, seg: { anom: segAnom }, treinos, oms, omsProx, oms7, omsCfg, agenda, atestados, atCfg, agora: new Date() });
 console.log(`${msgs.length} aviso(s) para enviar · ${marcar.length} marca(s) nova(s).`);
 msgs.forEach(m => console.log(`→ ${usuarios[m.uid].nome || m.uid}: ${m.titulo} | ${m.corpo.replace(/\n/g, ' / ')}`));
 if (soTestar) { console.log('::notice::Só teste: nada foi enviado.'); process.exit(0); }

@@ -12,6 +12,7 @@ rules_version = '2';
 //   - Fichas (gestao, gcolab, gocorr, gassin) = Gestão com as Fichas. O cadastro (gcolab) também é gravado pelo
 //     RH · Administrativo (RH › Colaboradores).
 //   - RH (freqcomp, ferias, adm) = RH: Administrativo grava, Somente leitura lê.
+//   - Atestados (atestados, atestadosFoto) = dado de saúde: só o RH · Administrativo, o administrador e quem lançou leem.
 //   - Indicadores (acesso.indicadores = 've' | 'gestor'): SÓ LEITURA do que está por trás dos painéis, nos conjuntos do
 //     escopo (Pátio, Bateria, Equipamentos): atividades, presença, equipamentos, frequência e férias, cadastro do RH,
 //     registros da Segurança do conjunto e treinamentos. Nenhuma gravação passa por este perfil. Veja indE.
@@ -1077,11 +1078,66 @@ service cloud.firestore {
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.at == request.time
         && request.resource.data.nome == perfil().get('nome', '')
-        && request.resource.data.ficha in ['rh', 'gestao']
+        && request.resource.data.ficha in ['rh', 'gestao', 'atestado']
         && request.resource.data.mat is string && request.resource.data.mat.size() > 0 && request.resource.data.mat.size() <= 30
         && request.resource.data.pessoa is string && request.resource.data.pessoa.size() <= 120
         && request.resource.data.dia is string && request.resource.data.dia.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
         && id == request.auth.uid + '|' + request.resource.data.mat + '|' + request.resource.data.ficha + '|' + request.resource.data.dia;
+    }
+    // Atestados (contas/atestados.js; telas/atestados.js e ui/atestado.js). Dado de saúde (LGPD): os detalhes e a foto só
+    // são lidos pelo RH · Administrativo, pelo administrador e por quem lançou. Os outros veem só o código AT na Presença.
+    // Lança: quem lança a presença na área (Operação · líder a gestor, no escopo), o RH · Administrativo e o administrador,
+    // sempre em nome próprio, com a hora do servidor e "a conferir". Quem lançou muda e apaga enquanto o RH não conferiu
+    // (e, ao mudar, volta para "a conferir"). Conferir, recusar e marcar o original: o RH · Administrativo e o administrador.
+    // Fotos (atestadosFoto): uma por documento, ligadas ao atestado (aid); as mesmas pessoas leem; ninguém altera.
+    function atRH() { return admin() || admEdita(); }
+    function atCampos(ch) { return ch.hasOnly(['conj', 'area', 'cid', 'mat', 'nome', 'ini', 'fim', 'dias', 'tipo', 'horas', 'emis', 'obs', 'nf', 'minis', 'st',
+      'motRec', 'orig', 'confPor', 'confNome', 'confEm', 'por', 'porNome', 'em', 'diaLanc', 'fotosApagadasEm', 'atualizadoEm', 'atualizadoPor']); }
+    // Confere o documento inteiro depois da gravação (poucas contas: o banco limita a 1000 por pedido).
+    function atOk() { let d = request.resource.data;
+      return atCampos(d.keys()) && d.conj in ['patio', 'bateria'] && d.area is string && d.area.size() <= 80 && d.nome is string && d.nome.size() <= 120
+        && d.ini is string && d.ini.size() == 10 && d.fim is string && d.fim.size() == 10 && d.emis is string && d.emis.size() == 10
+        && d.dias is int && d.dias >= 1 && d.dias <= 30 && d.st in ['conferir', 'conferido', 'recusado']
+        && d.tipo in ['Atestado médico', 'Atestado odontológico', 'Acompanhamento de familiar', 'Declaração de comparecimento', 'Outro']
+        && (d.get('obs', null) == null || (d.obs is string && d.obs.size() <= 300)) && (d.get('motRec', null) == null || (d.motRec is string && d.motRec.size() <= 300))
+        && d.get('nf', 0) is int && d.get('nf', 0) <= 2 && d.get('minis', []) is list && d.get('minis', []).size() <= 2
+        && (d.get('horas', null) == null || (d.horas is number && d.horas <= 24)) && d.get('orig', false) is bool
+        && d.get('atualizadoPor', '') == request.auth.uid; }
+    function atLanca(d) { return d.conj in ['patio', 'bateria'] && (atRH() || apontaDa(d.area, d.conj)); }
+    function atFotoPai(aid) { return /databases/$(database)/documents/atestados/$(aid); }
+    match /config/atestados {
+      allow read: if ativo();
+      allow write: if atRH() && request.resource.data.keys().hasOnly(['prazoH', 'inssDias', 'inssJanela', 'atualizadoEm', 'atualizadoPor'])
+        && request.resource.data.get('prazoH', 48) is int && request.resource.data.get('prazoH', 48) >= 12 && request.resource.data.get('prazoH', 48) <= 720
+        && request.resource.data.get('inssDias', 15) is int && request.resource.data.get('inssDias', 15) >= 1 && request.resource.data.get('inssDias', 15) <= 60
+        && request.resource.data.get('inssJanela', 60) is int && request.resource.data.get('inssJanela', 60) >= 7 && request.resource.data.get('inssJanela', 60) <= 365;
+    }
+    match /atestados/{id} {
+      allow read: if atRH() || (ativo() && resource.data.por == request.auth.uid);
+      allow create: if atLanca(request.resource.data) && atOk() && request.resource.data.por == request.auth.uid
+        && request.resource.data.em == request.time && request.resource.data.st == 'conferir'
+        && !novos().hasAny(['confPor', 'confNome', 'confEm', 'fotosApagadasEm']);
+      allow update: if atOk() && !mudados().hasAny(['por', 'em', 'conj'])
+        && (atRH() || (ativo() && resource.data.por == request.auth.uid && resource.data.st != 'conferido'
+          && request.resource.data.st == 'conferir' && !mudados().hasAny(['orig', 'confPor', 'confNome', 'confEm', 'fotosApagadasEm', 'cid', 'mat', 'nome', 'area'])))
+        && (!('confPor' in mudados()) || request.resource.data.confPor == request.auth.uid);
+      allow delete: if atRH() || (ativo() && resource.data.por == request.auth.uid && resource.data.st != 'conferido');
+    }
+    match /atestadosFoto/{id} {
+      allow read: if atRH() || (ativo() && resource.data.por == request.auth.uid);
+      allow create: if request.resource.data.keys().hasOnly(['aid', 'por', 'conj', 'area', 'ordem', 'dados', 'em'])
+        && request.resource.data.por == request.auth.uid && request.resource.data.em == request.time
+        && request.resource.data.aid is string && request.resource.data.aid.size() > 0 && request.resource.data.aid.size() <= 40
+        && request.resource.data.dados is string && request.resource.data.dados.size() <= 900000 && request.resource.data.dados.matches('data:image/jpeg;base64,.*')
+        && request.resource.data.ordem is int && request.resource.data.ordem >= 0 && request.resource.data.ordem <= 9
+        && existsAfter(atFotoPai(request.resource.data.aid))
+        && getAfter(atFotoPai(request.resource.data.aid)).data.conj == request.resource.data.conj
+        && getAfter(atFotoPai(request.resource.data.aid)).data.area == request.resource.data.area
+        && (atRH() || (atLanca(request.resource.data) && getAfter(atFotoPai(request.resource.data.aid)).data.por == request.auth.uid
+          && getAfter(atFotoPai(request.resource.data.aid)).data.st != 'conferido'));
+      allow update: if false;
+      allow delete: if atRH() || (ativo() && resource.data.por == request.auth.uid
+        && (!exists(atFotoPai(resource.data.aid)) || get(atFotoPai(resource.data.aid)).data.st != 'conferido'));
     }
     // Dados pessoais (CPF, endereço, telefone, rota de ônibus): dpessoais/{matrícula Dikma}, fora da ficha (gcolab), que é
     // lida por líderes, leitores e Indicadores. Lê: administrador e RH · Administrativo (o administrador pode desligar em

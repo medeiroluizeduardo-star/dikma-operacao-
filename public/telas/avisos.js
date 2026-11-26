@@ -9,7 +9,7 @@ import { editaAdm } from '../contas/acessos.js';
 import { horasEf, HORAS_AVISO } from '../contas/efetivo-dia.js';
 import { temAgenda } from '../ui/lembrar.js';
 
-const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true, agenda: true };
+const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividades: true, semanal: true, aprovacao: true, painel: true, seguranca: true, treinos: true, oms: true, efetivo: true, efetivoRH: true, agenda: true, atestados: true };
 
 export function criarAvisos(X) {
   const { DB, esc, toast, render } = X;
@@ -39,6 +39,8 @@ export function criarAvisos(X) {
       (temMod('operacao') || temMod('bateria')) && ['supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['justificativas', 'Faltas e atrasos de hoje sem justificativa (às 16h)'],
       (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor'].includes(P('operacao')) && ['efetivo', `Efetivo do dia ainda não enviado (às ${HE.efLider}h) e devolvido pelo RH`],
       editaAdm(ME()) && ['efetivoRH', `Efetivos enviados aguardando sua validação (às ${HE.efRH}h)`],
+      editaAdm(ME()) && ['atestados', 'Atestados a conferir e pessoas para encaminhar ao INSS (às 8h)'],
+      !editaAdm(ME()) && (temMod('operacao') || temMod('bateria')) && ['lider', 'supervisor', 'coordenador', 'gestor'].includes(P('operacao')) && ['atestados', 'Atestado que você lançou sem foto ou recusado pelo RH (às 8h)'],
       (ehAdm() || ['gestor', 'coordenador'].includes(pAtiv())) && ['semanal', 'Resumo da semana que passou (segunda, às 7h)'],
       temSeg(ME()) && ['seguranca', trataSeg() ? 'Anomalia nova na sua área e prazo do tratamento que está com você' : 'Prazo do tratamento das anomalias que estão com você'],
       veTreinos(ME()) && ['treinos', 'Treinamentos e ASO vencidos ou vencendo em 30 dias (segunda, às 7h)'],
