@@ -5,10 +5,8 @@
 export const UNIDADES = ['Coqueria', 'Sinter', 'Alto Forno'];
 const semAc = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
 
-// Unidade da pessoa: a escolhida na ficha (campo un); sem escolha, Sinter e Alto Forno pela área de atuação ou pela
-// Área/Setor do RH, e o resto é Coqueria.
+// Unidade da pessoa: Sinter e Alto Forno pela área de atuação ou pela Área/Setor do RH; o resto é Coqueria.
 export function unidadeDe(c, area = '') {
-  if (c && UNIDADES.includes(c.un)) return c.un;
   const t = `${semAc(area)} | ${semAc(c && c.setor)} | ${semAc(c && c.subsetor)}`;
   if (/SINTER/.test(t)) return 'Sinter';
   if (/ALTO\s*FORNO/.test(t)) return 'Alto Forno';
@@ -19,12 +17,6 @@ export function unidadeDe(c, area = '') {
 export const CAMPOS_CADASTRO = [['matArc', 'Matrícula Arcelor'], ['adm', 'Admissão'], ['funcao', 'Função'], ['setor', 'Área (RH)'], ['turma', 'Turma / turno'], ['lider', 'Líder imediato']];
 export function cadastroFalta(c) {
   return CAMPOS_CADASTRO.filter(([k]) => !String((c && c[k]) || '').trim()).map(([, t]) => t);
-}
-// Campo "Unidade" dos formulários da ficha (vazio = automática, pela área).
-export function campoUnidade(id, c, area = '') {
-  const auto = unidadeDe({ ...(c || {}), un: '' }, area);
-  const o = (v, t) => `<option value="${v}" ${(c && c.un || '') === v ? 'selected' : ''}>${t}</option>`;
-  return `<label class="sel"><span>Unidade</span><select class="in" id="${id}">${o('', `Automática (${auto})`)}${UNIDADES.map(u => o(u, u)).join('')}</select></label>`;
 }
 export const cadastroPct = c => Math.round(100 * (CAMPOS_CADASTRO.length - cadastroFalta(c).length) / CAMPOS_CADASTRO.length);
 

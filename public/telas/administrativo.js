@@ -13,7 +13,6 @@ import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../
 import { caixaBusca } from '../ui/busca.js';
 import { abrirAtestado } from '../ui/atestado.js';
 import { DECLARACAO, diasDoAtestado } from '../contas/atestados.js';
-import { UNIDADES, unidadeDe } from '../contas/colab-rh.js';
 import { passaFiltroFreq, filtrosFreqAtivos, rotasFreq, marcasFreq, passaCartao, CARTOES_FREQ } from '../contas/filtro-freq.js';
 import { gruposPelaFicha, folhaPelaFicha, SEM_FICHA } from '../contas/folha-ficha.js';
 import { repetidosNaFolha } from '../contas/duplicados.js';
@@ -145,19 +144,6 @@ export function criarAdministrativo(X) {
     const gr = gruposPelaFicha({ fichas: A().rh || [], colabs: A().colabs[conj] || [], outros, folha: (doc && doc.grupos) || [], ini: diasDaCompetencia(comp)[0], desligadoEm, letra });
     GF.set(conj + '|' + comp, { dep, gr }); return gr;
   }
-  // Unidade (Coqueria, Sinter, Alto Forno): a escolhida na ficha; senão a marca da planilha importada (Sinter) e,
-  // por fim, pela área da Escala do dia ou pela Área/Setor da ficha. U.fUn = filtro "Unidade" (vale na Frequência,
-  // no Excel da folha, no Conferir para fechar e nos Indicadores da frequência).
-  const FM = new WeakMap();
-  const fichaPorMat = () => { const rh = A().rh || []; let m = FM.get(rh); if (!m) { m = new Map(rh.map(c => [String(c.mat), c])); FM.set(rh, m); } return m; };
-  function unidadeDaPessoa(p, cmap) {
-    const fi = (p.mat && fichaPorMat().get(String(p.mat))) || {}; const c = p.ativ ? cmap.get(p.ativ) : null;
-    return unidadeDe({ ...fi, un: fi.un || p.un || '' }, (c && c.area) || '');
-  }
-  const naUnidade = (p, cmap) => !U.fUn || unidadeDaPessoa(p, cmap) === U.fUn;
-  const areaNaUnidade = a => !U.fUn || unidadeDe({}, a) === U.fUn;
-  const semAcentoArq = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '-');
-  const comUn = t => (U.fUn ? `${t} · ${U.fUn}` : t);
   const gruposDe = (conj, comp, doc) => (folhaPelaFicha(comp) ? gruposDaFicha(conj, comp, doc) : [...((doc && doc.grupos) || []), ...foraDaFolha(conj, doc, diasDaCompetencia(comp))]);
 
   /* ---------- topo: Pátio | Bateria e competência ---------- */
@@ -169,7 +155,6 @@ export function criarAdministrativo(X) {
     if (view !== 'afreq' && view !== 'fpainel') return '';
     conjOk(); const cs = view === 'fpainel' ? conjsOk() : ['patio', 'bateria'];
     return `${cs.length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${cs.map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}
-      ${view === 'fpainel' ? `<label class="sel"><span>Unidade</span><select class="in" id="aUn" aria-label="Unidade"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${U.fUn === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label>` : ''}
       <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${periodoComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
   }
 
@@ -213,7 +198,9 @@ export function criarAdministrativo(X) {
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
     // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Escala do dia.
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
-    const unidadeP = p => unidadeDaPessoa(p, cmap);
+    // Unidade (Coqueria, Sinter, Alto Forno): pela área da Escala do dia ou pela Área/Setor da ficha.
+    const fichaMat = new Map((A().rh || []).map(c => [String(c.mat), c]));
+    const unidadeP = p => { if (p.un) return p.un; const c = p.ativ ? cmap.get(p.ativ) : null; const fi = fichaMat.get(String(p.mat)) || {}; const t = `${(c && c.area) || ''} | ${fi.setor || ''} | ${fi.subsetor || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return /SINTER/.test(t) ? 'Sinter' : /ALTO\s*FORNO/.test(t) ? 'Alto Forno' : 'Coqueria'; };
     const filtra = !!(F.area || F.rota || F.turno || U.fCard || U.fUn); const procura = !!q || filtra;
     const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
     const passa = (g, p) => { if (U.fUn && unidadeP(p) !== U.fUn) return false; if (!(F.area || F.rota || F.turno)) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
@@ -457,7 +444,6 @@ export function criarAdministrativo(X) {
     const datas = diasDaCompetencia(comp), cmap = colabPorId(conj), GR = gruposDe(conj, comp, doc);
     const semJus = [], semFicha = [];
     for (const g of GR) for (const p of g.pessoas) {
-      if (!naUnidade(p, cmap)) continue;
       if (p.semFicha) semFicha.push(p);
       for (const dt of datas) {
         if (dt > TODAY) break;
@@ -465,10 +451,9 @@ export function criarAdministrativo(X) {
         if (!c.auto && JUS_CODS.includes(c.v)) { const ju = jusDe(conj, doc, p, dt); if (!(ju && ju.cod === c.v)) semJus.push({ p, dt, v: c.v }); }
       }
     }
-    const doGr = GR.flatMap(g => g.pessoas).filter(p => naUnidade(p, cmap));
-    const REP = repetidosNaFolha(doGr); const nRep = new Set(doGr.filter(p => REP.has(p.k)).map(p => normNome(p.nome))).size;
+    const REP = repetidosNaFolha(GR.flatMap(g => g.pessoas)); const nRep = new Set(GR.flatMap(g => g.pessoas).filter(p => REP.has(p.k)).map(p => normNome(p.nome))).size;
     const docsEf = DB.efDocs ? DB.efDocs(conj) : {}; const naoVal = [];
-    for (const dt of diasEf(datas)) for (const x of quadroEf(areasEfRH(conj).filter(areaNaUnidade), docsEf, dt, TODAY)) if (x.st !== 'validado') naoVal.push({ dt, area: x.area, nome: x.nome });
+    for (const dt of diasEf(datas)) for (const x of quadroEf(areasEfRH(conj), docsEf, dt, TODAY)) if (x.st !== 'validado') naoVal.push({ dt, area: x.area, nome: x.nome });
     const item = (ok, tit, det) => `<li class="fq-ck ${ok ? 'ok' : 'pend'}"><b>${ok ? '✓' : '!'}</b><div><div>${tit}</div>${det ? `<div class="muted small">${det}</div>` : ''}</div></li>`;
     const lista = (l, f, max = 8) => l.slice(0, max).map(f).join(' · ') + (l.length > max ? ` e mais ${l.length - max}` : '');
     const tudo = !semJus.length && !naoVal.length && !semFicha.length && !nRep;
@@ -478,7 +463,7 @@ export function criarAdministrativo(X) {
       ${item(!semFicha.length, semFicha.length ? `${semFicha.length} pessoa${semFicha.length === 1 ? '' : 's'} sem ficha em Colaboradores` : 'Todos com ficha', lista(semFicha, p => esc(title(p.nome))))}
       ${item(!nRep, nRep ? `${nRep} cadastro${nRep === 1 ? '' : 's'} repetido${nRep === 1 ? '' : 's'}` : 'Nenhum cadastro repetido', nRep ? 'Corrija em RH › Colaboradores › Cadastro repetido' : '')}
     </ul><p class="m0 small ${tudo ? '' : 'muted'}">${tudo ? '<b>Tudo certo:</b> a folha pode ser fechada. Baixe o Excel para mandar ao pagamento.' : 'Resolva os itens marcados com ! e confira de novo. O Excel já pode ser baixado para conferência.'}</p>`;
-    formSheet('Conferir para fechar', `${comUn(SETS[conj].curto)} · folha de ${periodoComp(comp)}`, html, X.isMobile() ? 'Fechar' : 'Baixar o Excel', async () => { if (!X.isMobile()) exportar(); });
+    formSheet('Conferir para fechar', `${SETS[conj].curto} · folha de ${periodoComp(comp)}`, html, X.isMobile() ? 'Fechar' : 'Baixar o Excel', async () => { if (!X.isMobile()) exportar(); });
   }
   function menuPessoa(gi, k) {
     const conj = U.conj, comp = U.comp, doc = A().comps[conj + '|' + comp]; if (!doc) return;
@@ -544,10 +529,10 @@ export function criarAdministrativo(X) {
     const datas = diasDaCompetencia(comp); const cmap = colabPorId(conj);
     const linhas = [['Grupo', 'Nome', 'Matrícula', ...datas.map(d => ddmm(d)), ...CONTA.map(k => NOMES_CODIGO[k])]];
     const GR = gruposDe(conj, comp, doc);
-    for (const g of GR) for (const p of g.pessoas) { if (!naUnidade(p, cmap)) continue; const t = totais(conj, comp, doc, g, p, datas, cmap); linhas.push([g.nome, p.nome, p.mat || '', ...datas.map(dt => rotuloSit(codigo(conj, comp, doc, g, p, dt, cmap), dt)), ...CONTA.map(k => t[k] || '')]); }
+    for (const g of GR) for (const p of g.pessoas) { const t = totais(conj, comp, doc, g, p, datas, cmap); linhas.push([g.nome, p.nome, p.mat || '', ...datas.map(dt => rotuloSit(codigo(conj, comp, doc, g, p, dt, cmap), dt)), ...CONTA.map(k => t[k] || '')]); }
     const jl = [['Grupo', 'Nome', 'Matrícula', 'Data', 'Situação', 'Motivo', 'Chegada', 'Minutos de atraso', 'Observação', 'Registrado por']];
-    for (const g of GR) for (const p of g.pessoas) for (const dt of datas) { if (!naUnidade(p, cmap)) break; const c = codigo(conj, comp, doc, g, p, dt, cmap); if (c.auto || !JUS_CODS.includes(c.v)) continue; const j = jusDe(conj, doc, p, dt); const ok = j && j.cod === c.v; jl.push([g.nome, p.nome, p.mat || '', dataBR(dt), NOMES_CODIGO[c.v], ok ? j.mot : 'Sem justificativa', ok ? j.chegada || '' : '', ok ? j.min || '' : '', ok ? j.obs || '' : '', ok ? j.nomePor || '' : '']); }
-    baixarExcel(`frequencia-${conj}${U.fUn ? '-' + semAcentoArq(U.fUn) : ''}-${comp}`, [{ nome: `${comUn(SETS[conj].curto)} ${periodoComp(comp).replace(/\//g, "-")}`, linhas }, { nome: 'Justificativas', linhas: jl }]).catch(e => toast('Não foi possível exportar: ' + e.message));
+    for (const g of GR) for (const p of g.pessoas) for (const dt of datas) { const c = codigo(conj, comp, doc, g, p, dt, cmap); if (c.auto || !JUS_CODS.includes(c.v)) continue; const j = jusDe(conj, doc, p, dt); const ok = j && j.cod === c.v; jl.push([g.nome, p.nome, p.mat || '', dataBR(dt), NOMES_CODIGO[c.v], ok ? j.mot : 'Sem justificativa', ok ? j.chegada || '' : '', ok ? j.min || '' : '', ok ? j.obs || '' : '', ok ? j.nomePor || '' : '']); }
+    baixarExcel(`frequencia-${conj}-${comp}`, [{ nome: `${SETS[conj].curto} ${periodoComp(comp).replace(/\//g, "-")}`, linhas }, { nome: 'Justificativas', linhas: jl }]).catch(e => toast('Não foi possível exportar: ' + e.message));
   }
 
   /* ---------- Férias ---------- */
@@ -662,7 +647,7 @@ export function criarAdministrativo(X) {
       for (const g of grs.get(comp)) for (const p of g.pessoas || []) {
         if (p.mat) naFolha.add('m' + p.mat); naFolha.add('n' + normNome(p.nome));
         const key = p.ativ ? 'a' + p.ativ : p.mat ? 'm' + p.mat : 'n' + normNome(p.nome);
-        let x = pessoas.get(key); if (!x) { const at = p.ativ ? cmap.get(p.ativ) : null; x = { nome: p.nome, mat: p.mat, grupo: g.nome, area: (at && at.area) || '', un: unidadeDaPessoa(p, cmap), c: {} }; pessoas.set(key, x); }
+        let x = pessoas.get(key); if (!x) { const at = p.ativ ? cmap.get(p.ativ) : null; x = { nome: p.nome, mat: p.mat, grupo: g.nome, area: (at && at.area) || '', c: {} }; pessoas.set(key, x); }
         x.c[dt] = codigo(conj, comp, doc, g, p, dt, cmap);
         const ju = jusDe(conj, doc, p, dt); if (ju) (x.j ||= {})[dt] = ju;
       }
@@ -674,13 +659,6 @@ export function criarAdministrativo(X) {
   function daArea(lev, area) {
     if (!area || area === 'TODAS' || (Array.isArray(area) && !area.length)) return lev;
     const pessoas = lev.pessoas.filter(x => (Array.isArray(area) ? area.includes(x.area) : x.area === area)); const naFolha = new Set();
-    for (const x of pessoas) { if (x.mat) naFolha.add('m' + x.mat); naFolha.add('n' + normNome(x.nome)); }
-    return { ...lev, pessoas, naFolha };
-  }
-  // Só as pessoas de uma unidade (Coqueria, Sinter, Alto Forno); vazio = todas.
-  function daUnidade(lev, un) {
-    if (!un) return lev;
-    const pessoas = lev.pessoas.filter(x => x.un === un); const naFolha = new Set();
     for (const x of pessoas) { if (x.mat) naFolha.add('m' + x.mat); naFolha.add('n' + normNome(x.nome)); }
     return { ...lev, pessoas, naFolha };
   }
@@ -708,9 +686,8 @@ export function criarAdministrativo(X) {
     return { agora: l.filter(f => f.inicio && f.inicio <= TODAY && (f.termino || f.inicio) >= TODAY), saem: l.filter(f => f.inicio > TODAY && f.inicio <= em30).sort((a, b) => (a.inicio < b.inicio ? -1 : 1)), voltam: l.filter(f => f.retorno && f.retorno > TODAY && f.retorno <= em7) }; };
   function vPainelFreq() {
     const conj = conjOk(), comp = U.comp, datas = diasDaCompetencia(comp);
-    const lev0 = daArea(levantar(conj, datas), areasOk()); const lev = daUnidade(lev0, U.fUn);
+    const lev = daArea(levantar(conj, datas), areasOk());
     if (lev.carregando && !lev.pessoas.length) return '<div class="card skel"><i></i><i></i><i></i></div>';
-    if (lev0.pessoas.length && !lev.pessoas.length) return `<div class="card"><div class="empty"><b>Ninguém da unidade ${esc(U.fUn)} na folha de ${periodoComp(comp)} (${SETS[conj].curto}).</b></div></div>`;
     if (!lev.pessoas.length) return `<div class="card"><div class="empty"><b>A folha de ${periodoComp(comp)} (${SETS[conj].curto}) ainda não foi aberta.</b><br>Ela é aberta em RH › Frequência.</div></div>`;
     const k = indicadores(lev, datas); const fe = feriasProximas(lev);
     const hojeI = k.ate.indexOf(TODAY); const hj = hojeI >= 0 ? k.dia[hojeI] : null;
@@ -718,7 +695,7 @@ export function criarAdministrativo(X) {
     let h = `<div class="kpis k8">
       ${kp('Presença no período', pc(k.pres), `${k.P} presenças de ${k.Q} dias previstos · até ${dBR(k.ate[k.ate.length - 1] || datas[0])}`, 'var(--st-real)')}
       ${kp('Presentes hoje', hj ? hj.p : '–', hj ? `de ${hj.q} escalados hoje` : 'hoje fora desta folha')}
-      ${kp('Pessoas na folha', lev.pessoas.length, `${comUn(SETS[conj].curto)} · ${periodoComp(comp)}`)}
+      ${kp('Pessoas na folha', lev.pessoas.length, `${SETS[conj].curto} · ${periodoComp(comp)}`)}
       ${kp('Faltas, atrasos e saídas', k.t.FT + k.t.ATR + k.t.SA, `${k.t.FT} faltas · ${k.t.ATR} atrasos · ${k.t.SA} saídas antecipadas`, 'var(--st-nreal)')}
       ${kp('Atestados', k.t.AT, `${k.t.AF} dias de afastamento`, 'var(--st-atr)')}
       ${kp('Abonos e suspensões', k.t.AB + k.t.SP, `${k.t.AB} abonos · ${k.t.SP} suspensões`)}

@@ -44,9 +44,3 @@ test('linha do tempo: admissão, experiência, troca de turma, férias e desliga
   assert.equal(ev[0].d, 'Pedido de demissão');
   assert.equal(ev[2].d, 'A → B'); assert.equal(ev[2].data, '2026-04-01');
 });
-
-test('unidade escolhida na ficha vale mais que a área e o setor', () => {
-  assert.equal(unidadeDe({ un: 'Sinter', setor: 'Coqueria - Pátio' }, 'RECEBIMENTO'), 'Sinter');
-  assert.equal(unidadeDe({ un: 'Coqueria' }, 'SINTER'), 'Coqueria');
-  assert.equal(unidadeDe({ un: 'qualquer' }, 'SINTER'), 'Sinter', 'valor desconhecido: volta para a automática');
-});

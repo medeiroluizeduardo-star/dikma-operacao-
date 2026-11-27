@@ -101,7 +101,6 @@ function interpretarArea(aT, rT) {
   const res = { setor: aT, subsetor: rT || aT };
   const PAT = SETS.patio.areas, BAT = SETS.bateria.areas;
   const s = norm(rT || aT), sa = norm(aT);
-  if (/^SINTER/.test(s) || /^SINTER/.test(sa)) return { ...res, aceita: ['SINTER'], padrao: 'SINTER' }; // Sinter: Escala do dia do Pátio
   if (!/^COQUERIA/.test(s) && !/^COQUERIA/.test(sa)) return { ...res, aceita: [], padrao: AREA_GERAL };
   const rest = s.replace(/^COQUERIA\s*-?\s*/, ''), ar = sa.replace(/^COQUERIA\s*-?\s*/, '');
   if (!rest) return /^PATIO/.test(ar) ? { ...res, aceita: PAT, padrao: null } : /^BATERIA/.test(ar) ? { ...res, aceita: BAT, padrao: 'BATERIA 1' } : { ...res, aceita: null };

@@ -17,7 +17,7 @@ import { criarLiderancaDaFicha } from '../contas/folha-ficha.js';
 import { cadastrosDuplicados } from '../contas/duplicados.js';
 import { anotarTroca } from '../contas/escala.js';
 import { indiceFeriasPessoa, situacaoPeriodo, resumoFeriasPessoa, deFeriasHoje, feriasEmBreve, limiteProximo, feriasSemCadastro } from '../contas/ferias.js';
-import { UNIDADES, unidadeDe, campoUnidade, cadastroFalta, CAMPOS_CADASTRO, experiencia, experienciaVence, MOTIVOS_DEM, desligadoNoMes, admitidoNoMes, linhaDoTempo } from '../contas/colab-rh.js';
+import { UNIDADES, unidadeDe, cadastroFalta, CAMPOS_CADASTRO, experiencia, experienciaVence, MOTIVOS_DEM, desligadoNoMes, admitidoNoMes, linhaDoTempo } from '../contas/colab-rh.js';
 import { campoBusca } from '../ui/busca.js';
 import { abas, dados, etiqueta, tabela, vazio, carregando, botaoAcao } from '../ui/padrao.js';
 import { acoes } from '../nucleo/acoes.js';
@@ -169,7 +169,7 @@ function vFicha(c) {
       ...((e => (e ? [['Experiência', `1º período até ${dBR(e.fim1)} · 2º até ${dBR(e.fim2)} ${etiqueta(`${e.faltam} dia${e.faltam === 1 ? '' : 's'} para o fim do ${e.periodo}º`, e.faltam <= 15 ? 'atencao' : 'info')}`]] : []))(experiencia(c, TODAY))),
       ['Demissão', c.dem ? `${dBR(c.dem)}${c.demMot ? ` <span class="muted small">· ${esc(c.demMot)}</span>` : ''}` : ''],
       ['Cadastro', (fl => (fl.length ? `${pctCad(c)}% completo <span class="muted small">· falta: ${esc(fl.join(', '))}</span>` : `${etiqueta('Completo', 'ok')}`))(falta(c))],
-      ['Função', esc(title(c.funcao || (at && at.funcao) || ''))], ['Unidade', `${esc(unidadeDe(c, lot.area))}${c.un ? '' : ' <span class="muted small">· automática</span>'}`], ['Área (RH)', esc(c.setor || '')], ['Setor (RH)', esc(c.subsetor || '')]])
+      ['Função', esc(title(c.funcao || (at && at.funcao) || ''))], ['Área (RH)', esc(c.setor || '')], ['Setor (RH)', esc(c.subsetor || '')]])
     : dados([
       ['Área de atuação', esc(lot.txt || PES.areaNome(lot.area))], ['Rota', at && ehAreaAtiv(at.area) ? esc(at.rota) : ''],
       ['Regime', at ? esc(title(at.regime || '')) : ''], ['Turma / turno', esc(c.turma || (at && at.turma) || '')],
@@ -256,19 +256,17 @@ function formRH(mat) {
     <label class="sel"><span>Função</span><input class="in" id="coFun" list="coDlFun" autocomplete="off" placeholder="Escolha da lista ou digite"><datalist id="coDlFun">${PES.funcoes().map(f => `<option value="${esc(f)}"></option>`).join('')}</datalist></label>`}
     <div class="row2"><label class="sel"><span>Admissão</span><input class="in" type="date" id="coAdm" value="${c.adm || ''}"></label><label class="sel"><span>Demissão</span><input class="in" type="date" id="coDem" value="${c.dem || ''}"></label></div>
     ${campoMotivoDem(c, 'coDemMot')}
-    ${campoUnidade('coUnF', c, mat ? PES.lotacao(c).area : '')}
     <div class="row2"><label class="sel"><span>Área (RH)</span><input class="in" id="coSetor" list="coDlSetor" autocomplete="off" value="${esc(c.setor || '')}" placeholder="Ex.: Coqueria - Pátio">${dl('coDlSetor', 'setor')}</label>
     <label class="sel"><span>Setor (RH)</span><input class="in" id="coSub" list="coDlSub" autocomplete="off" value="${esc(c.subsetor || '')}" placeholder="Ex.: Coqueria - Recebimento">${dl('coDlSub', 'subsetor')}</label></div>
     <div class="row2"><label class="sel"><span>Turma / turno (ficha)</span><input class="in" id="coTur" value="${esc(c.turma || '')}"></label><div class="sel"><span>Líder imediato</span>${campoBusca('coLid', nomeLider(c.lider), opLider, { livre: true, maiusculas: true, vazio: 'sem líder', placeholder: 'Escolha da lista ou digite' })}</div></div>
     ${mat ? `<label class="sel"><span>A troca de turma / turno vale a partir de</span><input class="in" type="date" id="coDesde" value="${TODAY}"></label>` : ''}
     ${mat ? '<p class="muted small m0">A letra da turma e a escala de turno valem pelo campo "Turma / turno" desta ficha (ex.: C, TURMA C, 4X4 C ou ADM). Nome, função, área de atuação e rota mudam também Atividades e Equipamentos: quem altera é o administrador.</p>' : ''}`, 'Salvar', async () => {
-    const n = { ...c, matArc: $('coArc').value.trim().toUpperCase(), adm: $('coAdm').value || null, dem: $('coDem').value || null, demMot: $('coDem').value ? $('coDemMot').value : '', un: $('coUnF').value, setor: $('coSetor').value.trim(), subsetor: $('coSub').value.trim(), turma: $('coTur').value.trim().toUpperCase(), lider: nomeLider($('coLid').value) };
+    const n = { ...c, matArc: $('coArc').value.trim().toUpperCase(), adm: $('coAdm').value || null, dem: $('coDem').value || null, demMot: $('coDem').value ? $('coDemMot').value : '', setor: $('coSetor').value.trim(), subsetor: $('coSub').value.trim(), turma: $('coTur').value.trim().toUpperCase(), lider: nomeLider($('coLid').value) };
     if (!mat) Object.assign(n, { mat: $('coMat').value.trim().replace(/\.0$/, ''), nome: $('coNome').value.trim().toUpperCase().replace(/\s+/g, ' '), funcao: $('coFun').value.trim().toUpperCase() });
     if (n.dem && n.dem !== c.dem && !n.demMot) throw new Error('Escolha o motivo do desligamento.');
     validar(n, mat);
     if (mat) { const h = anotarTroca(c, n, ['turma'], ($('coDesde') && $('coDesde').value) || TODAY); if (h.length) n.escHist = h; else delete n.escHist; }
     if (!n.matArc) delete n.matArc;
-    if (!n.un) delete n.un;
     await DB.rhSalvarFicha(n);
     DB.log(`RH: ${mat ? 'editou o cadastro de' : 'cadastrou'} ${title(n.nome)}`, 'rh');
     toast(mat ? 'Cadastro atualizado' : 'Colaborador cadastrado');
