@@ -77,7 +77,7 @@ import {
   reauthenticateWithCredential, EmailAuthProvider,
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
   doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot as onSnapshotFB, collection, query, where, orderBy, limit, getDocs,
-  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
+  writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion,
   getMessaging, getToken, deleteToken, mensagensSuportadas, initializeAppCheck, ReCaptchaEnterpriseProvider
 } from '../vendor/firebase.js';
 import { CHAVE_SITE } from './appcheck.js';
@@ -89,7 +89,6 @@ import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe, juntarFolha } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
-import { incrementosFt } from '../contas/fotos.js';
 import { idEf, novoEf, travaEf, destravaEf } from '../contas/efetivo-dia.js';
 
 export const isMock = false;
@@ -573,148 +572,13 @@ export function salvarColabsArea(area, itens, k = setDaArea(area) || cur) {
 export const saveRotas = rotas => track(updateDoc(doc(db, C('config'), 'sistema'), { rotas }));
 export const saveConfig = patch => track(updateDoc(doc(db, C('config'), 'sistema'), patch));
 
-// ---------- fotos das atividades (evidencias + evidenciasArquivo) ----------
-// Guardadas no próprio Firestore (plano grátis): a foto já chega reduzida pelo aparelho (ui/fotos.js).
-// Grava o apontamento (changes, pode ser vazio para só juntar fotos) e as fotos num lote só. Não espera o servidor:
-// sem sinal, fica tudo na fila do aparelho e sobe junto quando a conexão voltar.
-// fotos: [{ meta (fotos.js › metaFoto, sem por/at), dados }] · devolve os ids das fotos
-export function apontarComFotos(docId, changes, fotos) {
-  const k = setDaArea((fotos[0] && fotos[0].meta.area) || '') || cur;
-  const args = []; const finalStr = {};
-  for (const c of changes) finalStr[c.pid] = c.str;
-  for (const [pid, str] of Object.entries(finalStr)) args.push(new FieldPath('s', pid), str);
-  for (const c of changes) args.push(new FieldPath('m', c.pid + '|' + c.k), c.motivo ? c.motivo : deleteField());
-  const inc = {};
-  for (const f of fotos) for (const [key, n] of Object.entries(incrementosFt(f.meta.refs, 1))) inc[key] = (inc[key] || 0) + n;
-  for (const [key, n] of Object.entries(inc)) args.push(new FieldPath('ft', key), increment(n));
-  args.push('atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  const b = writeBatch(db);
-  b.update(doc(db, C('semanas', k), docId), ...args);
-  const ids = fotos.map(f => fotoNoLote(b, k, f));
-  track(b.commit());
-  return ids;
-}
-// Põe uma foto (documento leve + foto completa, mesmo id) no lote b; devolve o id.
-function fotoNoLote(b, k, f) {
-  const r = doc(collection(db, C('evidencias', k)));
-  b.set(r, { ...f.meta, por: me.uid, porNome: me.nome || me.login || '', at: serverTimestamp() });
-  b.set(doc(db, C('evidenciasArquivo', k), r.id), { area: f.meta.area, semana: f.meta.semana, dia: f.meta.dia, sha: f.meta.sha || '', por: me.uid, dados: f.dados });
-  return r.id;
-}
-// Queda zero (opcional): grava o lançamento qz[key] da semana (v = null apaga) e as fotos novas (opcionais,
-// [{ meta, dados }], contas/queda-zero.js › pidFotoQZ) no MESMO lote, como no apontamento: sem sinal sobe tudo junto.
-export function salvarQuedaZero(docId, area, key, v, fotos = []) {
-  const k = setDaArea(area || '') || cur;
-  const b = writeBatch(db);
-  b.update(doc(db, C('semanas', k), docId), new FieldPath('qz', key), v || deleteField(), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  for (const f of fotos) fotoNoLote(b, k, f);
-  return track(b.commit());
-}
-// Apaga fotos de um lançamento da Queda zero (líder da área ou administrador; as regras conferem) e, com
-// apagarLanc, o próprio lançamento; senão só diminui a contagem f. Espera o servidor (sem sinal, dá erro).
-export async function apagarFotosQZ(docId, area, key, fotos, apagarLanc = false) {
-  const k = setDaArea(area || '') || cur;
-  const b = writeBatch(db);
-  for (const f of fotos) { b.delete(doc(db, C('evidencias', k), f.id)); if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', k), f.id)); }
-  b.update(doc(db, C('semanas', k), docId), apagarLanc ? new FieldPath('qz', key) : new FieldPath('qz', key, 'f'), apagarLanc ? deleteField() : increment(-fotos.length), 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  await gravarLote(b);
-}
-// Cadastra um local ou motivo novo da Queda zero (tipo = 'locais' ou 'motivos'), para todos verem.
-export const salvarItemQZ = (tipo, nome) => track(setDoc(doc(db, 'config', 'quedazero'), { [tipo]: arrayUnion(nome), atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }, { merge: true }));
-const dataDe = v => (v && v.toDate ? v.toDate() : v || null);
-const comoFoto = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, at: x.at && x.at.toDate ? x.at.toDate() : new Date(), exportadoEm: dataDe(x.exportadoEm), lixeiraEm: dataDe(x.lixeiraEm), removidaEm: dataDe(x.removidaEm) }; };
-// Fotos (leves, com miniatura) de uma atividade num dia. Também as do código antigo (campo ref).
-// As da lixeira ficam de fora; as arquivadas fora do banco (removidaEm) vêm, para a tela mostrar a miniatura e o selo.
-export async function listarFotosCel(semana, pid, k, conj = setDaArea(semana.split('|')[0]) || cur) {
-  const col = collection(db, C('evidencias', conj));
-  const [a, b] = await Promise.all([
-    getDocs(query(col, where('refs', 'array-contains', `${semana}|${pid}|${k}`))),
-    getDocs(query(col, where('ref', '==', `${semana}#${pid}|${k}`))).catch(() => ({ docs: [] }))
-  ]);
-  const vistos = new Set(); const out = [];
-  for (const d of [...a.docs, ...b.docs]) if (!vistos.has(d.id)) { vistos.add(d.id); out.push(comoFoto(d)); }
-  return out.filter(f => !f.lixeiraEm || f.removidaEm).sort((x, y) => x.at - y.at);
-}
-// Relatório fotográfico (Parte 2): lista leve (miniaturas) de várias semanas de uma vez.
-export async function listarEvidenciasSemanas(ids, conj = cur) {
-  const out = [];
-  for (let i = 0; i < ids.length; i += 30) {
-    const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('semana', 'in', ids.slice(i, i + 30))));
-    qs.docs.forEach(d => out.push(comoFoto(d)));
-  }
-  return out;
-}
-// Foto completa (só ao abrir grande ou exportar).
-export async function abrirEvidencia(id, conj = cur) { const s = await getDoc(doc(db, C('evidenciasArquivo', conj), id)); return s.exists() ? s.data().dados : null; }
-// O autor ajusta a quais atividades a foto vale (até 24 h depois; as regras conferem).
-export const ajustarRefsFoto = (id, refs, conj = cur) => track(updateDoc(doc(db, C('evidencias', conj), id), { refs, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
-// Apagar uma foto (Apontar › fotos da atividade; líder da área ou administrador, as regras conferem): apaga o documento
-// leve e a foto completa e diminui a contagem ft da semana, num lote só. Espera o servidor (sem sinal, dá erro).
-// A foto já arquivada fora do banco (removidaEm) não tem mais a foto completa: só o leve sai.
-export async function apagarFotoAtividade(f, conj = setDaArea(f.area || '') || cur) {
-  const b = writeBatch(db);
-  b.delete(doc(db, C('evidencias', conj), f.id));
-  if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', conj), f.id));
-  const args = [];
-  if (f.semana && (f.refs || []).length) for (const [key, n] of Object.entries(incrementosFt(f.refs, 1))) args.push(new FieldPath('ft', key), increment(-n));
-  if (args.length) b.update(doc(db, C('semanas', conj), f.semana), ...args, 'atualizadoEm', serverTimestamp(), 'atualizadoPor', me.uid);
-  await gravarLote(b);
-}
-// Fotos das OMs: gravadas como as das atividades (contas/oms.js › pidFotoOM), na semana atual da área da OM.
-export async function listarFotosOM(conj, omId) {
-  const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('pid', '==', 'OM-' + omId)));
-  return qs.docs.map(comoFoto).filter(f => !f.lixeiraEm || f.removidaEm).sort((x, y) => x.at - y.at);
-}
-export function salvarFotosOM(conj, fotos) { const b = writeBatch(db); for (const f of fotos) fotoNoLote(b, conj, f); return gravarLote(b); }
-export async function apagarFotoOM(conj, f) {
-  const b = writeBatch(db); b.delete(doc(db, C('evidencias', conj), f.id)); if (!f.removidaEm) b.delete(doc(db, C('evidenciasArquivo', conj), f.id)); await gravarLote(b);
-}
-// ---------- Relatórios e arquivo de fotos (Parte 2; só o administrador; contas em fotos-arquivo.js) ----------
-// Fotos (leves) de um período: lidas por mês e filtradas pelo dia. Todas as situações (a tela separa).
-export async function listarEvidenciasPeriodo(conj, de, ate) {
-  const meses = []; for (let m = de.slice(0, 7); m <= ate.slice(0, 7); m = addMonth(m, 1)) meses.push(m);
-  const out = [];
-  for (let i = 0; i < meses.length; i += 10) {
-    const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('mes', 'in', meses.slice(i, i + 10))));
-    qs.docs.forEach(d => { const f = comoFoto(d); if (f.dia >= de && f.dia <= ate) out.push(f); });
-  }
-  return out;
-}
-// Lixeira: fotos com lixeiraEm (de qualquer período), sem as já apagadas de vez.
-export async function listarEvidenciasLixeira(conj) {
-  const qs = await getDocs(query(collection(db, C('evidencias', conj)), where('lixeiraEm', '!=', null)));
-  return qs.docs.map(comoFoto).filter(f => !f.removidaEm);
-}
-// Semanas do período (para os indicadores do relatório), lidas por mês (campo mes da semana).
-export async function semanasPeriodo(conj, meses) {
-  const out = {};
-  for (let i = 0; i < meses.length; i += 10) {
-    const qs = await getDocs(query(collection(db, C('semanas', conj)), where('mes', 'in', meses.slice(i, i + 10))));
-    qs.docs.forEach(d => { out[d.id] = toLocal(d.id, d.data()); });
-  }
-  return out;
-}
 // Grava um lote e espera o servidor (sem sinal a tela nem começa): a tela mostra o progresso e para no erro.
 async function gravarLote(b) { pending++; syncMudou(); try { await b.commit(); } finally { pending--; syncMudou(); } }
 // Quem gravou e quando: o banco exige nas coleções principais (semanas, presença, cadastro, fichas; firestore.rules › marcaOk).
 function marca() { return { atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }; }
-// Exportada: itens [{ id, conf: 'ok' | 'divergente' | 'sem-sha' }] num lote só (até 400).
-export async function marcarExportadas(conj, itens, lote) {
-  const b = writeBatch(db);
-  for (const x of itens) b.update(doc(db, C('evidencias', conj), x.id), { exportadoEm: serverTimestamp(), exportLote: lote, exportConf: x.conf, ...marca() });
-  await gravarLote(b);
-}
-export async function moverLixeira(conj, ids) { const b = writeBatch(db); for (const id of ids) b.update(doc(db, C('evidencias', conj), id), { lixeiraEm: serverTimestamp(), ...marca() }); await gravarLote(b); }
-export async function restaurarLixeira(conj, ids) { const b = writeBatch(db); for (const id of ids) b.update(doc(db, C('evidencias', conj), id), { lixeiraEm: null, ...marca() }); await gravarLote(b); }
-// Apagar de vez: apaga a foto completa (evidenciasArquivo) e marca removidaEm no documento leve, no mesmo lote
-// (até 200 fotos). O documento leve fica, com a miniatura, os dados da atividade, o sha e o lote da exportação.
-export async function apagarDefinitivo(conj, ids) {
-  const b = writeBatch(db);
-  for (const id of ids) { b.delete(doc(db, C('evidenciasArquivo', conj), id)); b.update(doc(db, C('evidencias', conj), id), { removidaEm: serverTimestamp(), ...marca() }); }
-  await gravarLote(b);
-}
-// Configuração das fotos (só o administrador).
-export const salvarCfgFotos = c => track(setDoc(doc(db, 'config', 'fotos'), { obrig: c.obrig, min: c.min, max: c.max, maxQZ: c.maxQZ, maxOM: c.maxOM, situacoes: c.situacoes, desde: c.desde, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+// Estado da conexão para as partes separadas deste arquivo (data-fotos.js). Lido na hora de cada chamada (getters).
+export const interno = { get db() { return db; }, get me() { return me; }, get cur() { return cur; }, C, track, gravarLote, marca, toLocal };
+export * from './data-fotos.js';
 // Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.
 // (A conta interna do Firebase Authentication fica órfã e pode ser apagada no console, se quiser.)
 export async function excluirUsuario(uid) {
