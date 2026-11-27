@@ -14,3 +14,4 @@ dados-importacao/*
 *.xlsx
 *.xlsm
 *.xls
+public/sw-marcas.json

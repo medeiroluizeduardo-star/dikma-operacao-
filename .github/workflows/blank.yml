@@ -77,6 +77,9 @@ jobs:
           npm install --no-audit --no-fund --prefix integracao/admin
           node integracao/admin/enviar-dados.mjs
 
+      - name: Marcas dos arquivos (o celular baixa só o que mudou)
+        run: node ferramentas/marcas-sw.mjs
+
       - name: Publicar site e regras de segurança
         # O Google às vezes responde "503 indisponível" por instantes: tenta até 3 vezes, com 60 s entre elas.
         run: |

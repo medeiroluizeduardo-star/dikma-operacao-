@@ -4,7 +4,7 @@
 // - Exportar para o Excel: lê os quadros que estão na tela (números do topo, tabelas, barras e colunas por dia), uma folha
 //   por quadro; a aba pode juntar folhas com a lista completa (registrarExcel: OMs do mês, lançamentos da queda zero).
 import { baixarExcel } from './exportar.js';
-import { fmtTexto } from './excel-relatorio.js';
+import { fmtTexto } from './fmt-texto.js';
 import { $, esc, TODAY, MARCA_PAPEL } from '../nucleo/base.js';
 import { acoes } from '../nucleo/acoes.js';
 import { UI } from '../nucleo/estado.js';
