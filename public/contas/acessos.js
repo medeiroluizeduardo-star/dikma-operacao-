@@ -10,7 +10,7 @@ import { normNome } from './planilhas-adm.js';
 // Modelo no cadastro usuarios/{uid}:
 //   acesso  = { operacao?: perfil, gestao?: perfil, seguranca?: perfil, rh?: perfil, indicadores?: 've' | 'gestor',
 //               administracao?: 'admin' | 'modulo' }
-//   escopos = parte de ['patio', 'bateria', 'equipamentos'] (conjuntos usados dentro da Operação e da Gestão)
+//   escopos = parte de ['patio', 'bateria', 'sinter', 'equipamentos'] (conjuntos usados dentro da Operação e da Gestão)
 // Áreas: líder 1 (area); supervisor quantas precisar (lista areas; area e area2 guardam as duas primeiras, para quem
 // ainda lê os campos antigos); gestor e coordenador todas. As exceções ficam em abas.
 // Do cadastro antigo ficam só: papel (qualquer perfil = ativo; 'bloqueado' = sem acesso) e 'gestao' em modulos
@@ -26,7 +26,7 @@ export const MODULOS_ACESSO = [
   { k: 'administracao', nome: 'Administração', sub: 'Configurações, Usuários e Perfis', perfis: ['admin', 'modulo'] }
 ];
 export const MODULO_ACESSO = Object.fromEntries(MODULOS_ACESSO.map(m => [m.k, m]));
-export const ESCOPOS = [['patio', 'Pátio'], ['bateria', 'Bateria'], ['equipamentos', 'Equipamentos']];
+export const ESCOPOS = [['patio', 'Pátio'], ['bateria', 'Bateria'], ['sinter', 'Sinter'], ['equipamentos', 'Equipamentos']];
 export const PERFIL_NOME = { lider: 'Líder', supervisor: 'Supervisor', tecnico: 'Técnico de Processo', coordenador: 'Coordenador', gestor: 'Gestor', administrativo: 'Administrativo', leitor: 'Somente leitura', registra: 'Registra', trata: 'Trata', ve: 'Vê', admin: 'Completa', modulo: 'Dos módulos' };
 export const perfilNome = (mod, p) => (mod === 'administracao' ? { admin: 'Completa (administrador)', modulo: 'Só dos módulos (gestor)' }[p] : mod === 'indicadores' ? { ve: 'Vê', gestor: 'Gestor (metas)' }[p] : PERFIL_NOME[p]) || p;
 // Ordem usada para escolher o papel antigo (único) a partir dos perfis de cada módulo.
@@ -38,7 +38,7 @@ export const ORDEM_PAPEL = ['admin', 'gestor', 'coordenador', 'supervisor', 'lid
 export function legadoDoAcesso(acesso, escopos, extras = {}) {
   const a = acesso || {}; const esc = new Set(escopos || []);
   const lista = areasDoCadastro(extras, true);
-  if (a.administracao === 'admin') return { papel: extras.bloqueado ? 'bloqueado' : 'admin', modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'], area: null, area2: null, areas: [] };
+  if (a.administracao === 'admin') return { papel: extras.bloqueado ? 'bloqueado' : 'admin', modulos: ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'], area: null, area2: null, areas: [] };
   // Papel antigo = o perfil mais alto entre os módulos (Segurança fica de fora: não existe no modelo antigo).
   const cands = [a.operacao, a.gestao, a.rh, a.administracao === 'modulo' ? 'gestor' : null].filter(Boolean);
   let papel = ORDEM_PAPEL.find(p => cands.includes(p)) || 'leitor';
@@ -47,6 +47,7 @@ export function legadoDoAcesso(acesso, escopos, extras = {}) {
   const opOuGe = !!(a.operacao || a.gestao);
   if (opOuGe && esc.has('patio')) modulos.push('operacao');
   if (opOuGe && esc.has('bateria')) modulos.push('bateria');
+  if (opOuGe && esc.has('sinter')) modulos.push('sinter');
   if (opOuGe && esc.has('equipamentos')) modulos.push('equipamentos');
   if (a.gestao && extras.fichas !== false) modulos.push('gestao');
   if (a.rh) modulos.push('frequencia');
@@ -89,24 +90,25 @@ export function perfilDe(u, mod) {
   return acessoMemo(u).acesso[mod] || null;
 }
 // Escopos (Pátio, Bateria, Equipamentos); o administrador tem todos.
-export const escoposDe = u => (!u || u.papel === 'bloqueado' ? [] : ehAdminU(u) ? ['patio', 'bateria', 'equipamentos'] : acessoMemo(u).escopos);
+export const escoposDe = u => (!u || u.papel === 'bloqueado' ? [] : ehAdminU(u) ? ['patio', 'bateria', 'sinter', 'equipamentos'] : acessoMemo(u).escopos);
 // Gestão com as Fichas de acompanhamento.
 export const temFichasU = u => !!u && (ehAdminU(u) || (!!perfilDe(u, 'gestao') && acessoMemo(u).fichas));
 // Indicadores (6º módulo): quem tem o perfil vê os números dos conjuntos do escopo, mesmo sem Operação ou RH.
 // conjsInd = Pátio e Bateria do escopo (o administrador: os dois) · eqInd = escopo Equipamentos.
 // O Gestor e quem não tem área no cadastro veem todas as áreas; o "Vê" com área (líder, supervisor) vê só as dele.
 export const temIndU = u => !!perfilDe(u, 'indicadores');
-export const conjsInd = u => (temIndU(u) ? ['patio', 'bateria'].filter(k => escoposDe(u).includes(k)) : []);
+export const conjsInd = u => (temIndU(u) ? ['patio', 'bateria', 'sinter'].filter(k => escoposDe(u).includes(k)) : []);
 export const eqInd = u => temIndU(u) && escoposDe(u).includes('equipamentos');
 export const areasInd = u => (['admin', 'gestor'].includes(perfilDe(u, 'indicadores')) ? [] : areasDoCadastro(u, true));
 // Marcas no formato antigo, tiradas do acesso (operacao = Pátio, bateria, equipamentos, gestao = fichas,
 // frequencia = RH). Usadas para saber que dados carregar e nas contas que não dependem do perfil.
 export function marcasDe(u) {
   if (!u || u.papel === 'bloqueado') return [];
-  if (ehAdminU(u)) return ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'];
+  if (ehAdminU(u)) return ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao', 'frequencia'];
   const e = escoposDe(u); const opGe = !!(perfilDe(u, 'operacao') || perfilDe(u, 'gestao')); const l = [];
   if (opGe && e.includes('patio')) l.push('operacao');
   if (opGe && e.includes('bateria')) l.push('bateria');
+  if (opGe && e.includes('sinter')) l.push('sinter');
   if (opGe && e.includes('equipamentos')) l.push('equipamentos');
   if (temFichasU(u)) l.push('gestao');
   if (perfilDe(u, 'rh')) l.push('frequencia');

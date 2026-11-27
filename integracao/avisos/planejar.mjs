@@ -20,7 +20,7 @@ const PREFS_PADRAO = { paradas: true, assinaturas: true, deficit: true, atividad
 export const ROTINA_URL = '/?m=administracao&v=cfproc';
 const up = s => String(s || '').toUpperCase();
 const fmtH = h => h.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
+const mods = u => (u.papel === 'admin' ? ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao'] : (u.modulos && u.modulos.length ? u.modulos : ['operacao']));
 const todas = (u, m) => u.papel === 'admin' || (['gestor', 'coordenador', 'tecnico', 'administrativo', 'leitor'].includes(u.papel) && mods(u).includes(m));
 function areasDe(u, k) {
   if (!mods(u).includes(SETS[k].mod)) return [];

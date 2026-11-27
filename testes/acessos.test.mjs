@@ -37,7 +37,7 @@ test('gestor ganha Administração dos módulos; o administrador ganha tudo', ()
   const a = acessoDoLegado({ papel: 'admin' });
   assert.deepEqual(Object.keys(a.acesso).sort(), MODULOS_ACESSO.map(m => m.k).sort());
   assert.equal(a.acesso.administracao, 'admin');
-  assert.deepEqual(a.escopos, ['patio', 'bateria', 'equipamentos']);
+  assert.deepEqual(a.escopos, ['patio', 'bateria', 'sinter', 'equipamentos']);
 });
 test('só Equipamentos: Operação com escopo Equipamentos, sem Gestão automática', () => {
   const r = acessoDoLegado({ papel: 'supervisor', modulos: ['equipamentos'] });
@@ -137,7 +137,7 @@ test('ida e volta (legado → novo → legado) mantém papel e módulos', () => 
 test('ida e volta: administrador, bloqueado, sem modulos e antigo acesso Administrativo', () => {
   const adm = idaEVolta({ papel: 'admin', modulos: ['operacao'] });
   assert.equal(adm.v.papel, 'admin');
-  assert.deepEqual(adm.efetivo, ord(['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia']));
+  assert.deepEqual(adm.efetivo, ord(['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao', 'frequencia']));
   const semMod = idaEVolta({ papel: 'lider', area: 'RECEBIMENTO' });
   assert.deepEqual(semMod.v.modulos, ['operacao']); assert.equal(semMod.v.papel, 'lider');
   const antigo = idaEVolta({ papel: 'leitor', acessos: ['administrativo'] });
@@ -225,7 +225,7 @@ test('Segurança: quem vê e quem trata cada registro', () => {
 });
 test('Segurança: listas padrão dos formulários e contas do painel', () => {
   const l = listasSeg(null);
-  assert.deepEqual(l.areas.map(a => a.nome), ['PÁTIO DE CARVÃO', 'BATERIA']); assert.deepEqual(l.tipos, ['ROTINA', 'PARADA']); assert.deepEqual(l.regimes, ['ADM', 'TURNO']);
+  assert.deepEqual(l.areas.map(a => a.nome), ['PÁTIO DE CARVÃO', 'BATERIA', 'SINTER']); assert.deepEqual(l.tipos, ['ROTINA', 'PARADA']); assert.deepEqual(l.regimes, ['ADM', 'TURNO']);
   assert.equal(l.desvios.length, 18); assert.equal(l.desvios[l.desvios.length - 1], 'OUTROS');
   assert.equal(listasSeg({ desvios: ['outros', 'epi'] }).desvios.join(), 'EPI,OUTROS', 'OUTROS sempre por último');
   const inter = [{ mes: '2026-10', resp: 'Ana', desvios: ['EPI', 'GÁS'], area: 'BATERIA' }, { mes: '2026-10', resp: 'ANA', desvios: ['EPI'], area: 'BATERIA' }, { mes: '2026-09', resp: 'Beto', desvios: [] }];
@@ -279,7 +279,7 @@ test('Indicadores: escolhido por pessoa (Vê ou Gestor); vê os conjuntos do esc
   assert.deepEqual(conjsInd(u({ indicadores: 've' }, ['patio', 'equipamentos'])), ['patio']);
   assert.equal(eqInd(u({ indicadores: 've' }, ['patio', 'equipamentos'])), true);
   assert.equal(eqInd(u({ indicadores: 've' }, ['bateria'])), false);
-  assert.deepEqual(conjsInd(u({ administracao: 'admin' }, [], { papel: 'admin' })), ['patio', 'bateria'], 'administrador: os dois');
+  assert.deepEqual(conjsInd(u({ administracao: 'admin' }, [], { papel: 'admin' })), ['patio', 'bateria', 'sinter'], 'administrador: os três');
   assert.deepEqual(conjsInd(u({ indicadores: 'gestor' }, ['patio'], { papel: 'bloqueado' })), [], 'bloqueado não vê');
   // áreas: o Vê com área de líder/supervisor fica com as dele; o Gestor vê todas
   assert.deepEqual(areasInd(u({ operacao: 'lider', indicadores: 've' }, ['patio'], { area: 'RECEBIMENTO' })), ['RECEBIMENTO']);

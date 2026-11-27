@@ -247,7 +247,8 @@ function cartaoQZ(doc, k, edit) {
 // Área (como no Apontar), semana do topo com o total de cada dia, o dia escolhido com os lançamentos e o total do mês.
 export function vQuedaZero() {
   if (UI.dia == null || UI.dia < 0 || UI.dia > 6) { const t = Math.round((pd(TODAY) - pd(UI.ini)) / 864e5); UI.dia = t >= 0 && t < 7 ? t : 0; }
-  const area = areaQZ(); UI.apArea = area; const k = UI.dia;
+  const area = areaQZ(); if (!AREAS.length) return `<div class="card"><div class="empty">Este conjunto ainda não tem áreas com rota. Quando as áreas e rotas forem cadastradas, as atividades aparecem aqui.</div></div>`;
+  UI.apArea = area; const k = UI.dia;
   const lista = myArea() ? myAreas() : AREAS;
   const chips = !myArea() || myAreas().length > 1 ? `<div class="rchips linha" role="group" aria-label="Área">${lista.map(a => `<button class="rchip" data-aparea="${a}" aria-pressed="${a === area}">${AREA_S[a]}</button>`).join('')}</div>` : '';
   const doc = DB.cache.semanas[area + '|' + UI.ini];

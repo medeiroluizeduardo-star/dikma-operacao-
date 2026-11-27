@@ -2,7 +2,7 @@
 // A presença de quem está nas Atividades é a mesma do Efetivo diário (situacao): o líder marca na Operação,
 // a Frequência vê e corrige aqui. Quem não está nas Atividades (gestão, apoio) fica só na folha (freqcomp).
 // Férias marcadas aqui aparecem sozinhas como FE no Efetivo diário e na folha.
-import { SETS, AREA_S, today, add, ddmm, MESES_L, DAYS } from '../contas/cal.js';
+import { SETS, SET_KEYS, AREA_S, today, add, ddmm, MESES_L, DAYS } from '../contas/cal.js';
 import { normRegime, letra, comoEra } from '../contas/escala.js';
 import { editaAdm, indiceFerias, ehAdminU } from '../contas/acessos.js';
 import { quadroEf, aguardandoEf, podeEf, ultimaEf, horaEf } from '../contas/efetivo-dia.js';
@@ -31,7 +31,7 @@ export function criarAdministrativo(X) {
   const ME = () => X.ME;
   const $ = id => document.getElementById(id);
   const TODAY = today();
-  const A = () => DB.cache.adm || { ferias: [], comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+  const A = () => DB.cache.adm || { ferias: [], comps: {}, sit: { patio: {}, bateria: {}, sinter: {} }, colabs: { patio: [], bateria: [], sinter: [] }, rh: [] };
   const U = UI.a; // valores iniciais em nucleo/estado.js
   const pode = () => editaAdm(ME()) && (!X.podeItem || X.podeItem('i_freq'));
   const dBR = s => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
@@ -162,12 +162,12 @@ export function criarAdministrativo(X) {
 
   /* ---------- topo: Pátio | Bateria e competência ---------- */
   // Conjuntos que a pessoa vê aqui (nos Indicadores, só os do escopo) e áreas (o "Vê" com área: só as dele).
-  const conjsOk = () => (X.conjs ? X.conjs() : ['patio', 'bateria']);
+  const conjsOk = () => (X.conjs ? X.conjs() : SET_KEYS);
   const areasOk = () => (X.areas ? X.areas() : []);
   const conjOk = () => { const l = conjsOk(); if (l.length && !l.includes(U.conj)) { U.conj = l[0]; U.fArea = U.fRota = ''; } return U.conj; };
   function topo(view) {
     if (view !== 'afreq' && view !== 'fpainel') return '';
-    conjOk(); const cs = view === 'fpainel' ? conjsOk() : ['patio', 'bateria'];
+    conjOk(); const cs = view === 'fpainel' ? conjsOk() : SET_KEYS;
     return `${cs.length > 1 ? `<div class="seg setsw" role="tablist" aria-label="Conjunto">${cs.map(k => `<button type="button" role="tab" data-a="conj" data-v="${k}" aria-selected="${U.conj === k}">${SETS[k].curto}</button>`).join('')}</div>` : ''}
       ${view === 'fpainel' ? `<label class="sel"><span>Unidade</span><select class="in" id="aUn" aria-label="Unidade"><option value="">Todas</option>${UNIDADES.map(u => `<option value="${u}" ${U.fUn === u ? 'selected' : ''}>${u}</option>`).join('')}</select></label>` : ''}
       <div class="compnav"><button class="btn ghost sm" data-a="comp" data-v="-1" aria-label="Competência anterior">‹</button><b>${periodoComp(U.comp)}</b><button class="btn ghost sm" data-a="comp" data-v="1" aria-label="Próxima competência">›</button></div>`;
@@ -412,7 +412,7 @@ export function criarAdministrativo(X) {
   function opcoesPessoa() {
     const out = []; const vistos = new Set();
     for (const c of A().rh || []) { const k = normNome(c.nome); if (vistos.has(k)) continue; vistos.add(k); out.push({ nome: c.nome, mat: String(c.mat || '') }); }
-    for (const conj of ['patio', 'bateria']) for (const c of A().colabs[conj] || []) { const k = normNome(c.nome); if (vistos.has(k)) continue; vistos.add(k); out.push({ nome: c.nome, mat: c.mat || '' }); }
+    for (const conj of SET_KEYS) for (const c of A().colabs[conj] || []) { const k = normNome(c.nome); if (vistos.has(k)) continue; vistos.add(k); out.push({ nome: c.nome, mat: c.mat || '' }); }
     return out.sort((a, b) => a.nome.localeCompare(b.nome));
   }
   function addPessoa(gi) {
@@ -562,7 +562,7 @@ export function criarAdministrativo(X) {
     const pes = f || pessoa;
     formSheet(f ? 'Férias de ' + title(f.nome) : 'Novas férias', f ? esc(f.setor || '') : pessoa ? `${esc(title(pessoa.nome))}${pessoa.mat ? ' · matrícula ' + esc(pessoa.mat) : ''}` : 'Escolha a pessoa e as datas', `
       ${pes ? '' : `<label class="sel"><span>Nome</span><input class="in" id="afNome" list="afLista" autocomplete="off" required></label><datalist id="afLista">${ops.map(o => `<option value="${esc(o.nome)}">${o.mat ? 'Matrícula ' + esc(o.mat) : ''}</option>`).join('')}</datalist>`}
-      <div class="g2eq"><label class="sel"><span>Setor</span><input class="in" id="afSetor" value="${v('setor', (pessoa && pessoa.setor) || (U.conj === 'bateria' ? 'BATERIA' : 'PATIO'))}"></label><label class="sel"><span>Horário</span><input class="in" id="afHor" value="${v('horario', 'ADM')}"></label></div>
+      <div class="g2eq"><label class="sel"><span>Setor</span><input class="in" id="afSetor" value="${v('setor', (pessoa && pessoa.setor) || (U.conj === 'bateria' ? 'BATERIA' : U.conj === 'sinter' ? 'SINTER' : 'PATIO'))}"></label><label class="sel"><span>Horário</span><input class="in" id="afHor" value="${v('horario', 'ADM')}"></label></div>
       <div class="g2eq"><label class="sel"><span>Início</span><input class="in" type="date" id="afIni" value="${v('inicio')}"></label><label class="sel"><span>Dias</span><input class="in" type="number" min="5" max="30" id="afDias" value="${v('dias', 30)}"></label></div>
       <div class="g2eq"><label class="sel"><span>Retorno</span><input class="in" type="date" id="afRet" value="${v('retorno')}"></label><label class="sel"><span>Data limite</span><input class="in" type="date" id="afLim" value="${v('limite', (pessoa && pessoa.limite) || '')}"></label></div>
       <div class="g2eq"><label class="sel"><span>Mês planejado (sem data ainda)</span><input class="in" type="month" id="afMes" value="${v('mesPlanejado', (pessoa && pessoa.mes) || '')}"></label><label class="sel"><span>Aviso de férias entregue em</span><input class="in" type="date" id="afAviso" value="${v('avisoEm')}"></label></div>
@@ -594,12 +594,12 @@ export function criarAdministrativo(X) {
     if (!pode()) return '<div class="card"><div class="empty">Somente leitura: quem edita a Frequência importa planilhas.</div></div>';
     const adm = ME().papel === 'admin';
     let h = `<div class="${adm ? 'grid2' : ''}">${adm ? `<div class="card"><header><h2>Planilhas recebidas</h2><p>CONTROLE DE FREQUÊNCIA (Pátio e Bateria) e FÉRIAS GERAL, já no sistema</p></header><div class="body stackcol"><p class="m0 small">Lê as planilhas, liga cada pessoa ao cadastro do RH e às Atividades e mostra a conferência antes de gravar. Na presença do dia, só preenche o que ainda está vazio: nada do que os líderes já lançaram é trocado.</p><div class="row-gap"><button class="btn pri" data-a="impSeeds" ${st && st.busy ? 'disabled' : ''}>${st && st.busy ? 'Lendo…' : 'Ler as planilhas recebidas'}</button></div></div></div>` : ''}
-      <div class="card"><header><h2>Importar arquivo</h2><p>Uma planilha nova de frequência ou de férias (Excel)</p></header><div class="body stackcol"><div class="seg setsw" role="tablist" aria-label="Frequência de">${[['patio', 'Pátio'], ['bateria', 'Bateria'], ['sinter', 'Sinter']].map(([k, t]) => `<button type="button" role="tab" data-a="impConj" data-v="${k}" aria-selected="${(U.impConj || 'patio') === k}">${t}</button>`).join('')}</div><p class="muted small m0">Frequência: escolha Pátio, Bateria ou Sinter. A Sinter entra na folha do Pátio, junto dos grupos que já estão lá (não apaga ninguém). Férias: o sistema reconhece sozinho.</p><label class="btn">${I.file} Escolher arquivo<input type="file" id="aImpArq" accept=".xlsx,.xlsm,.xls" hidden></label></div></div></div>`;
+      <div class="card"><header><h2>Importar arquivo</h2><p>Uma planilha nova de frequência ou de férias (Excel)</p></header><div class="body stackcol"><div class="seg setsw" role="tablist" aria-label="Frequência de">${SET_KEYS.map(k => [k, SETS[k].curto]).map(([k, t]) => `<button type="button" role="tab" data-a="impConj" data-v="${k}" aria-selected="${(U.impConj || 'patio') === k}">${t}</button>`).join('')}</div><p class="muted small m0">Frequência: escolha Pátio, Bateria ou Sinter. Férias: o sistema reconhece sozinho.</p><label class="btn">${I.file} Escolher arquivo<input type="file" id="aImpArq" accept=".xlsx,.xlsm,.xls" hidden></label></div></div></div>`;
     if (st && st.erro) h += `<div class="card"><div class="body"><p class="err m0">${esc(st.erro)}</p></div></div>`;
     if (st && st.prep) {
       const r = st.prep.resumo;
       h += `<div class="card"><header><h2>Conferência</h2><p>${esc(st.origem || '')}</p></header><div class="body stackcol">
-        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${r.unidade ? `${r.unidade} (folha do ${SETS[conj].curto})` : SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Escala do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
+        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Escala do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
         ${r.ferias ? `<div><b>Férias</b>: ${r.ferias.total} períodos (${r.ferias.comData} com data marcada)</div><label class="mchip"><input type="checkbox" id="aImpSubst" ${st.subst ? 'checked' : ''}><span>Substituir as férias que já estão no sistema (${A().ferias.length})</span></label>` : ''}
         ${r.semRH.length ? `<details class="legdet"><summary>${r.semRH.length} nome(s) sem ficha no RH (entram na folha mesmo assim)</summary><p class="small m0">${r.semRH.map(x => esc(title(x.nome))).join(' · ')}</p></details>` : ''}
         <div class="row-gap"><button class="btn pri" data-a="impOk" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Gravando…' : 'Gravar no sistema'}</button><button class="btn" data-a="impCancel">Cancelar</button></div></div></div>`;
@@ -623,12 +623,10 @@ export function criarAdministrativo(X) {
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
       const abas = abasDoXLSX(XLSX, wb);
       const ehFerias = abas.some(a => a.linhas.some(l => (l || []).some(v => typeof v === 'string' && /^matr[ií]cula$/i.test(v.trim()))));
-      // Sinter: a folha fica dentro da do Pátio (as pessoas estão na Escala do dia do Pátio, área SINTER) e é juntada à que já existe.
-      const un = U.impConj === 'sinter' ? 'Sinter' : ''; const conj = un ? 'patio' : (U.impConj || 'patio');
+      const conj = U.impConj || 'patio';
       const prep = ehFerias ? prepararImportacao({ ferias: lerFerias(abas), colabs: A().colabs, rh: A().rh }) : prepararImportacao({ freq: { [conj]: lerFrequencia(abas, conj) }, colabs: A().colabs, rh: A().rh });
-      if (un && !ehFerias) { prep.comps = prep.comps.map(c => ({ ...c, un })); prep.resumo.unidade = un; }
       if (!prep.comps.length && !(prep.ferias && prep.ferias.length)) throw new Error('Não achei folha de frequência nem lista de férias nesse arquivo.');
-      U.imp = { prep, origem: `${file.name} · ${ehFerias ? 'férias' : 'frequência ' + (un ? 'Sinter (dentro da folha do Pátio)' : SETS[conj].curto)}`, subst: false };
+      U.imp = { prep, origem: `${file.name} · ${ehFerias ? 'férias' : 'frequência ' + SETS[conj].curto}`, subst: false };
     } catch (e) { U.imp = { erro: 'Não foi possível ler o arquivo: ' + ((e && e.message) || e) }; }
     render();
   }

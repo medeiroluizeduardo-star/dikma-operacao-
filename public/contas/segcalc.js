@@ -16,7 +16,7 @@ import { perfilDe, escoposDe, areasDoCadastro } from './acessos.js';
 export const DESVIOS_PADRAO = ['ADESIVO DE QUALIFICAÇÃO', 'ANÁLISE DE RISCO', 'CELULAR', 'EPI', 'FERRAMENTAS MANUAIS', 'IÇAMENTO DE CARGA', 'INSPEÇÃO DE PRÉ-USO', 'SEGURANÇA EM TRILHOS', 'VEÍCULOS E DIREÇÃO', 'ADORNOS', 'ARRUMAÇÃO E LIMPEZA', 'EMERGÊNCIA', 'ESPAÇO CONFINADO', 'GÁS', 'IMPEDIMENTO/BLOQUEIO', 'ISOLAMENTO DE ÁREA', 'TRABALHO EM ALTURA', 'OUTROS'];
 // conj = conjunto das Atividades da área (patio | bateria): diz quem é o supervisor da área.
 export const SEG_PADRAO = {
-  areas: [{ nome: 'PÁTIO DE CARVÃO', conj: 'patio' }, { nome: 'BATERIA', conj: 'bateria' }],
+  areas: [{ nome: 'PÁTIO DE CARVÃO', conj: 'patio' }, { nome: 'BATERIA', conj: 'bateria' }, { nome: 'SINTER', conj: 'sinter' }],
   tipos: ['ROTINA', 'PARADA'],
   regimes: ['ADM', 'TURNO'],
   desvios: DESVIOS_PADRAO

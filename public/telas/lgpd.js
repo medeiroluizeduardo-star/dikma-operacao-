@@ -20,7 +20,7 @@ async function montar() {
   const d = await DB.lgpdLer(LG.limiteAcesso(TODAY), limiteFotoAt(TODAY));
   const aso = LG.asoParaDescartar(d.aso, d.fichas, TODAY);
   const obs = [];
-  for (const s of d.sit) for (const x of LG.obsDaSituacao(s, TODAY)) obs.push({ ...x, col: s.col, id: s.id, onde: s.col === 'b_situacao' ? 'Presença da Bateria' : 'Presença do Pátio' });
+  for (const s of d.sit) for (const x of LG.obsDaSituacao(s, TODAY)) obs.push({ ...x, col: s.col, id: s.id, onde: s.col === 'b_situacao' ? 'Presença da Bateria' : s.col === 's_situacao' ? 'Presença da Sinter' : 'Presença do Pátio' });
   for (const c of d.comps) for (const x of LG.obsDaFolha(c, TODAY)) obs.push({ ...x, col: 'freqcomp', id: c.id, onde: 'Folha da Frequência' });
   const acessos = LG.acessosParaDescartar(d.acessos, TODAY);
   const dps = dpParaDescartar(d.dps || [], d.fichas, TODAY);

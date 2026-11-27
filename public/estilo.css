@@ -273,7 +273,7 @@ table.efd tfoot b.menos{color:var(--st-nreal)}
 .pill svg{width:12px;height:12px;vertical-align:-2px;margin-right:2px}
 .btn svg{flex:none}
 /* Módulo Escala e Efetivo */
-.setsw{display:inline-grid;grid-template-columns:repeat(2,auto);align-self:flex-end}
+.setsw{display:inline-grid;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:auto;align-self:flex-end}
 .setsw button{padding:7px 16px}
 table.efd tr.grp-row th{background:var(--surface-2);text-align:left;padding-top:8px;padding-bottom:8px;font-size:13px}
 table.efd tr.grp-row .btn.link{font-weight:700;padding:0}
@@ -1072,7 +1072,7 @@ table.freq .fnome .btn.link{color:var(--ink)}
 
 /* ---- correções de layout ---- */
 .row-gap.diastog{flex-wrap:nowrap}
-.seg.setsw{flex:none;width:max-content;grid-template-columns:repeat(2,auto)}
+.seg.setsw{flex:none;width:max-content;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:auto}
 .seg.indsw{flex:none;width:max-content;max-width:100%;grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:auto}.seg.indsw button{padding:8px 12px;white-space:nowrap}
 table.tipos input.in[data-gt$="|tipo"]{min-width:170px}
 table.tipos textarea.in{min-width:240px}
@@ -1813,7 +1813,7 @@ button.ic-card:focus-visible{outline:2px solid var(--marca);outline-offset:2px}
 .ic-hv{font-weight:600;font-variant-numeric:tabular-nums}
 .ic-hv.ok{color:var(--ok)}.ic-hv.fora{color:var(--critico)}
 .p-recolhe .ic-grade{padding:var(--s3)}
-.seg.setsw.ic-sw{grid-template-columns:repeat(3,auto)}
+.seg.setsw.ic-sw{grid-template-columns:none;grid-auto-flow:column}
 /* Gestão › Medição (telas/medicao.js) */
 .md-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:var(--s3);margin-bottom:var(--s4)}
 .md-card .p-ind-v{font-size:30px}

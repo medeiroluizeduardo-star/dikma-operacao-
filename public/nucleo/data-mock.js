@@ -96,7 +96,7 @@ async function fresh() {
   const slug = n => n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ').filter(Boolean);
   const usados = new Set();
   const loginDe = n => { const p = slug(n); let l = p[0] + '.' + p[p.length - 1], i = 2; while (usados.has(l)) l = p[0] + '.' + p[p.length - 1] + i++; usados.add(l); return l; };
-  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'equipamentos', 'gestao'], ...ac({ operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' }, ['patio', 'bateria', 'equipamentos']) },
+  cache.usuarios = [{ uid: 'admin', nome: 'Administrador (demonstração)', login: 'admin', senha: '123456', papel: 'admin', area: null, modulos: ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao'], ...ac({ operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' }, ['patio', 'bateria', 'equipamentos']) },
     { uid: 'eq', nome: 'Supervisor de Equipamentos', login: 'operacao', senha: '123456', papel: 'supervisor', area: null, modulos: ['equipamentos'], ...ac({ operacao: 'supervisor', indicadores: 've' }, ['equipamentos']) },
     { uid: 'rh', nome: 'Analista de Gestão', login: 'gestao', senha: '123456', papel: 'supervisor', area: null, modulos: ['gestao'], ...ac({ gestao: 'supervisor' }, []) },
     ...lideres.map(c => liderGestao({ uid: c.id, nome: c.nome, login: loginDe(c.nome), senha: '123456', papel: c.funcao === 'LÍDER' ? 'lider' : 'supervisor', area: c.area, modulos: c.funcao === 'SUPERVISOR' ? [SETS[c.set].mod, 'gestao'] : [SETS[c.set].mod] })),
@@ -109,6 +109,7 @@ async function fresh() {
     { uid: 'sup4', nome: 'Supervisor de várias áreas', login: 'supervisor4', senha: '123456', papel: 'supervisor', area: 'RECEBIMENTO', area2: 'PREPARAÇÃO', areas: ['RECEBIMENTO', 'PREPARAÇÃO', 'BATERIA 1', 'BATERIA 2'], modulos: ['operacao', 'bateria', 'gestao'], ...ac({ operacao: 'supervisor', gestao: 'supervisor', indicadores: 've' }, ['patio', 'bateria']) },
     // Usuários do cliente (recebem as OMs enviadas pelo Técnico de Processo).
     { uid: 'cliPatio', nome: 'Usuário Pátio', login: 'cliente.patio', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao'], ...ac({ operacao: 'leitor' }, ['patio']) },
+    { uid: 'cliSin', nome: 'Usuário Sinter', login: 'cliente.sinter', senha: '123456', papel: 'leitor', area: null, modulos: ['sinter'], ...ac({ operacao: 'leitor' }, ['sinter']) },
     { uid: 'cliBat', nome: 'Usuário Bateria', login: 'cliente.bateria', senha: '123456', papel: 'leitor', area: null, modulos: ['bateria'], ...ac({ operacao: 'leitor' }, ['bateria']) },
     { uid: 'leitor', nome: 'Visitante', login: 'visitante', senha: '123456', papel: 'leitor', area: null, modulos: ['operacao', 'frequencia'], ...ac({ operacao: 'leitor', gestao: 'leitor', rh: 'leitor' }, ['patio']) },
     { uid: 'adm1', nome: 'Analista de Frequência', login: 'frequencia', senha: '123456', papel: 'supervisor', area: null, modulos: ['frequencia'], ...ac({ rh: 'administrativo', indicadores: 've' }, ['patio', 'bateria']) },
@@ -310,7 +311,7 @@ export function rotinaMarcar(id, dados) { cache.proc.docs = { ...cache.proc.docs
     om10: base('om10', { dPrev: d(0), area: 'RECEBIMENTO', equip: 'VB-04', local: 'Válvula do silo 4', titulo: 'Troca de válvula borboleta', status: 'recusada', numero: '4500130', cliente: 'Usuário Pátio', clienteUid: 'cliPatio', motivo: 'Falta a APR assinada e o silo está em carga hoje', hCanc: hr(0, '09:20'), cancNome: 'Usuário Pátio', cancCli: true, hSol: hr(-1, '15:00'), hAprov: hr(-1, '15:30'), hEnvio: hr(0, '07:10'), hist: [p('solicitada', hr(-1, '15:00')), { ...p('aprovada', hr(-1, '15:30')), obs: 'Levar a APR para o cliente assinar' }, p('enviada', hr(0, '07:10'), 'para Usuário Pátio · OM 4500130'), { ...p('recusada', hr(0, '09:20'), 'Falta a APR assinada e o silo está em carga hoje'), obs: 'Podemos liberar amanhã às 7h' }] }),
     om11: base('om11', { area: 'PREPARAÇÃO', equip: 'BR-01', local: 'Britador', titulo: 'Troca do motor do britador', prio: 'emergencia', status: 'planejada', dPrev: d(3), docs: { pt: 'ok', apr: 'pend', bloq: 'pend', isol: 'na', acomp: 'pend' }, hist: [p('planejada', hr(-1, '11:00'), 'prevista para ' + d(3))] }),
     om5: base('om5', { dPrev: d(-4), area: 'RECEBIMENTO', equip: 'TC-01', local: 'Correia 1', titulo: 'Alinhar correia', status: 'finalizada', numero: '4500101', cliente: 'Usuário Pátio', clienteUid: 'cliPatio', hSol: hr(-5, '07:00'), hAprov: hr(-5, '07:30'), hEnvio: hr(-5, '08:00'), hCiente: hr(-5, '08:15'), hSala: hr(-5, '08:30'), hEletr: hr(-4, '12:40'), hLib: hr(-4, '13:00'), hFim: hr(-4, '16:30'), hDesb: hr(-4, '17:00'), obsFim: 'Correia alinhada e testada', hist: [p('solicitada', hr(-5, '07:00')), p('finalizada', hr(-4, '16:30'))] })
-  } }, bateria: { loaded: true, d: {} } }; }
+  } }, bateria: { loaded: true, d: {} }, sinter: { loaded: true, d: {} } }; }
 cache.omsCfg = { loaded: true, d: { clientes: { patio: { uid: 'cliPatio', nome: 'Usuário Pátio' } } } };
 export function omsWatch() { /* tudo já está em memória */ }
 export function omsClienteSalvar(conj, cliente) { cache.omsCfg = { loaded: true, d: { ...(cache.omsCfg.d || {}), clientes: { ...((cache.omsCfg.d || {}).clientes || {}), [conj]: cliente } } }; changed(); return Promise.resolve(); }
@@ -322,7 +323,7 @@ export function omSalvar(id, conj, dados, novo = false) {
   c.d = { ...c.d, [id]: { ...(c.d[id] || {}), id, ...dados, ...(novo ? { conj, solPor: me.uid, solNome: me.nome } : {}) } }; cache.oms = { ...cache.oms, [conj]: c }; changed(); return Promise.resolve();
 }
 // Preventivas que se repetem: na demonstração, uma no Pátio (toda segunda e quinta).
-cache.omsRec = { patio: { loaded: true, d: { rec1: { id: 'rec1', conj: 'patio', area: 'RECEBIMENTO', local: 'Correia 2', equip: 'TC-02', titulo: 'Lubrificar mancais da correia', prio: 'baixa', freq: 'semana', dias: [0, 3], dia: 0, inicio: today(), ativa: true, ate: '' } } }, bateria: { loaded: true, d: {} } };
+cache.omsRec = { patio: { loaded: true, d: { rec1: { id: 'rec1', conj: 'patio', area: 'RECEBIMENTO', local: 'Correia 2', equip: 'TC-02', titulo: 'Lubrificar mancais da correia', prio: 'baixa', freq: 'semana', dias: [0, 3], dia: 0, inicio: today(), ativa: true, ate: '' } } }, bateria: { loaded: true, d: {} }, sinter: { loaded: true, d: {} } };
 export function omsRecWatch() { /* tudo já está em memória */ }
 export const omRecNovoId = () => 'rec' + Date.now().toString(36);
 export function omRecSalvar(id, conj, dados) { const c = cache.omsRec[conj] || { d: {}, loaded: true }; c.d = { ...c.d, [id]: { ...(c.d[id] || {}), id, conj, ...dados } }; cache.omsRec = { ...cache.omsRec, [conj]: c }; changed(); return Promise.resolve(); }
@@ -387,12 +388,13 @@ export async function setAprov(docId, area, mes, itens) {
 // enviou e espera o RH; anteontem, a 2ª foi validada.
 const LSEF = 'coqueria-demo-ef';
 const EF = (() => { try { const x = JSON.parse(localStorage.getItem(LSEF) || 'null'); if (x && x.patio) return x; } catch (e) { /* ignora */ } return null; })() || (() => {
-  const e = { patio: {}, bateria: {} }; const h = today(); const [a1, a2] = SETS.patio.areas; const iso = (d, hm) => `${d}T${hm}:00.000-03:00`;
+  const e = { patio: {}, bateria: {}, sinter: {} }; const h = today(); const [a1, a2] = SETS.patio.areas; const iso = (d, hm) => `${d}T${hm}:00.000-03:00`;
   const d1 = add(h, -1), d2 = add(h, -2);
   e.patio[idEf(d1, a1)] = { area: a1, data: d1, mes: d1.slice(0, 7), st: 'enviado', por: 'demo', nome: 'Líder (exemplo)', mot: '', em: iso(d1, '08:10'), hist: [{ st: 'enviado', nome: 'Líder (exemplo)', em: iso(d1, '08:10') }] };
   e.patio[idEf(d2, a2)] = { area: a2, data: d2, mes: d2.slice(0, 7), st: 'validado', por: 'demo', nome: 'RH (exemplo)', mot: '', em: iso(d2, '10:30'), hist: [{ st: 'enviado', nome: 'Líder (exemplo)', em: iso(d2, '08:05') }, { st: 'validado', nome: 'RH (exemplo)', em: iso(d2, '10:30') }] };
   return e;
 })();
+for (const k of SET_KEYS) EF[k] ||= {};
 export const efDia = (k, data, area) => EF[k][idEf(data, area)] || null;
 export const efDocs = k => EF[k];
 export async function efGravar(k, data, area, acao, mot = '', ids = []) {   // ids: a trava no banco (data.js); o demo só guarda o status
@@ -462,7 +464,7 @@ export async function dpImportar(itens, arc) {
 }
 // LGPD › descarte por prazo (demonstração): as mesmas leituras e gravações de data.js, sobre o que está em memória.
 export async function lgpdLer(limAcesso, limAt = '0000-00-00') {
-  const sit = []; for (const k of SET_KEYS) for (const [m, v] of Object.entries(S[k].sitByMonth || {})) sit.push({ id: m, col: (k === 'bateria' ? 'b_' : '') + 'situacao', v, jus: ((S[k].sitExtra || {})[m] || {}).jus || {} });
+  const sit = []; for (const k of SET_KEYS) for (const [m, v] of Object.entries(S[k].sitByMonth || {})) sit.push({ id: m, col: SETS[k].pre + 'situacao', v, jus: ((S[k].sitExtra || {})[m] || {}).jus || {} });
   const comps = Object.entries((cache.adm && cache.adm.comps) || {}).filter(([, c]) => c).map(([id, c]) => ({ id, ...c }));
   return JSON.parse(JSON.stringify({ sit, comps, aso: (cache.treinos || []).filter(t => t.tipo === 'ASO'), acessos: [...acessosMock.values()].filter(a => a.dia < limAcesso), dps: [...dpMock.values()], fichas: (cache.g && cache.g.colabs) || [],
     atest: Object.values(cache.atest.d || {}).filter(a => (a.fim || a.ini) < limAt), atFotos: [...atFotosMock.values()].map(f => ({ id: f.id, aid: f.aid })) }));
@@ -475,7 +477,7 @@ export async function lgpdGravar(ops) {
     else if (o.tipo === 'atlimpa') { if (cache.atest.d[o.id]) cache.atest.d[o.id] = { ...cache.atest.d[o.id], minis: [], nf: 0, obs: null, fotosApagadasEm: Date.now() }; }
     else if (o.tipo === 'aso') cache.treinos = cache.treinos.filter(t => t.id !== o.id);
     else if (o.tipo === 'obs') {
-      const k = o.col.startsWith('b_') ? 'bateria' : 'patio';
+      const k = setDaCol(o.col);
       const alvo = o.col.endsWith('situacao') ? ((S[k].sitExtra || {})[o.id] || {}) : (cache.adm.comps[o.id] || {});
       let x = alvo; for (const p of o.caminho.slice(0, -1)) x = x && x[p]; if (x) delete x[o.caminho[o.caminho.length - 1]];
     }
@@ -674,7 +676,7 @@ export async function eImportar() { /* a demonstração já começa com a planil
 
 // ---------- Administrativo (demonstração): folhas e férias de exemplo, ligadas às Atividades da demonstração ----------
 const LSA = 'coqueria-demo-adm-v1';
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {}, sinter: {} }, colabs: { patio: [], bateria: [], sinter: [] }, rh: [] };
 cache.feriasAtivas = []; cache.desligados = []; cache.uso = null;
 // Saúde do sistema (exemplo): cópia de hoje, ensaio do dia 1º e uma cópia do mês esperando ser guardada no Drive.
 { const ha = h => new Date(Date.now() - h * 36e5).toISOString();
@@ -687,8 +689,8 @@ function admPersist() { try { localStorage.setItem(LSA, JSON.stringify({ ferias:
 const admCh = () => { cache.feriasAtivas = cache.adm.ferias.filter(f => f.inicio && f.termino).map(f => ({ mat: f.mat, nome: f.nome, inicio: f.inicio, termino: f.termino })); admPersist(); changed(); };
 async function iniciarAdm() {
   for (const k of SET_KEYS) cache.adm.colabs[k] = Object.values(S[k].colabs).flat();
-  cache.adm.sit = { patio: sitProxy('patio'), bateria: sitProxy('bateria') };
-  cache.adm.jus = { patio: jusProxy('patio'), bateria: jusProxy('bateria') };
+  cache.adm.sit = Object.fromEntries(SET_KEYS.map(k => [k, sitProxy(k)]));
+  cache.adm.jus = Object.fromEntries(SET_KEYS.map(k => [k, jusProxy(k)]));
   // o cadastro do RH é a mesma lista das fichas (gcolab) da demonstração
   if (!Object.getOwnPropertyDescriptor(cache.adm, 'rh').get) Object.defineProperty(cache.adm, 'rh', { get: () => cache.g.colabs || [], set: () => {}, enumerable: true });
   cache.adm.rhLoaded = true;
@@ -912,8 +914,8 @@ export async function segExcluir(col, r) {
 }
 
 // ---------- Limpeza de dados (demonstração): as mesmas consultas e gravações de data.js, sobre o que está em memória ----------
-const setDaCol = col => (col.startsWith('b_') ? 'bateria' : 'patio');
-const semPre = col => col.replace(/^b_/, '');
+function setDaCol(col) { return col.startsWith('b_') ? 'bateria' : col.startsWith('s_') ? 'sinter' : 'patio'; }
+const semPre = col => col.replace(/^[bs]_/, '');
 const copia = x => JSON.parse(JSON.stringify(x));
 // Documentos da coleção no formato do banco, com o id.
 function docsMock(col) {

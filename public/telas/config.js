@@ -135,7 +135,7 @@ function vCfConf() {
   }
   // 4) usuários
   const us = DB.cache.usuarios || [];
-  const semArea = us.filter(u => ['lider', 'supervisor'].includes(u.papel) && !u.area && (u.modulos || ['operacao']).some(m => m === 'operacao' || m === 'bateria'));
+  const semArea = us.filter(u => ['lider', 'supervisor'].includes(u.papel) && !u.area && (u.modulos || ['operacao']).some(m => m === 'operacao' || m === 'bateria' || m === 'sinter'));
   if (semArea.length) item('bad', 'Líderes e supervisores sem área', 'Eles não veem nenhuma rota até a área ser escolhida.', semArea.map(u => title(u.nome)), 'usuarios', 'Usuários e acessos');
   const nunca = us.filter(u => u.trocarSenha && u.papel !== 'bloqueado');
   if (nunca.length) item('neu', 'Ainda não criaram a própria senha', 'Receberam a senha provisória e não entraram.', nunca.map(u => `${title(u.nome)} (${u.login || ''})`), 'usuarios', 'Usuários e acessos');
@@ -335,7 +335,7 @@ function folhaPlanejamento() {
 // Ao salvar grava o modelo novo (acesso, escopos) E os campos antigos tirados dele (papel, modulos, áreas), que são o
 // que as telas e as regras ainda usam (gravação dupla; ver legadoDoAcesso em acessos.js).
 // Áreas em botões de marcar, um grupo por conjunto (Pátio, Bateria): o líder marca 1, o supervisor quantas precisar.
-const areaChips = (px, marcadas) => `<div class="sel uareas" role="group" aria-label="Áreas"><span>Áreas <small class="muted">(líder: 1 · supervisor: quantas precisar)</small></span>${Object.values(SETS).map(st => `<div class="uagrupo"><small class="muted">${st.curto}</small><div class="mchips">${st.areas.map(a => `<label class="mchip"><input type="checkbox" name="${px}Areas" value="${a}" data-acf="${px}" ${marcadas.includes(a) ? 'checked' : ''}><span>${AREA_S[a]}</span></label>`).join('')}</div></div>`).join('')}</div>`;
+const areaChips = (px, marcadas) => `<div class="sel uareas" role="group" aria-label="Áreas"><span>Áreas <small class="muted">(líder: 1 · supervisor: quantas precisar)</small></span>${Object.values(SETS).map(st => `<div class="uagrupo"><small class="muted">${st.curto}</small><div class="mchips">${(st.areas.length ? st.areas : st.gerais).map(a => `<label class="mchip"><input type="checkbox" name="${px}Areas" value="${a}" data-acf="${px}" ${marcadas.includes(a) ? 'checked' : ''}><span>${AREA_S[a]}</span></label>`).join('')}</div></div>`).join('')}</div>`;
 const MOD_ANTIGO = { operacao: 'Atividades Pátio', bateria: 'Atividades Bateria', equipamentos: 'Equipamentos', gestao: 'Fichas', frequencia: 'Frequência e férias' };
 // px = prefixo dos ids (nu = novo usuário, ea = editar acesso), para os dois formulários não repetirem ids.
 export function formAcesso(px, st) {
@@ -367,9 +367,9 @@ export function validarAcesso(st, uid) {
   const a = st.acesso;
   if (!Object.keys(a).length) throw new Error('Escolha o perfil em pelo menos um módulo.');
   if (a.operacao && !st.escopos.length) throw new Error('A Operação precisa de pelo menos um escopo: Pátio, Bateria ou Equipamentos.');
-  if (a.indicadores && !st.escopos.length) throw new Error('Os Indicadores precisam de pelo menos um escopo: Pátio, Bateria ou Equipamentos.');
+  if (a.indicadores && !st.escopos.length) throw new Error('Os Indicadores precisam de pelo menos um escopo: Pátio, Bateria, Sinter ou Equipamentos.');
   const v = legadoDoAcesso(a, st.escopos, st);
-  const ativ = v.modulos.includes('operacao') || v.modulos.includes('bateria');
+  const ativ = v.modulos.includes('operacao') || v.modulos.includes('bateria') || v.modulos.includes('sinter');
   if (ativ && [a.operacao, a.gestao].some(p => ['lider', 'supervisor'].includes(p)) && !v.area) throw new Error('Escolha a área do líder ou supervisor.');
   if (v.area && v.areas.length < areasDoCadastro(st, true).length) throw new Error('O líder fica com uma área só. Para mais de uma área, escolha Supervisor na Operação ou na Gestão.');
   for (const [i, ar] of v.areas.entries()) { const k = setDaArea(ar); if ((ativ || i > 0) && k && !st.escopos.includes(k)) throw new Error(`A área ${AREA_S[ar]} é do escopo ${SETS[k].curto}. Marque esse escopo.`); }
@@ -559,7 +559,7 @@ acoes.rotaRestaurar = async (t, d) => {
 export function vImportar() {
   if (!admDe('ativ')) return '<div class="card"><div class="empty">O administrador ainda não importou os dados da planilha.</div></div>';
   const ws = []; for (const m of [CUR_MONTH]) for (const w of weeksOfMonth(m)) ws.push(w);
-  return `<div class="card"><header><h2>Importar dados da planilha · ${esc(SETS[SK].nome)}</h2><p>Plano padrão, rotas, colaboradores e as situações já lançadas no efetivo diário da planilha ${SK === 'bateria' ? 'PLANEJAMENTO DE ATIVIDADES BATERIA (Bateria 1, Bateria 2, Trilho e CDQ)' : 'do Pátio de Carvão'}</p></header><div class="body stackcol">
+  return `<div class="card"><header><h2>Importar dados da planilha · ${esc(SETS[SK].nome)}</h2><p>Plano padrão, rotas, colaboradores e as situações já lançadas no efetivo diário da planilha ${SK === 'bateria' ? 'PLANEJAMENTO DE ATIVIDADES BATERIA (Bateria 1, Bateria 2, Trilho e CDQ)' : SK === 'sinter' ? 'de atividades da Sinter' : 'do Pátio de Carvão'}</p></header><div class="body stackcol">
    <label class="sel"><span>Começar a programação na semana</span><select class="in" id="impIni">${ws.map(w => `<option value="${w}" ${w === UI.impIni ? 'selected' : ''}>${weekLabel(w)}${w === CUR_WEEK ? ' · atual' : ''}</option>`).join('')}</select></label>
    <p class="muted m0">Gera ${monthLabel(CUR_MONTH)} a partir dessa semana e os dois meses seguintes. Semanas anteriores não são criadas, para não aparecerem como atrasadas.</p>
    <button class="btn pri" data-act="importar" ${UI.busy ? 'disabled' : ''} style="align-self:flex-start">${UI.busy ? 'Importando…' : 'Importar e gerar a programação'}</button>

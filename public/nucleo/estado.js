@@ -23,7 +23,7 @@ export const UI = { view: '', mes: null, ini: null, area: 'TODAS', rota: 'TODAS'
 UI.modulo = 'operacao';
 // Módulos de antes da divisão em 5 (guardados no aparelho, em links e avisos) → módulo de agora e o conjunto.
 // A tela (view) manda mais: ensureModulo leva para o módulo onde a aba está agora.
-const MOD_ANTIGO = { paineis: ['gestao'], bateria: ['operacao', 'bateria'], equipamentos: ['operacao'], frequencia: ['rh'], adm: ['rh'], administrativo: ['rh'], config: ['administracao'], escala: ['operacao'], sistema: ['administracao'] };
+const MOD_ANTIGO = { paineis: ['gestao'], bateria: ['operacao', 'bateria'], sinter: ['operacao', 'sinter'], equipamentos: ['operacao'], frequencia: ['rh'], adm: ['rh'], administrativo: ['rh'], config: ['administracao'], escala: ['operacao'], sistema: ['administracao'] };
 export const MODULOS = ['operacao', 'gestao', 'seguranca', 'rh', 'indicadores', 'administracao'];
 // Converte o módulo recebido (antigo ou novo); antigo=true quando veio de antes da divisão (o antigo 'gestao' era
 // Pessoas no turno e o antigo 'operacao' era Atividades do Pátio). Devolve o módulo de agora.
@@ -83,7 +83,7 @@ export function gerencia(alvo, u = ME) {
   if (ehAdminU(u)) return true;
   if (perfilDe(u, 'administracao') !== 'modulo') return false;
   const ge = perfilDe(u, 'gestao') === 'gestor', op = perfilDe(u, 'operacao') === 'gestor', esc = escoposDe(u);
-  if (alvo === 'ativ') return ge && (esc.includes('patio') || esc.includes('bateria'));
+  if (alvo === 'ativ') return ge && (esc.includes('patio') || esc.includes('bateria') || esc.includes('sinter'));
   if (alvo === 'equip') return (ge || op) && esc.includes('equipamentos');
   if (alvo === 'fichas') return ge && temFichasU(u);
   if (alvo === 'escala') return ge || op;
@@ -128,12 +128,12 @@ export function ensurePeriod() {
 }
 // Marcas no formato antigo, tiradas do acesso por módulo: operacao (Pátio), bateria, equipamentos, gestao (fichas),
 // frequencia (RH). Dizem que dados carregar e o que existe para a pessoa, sem olhar o perfil.
-export const MODS_MARCAVEIS = ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'];
+export const MODS_MARCAVEIS = ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao', 'frequencia'];
 export const modsReais = u => marcasDe(u);
 export const temFichas = u => temFichasU(u);
 export const escopos = (u = ME) => escoposDe(u);
 // Conjuntos de atividades (Pátio, Bateria) da pessoa, no módulo pedido (sem módulo: em qualquer um dos dois).
-export const setsDe = (u, mod) => { if (!u) return []; const ok = mod ? !!perfilDe(u, mod) : !!(perfilDe(u, 'operacao') || perfilDe(u, 'gestao')); return ok ? ['patio', 'bateria'].filter(k => escoposDe(u).includes(k)) : []; };
+export const setsDe = (u, mod) => { if (!u) return []; const ok = mod ? !!perfilDe(u, mod) : !!(perfilDe(u, 'operacao') || perfilDe(u, 'gestao')); return ok ? ['patio', 'bateria', 'sinter'].filter(k => escoposDe(u).includes(k)) : []; };
 export const temEquipEm = (u, mod) => !!u && !!perfilDe(u, mod) && escoposDe(u).includes('equipamentos');
 // Módulos que aparecem no seletor, nesta ordem: Operação · Gestão · Segurança · RH · Indicadores · Administração.
 export const modsDe = u => {

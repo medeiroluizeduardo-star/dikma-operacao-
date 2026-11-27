@@ -16,8 +16,8 @@ const destino = path.resolve(process.env.BACKUP_PASTA || 'backup');
 fs.rmSync(destino, { recursive: true, force: true });
 fs.mkdirSync(destino, { recursive: true });
 
-const SO_SEMANAL = ['historico', 'evidencias', 'b_evidencias'];
-const SO_COMPLETA = ['evidenciasArquivo', 'b_evidenciasArquivo'];
+const SO_SEMANAL = ['historico', 'evidencias', 'b_evidencias', 's_evidencias'];
+const SO_COMPLETA = ['evidenciasArquivo', 'b_evidenciasArquivo', 's_evidenciasArquivo'];
 const NUNCA = []; // seeds (planilhas originais) entram: não ficam mais no repositório
 // Coleções com subcoleções que entram inteiras (painel/{uid}/tasks, registros, config... do Meu painel)
 const SUBCOLECOES = ['painel'];
@@ -74,7 +74,7 @@ man.fim = new Date().toISOString();
 const uso = { em: F.FieldValue.serverTimestamp(), tipo, leiturasCopia: leituras, pacoteBytes: bytes, colecoes: Object.fromEntries(Object.entries(man.colecoes).filter(([c]) => !c.includes('/')).map(([c, x]) => [c, x.documentos])) };
 try {
   let n = 0, b = 0;
-  for (const c of ['evidencias', 'b_evidencias']) {
+  for (const c of ['evidencias', 'b_evidencias', 's_evidencias']) {
     if (!todas.includes(c)) continue;
     const a = (await db.collection(c).aggregate({ n: F.AggregateField.count(), t: F.AggregateField.sum('tamanho') }).get()).data();
     n += a.n || 0; b += a.t || 0;

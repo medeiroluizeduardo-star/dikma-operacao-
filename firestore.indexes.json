@@ -35,6 +35,16 @@
       "collectionGroup": "b_evidenciasArquivo",
       "fieldPath": "dados",
       "indexes": []
+    },
+    {
+      "collectionGroup": "s_evidencias",
+      "fieldPath": "thumb",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "s_evidenciasArquivo",
+      "fieldPath": "dados",
+      "indexes": []
     }
   ]
 }

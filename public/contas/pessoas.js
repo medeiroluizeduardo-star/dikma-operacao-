@@ -31,7 +31,7 @@ export const areasFichaDe = u => {
 };
 
 export function criarPessoas(DB) {
-  const st = k => DB.dados(k);
+  const st = k => DB.dados(k) || { colabs: {} }; // conjunto ainda sem dados (ex.: Sinter recém-criada)
   const temSetDados = k => !!st(k).config;
   const temOp = () => !!(DB.cache.e && DB.cache.e.config);
   const ativ = () => SET_KEYS.flatMap(k => areasDoSet(k).flatMap(a => (st(k).colabs[a] || []).map(x => ({ set: k, x }))));

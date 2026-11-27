@@ -411,12 +411,12 @@ export function visaoMes(l, ym, hoje) {
 
 /* ---------- cliente de cada conjunto ---------- */
 // O cliente é um usuário do sistema (Pátio: o usuário do Pátio; Bateria: o usuário da Bateria), escolhido pelo
-// administrador e guardado em config/oms { clientes: { patio: { uid, nome }, bateria: { uid, nome } } }.
+// administrador e guardado em config/oms { clientes: { patio: { uid, nome }, bateria: { uid, nome }, sinter: { uid, nome } } }.
 export const clienteDe = (cfg, conj) => { const c = cfg && cfg.clientes && cfg.clientes[conj]; return c && c.uid ? { uid: c.uid, nome: c.nome || '' } : null; };
 const sem = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 // Sugestão para o administrador: o usuário cujo nome ou login fala do conjunto ("Usuário Pátio", "patio"…).
 export function palpiteCliente(usuarios, conj) {
-  const chave = conj === 'patio' ? 'patio' : 'bateria';
+  const chave = conj === 'patio' ? 'patio' : conj === 'sinter' ? 'sinter' : 'bateria';
   const l = (usuarios || []).filter(u => u && u.papel !== 'bloqueado' && (sem(u.nome).includes(chave) || sem(u.login).includes(chave)));
   return l.sort((a, b) => (sem(a.nome).startsWith('usuario') ? 0 : 1) - (sem(b.nome).startsWith('usuario') ? 0 : 1) || sem(a.nome).length - sem(b.nome).length)[0] || null;
 }
@@ -480,7 +480,7 @@ export function resumo7h(oms, usuarios, hoje, cfg = null, agora = agoraLocal()) 
     const u = { ...u0, uid }; if (!u || u.papel === 'bloqueado') continue;
     const partes = []; let total = 0;
     const conta = (n, txt) => { if (n) { partes.push(`${n} ${txt}`); total += n; } };
-    const conjs = ['patio', 'bateria'];
+    const conjs = ['patio', 'bateria', 'sinter'];
     const trata = oms.filter(o => conjs.includes(o.conj) && trataOmU(u, o.conj));
     if (trata.length) {
       conta(trata.filter(o => o.status === 'solicitada').length, 'para aprovar');

@@ -4,8 +4,11 @@
 // Conjuntos de atividades: cada um é um módulo com as próprias áreas, plano, semanas e efetivo diário.
 // pre = prefixo das coleções no Firestore (o Pátio usa os nomes originais).
 export const SETS = {
-  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'], gerais: ['COQUERIA GERAL', 'COQUERIA PÁTIO', 'SINTER'] },
-  bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'], gerais: ['COQUERIA BATERIA'] }
+  patio: { mod: 'operacao', nome: 'Atividades Pátio', curto: 'Pátio', local: 'Pátio de Carvão', pre: '', seed: 'seed.json', idp: 'C', areas: ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'], gerais: ['COQUERIA GERAL', 'COQUERIA PÁTIO'] },
+  bateria: { mod: 'bateria', nome: 'Atividades Bateria', curto: 'Bateria', local: 'Bateria', pre: 'b_', seed: 'seed-bateria.json', idp: 'B', areas: ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ'], gerais: ['COQUERIA BATERIA'] },
+  // Sinter (27/11/2026): conjunto próprio, igual à Bateria, com o prefixo s_. As áreas com rota entram em areas quando
+  // forem definidas; até lá todos ficam na área geral SINTER (Escala do dia, Frequência e Efetivo do dia da Sinter).
+  sinter: { mod: 'sinter', nome: 'Atividades Sinter', curto: 'Sinter', local: 'Sinter', pre: 's_', seed: 'seed-sinter.json', idp: 'S', areas: [], gerais: ['SINTER'] }
 };
 export const SET_KEYS = Object.keys(SETS);
 export const AREAS = SETS.patio.areas;
@@ -14,8 +17,7 @@ export const AREAS_ATIV = SET_KEYS.flatMap(k => SETS[k].areas);
 // conjunto, mas a área não tem plano, apontamento nem indicador de atividades. Ficam em colaboradores/{ÁREA} como as outras.
 export const AREAS_GERAIS = SET_KEYS.flatMap(k => SETS[k].gerais);
 export const ehAreaGeral = a => AREAS_GERAIS.includes(a);
-// Áreas que não são da Coqueria (Sinter, 24/11/2026): ficam na Escala do dia e na Frequência do Pátio, como a Coqueria
-// Geral, mas saem da Medição e dos números do contrato da Coqueria (ICCC/ICCP, Visão geral).
+// Áreas que não são da Coqueria (Sinter): saem da Medição e dos números do contrato da Coqueria (ICCC/ICCP, Visão geral).
 export const AREAS_FORA_COQUERIA = ['SINTER'];
 export const foraDaCoqueria = a => AREAS_FORA_COQUERIA.includes(a);
 // Todas as áreas onde ficam pessoas do conjunto (atividades + gerais).
@@ -72,7 +74,7 @@ export function seedParaBanco(seed, areas = AREAS) {
   const plano = {}, colabs = {}, sit = {};
   for (const a of areas) { plano[a] = []; colabs[a] = []; }
   for (const p of seed.plano) plano[p[1]].push({ id: p[0], area: p[1], rota: p[2], local: p[3], ativ: p[4], tipo: p[5], dias: p[6], ativo: true });
-  for (const c of seed.colabs) colabs[c.area].push(c);
+  for (const c of seed.colabs) (colabs[c.area] ||= []).push(c);
   for (const [k, v] of Object.entries(seed.sit)) { const m = k.split('|')[1].slice(0, 7); (sit[m] ||= {})[k] = v; }
   const config = { rotas: seed.rotas.map(r => ({ area: r[0], rota: r[1], ef: r[2], carga: r[3] })), tipos: seed.tipos, meses: [] };
   return { config, plano, colabs, sit };

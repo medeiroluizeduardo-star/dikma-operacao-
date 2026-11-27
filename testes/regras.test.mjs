@@ -41,6 +41,9 @@ const USUARIOS = {
   // Já com o acesso por módulo (fase 1): os campos antigos gravados junto (legadoDoAcesso) continuam valendo.
   liderNovo: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao', 'gestao'], acesso: { operacao: 'lider', gestao: 'lider' }, escopos: ['patio'], nome: 'Líder Novo' },
   segReg: { papel: 'leitor', modulos: ['seguranca'], acesso: { seguranca: 'registra' }, escopos: [] },
+  // Sinter (3º conjunto, prefixo s_): líder da área SINTER e o usuário do cliente (só leitura), os dois só com o escopo Sinter.
+  liderSin: { papel: 'lider', area: 'SINTER', modulos: ['sinter'], acesso: { operacao: 'lider' }, escopos: ['sinter'], nome: 'Líder Sinter' },
+  cliSin: { papel: 'leitor', modulos: ['sinter'], acesso: { operacao: 'leitor' }, escopos: ['sinter'], nome: 'Usuário Sinter' },
   // Fase 2: o perfil de cada módulo vale nas regras. Os campos antigos (papel, modulos) vão como a tela grava
   // (legadoDoAcesso: papel = o mais alto), para provar que as regras olham o acesso, não o papel único.
   opLiderGeLeitor: { papel: 'lider', area: 'RECEBIMENTO', modulos: ['operacao'], acesso: { operacao: 'lider', gestao: 'leitor' }, escopos: ['patio'], nome: 'Misto' },
@@ -103,7 +106,7 @@ const db = uid => { if (!uid) return env.unauthenticatedContext().firestore(); c
 // Quem gravou e quando: o site (nucleo/data.js › marca) manda atualizadoPor e atualizadoEm em toda gravação das coleções
 // principais. Estas versões de setDoc, updateDoc e writeBatch fazem o mesmo, como o site; o teste "quem gravou e
 // quando" usa as originais (setDoc0, updateDoc0) para provar que sem a marca, ou com outra pessoa, o banco recusa.
-const COM_MARCA = /^((b_)?(semanas|situacao|colaboradores)|gcolab|gocorr)$/;
+const COM_MARCA = /^(([bs]_)?(semanas|situacao|colaboradores)|gcolab|gocorr)$/;
 const marcaDe = ref => { const uid = UID.get(ref.firestore); return uid && COM_MARCA.test(ref.parent.id) ? { atualizadoPor: uid, atualizadoEm: serverTimestamp() } : null; };
 // Presença (situacao): o site diz em sitK a chave que mudou (nucleo/data.js › setSit); estas versões fazem o mesmo.
 const MAPAS_SIT = ['v', 'cob', 'he', 'hed', 'jus', 'ck'];
@@ -144,6 +147,8 @@ before(async () => {
     await setDoc(doc(d, 'semanas', SEM_PREP), { area: 'PREPARAÇÃO', s: {}, ev: {} });
     await setDoc(doc(d, 'semanas', SEM_CHEIA), { area: 'RECEBIMENTO', s: {}, ev: { 'REC-001|2': 6 } });
     await setDoc(doc(d, 'b_semanas', SEM_B1), { area: 'BATERIA 1', s: {}, ev: {} });
+    await setDoc(doc(d, 's_colaboradores', 'SINTER'), { itens: [] });
+    await setDoc(doc(d, 's_config', 'sistema'), { rotas: [] });
     await setDoc(doc(d, 'gestao', 'colaboradores'), { itens: [] });
     for (const id of ['o1', 'o2']) await setDoc(doc(d, 'gocorr', id), { area: 'RECEBIMENTO', status: 'pendente', desc: 'Atestado', criadoPor: 'liderG' });
     for (const id of ['a1', 'a2']) await setDoc(doc(d, 'gassin', id), { area: 'RECEBIMENTO', por: 'liderG', metodo: 'tela' });
@@ -2004,4 +2009,20 @@ test('Atestados (atestados e atestadosFoto): dado de saúde; só o RH · Adminis
   await assertSucceeds(getDoc(doc(db('liderNovo'), 'config', 'atestados')), 'todos leem as regras');
   // Quem abriu a foto fica no mesmo registro das fichas.
   await assertSucceeds(setDoc0(doc(db('rhSo'), 'acessosFicha', 'rhSo|1001|atestado|2026-11-26'), { at: serverTimestamp(), uid: 'rhSo', nome: 'rhSo', mat: '1001', pessoa: 'PESSOA TESTE', ficha: 'atestado', dia: '2026-11-26' }), 'registra quem abriu a foto');
+});
+
+// ---------------- Sinter (3º conjunto) ----------------
+test('Sinter: quem tem só o escopo Sinter lê e lança a Sinter e não vê o Pátio nem a Bateria', async () => {
+  const M = (uid, x = {}) => ({ atualizadoPor: uid, atualizadoEm: serverTimestamp(), ...x });
+  for (const quem of ['liderSin', 'cliSin']) {
+    await assertSucceeds(getDoc(doc(db(quem), 's_colaboradores', 'SINTER')), `${quem} lê as pessoas da Sinter`);
+    await assertSucceeds(getDoc(doc(db(quem), 's_config', 'sistema')));
+    await assertFails(getDoc(doc(db(quem), 'colaboradores', 'RECEBIMENTO')), `${quem} não lê o Pátio`);
+    await assertFails(getDoc(doc(db(quem), 'b_semanas', SEM_B1)), `${quem} não lê a Bateria`);
+  }
+  await assertSucceeds(setDoc0(doc(db('liderSin'), 's_situacao', '2026-12'), M('liderSin', { v: { 'S001|2026-12-01': 'FT' }, sitK: 'S001|2026-12-01' }), { merge: true }), 'o líder da Sinter lança a presença');
+  await assertFails(setDoc0(doc(db('cliSin'), 's_situacao', '2026-12'), M('cliSin', { v: { 'S001|2026-12-02': 'FT' }, sitK: 'S001|2026-12-02' }), { merge: true }), 'o cliente só lê');
+  await assertFails(setDoc0(doc(db('liderRec'), 's_situacao', '2026-12'), M('liderRec', { v: { 'S001|2026-12-03': 'FT' }, sitK: 'S001|2026-12-03' }), { merge: true }), 'o líder do Pátio não lança na Sinter');
+  await assertFails(getDoc(doc(db('liderRec'), 's_colaboradores', 'SINTER')), 'o líder do Pátio não lê a Sinter');
+  await assertSucceeds(getDoc(doc(db('admin'), 's_colaboradores', 'SINTER')));
 });
