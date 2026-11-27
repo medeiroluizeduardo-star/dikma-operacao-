@@ -23,6 +23,19 @@ export async function abrirFotoAt(a, i, rh) {
   verFotoGrande(async () => { const l = await DB.atFotos(a.id, rh); const f = l[i] || l.find(x => x.ordem === i); return f ? f.dados : null; }, mini, 'Foto do atestado', `${title(a.nome || '')} · ${dBR(a.ini)}`);
 }
 
+// Baixa as fotos do atestado (JPEG, como foram guardadas). Só quem pode ver a foto consegue (regras do banco);
+// fica registrado como "abriu" (Administração › LGPD › Quem abriu) e no histórico, sem o tipo nem a observação.
+export async function baixarAtestado(a, rh) {
+  let l = [];
+  try { l = await DB.atFotos(a.id, rh); } catch (e) { toast(e && e.code === 'permission-denied' ? 'Sem permissão para baixar este atestado' : 'Não foi possível baixar agora'); return; }
+  if (!l.length) { toast('Este atestado está sem foto'); return; }
+  registrarVista(a);
+  const base = `atestado_${String(a.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'colaborador'}_${a.ini || TODAY}`;
+  l.forEach((f, i) => setTimeout(() => { const el = document.createElement('a'); el.href = f.dados; el.download = `${base}${l.length > 1 ? '_' + (i + 1) : ''}.jpg`; document.body.appendChild(el); el.click(); el.remove(); }, i * 400));
+  DB.log(`Atestado baixado: ${title(a.nome || '')} · ${dBR(a.ini)}`, rh ? 'rh' : 'operacao');
+  toast(l.length > 1 ? `Baixando as ${l.length} fotos do atestado` : 'Baixando a foto do atestado');
+}
+
 // o = { c: { id, area, nome, mat }, conj, dt (1º dia sugerido), atual (atestado já lançado ou null), titulo,
 //       aoSalvar(at, dias, diasAntes) depois de gravar, aoCancelar() }
 export function abrirAtestado(o) {
