@@ -1,0 +1,51 @@
+name: Mover a Sinter
+
+# Passa as pessoas da área SINTER, que ficavam no Pátio, para o conjunto Sinter (coleções s_): cadastro, presença,
+# Efetivo do dia, folhas de frequência, ações, registros com conj e usuários com a área SINTER (ganham o escopo Sinter).
+# Só manual (Run workflow). Rode antes o "backup".
+#   simular (padrão): só mostra no resumo desta execução o que mudaria.
+#   gravar: guarda uma cópia dos documentos que vão mudar (arquivo desta execução + coleção backups) e grava.
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'simular (só mostra) ou gravar'
+        type: choice
+        options: [simular, gravar]
+        default: simular
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco
+  cancel-in-progress: false
+
+jobs:
+  mover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Mover a Sinter (${{ inputs.modo }})
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BACKUP_PASTA: copia-sinter
+          SINTER_MODO: ${{ inputs.modo }}
+        run: |
+          npm install --no-audit --no-fund --prefix integracao/admin
+          node integracao/admin/mover-sinter.mjs
+
+      - name: Guardar a cópia dos documentos
+        if: inputs.modo == 'gravar'
+        uses: actions/upload-artifact@v4
+        with:
+          name: antes-de-mover-sinter-${{ github.run_id }}
+          path: copia-sinter/
+          retention-days: 90
+          if-no-files-found: ignore

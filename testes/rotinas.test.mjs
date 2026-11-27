@@ -368,3 +368,50 @@ test('ajustar Atividades: tira repetido, protege cadastro único e inclui na ár
   assert.ok((await db.collection('backups').get()).docs.some(d => d.id.startsWith('antes-ajustar-atividades-')), 'cópia no banco');
   assert.match(rodar('ajustar-atividades.mjs', { ...env, AJ_MODO: 'gravar' }), /Nada a gravar/, 'rodar de novo não muda nada');
 });
+
+test('mover a Sinter: simular não grava; gravar leva pessoas, presença, efetivo, folha, ações e usuários para o conjunto Sinter', async () => {
+  await limpar();
+  await db.doc('config/sistema').set({ rotas: [{ area: 'RECEBIMENTO', rota: 'R1' }], tipos: ['LIMPEZA'], meses: ['2026-11'] });
+  await db.doc('colaboradores/SINTER').set({ itens: [{ id: 'C900', area: 'SINTER', rota: 'SINTER', nome: 'PESSOA SINTER UM' }, { id: 'C901', area: 'SINTER', rota: 'SINTER', nome: 'PESSOA SINTER DOIS' }] });
+  await db.doc('colaboradores/RECEBIMENTO').set({ itens: [{ id: 'C001', area: 'RECEBIMENTO', rota: 'R1', nome: 'PESSOA PATIO' }] });
+  await db.doc('situacao/2026-11').set({ v: { 'C900|2026-11-03': 'F', 'C001|2026-11-03': 'P' }, jus: { 'C901|2026-11-04': 'médico' }, trv: { 'C900|2026-11-03': 'SINTER' }, sitK: 'C001|2026-11-03' });
+  await db.doc('efetivoDia/2026-11-03_SINTER').set({ area: 'SINTER', data: '2026-11-03', mes: '2026-11', st: 'enviado' });
+  await db.doc('efetivoDia/2026-11-03_RECEBIMENTO').set({ area: 'RECEBIMENTO', data: '2026-11-03', mes: '2026-11', st: 'enviado' });
+  await db.doc('freqcomp/patio|2026-11').set({ conj: 'patio', competencia: '2026-11', ini: '2026-10-21', fim: '2026-11-20',
+    grupos: [{ nome: 'LIDER A', turno: '', pessoas: [{ k: 'p1', nome: 'PESSOA PATIO', ativ: 'C001' }, { k: 's1', nome: 'PESSOA SINTER UM', ativ: 'C900' }] },
+      { nome: 'LIDER S', turno: '', pessoas: [{ k: 's2', nome: 'OUTRA DA SINTER', un: 'Sinter' }] }],
+    d: { p1: { '2026-11-03': 'P' }, s2: { '2026-11-03': 'F' } }, jus: { s2: { '2026-11-03': 'atestado' } } });
+  await db.doc('acoes/a1').set({ area: 'SINTER', titulo: 'ação' });
+  await db.doc('seginter/r1').set({ area: 'SINTER', conj: 'patio' });
+  await db.doc('seginter/r2').set({ area: 'RECEBIMENTO', conj: 'patio' });
+  await db.doc('usuarios/lid').set({ nome: 'LIDER SINTER', area: 'SINTER', escopos: ['patio'], modulos: ['operacao'] });
+  await db.doc('usuarios/out').set({ nome: 'OUTRO', area: 'RECEBIMENTO', escopos: ['patio'], modulos: ['operacao'] });
+
+  const s = rodar('mover-sinter.mjs', { SINTER_MODO: 'simular' });
+  assert.match(s, /Modo simular/);
+  assert.ok((await db.doc('colaboradores/SINTER').get()).exists, 'simular não grava');
+
+  const g = rodar('mover-sinter.mjs', { SINTER_MODO: 'gravar', BACKUP_PASTA: path.join(tmp, 'copia-sinter') });
+  assert.match(g, /Gravado/);
+  assert.equal((await db.doc('colaboradores/SINTER').get()).exists, false);
+  assert.deepEqual((await db.doc('s_colaboradores/SINTER').get()).get('itens').map(c => c.id), ['C900', 'C901']);
+  const sp = (await db.doc('situacao/2026-11').get()).data(), ss = (await db.doc('s_situacao/2026-11').get()).data();
+  assert.deepEqual(sp.v, { 'C001|2026-11-03': 'P' }); assert.deepEqual(sp.jus, {}); assert.deepEqual(sp.trv, {});
+  assert.deepEqual(ss.v, { 'C900|2026-11-03': 'F' }); assert.deepEqual(ss.jus, { 'C901|2026-11-04': 'médico' }); assert.deepEqual(ss.trv, { 'C900|2026-11-03': 'SINTER' });
+  assert.equal((await db.doc('efetivoDia/2026-11-03_SINTER').get()).exists, false);
+  assert.equal((await db.doc('s_efetivoDia/2026-11-03_SINTER').get()).get('st'), 'enviado');
+  assert.ok((await db.doc('efetivoDia/2026-11-03_RECEBIMENTO').get()).exists);
+  const fp = (await db.doc('freqcomp/patio|2026-11').get()).data(), fs_ = (await db.doc('freqcomp/sinter|2026-11').get()).data();
+  assert.deepEqual(fp.grupos.flatMap(x => x.pessoas.map(p => p.k)), ['p1']); assert.deepEqual(Object.keys(fp.d), ['p1']); assert.deepEqual(fp.jus, {});
+  assert.equal(fs_.conj, 'sinter'); assert.deepEqual(fs_.grupos.flatMap(x => x.pessoas.map(p => p.k)).sort(), ['s1', 's2']);
+  assert.deepEqual(fs_.d, { s2: { '2026-11-03': 'F' } }); assert.deepEqual(fs_.jus, { s2: { '2026-11-03': 'atestado' } });
+  assert.equal((await db.doc('acoes/a1').get()).exists, false); assert.ok((await db.doc('s_acoes/a1').get()).exists);
+  assert.equal((await db.doc('seginter/r1').get()).get('conj'), 'sinter'); assert.equal((await db.doc('seginter/r2').get()).get('conj'), 'patio');
+  assert.deepEqual((await db.doc('usuarios/lid').get()).get('escopos'), ['patio', 'sinter']);
+  assert.deepEqual((await db.doc('usuarios/lid').get()).get('modulos'), ['operacao', 'sinter']);
+  assert.deepEqual((await db.doc('usuarios/out').get()).get('escopos'), ['patio']);
+  assert.deepEqual((await db.doc('s_config/sistema').get()).get('tipos'), ['LIMPEZA']);
+  assert.ok((await db.collection('backups').get()).size >= 1, 'cópia no banco antes de gravar');
+  // rodar de novo não muda nada
+  assert.match(rodar('mover-sinter.mjs', { SINTER_MODO: 'gravar' }), /Nada a mudar/);
+});
