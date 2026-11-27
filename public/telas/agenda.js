@@ -117,7 +117,7 @@ const lerPassos = () => [...document.querySelectorAll('.ag-passo')].map(r => ({ 
 // Abrir o link de um item: troca de tela e chama a ação que abre o registro (quando a tela já chegou).
 function irPara(l) {
   const lay = document.getElementById('layer'); if (lay) lay.innerHTML = '';
-  if (l.v === 'oms' && ['patio', 'bateria'].includes(l.col)) UI.esSet = l.col; // a OM é do conjunto dela
+  if (l.v === 'oms' && ['patio', 'bateria', 'sinter'].includes(l.col)) UI.esSet = l.col; // a OM é do conjunto dela
   irParaModuloDa(l.v); aplicarSet();
   UI.view = l.v; UI.more = 0;
   if (l.mat && l.v === 'gcolab' && UI.g) UI.g.mat = l.mat;

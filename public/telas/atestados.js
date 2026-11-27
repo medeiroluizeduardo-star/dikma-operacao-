@@ -60,7 +60,7 @@ function vLista(ehRH) {
   if (inss.length) h += `<div class="card at-inss"><div class="body stackcol"><b>${I.pend || ''} Encaminhar ao INSS: ${inss.length} pessoa${inss.length > 1 ? 's' : ''}</b><p class="muted small m0">Os atestados somam mais de ${c.inssDias} dias nos últimos ${c.inssJanela} dias (cada dia conta uma vez; recusados e declarações não contam).</p>
     <ul class="at-inss-l">${inss.map(p => `<li><b>${esc(title(p.nome))}</b>${p.mat ? ` <span class="muted mono small">${esc(p.mat)}</span>` : ''} · <span class="num">${p.dias}</span> dias (${ddmm(p.de)} a ${ddmm(p.ate)})</li>`).join('')}</ul></div></div>`;
   h += `<div class="card"><div class="body lbar"><div class="rchips">${fs.map(([k, t, q]) => `<button type="button" class="rchip" data-at-st="${k}" aria-pressed="${u.st === k}">${t}${q != null ? ` <span class="num">${q}</span>` : ''}</button>`).join('')}</div>
-    ${ehRH ? `<label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Pátio e Bateria</option>${['patio', 'bateria'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label>
+    ${ehRH ? `<label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Todos</option>${['patio', 'bateria', 'sinter'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label>
     <label class="sel"><span>Buscar</span><input class="in" type="search" id="atQ" value="${esc(u.q)}" placeholder="Nome ou matrícula" autocomplete="off"></label>` : ''}
     ${ehRH && u.st === 'conferido' ? `<label class="sel"><span>Competência</span>${selComp('atCompL', u.comp)}</label>` : ''}</div></div>`;
   if (!f.length) return h + vazio(u.st === 'conferir' ? 'Nenhum atestado a conferir' : 'Nenhum atestado aqui', ehRH ? 'Os atestados chegam quando o líder lança AT na Escala do dia.' : 'Lance o atestado na Escala do dia: toque no nome, escolha Atestado e junte a foto.');
@@ -114,7 +114,7 @@ function vFolha() {
   const u = U(); const l = AT.folhaDaCompetencia(todos(), u.comp, u.conj);
   const tot = l.reduce((n, r) => n + r.diasComp, 0);
   let h = `<div class="card"><div class="body lbar"><label class="sel"><span>Competência</span>${selComp('atComp', u.comp)}</label>
-    <label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Pátio e Bateria</option>${['patio', 'bateria'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label>
+    <label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Todos</option>${['patio', 'bateria', 'sinter'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label>
     ${l.length ? `<button class="btn" data-act="atExcel">${I.dl} Baixar Excel</button>` : ''}</div></div>`;
   if (!l.length) return h + vazio('Nenhum atestado nesta competência', 'A lista mostra os dias de atestado que caem de 16 a 15.');
   h += `<p class="muted small">${l.length} atestado${l.length > 1 ? 's' : ''} · <b class="num">${tot}</b> dias na competência · ${l.filter(r => r.st === 'conferir').length} ainda a conferir</p>`;
@@ -136,7 +136,7 @@ function vIndicadorRH() {
   const meses = []; for (let i = 5; i >= 0; i--) meses.push(addMonth(u.mes, -i));
   const serie = AT.diasPorMes(l, meses); const tot = r.reduce((n, x) => n + x.dias, 0);
   const sel = `<div class="card"><div class="body lbar"><label class="sel"><span>Mês</span><select class="in" id="atMes">${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => addMonth(TODAY.slice(0, 7), -i)).map(m => `<option value="${m}" ${m === u.mes ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select></label>
-    <label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Pátio e Bateria</option>${['patio', 'bateria'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label></div></div>`;
+    <label class="sel"><span>Conjunto</span><select class="in" id="atConj"><option value="">Todos</option>${['patio', 'bateria', 'sinter'].map(k => `<option value="${k}" ${u.conj === k ? 'selected' : ''}>${conjNome(k)}</option>`).join('')}</select></label></div></div>`;
   const ind = indicadores([
     { rotulo: 'Dias de atestado', valor: String(tot), serie },
     { rotulo: 'Atestados', valor: String(r.reduce((n, x) => n + x.atestados, 0)) },

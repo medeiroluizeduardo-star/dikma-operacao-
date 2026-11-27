@@ -62,7 +62,7 @@ test('administrador: cria o primeiro, recupera a senha e promove um usuário exi
   const u = (await db.doc(`usuarios/${lg.uid}`).get()).data();
   assert.equal(u.papel, 'admin');
   assert.equal(u.acesso.administracao, 'admin', 'acesso por módulo: Administração completa');
-  assert.deepEqual(u.escopos, ['patio', 'bateria', 'equipamentos']);
+  assert.deepEqual(u.escopos, ['patio', 'bateria', 'sinter', 'equipamentos']);
   assert.equal(u.trocarSenha, true);
   assert.equal((await db.doc('config/bootstrap').get()).get('uid'), lg.uid);
   assert.ok(await entrar(lg.email, senha1), 'entra com a senha provisória');

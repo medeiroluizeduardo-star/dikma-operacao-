@@ -27,6 +27,7 @@ export function vApontar() {
   let area = areaScope();
   const varias = !myArea() || myAreas().length > 1;
   if (area === 'TODAS') { area = AREAS.includes(UI.apArea) ? UI.apArea : AREAS.slice().sort((a, b) => pendDia(b, UI.dia) - pendDia(a, UI.dia))[0]; }
+  if (!AREAS.length) return `<div class="card"><div class="empty">Este conjunto ainda não tem áreas com rota. Quando as áreas e rotas forem cadastradas, as atividades aparecem aqui.</div></div>`;
   UI.apArea = area;
   const areasLista = myArea() ? myAreas() : AREAS;
   const chipsArea = varias ? `<div class="rchips linha" role="group" aria-label="Área">${areasLista.map(a => { const p = pendDia(a, UI.dia); return `<button class="rchip" data-aparea="${a}" aria-pressed="${a === area}">${AREA_S[a]}${p ? `<span class="c num">${p}</span>` : ''}</button>`; }).join('')}</div>` : '';

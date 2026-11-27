@@ -32,7 +32,7 @@ function base() { if (DB.tratWatch) DB.tratWatch(); return DB.cache.trat || { d:
 // Ações antigas de Causas e ações (Pátio e Bateria do acesso à Gestão), no formato das tratativas.
 function antigas() {
   const out = [];
-  for (const k of setsDe(ME, 'gestao').filter(x => x === 'patio' || x === 'bateria')) {
+  for (const k of setsDe(ME, 'gestao').filter(x => x === 'patio' || x === 'bateria' || x === 'sinter')) {
     const st = DB.dados(k); if (!st || !st.acoes) continue;
     for (const a of Object.values(st.acoes)) if (a && a.acao) out.push(deAcaoAntiga(a, k));
   }

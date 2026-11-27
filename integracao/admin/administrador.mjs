@@ -35,10 +35,10 @@ if (!perfil && !nome) {
 
 const dados = {
   nome: nome || perfil.nome, nomeUp: String(nome || perfil.nome || '').toUpperCase(), login, papel: 'admin', area: null, area2: null,
-  modulos: ['operacao', 'bateria', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'],
+  modulos: ['operacao', 'bateria', 'sinter', 'equipamentos', 'gestao', 'frequencia'], acessos: ['operacao'],
   // Acesso por módulo (é o que vale nas regras e nas telas): Administração completa e todos os escopos.
   acesso: { operacao: 'gestor', gestao: 'gestor', seguranca: 'gestor', rh: 'administrativo', administracao: 'admin' },
-  escopos: ['patio', 'bateria', 'equipamentos'], trocarSenha: true,
+  escopos: ['patio', 'bateria', 'sinter', 'equipamentos'], trocarSenha: true,
   senhaRedefinidaEm: F.FieldValue.serverTimestamp()
 };
 

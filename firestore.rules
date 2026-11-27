@@ -2,7 +2,7 @@ rules_version = '2';
 // Regras de segurança — Dikma Gestão (Coqueria)
 // ACESSO POR MÓDULO (usuarios/{uid}.acesso, a partir da fase 2 da divisão em 5 módulos):
 //   acesso  = { operacao, gestao, seguranca, rh: perfil no módulo; administracao: 'admin' | 'modulo' }
-//   escopos = parte de ['patio', 'bateria', 'equipamentos']; as Fichas de acompanhamento = 'gestao' em modulos.
+//   escopos = parte de ['patio', 'bateria', 'sinter', 'equipamentos']; as Fichas de acompanhamento = 'gestao' em modulos.
 //   Cada regra confere o perfil DO MÓDULO certo:
 //   - Pátio/Bateria (semanas, aprov, plano, colaboradores, situacao, acoes): ler = Operação ou Gestão + escopo;
 //     apontar e lançar a presença = Operação (líder a gestor) na área; aprovar = Operação · Supervisor na área,
@@ -30,7 +30,7 @@ rules_version = '2';
 // Só vale o acesso por módulo: cadastro sem o campo acesso não tem acesso a nenhum módulo. Do cadastro antigo ficam
 // só papel (qualquer perfil = ativo; 'bloqueado' = sem acesso nenhum) e 'gestao' em modulos (= com as Fichas).
 // Áreas: area (líder e supervisor); area2 e a lista areas (só supervisor, quantas áreas precisar), conforme o perfil do módulo.
-// A Bateria usa as mesmas coleções do Pátio com o prefixo b_.
+// A Bateria usa as mesmas coleções do Pátio com o prefixo b_, e a Sinter com o prefixo s_.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signed() { return request.auth != null; }
@@ -55,6 +55,7 @@ service cloud.firestore {
       return pEm('administracao') == 'modulo' && (
         (m == 'operacao' && pEm('gestao') == 'gestor' && esc('patio'))
         || (m == 'bateria' && pEm('gestao') == 'gestor' && esc('bateria'))
+        || (m == 'sinter' && pEm('gestao') == 'gestor' && esc('sinter'))
         || (m == 'equipamentos' && (pEm('gestao') == 'gestor' || pEm('operacao') == 'gestor') && esc('equipamentos'))
         || (m == 'gestao' && pEm('gestao') == 'gestor' && fichasU(perfil())));
     }
@@ -62,15 +63,17 @@ service cloud.firestore {
     // RH: Frequência e férias (ler) e quem grava (Administrativo).
     function acAdm() { return ativo() && (admin() || pEm('rh') != ''); }
     function admEdita() { return acAdm() && (admin() || pEm('rh') == 'administrativo'); }
-    // Lê as Atividades de um conjunto (e = patio | bateria): Operação ou Gestão com o escopo.
+    // Lê as Atividades de um conjunto (e = patio | bateria | sinter): Operação ou Gestão com o escopo.
     function lePB(e) { return ativo() && (admin() || ((pEm('operacao') != '' || pEm('gestao') != '') && esc(e))); }
     function op() { return lePB('patio'); }        // Atividades Pátio
     function ba() { return lePB('bateria'); }      // Atividades Bateria
+    function si() { return lePB('sinter'); }       // Atividades Sinter
     // Indicadores: lê os dados do escopo e (e = patio | bateria | equipamentos). Só aparece em regras de leitura.
     function indE(e) { return ativo() && pEm('indicadores') != '' && esc(e); }
-    function indAlgum() { return indE('patio') || indE('bateria'); }
+    function indAlgum() { return indE('patio') || indE('bateria') || indE('sinter'); }
     function opI() { return op() || indE('patio'); }       // leitura do Pátio (Operação, Gestão ou Indicadores)
     function baI() { return ba() || indE('bateria'); }     // leitura da Bateria
+    function siI() { return si() || indE('sinter'); }      // leitura da Sinter
     function eqmI() { return eqm() || indE('equipamentos'); }
     function ge() { return hasProfile() && geU(perfil()); }          // Fichas (Gestão)
     // Equipamentos: ler = escopo Equipamentos com Operação ou Gestão; gravar = Operação (líder a gestor).
@@ -86,10 +89,12 @@ service cloud.firestore {
     function tecnicoEm(e) { return ativo() && esc(e) && pEm('operacao') == 'tecnico'; }
     function gestorDa(area) { return apontaDa(area, 'patio'); }
     function gestorDaB(area) { return apontaDa(area, 'bateria'); }
+    function gestorDaS(area) { return apontaDa(area, 'sinter'); }
     // Atividade fora da programação (campo fp da semana): só coordenador e supervisor da área (e o administrador).
     function criaFora(area, e) { return apontaDa(area, e) && pEm('operacao') in ['coordenador', 'supervisor']; }
     function criaForaDa(area) { return criaFora(area, 'patio'); }
     function criaForaDaB(area) { return criaFora(area, 'bateria'); }
+    function criaForaDaS(area) { return criaFora(area, 'sinter'); }
     // Presença do dia (situacao): quem aponta no conjunto (Operação), o RH (Administrativo) e o administrador.
     function lancaSit(e) { return admin() || admEdita() || (ativo() && esc(e) && pEm('operacao') in ['gestor', 'coordenador', 'supervisor', 'lider']); }
     // Efetivo por área: administrador, gestor, coordenador, administrativo e somente leitura veem todas as áreas;
@@ -146,9 +151,10 @@ service cloud.firestore {
     match /seeds/{nome} {
       allow get: if (nome == 'seed' && admMod('operacao'))
         || (nome == 'seed-bateria' && admMod('bateria'))
+        || (nome == 'seed-sinter' && admMod('sinter'))
         || (nome == 'seed-equip' && admMod('equipamentos'))
         || (nome in ['seed-gestao', 'seed-efetivo'] && admMod('gestao'))
-        || (nome in ['seed-freq-patio', 'seed-freq-bateria', 'seed-ferias'] && admin());
+        || (nome in ['seed-freq-patio', 'seed-freq-bateria', 'seed-freq-sinter', 'seed-ferias'] && admin());
       allow list, create, update, delete: if false;
     }
 
@@ -213,7 +219,7 @@ service cloud.firestore {
     function movPede(u, v, e) { return adminU(u) || (v.ao == v.ap ? escU(u, e) && pmU(u, 'operacao') in ['lider', 'supervisor', 'coordenador', 'gestor'] && movArea(u, v.ao) : movAcima(u, v.ao, e)); }
     function movAprova(u, v, e) { return adminU(u) || (v.ao == v.ap && movAcima(u, v.ap, e)); }
     function movValidado(c, id) { return exists(/databases/$(database)/documents/$(c)/$(id)) && get(/databases/$(database)/documents/$(c)/$(id)).data.get('st', '') == 'validado'; }
-    function movLivre(v, e) { let c = e == 'bateria' ? 'b_efetivoDia' : 'efetivoDia';
+    function movLivre(v, e) { let c = e == 'bateria' ? 'b_efetivoDia' : e == 'sinter' ? 's_efetivoDia' : 'efetivoDia';
       return !movValidado(c, v.dt + '_' + v.ao) && (v.ap == v.ao || !movValidado(c, v.dt + '_' + v.ap)); }
     function movForma(v, k) {
       return v is map && v.keys().hasOnly(['id', 'dt', 'de', 'para', 'ao', 'ap', 'st', 'por', 'nome', 'em', 'ok', 'okNome', 'okEm', 'mot'])
@@ -274,6 +280,11 @@ service cloud.firestore {
       allow create, update: if efOk(id) && efPode('bateria');
       allow delete: if admin();
     }
+    match /s_efetivoDia/{id} {
+      allow read: if siI() || acAdm();
+      allow create, update: if efOk(id) && efPode('sinter');
+      allow delete: if admin();
+    }
 
     // Apagar semanas e aprovações (Limpeza de dados) e o histórico: só o administrador. A dispensa das pendências
     // antigas (célula volta a '_' e a marca vai em dx) é uma alteração: o administrador já altera a semana inteira.
@@ -307,7 +318,7 @@ service cloud.firestore {
     // Plano de ação das causas de não realização: quem aprova na área (ou em todas, area 'TODAS') cria e acompanha.
     function acaoOk(d) { return d.area is string && d.causa is string && d.causa.size() <= 160 && d.acao is string && d.acao.size() <= 400; }
     function acaoTodas(e) { return admin() || (ativo() && esc(e) && (pEm('operacao') in ['gestor', 'coordenador'] || pEm('gestao') in ['gestor', 'coordenador'])); }
-    function acaoPode(area, m) { return area == 'TODAS' ? acaoTodas(m == 'operacao' ? 'patio' : 'bateria') : (m == 'operacao' ? acompanhaDa(area) : acompanhaDaB(area)); }
+    function acaoPode(area, m) { let e = m == 'operacao' ? 'patio' : m; return area == 'TODAS' ? acaoTodas(e) : acompanha(area, e); }
     // Quem alterou a ação: atualizadoPor = quem está logado, com atualizadoEm novo (o site grava a hora do aparelho em texto).
     function acaoMarca() { return request.resource.data.get('atualizadoPor', '') == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasAny(['atualizadoEm']); }
     match /acoes/{id} {
@@ -321,6 +332,12 @@ service cloud.firestore {
       allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'bateria');
       allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'bateria');
       allow delete: if admMod('bateria');
+    }
+    match /s_acoes/{id} {
+      allow read: if siI();
+      allow create: if acaoOk(request.resource.data) && request.resource.data.get('por', '') == request.auth.uid && acaoPode(request.resource.data.area, 'sinter');
+      allow update: if acaoOk(request.resource.data) && acaoMarca() && resource.data.area == request.resource.data.area && acaoPode(resource.data.area, 'sinter');
+      allow delete: if admMod('sinter');
     }
 
     // ---------- Fotos das atividades (evidencias/evidenciasArquivo; Bateria com o prefixo b_) ----------
@@ -552,7 +569,7 @@ service cloud.firestore {
     // Na criação, só os campos de quem abre ou planeja (os da parte 2 e 3 nascem depois, nos passos seguintes).
     function omCamposNovo() { return ['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'tipo', 'prio', 'status', 'hSol', 'dPrev', 'solPor', 'solNome', 'hist', 'criadoEm', 'atualizadoEm', 'atualizadoPor', 'docs']; }
     function omOk(d) {
-      return d.conj in ['patio', 'bateria'] && d.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'recusada', 'liberada', 'finalizada', 'cancelada']
+      return d.conj in ['patio', 'bateria', 'sinter'] && d.status in ['planejada', 'solicitada', 'devolvida', 'aprovada', 'enviada', 'recusada', 'liberada', 'finalizada', 'cancelada']
         && d.titulo is string && d.titulo.size() >= 5 && d.titulo.size() <= 200 && d.area is string && d.area.size() <= 40
         && d.get('tipo', 'corretiva') in ['corretiva', 'preventiva', 'melhoria', 'seguranca'] && d.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
         && d.get('hist', []) is list && d.get('hist', []).size() <= 60;
@@ -592,7 +609,7 @@ service cloud.firestore {
     match /config/oms {
       allow read: if ativo();
       allow write: if admin() && request.resource.data.keys().hasOnly(['clientes', 'prazos', 'atualizadoEm', 'atualizadoPor'])
-        && request.resource.data.get('clientes', {}) is map && request.resource.data.get('clientes', {}).keys().hasOnly(['patio', 'bateria'])
+        && request.resource.data.get('clientes', {}) is map && request.resource.data.get('clientes', {}).keys().hasOnly(['patio', 'bateria', 'sinter'])
         && omPrazosOk(request.resource.data.get('prazos', {}));
     }
     match /oms/{id} {
@@ -641,7 +658,7 @@ service cloud.firestore {
       allow read: if admin() || (ativo() && pEm('operacao') != '' && esc(resource.data.conj));
       allow create, update: if marcaOk() && omTrata(request.resource.data.conj) && (resource == null || resource.data.conj == request.resource.data.conj)
         && request.resource.data.keys().hasOnly(['conj', 'area', 'local', 'equip', 'titulo', 'desc', 'prio', 'freq', 'dias', 'dia', 'inicio', 'ativa', 'ate', 'criadoPor', 'criadoNome', 'atualizadoEm', 'atualizadoPor'])
-        && request.resource.data.conj in ['patio', 'bateria'] && request.resource.data.titulo is string && request.resource.data.titulo.size() >= 5 && request.resource.data.titulo.size() <= 200
+        && request.resource.data.conj in ['patio', 'bateria', 'sinter'] && request.resource.data.titulo is string && request.resource.data.titulo.size() >= 5 && request.resource.data.titulo.size() <= 200
         && request.resource.data.area is string && request.resource.data.area.size() <= 40 && tTxt(request.resource.data, 'local', 120) && tTxt(request.resource.data, 'equip', 80)
         && tTxt(request.resource.data, 'desc', 1000) && request.resource.data.get('prio', 'media') in ['baixa', 'media', 'alta', 'emergencia']
         && request.resource.data.freq in ['semana', 'quinzena', 'mes'] && request.resource.data.get('dias', []) is list && request.resource.data.get('dias', []).size() <= 7
@@ -713,6 +730,55 @@ service cloud.firestore {
       allow create: if (admin() || gestorDaB(request.resource.data.area)) && arqOk(request.resource.data, 'b_evidencias', id);
       allow update: if false;
       allow delete: if arqApagavel('b_evidencias', id, 'bateria');
+    }
+
+    // ---------- Módulo Atividades Sinter (mesma estrutura do Pátio, prefixo s_) ----------
+    match /s_config/sistema {
+      allow read: if siI();
+      allow write: if admMod('sinter');
+    }
+    match /s_plano/{area} {
+      allow read: if siI();
+      allow write: if admMod('sinter');
+    }
+    match /s_colaboradores/{area} {
+      allow read: if siI() || acAdm();
+      allow create: if (admMod('sinter') || admMod('gestao')) && marcaOk() && colabsOk(novos());
+      allow update: if (admMod('sinter') || admMod('gestao')) && marcaOk() && colabsOk(mudados());
+      allow delete: if admMod('sinter') || admMod('gestao');
+    }
+    match /s_situacao/{mes} {
+      allow read: if siI() || acAdm() || eqmI();
+      allow create: if lancaSit('sinter') && marcaOk() && sitOk(novos()) && movSit(novos(), 'sinter') && sitTrava(novos());
+      allow update: if lancaSit('sinter') && marcaOk() && sitOk(mudados()) && movSit(mudados(), 'sinter') && sitTrava(mudados());
+      allow delete: if admin() || admEdita();   // apagar o mês inteiro passaria por cima da trava
+    }
+    match /s_semanas/{id} {
+      allow read: if siI();
+      allow create: if admMod('sinter') && marcaOk();
+      allow delete: if admin();
+      allow update: if marcaOk() && (admMod('sinter') || (gestorDaS(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'qz', 'atualizadoEm', 'atualizadoPor']))
+        || (tecnicoEm('sinter') && soAltera(['s', 'm', 'atualizadoEm', 'atualizadoPor']))
+        || (criaForaDaS(resource.data.area) && soAltera(['s', 'm', 'ev', 'ft', 'fp', 'qz', 'atualizadoEm', 'atualizadoPor'])));
+    }
+    function aprovaDaS(area) { return aprova(area, 'sinter'); }
+    function acompanhaDaS(area) { return acompanha(area, 'sinter'); }
+    match /s_aprov/{id} {
+      allow read: if siI();
+      allow create, update: if aprovaDaS(request.resource.data.area) && (resource == null || resource.data.area == request.resource.data.area);
+      allow delete: if admin();
+    }
+    match /s_evidencias/{id} {
+      allow read: if si();
+      allow create: if (admin() || gestorDaS(request.resource.data.area)) && fotoOk(request.resource.data, 's_semanas');
+      allow update: if (fotoAutor('sinter') && refsOk(request.resource.data)) || (fotoAdmin() && refsOuAntiga(request.resource.data));
+      allow delete: if admin() || fotoApontaApaga('sinter');
+    }
+    match /s_evidenciasArquivo/{id} {
+      allow read: if si();
+      allow create: if (admin() || gestorDaS(request.resource.data.area)) && arqOk(request.resource.data, 's_evidencias', id);
+      allow update: if false;
+      allow delete: if arqApagavel('s_evidencias', id, 'sinter');
     }
 
     // ---------- Módulo Operação: controle de equipamentos ----------
@@ -859,14 +925,14 @@ service cloud.firestore {
     // ---------- Acesso Administrativo ----------
     // Folha de frequência de cada competência (16 a 15): grupos, pessoas e os dias de quem não está nas Atividades.
     // Quem está nas Atividades tem a presença em situacao/b_situacao (a mesma do Efetivo diário).
-    // id = 'conj|AAAA-MM' (conj = patio ou bateria); grupos[] = grupos e pessoas; d e jus = dias e justificativas por pessoa.
+    // id = 'conj|AAAA-MM' (conj = patio, bateria ou sinter); grupos[] = grupos e pessoas; d e jus = dias e justificativas por pessoa.
     function compOk(d, ch) {
       return fTxt(d, ch, 'conj', 10) && fTxt(d, ch, 'competencia', 7) && fDia(d, ch, 'ini') && fDia(d, ch, 'fim') && fLista(d, ch, 'grupos', 300)
         && fMapa(d, ch, 'd', 3000) && fMapa(d, ch, 'jus', 3000) && fTxt(d, ch, 'aba', 120) && d.keys().size() <= 30; }
     match /freqcomp/{id} {
       // Equipe e frota (Operação) lê a folha para a situação dos operadores; os Indicadores, a do conjunto do escopo.
-      allow read: if acAdm() || eqmI() || (id.matches('patio[|].*') && indE('patio')) || (id.matches('bateria[|].*') && indE('bateria'));
-      allow create: if admEdita() && request.resource.data.get('conj', '') in ['patio', 'bateria'] && request.resource.data.get('competencia', '') is string
+      allow read: if acAdm() || eqmI() || (id.matches('patio[|].*') && indE('patio')) || (id.matches('bateria[|].*') && indE('bateria')) || (id.matches('sinter[|].*') && indE('sinter'));
+      allow create: if admEdita() && request.resource.data.get('conj', '') in ['patio', 'bateria', 'sinter'] && request.resource.data.get('competencia', '') is string
         && id == request.resource.data.conj + '|' + request.resource.data.competencia && request.resource.data.competencia.matches('[0-9]{4}-[0-9]{2}')
         && compOk(request.resource.data, novos());
       allow update: if admEdita() && !mudados().hasAny(['conj', 'competencia']) && compOk(request.resource.data, mudados());
@@ -915,7 +981,7 @@ service cloud.firestore {
     // ---------- Módulo Segurança: registros de interação e de anomalia ----------
     // Só registra quem o administrador autorizou (Segurança · registra, trata ou gestor). Quem só registra lê só o que
     // registrou; trata, gestor, somente leitura e o administrador leem tudo. O supervisor da área (Operação · Supervisor
-    // com uma das áreas dele dentro do conjunto da anomalia: conj = patio | bateria) lê e trata as anomalias e
+    // com uma das áreas dele dentro do conjunto da anomalia: conj = patio | bateria | sinter) lê e trata as anomalias e
     // lê as interações da área. O acompanhamento (status, trat, conclEm) é de quem trata e do supervisor da área; o autor
     // corrige o próprio registro por 24 h (a anomalia, só enquanto aberta). Apagar = administrador. As fotos (segfotos)
     // levam o autor e o conjunto do registro e seguem as mesmas regras de leitura.
@@ -923,19 +989,19 @@ service cloud.firestore {
     function segRegistra() { return admin() || (ativo() && segP() in ['registra', 'trata', 'gestor']); }
     function segTudo() { return admin() || (ativo() && segP() in ['trata', 'gestor', 'leitor']); }
     function segTrata() { return admin() || (ativo() && segP() in ['trata', 'gestor']); }
-    function areasDoConj(conj) { return conj == 'patio' ? ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] : ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ']; }
+    function areasDoConj(conj) { return conj == 'patio' ? ['RECEBIMENTO', 'FINAL DO PÁTIO', 'PREPARAÇÃO', 'TRATAMENTO DE COQUE'] : conj == 'sinter' ? ['SINTER'] : ['BATERIA 1', 'BATERIA 2', 'TRILHO', 'CDQ']; }
     function supSeg(conj) {
-      return conj in ['patio', 'bateria'] && ativo()
+      return conj in ['patio', 'bateria', 'sinter'] && ativo()
         && pEm('operacao') == 'supervisor' && esc(conj)
         && (perfil().get('area', '') in areasDoConj(conj) || perfil().get('area2', '') in areasDoConj(conj)
             || perfil().get('areas', []).hasAny(areasDoConj(conj)));
     }
     // Indicadores: os registros do conjunto do escopo (só leitura).
-    function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj) || (r.conj in ['patio', 'bateria'] && indE(r.conj)); }
+    function segLe(r) { return segTudo() || (r.por == request.auth.uid && segRegistra()) || supSeg(r.conj) || (r.conj in ['patio', 'bateria', 'sinter'] && indE(r.conj)); }
     function txtOk(d, k, min, max) { return d.get(k, '') is string && d.get(k, '').size() >= min && d.get(k, '').size() <= max; }
     function dataOk(d) { return d.data is string && d.data.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}') && d.mes == d.data.split('-')[0] + '-' + d.data.split('-')[1]; }
     function regOk(d) {
-      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', '']
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', 'sinter', '']
         && d.conj is string && txtOk(d, 'local', 1, 120) && txtOk(d, 'mat', 1, 30) && d.get('fotos', []) is list && d.get('minis', []) is list
         && d.get('fotos', []).size() <= 6 && d.get('minis', []).size() <= 6 && d.por is string && txtOk(d, 'porNome', 0, 120);
     }
@@ -986,7 +1052,7 @@ service cloud.firestore {
     // (OK / Não OK / N/A) e a nota. Registra e lê como os outros registros da Segurança; o autor corrige por 24 h (no mesmo
     // lote, os itens Não OK novos viram anomalias com o id da inspeção); apagar = administrador.
     function segInspOk(d) {
-      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && d.conj is string && txtOk(d, 'local', 1, 120)
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', 'sinter', ''] && d.conj is string && txtOk(d, 'local', 1, 120)
         && d.keys().hasOnly(['tipo', 'data', 'mes', 'area', 'conj', 'local', 'itens', 'nota', 'obs', 'por', 'porNome', 'em', 'atualizadoEm'])
         && d.tipo in ['s5', 'seg', 'area'] && d.itens is list && d.itens.size() >= 1 && d.itens.size() <= 20
         && (d.get('nota', null) == null || (d.nota is number && d.nota >= 0 && d.nota <= 100))
@@ -1003,7 +1069,7 @@ service cloud.firestore {
     // lê como os outros registros; valida quem trata as anomalias (trata, gestor, administrador = Seg. do Trabalho)
     // e o supervisor da área (Líder imediato), só nos campos da validação. O autor corrige por 24 h enquanto pendente.
     function cartaoOk(d) {
-      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', ''] && d.conj is string
+      return dataOk(d) && txtOk(d, 'area', 1, 60) && d.get('conj', '') in ['patio', 'bateria', 'sinter', ''] && d.conj is string
         && d.keys().hasOnly(['data', 'mes', 'area', 'conj', 'faltou', 'motivo', 'comoSeguro', 'comunic', 'mat', 'fotos', 'minis', 'por', 'porNome', 'em', 'status', 'valid', 'atualizadoEm', 'atualizadoPor'])
         && d.get('faltou', []) is list && d.get('faltou', []).size() <= 3
         && txtOk(d, 'motivo', 1, 3000) && txtOk(d, 'comoSeguro', 1, 3000) && txtOk(d, 'comunic', 1, 120) && txtOk(d, 'mat', 1, 30)
@@ -1095,7 +1161,7 @@ service cloud.firestore {
       'motRec', 'orig', 'confPor', 'confNome', 'confEm', 'por', 'porNome', 'em', 'diaLanc', 'fotosApagadasEm', 'atualizadoEm', 'atualizadoPor']); }
     // Confere o documento inteiro depois da gravação (poucas contas: o banco limita a 1000 por pedido).
     function atOk() { let d = request.resource.data;
-      return atCampos(d.keys()) && d.conj in ['patio', 'bateria'] && d.area is string && d.area.size() <= 80 && d.nome is string && d.nome.size() <= 120
+      return atCampos(d.keys()) && d.conj in ['patio', 'bateria', 'sinter'] && d.area is string && d.area.size() <= 80 && d.nome is string && d.nome.size() <= 120
         && d.ini is string && d.ini.size() == 10 && d.fim is string && d.fim.size() == 10 && d.emis is string && d.emis.size() == 10
         && d.dias is int && d.dias >= 1 && d.dias <= 30 && d.st in ['conferir', 'conferido', 'recusado']
         && d.tipo in ['Atestado médico', 'Atestado odontológico', 'Acompanhamento de familiar', 'Declaração de comparecimento', 'Outro']
@@ -1103,7 +1169,7 @@ service cloud.firestore {
         && d.get('nf', 0) is int && d.get('nf', 0) <= 2 && d.get('minis', []) is list && d.get('minis', []).size() <= 2
         && (d.get('horas', null) == null || (d.horas is number && d.horas <= 24)) && d.get('orig', false) is bool
         && d.get('atualizadoPor', '') == request.auth.uid; }
-    function atLanca(d) { return d.conj in ['patio', 'bateria'] && (atRH() || apontaDa(d.area, d.conj)); }
+    function atLanca(d) { return d.conj in ['patio', 'bateria', 'sinter'] && (atRH() || apontaDa(d.area, d.conj)); }
     function atFotoPai(aid) { return /databases/$(database)/documents/atestados/$(aid); }
     match /config/atestados {
       allow read: if ativo();

@@ -67,8 +67,8 @@
 //                             feito, fixa, criadoEm, atualizadoEm, atualizadoPor }  só o dono lê e grava (contas/agenda.js)
 //   segfotos/{id}             { reg, col, tipo: antes|depois, mini, dados, ordem, autor, por, conj, area, mes, em }  uma foto
 //                             por documento (até ~700 KB); a lista usa só as miniaturas que ficam no registro
-// Atividades Bateria: as mesmas coleções com o prefixo b_ (b_config/sistema, b_plano, b_colaboradores, b_situacao,
-//   b_semanas, b_evidencias, b_evidenciasArquivo). O conjunto ativo é escolhido com useSet('patio' | 'bateria').
+// Atividades Bateria e Sinter: as mesmas coleções com o prefixo b_ e s_ (b_config/sistema, b_plano, b_colaboradores, b_situacao,
+//   b_semanas, b_evidencias, b_evidenciasArquivo). O conjunto ativo é escolhido com useSet('patio' | 'bateria' | 'sinter').
 // Um documento por área+semana: cada tela lê poucos documentos (cabe no plano grátis).
 
 import {
@@ -118,7 +118,8 @@ function onSnapshot(ref, ...a) {
 
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
 const novoSet = () => ({ config: null, configLoaded: false, configErro: null, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
-const S = { patio: novoSet(), bateria: novoSet() };
+const porSet = f => Object.fromEntries(SET_KEYS.map(k => [k, f()]));
+const S = Object.fromEntries(SET_KEYS.map(k => [k, novoSet()]));
 let cur = 'patio';
 export const useSet = k => { if (S[k]) cur = k; };
 export const setAtual = () => cur;
@@ -399,7 +400,7 @@ export function iniciarAdministracao() {
   admSisOn = true;
   const on = (q, fn) => dataSubs.push(onSnapshot(q, fn, e => cb.onError && cb.onError(e)));
   if (!admOn) {
-    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [] };
+    cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: porSet(() => ({})), jus: porSet(() => ({})), colabs: porSet(() => []) , rh: [] };
     dataSubs.push(ouvirIncremental('ferias', (l, ok) => { cache.adm.ferias = l; cache.adm.fLoaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
   }
   const comp = competenciaDe(today());
@@ -430,7 +431,7 @@ function stopData() {
   for (const f of omSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omSubs.clear(); cache.oms = {};
   if (omsCfgSub) { try { omsCfgSub(); } catch (e) { /* já fechado */ } } omsCfgSub = null; cache.omsCfg = { loaded: false, d: null };
   for (const f of omRecSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omRecSubs.clear(); cache.omsRec = {};
-  eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 }; admOn = false;
+  eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: porSet(() => ({})), v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
   for (const k of SET_KEYS) S[k] = novoSet();
@@ -484,7 +485,7 @@ function watchSet(k, meses) {
 export const sit = key => { const m = key.split('|')[1].slice(0, 7); return (cache.sitByMonth[m] || {})[key]; };
 // ---------- Efetivo do dia (status do envio por área e dia; contas/efetivo-dia.js) ----------
 // efetivoDia/{AAAA-MM-DD}_{ÁREA} (b_efetivoDia na Bateria). Lido pela Operação (watchSet) e pelo RH (admWatch).
-const EF = { patio: {}, bateria: {} };
+const EF = Object.fromEntries(SET_KEYS.map(k => [k, {}]));
 function efOuvir(k, mes) {
   return onSnapshot(query(collection(db, C('efetivoDia', k)), where('mes', '==', mes)), qs => {
     qs.docChanges().forEach(x => { if (x.type === 'removed') delete EF[k][x.doc.id]; else EF[k][x.doc.id] = x.doc.data({ serverTimestamps: 'estimate' }); });
@@ -1023,12 +1024,12 @@ export async function dpImportar(itens, arc) {
 // LGPD › descarte por prazo (Administração › LGPD; contas/lgpd.js diz o que passou do prazo). Lê a presença (Pátio e
 // Bateria), as folhas da Frequência, os ASO, os acessos às fichas com mais de 1 ano e o cadastro (demissão).
 export async function lgpdLer(limAcesso, limAt = '0000-00-00') {
-  const [sp, sb, comps, aso, acessos, fichas] = await Promise.all([limpezaLer('situacao'), limpezaLer('b_situacao'), limpezaLer('freqcomp'),
+  const [sp, sb, ss, comps, aso, acessos, fichas] = await Promise.all([limpezaLer('situacao'), limpezaLer('b_situacao'), limpezaLer('s_situacao'), limpezaLer('freqcomp'),
     limpezaLer('treinos', [['tipo', '==', 'ASO']]), limpezaLer('acessosFicha', [['dia', '<', limAcesso]]), limpezaLer('gcolab')]);
   const dps = await limpezaLer('dpessoais');
   const atest = await limpezaLer('atestados', [['fim', '<', limAt]]);
   const atFotosIds = atest.length ? (await limpezaLer('atestadosFoto')).filter(f => atest.some(a => a.id === f.aid)).map(f => ({ id: f.id, aid: f.aid })) : [];
-  return { dps, atest, atFotos: atFotosIds, sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
+  return { dps, atest, atFotos: atFotosIds, sit: [...sp.map(d => ({ ...d, col: 'situacao' })), ...sb.map(d => ({ ...d, col: 'b_situacao' })), ...ss.map(d => ({ ...d, col: 's_situacao' }))], comps, aso, acessos, fichas: fichas.flatMap(d => d.itens || []) };
 }
 // ops: { tipo: 'obs', col, id, caminho[] } apaga a observação · { tipo: 'aso', id } apaga o ASO (marca de apagado do
 // incremental, sem as datas nem a observação) · { tipo: 'acesso', id } apaga a linha do registro de acesso.
@@ -1112,10 +1113,10 @@ export async function importar(seed, meses, aPartirDe) {
 //   ativ = id da pessoa nas Atividades (C012, B034): a presença dela fica em situacao (a mesma do Efetivo diário).
 // ferias/{id}: { mat, nome, setor, funcao, horario, admissao, limite, inicio, dias, termino, retorno, substituto }
 // adm/feriasAtivas: { itens: [{ mat, nome, inicio, termino }] } resumo para a Operação.
-cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], rhLoaded: false };
+cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: porSet(() => ({})), jus: porSet(() => ({})), colabs: porSet(() => []) , rh: [], rhLoaded: false };
 const admSubs = new Map();
 function startAdm(on) {
-  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: { patio: {}, bateria: {} }, jus: { patio: {}, bateria: {} }, colabs: { patio: [], bateria: [] }, rh: [], rhLoaded: false };
+  cache.adm = { loaded: false, ferias: [], fLoaded: false, comps: {}, sit: porSet(() => ({})), jus: porSet(() => ({})), colabs: porSet(() => []) , rh: [], rhLoaded: false };
   fichasRH = {};
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
   dataSubs.push(ouvirIncremental('ferias', (l, ok) => { cache.adm.ferias = l; cache.adm.fLoaded = ok; cache.adm.loaded = ok; changed(); }, e => cb.onError && cb.onError(e)));
@@ -1403,7 +1404,7 @@ export function eWatch(meses) {
 }
 // Equipe e frota em sincronia com a Frequência e o Efetivo diário: a folha (freqcomp) das competências que cobrem o mês
 // e a presença do dia (situacao/b_situacao) do mês. Só leitura; quem lança é o Efetivo diário ou o Administrativo.
-cache.eqFreq = { comps: {}, sit: { patio: {}, bateria: {} }, v: 0 };
+cache.eqFreq = { comps: {}, sit: porSet(() => ({})), v: 0 };
 const eqFreqSubs = new Set();
 // Hora extra lançada na Operação (status HORA EXTRA / HE NOTURNA dos lançamentos de equipamento), por mês.
 // Lida também por quem tem a Frequência ou as Atividades: entra na folha e no Banco de horas extras.

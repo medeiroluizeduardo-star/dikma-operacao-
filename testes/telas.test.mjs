@@ -136,6 +136,7 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
             const novas = (await page.$$eval('#fbarra [data-go]', bs => bs.map(b => b.dataset.go))).filter(x => !vistas.has(x));
             novas.forEach(x => vistas.add(x)); ids.splice(i + 1, 0, ...novas.map(x => [x, id]));
           }
+          const conferir = async onde => {
           const r = await page.evaluate(w => ({
             texto: (document.getElementById('view')?.innerText || '').trim().length,
             carregando: !!document.querySelector('#view [aria-busy="true"]'),
@@ -144,12 +145,23 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
             iconeGrande: [...document.querySelectorAll('#view svg[viewBox="0 0 24 24"]')].some(e => e.getBoundingClientRect().height > 96),
             falhou: [...document.querySelectorAll('.toast')].map(e => e.innerText).find(s => /não foi possível/i.test(s)) || ''
           }), tela.width);
-          assert.deepEqual(erros, [], 'erros na tela');
-          assert.equal(r.falhou, '', 'aviso de falha na tela');
-          assert.ok(r.texto > 0, 'tela em branco');
-          assert.equal(r.iconeGrande, false, 'ícone gigante (falta tamanho no CSS)');
-          assert.equal(r.carregando, false, 'tela presa no "Carregando"');
-          assert.ok(r.largura <= r.janela + 1, `rolagem lateral: conteúdo com ${r.largura}px numa tela de ${r.janela}px`);
+          assert.deepEqual(erros, [], 'erros na tela' + onde);
+          assert.equal(r.falhou, '', 'aviso de falha na tela' + onde);
+          assert.ok(r.texto > 0, 'tela em branco' + onde);
+          assert.equal(r.iconeGrande, false, 'ícone gigante (falta tamanho no CSS)' + onde);
+          assert.equal(r.carregando, false, 'tela presa no "Carregando"' + onde);
+          assert.ok(r.largura <= r.janela + 1, `rolagem lateral: conteúdo com ${r.largura}px numa tela de ${r.janela}px${onde}`);
+          };
+          await conferir('');
+          // Tela com a escolha do conjunto (Pátio, Bateria, Sinter): confere também com a Sinter (conjunto novo, ainda
+          // sem áreas com rota) e volta para o primeiro conjunto.
+          const trocar = rot => page.evaluate(async t => {
+            const b = [...document.querySelectorAll('.setsw button')].find(x => x.innerText.trim() === t && x.getAttribute('aria-selected') !== 'true');
+            if (!b) return false; b.click();
+            const quadro = () => new Promise(r => requestAnimationFrame(r));
+            await new Promise(r => setTimeout(r, 45)); await quadro(); await quadro(); return true;
+          }, rot);
+          if (await trocar('Sinter')) { await esperar(page); await conferir(' (com a Sinter)'); await trocar('Pátio'); await esperar(page); }
           await fecharJanelas(page);
         });
         abas++;

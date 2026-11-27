@@ -22,13 +22,16 @@ const cfg = () => (DB.cache.omsCfg || {}).d || null;
 
 // Conjuntos que a pessoa vê nos Indicadores e a vista escolhida (Coqueria = Pátio + Bateria).
 const conjs = () => conjsInd(ME);
+// Coqueria = Pátio + Bateria (a Sinter tem a vista própria).
+const coq = () => conjs().filter(k => k === 'patio' || k === 'bateria');
 function vista() {
   const u = U(); const cs = conjs();
   if (cs.length < 2) u.vista = cs[0] || 'coq';
-  else if (u.vista !== 'coq' && !cs.includes(u.vista)) u.vista = 'coq';
+  else if (!coq().length && !cs.includes(u.vista)) u.vista = cs[0];
+  else if (u.vista !== 'coq' && !cs.includes(u.vista)) u.vista = coq().length ? 'coq' : cs[0];
   return u.vista;
 }
-const daVista = () => { const v = vista(); return v === 'coq' ? conjs() : [v]; };
+const daVista = () => { const v = vista(); return v === 'coq' ? coq() : [v]; };
 // As OMs da vista; quem vê só a própria área nos Indicadores vê só as OMs dela.
 function dados() {
   const cs = daVista(); let ok = true; const l = [];
@@ -104,7 +107,7 @@ function vPainel() {
 export function topo() {
   const u = U(); const cs = conjs(); const v = vista();
   const ops = []; for (let i = 0; i < 13; i++) ops.push(addMonth(MES_HOJE, -i));
-  const sw = cs.length > 1 ? `<div class="seg setsw ic-sw" role="tablist" aria-label="Conjunto">${[['coq', 'Coqueria'], ...cs.map(k => [k, SETS[k].curto])].map(([k, t]) => `<button type="button" role="tab" data-act="oiVista" data-v="${k}" aria-selected="${v === k}">${esc(t)}</button>`).join('')}</div>` : '';
+  const sw = cs.length > 1 ? `<div class="seg setsw ic-sw" role="tablist" aria-label="Conjunto">${[...(coq().length ? [['coq', 'Coqueria']] : []), ...cs.map(k => [k, SETS[k].curto])].map(([k, t]) => `<button type="button" role="tab" data-act="oiVista" data-v="${k}" aria-selected="${v === k}">${esc(t)}</button>`).join('')}</div>` : '';
   return sw + `<label class="sel"><span>Mês</span><select class="in" id="oiMes">${ops.map(m => `<option value="${m}" ${m === u.mes ? 'selected' : ''}>${esc(mesNome(m))}</option>`).join('')}</select></label>`;
 }
 export const renderView = () => vPainel();

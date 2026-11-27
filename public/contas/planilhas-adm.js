@@ -80,7 +80,7 @@ function evento(txt) {
   return { nota: txt };
 }
 
-// Lê uma planilha de frequência inteira. conjunto = 'patio' | 'bateria'.
+// Lê uma planilha de frequência inteira. conjunto = 'patio' | 'bateria' | 'sinter'.
 export function lerFrequencia(abas, conjunto) {
   const comps = []; let ano = null, mesAnt = null;
   const avisos = [];
@@ -324,8 +324,8 @@ const MES_ABA = s => { const n = semAcento(s).toUpperCase(); const i = MESES.fin
 // colabs: { patio: [...], bateria: [...] } (Atividades) · rh: fichas do Efetivo (com matrícula)
 export function prepararImportacao({ freq = {}, ferias = null, colabs = {}, rh = [] }) {
   const buscaRH = criarBusca(rh);
-  const comps = [], presenca = { patio: {}, bateria: {} }, resumo = { frequencia: {}, ferias: null, semRH: [], ligadas: 0 };
-  for (const conj of ['patio', 'bateria']) {
+  const comps = [], presenca = { patio: {}, bateria: {}, sinter: {} }, resumo = { frequencia: {}, ferias: null, semRH: [], ligadas: 0 };
+  for (const conj of ['patio', 'bateria', 'sinter']) {
     const f = freq[conj]; if (!f) continue;
     const buscaAt = criarBusca(colabs[conj] || []);
     const r = { competencias: [], pessoas: 0, ligadas: 0, diasPresenca: 0, diasFolha: 0 };

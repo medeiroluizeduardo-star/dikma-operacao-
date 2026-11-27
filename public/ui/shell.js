@@ -1,5 +1,5 @@
 // Moldura da tela: entrada (login), desenho da tela (render), menu lateral, barra de baixo, topo, filtros, busca e tema.
-import { SETS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
+import { SETS, SET_KEYS, AREA_S, add, ddmm, weeksOfMonth, weekLabel, monthLabel } from '../contas/cal.js';
 import * as M from './movimento.js';
 import * as VEL from '../nucleo/medidor.js';
 import { semAcento, filtrarLista } from './busca.js';
@@ -191,7 +191,7 @@ function renderNav() {
   if (apv) SELOS.aprovar = { n: apv, txt: 'aguardando aprovação' };
   if (gb) SELOS[ge ? 'gcolab' : 'elanc'] = { n: gb, txt: ge ? 'pendências com mais de 7 dias' : 'equipamentos parados' };
   // RH: efetivos enviados pelos líderes esperando validação (os meses que a Frequência já abriu)
-  const efr = UI.modulo === 'rh' && editaAdm(ME) && DB.efDocs ? ['patio', 'bateria'].reduce((n, k) => n + aguardandoEf(DB.efDocs(k)).length, 0) : 0;
+  const efr = UI.modulo === 'rh' && editaAdm(ME) && DB.efDocs ? SET_KEYS.reduce((n, k) => n + aguardandoEf(DB.efDocs(k)).length, 0) : 0;
   if (efr) SELOS.afreq = { n: efr, txt: 'efetivos aguardando validação' };
   // Atestados: o RH vê quantos estão a conferir; quem lança, os dele recusados ou sem foto (contas/atestados.js).
   const atRH = editaAdm(ME), atOp = UI.modulo === 'operacao' && (isAdmin() || ['gestor', 'coordenador', 'supervisor', 'lider'].includes(perfil('operacao')));
