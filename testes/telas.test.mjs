@@ -6,6 +6,7 @@
 //   - a tela desenhou alguma coisa e não ficou presa no "Carregando";
 //   - nada passa da largura da tela (sem rolagem lateral).
 //   - nenhum ícone sem tamanho (fica gigante).
+// E uma terceira passada no computador com dados de invasão: texto dos dados que vire HTML na tela (falta esc()).
 // Não usa o banco de verdade: o modo demonstração tem dados inventados e não grava nada.
 // Para rodar no computador: cd testes && npm install && npx playwright install chromium && npm run telas
 // Simulando uma máquina lenta (processador 6 vezes mais lento): LENTO=6 npm run telas
@@ -86,14 +87,23 @@ const clicar = (page, sel) => page.evaluate(async s => {
   await new Promise(r => setTimeout(r, 45)); await quadro(); await quadro();
   return true;
 }, sel);
+// Teste de injeção (passada "invasão"): os dados de exemplo chegam com um "ataque" no fim de cada nome e texto livre
+// (aspas, fecha-tag e um <i class="xss-teste">), só nos campos de texto livre (LIVRES). Se alguma tela montar HTML com esses dados sem passar por esc()
+// (nucleo/base.js), o <i> vira elemento de verdade na página e o teste acusa. Códigos, chaves, datas e números ficam como estão.
+const ATAQUE = '"\'><i class="xss-teste"></i>';
+const LIVRES = new Set(['nome', 'desc', 'obs', 'notas', 'texto', 'causa', 'lider', 'declaracao', 'setor']);
+const envenenar = (v, campo = '') => Array.isArray(v) ? v.map(x => envenenar(x, campo))
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, envenenar(x, k)]))
+  : typeof v === 'string' && v && LIVRES.has(campo) ? v + ATAQUE : v;
 const fecharJanelas = page => page.evaluate(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); });
 
-for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celular', { width: 390, height: 844 }]]) {
+for (const [nome, tela, invasao] of [['computador', { width: 1366, height: 800 }], ['celular', { width: 390, height: 844 }], ['computador, com dados de invasão', { width: 1366, height: 800 }, true]]) {
   test(`telas no ${nome} (${tela.width} de largura)`, async t => {
     const ctx = await navegador.newContext({ viewport: tela, serviceWorkers: 'block', locale: 'pt-BR', timezoneId: 'America/Sao_Paulo', ...(nome === 'celular' ? { isMobile: true, hasTouch: true, deviceScaleFactor: 1 } : {}) });
     // Sem internet: só o próprio site (as fontes do Google ficam de fora, a tela usa as do sistema).
     await ctx.route(u => !u.href.startsWith(base), r => r.abort());
     await ctx.addInitScript(ESPIAO);
+    if (invasao) await ctx.route(u => u.href.startsWith(base + 'demo/'), async r => { const resp = await r.fetch(); r.fulfill({ response: resp, json: envenenar(await resp.json()) }); });
     const page = await ctx.newPage();
     // LENTO=4 npm run telas: simula uma máquina 4x mais lenta (como a da CI em dia ruim) para conferir que o teste aguenta.
     if (Number(process.env.LENTO) > 1) await (await ctx.newCDPSession(page)).send('Emulation.setCPUThrottlingRate', { rate: Number(process.env.LENTO) });
@@ -117,7 +127,7 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
 
     const modulos = await page.$$eval('[data-mod]', bs => bs.map(b => b.dataset.mod));
     assert.ok(modulos.length >= 5, `o administrador devia ver os 5 módulos (viu ${modulos.join(', ')})`);
-    let abas = 0;
+    let abas = 0, ataquesVistos = 0;
     for (const m of modulos) {
       await clicar(page, `[data-mod="${m}"]`);
       await esperar(page);
@@ -143,9 +153,12 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
             largura: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth), janela: w,
             // ícone (desenho 24x24) sem tamanho no CSS fica do tamanho da tela (Atestados, 27/11)
             iconeGrande: [...document.querySelectorAll('#view svg[viewBox="0 0 24 24"]')].some(e => e.getBoundingClientRect().height > 96),
+            invadiu: document.querySelectorAll('.xss-teste').length, ataqueComoTexto: document.body.innerText.includes('xss-teste'),
             falhou: [...document.querySelectorAll('.toast')].map(e => e.innerText).find(s => /não foi possível/i.test(s)) || ''
           }), tela.width);
           assert.deepEqual(erros, [], 'erros na tela' + onde);
+          if (r.ataqueComoTexto) ataquesVistos++;
+          assert.equal(r.invadiu, 0, 'texto dos dados virou HTML na tela (falta esc())' + onde);
           assert.equal(r.falhou, '', 'aviso de falha na tela' + onde);
           assert.ok(r.texto > 0, 'tela em branco' + onde);
           assert.equal(r.iconeGrande, false, 'ícone gigante (falta tamanho no CSS)' + onde);
@@ -168,6 +181,8 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
       }
     }
     assert.ok(abas >= 20, `poucas abas testadas (${abas})`);
+    // o ataque precisa aparecer como texto comum em várias telas; se não aparece, o teste não está valendo
+    if (invasao) assert.ok(ataquesVistos >= 10, `o texto de invasão quase não apareceu nas telas (${ataquesVistos}): os dados de exemplo mudaram?`);
     await ctx.close();
   });
 }
