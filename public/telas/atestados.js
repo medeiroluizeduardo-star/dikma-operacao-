@@ -8,7 +8,7 @@ import * as AT from '../contas/atestados.js';
 import { SETS, AREA_S, add, monthLabel, addMonth } from '../contas/cal.js';
 import { competenciaDe } from '../contas/planilhas-adm.js';
 import { editaAdm } from '../contas/acessos.js';
-import { abrirAtestado, abrirFotoAt, registrarVista, AVISO_LGPD } from '../ui/atestado.js';
+import { abrirAtestado, abrirFotoAt, baixarAtestado, registrarVista, AVISO_LGPD } from '../ui/atestado.js';
 import { vazio, carregando, abas, etiqueta, tabela, dados, indicadores, botaoAcao, recolhido } from '../ui/padrao.js';
 import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { DB, TODAY, esc, title } from '../nucleo/base.js';
@@ -103,7 +103,7 @@ function vDetalhe(a) {
   <div class="card"><div class="body stackcol">
     <h2 class="p-t2">Atestado · ${esc(title(a.nome))}</h2>
     ${info}
-    <div><span class="ag-rot">Foto do atestado</span>${fotos ? `<div class="sgfotos">${fotos}</div><p class="muted small m0">Tocar abre a foto; fica registrado quem abriu (Administração › LGPD).</p>` : `<p class="muted small m0">${a.fotosApagadasEm ? 'A foto saiu pelo prazo da LGPD (12 meses depois do último dia).' : 'Sem foto ainda.'}</p>`}</div>
+    <div><span class="ag-rot">Foto do atestado</span>${fotos ? `<div class="sgfotos">${fotos}</div><div class="row-gap"><button type="button" class="btn sm" data-act="atBaixar" data-id="${esc(a.id)}">${I.dl} Baixar o atestado</button></div><p class="muted small m0">Tocar abre a foto; quem abre ou baixa fica registrado (Administração › LGPD).</p>` : `<p class="muted small m0">${a.fotosApagadasEm ? 'A foto saiu pelo prazo da LGPD (12 meses depois do último dia).' : 'Sem foto ainda.'}</p>`}</div>
     ${!pode && a.por === ME.uid ? '<p class="muted small m0">Já foi conferido pelo RH: só o RH muda agora.</p>' : ''}
     ${bt.length ? `<div class="row-gap">${bt.join('')}</div>` : ''}
   </div></div>`;
@@ -181,6 +181,7 @@ function vRegras() {
 const sel = id => { U().sel = id; render(); window.scrollTo(0, 0); };
 acoes.atAbrir = (t, d) => sel(d.id);
 acoes.atVoltar = () => { U().sel = null; render(); };
+acoes.atBaixar = (t, d) => { const a = achar(d.id); if (a) baixarAtestado(a, rh()); };
 acoes.atFoto = (t, d) => { const a = achar(d.id); if (a) abrirFotoAt(a, +d.i, rh()); };
 acoes.atFotoX = async (t, d) => {
   const a = achar(d.id); if (!a || !mexe(a)) return;
