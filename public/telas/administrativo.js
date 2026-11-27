@@ -200,7 +200,7 @@ export function criarAdministrativo(X) {
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
     // Unidade (Coqueria, Sinter, Alto Forno): pela área da Escala do dia ou pela Área/Setor da ficha.
     const fichaMat = new Map((A().rh || []).map(c => [String(c.mat), c]));
-    const unidadeP = p => { const c = p.ativ ? cmap.get(p.ativ) : null; const fi = fichaMat.get(String(p.mat)) || {}; const t = `${(c && c.area) || ''} | ${fi.setor || ''} | ${fi.subsetor || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return /SINTER/.test(t) ? 'Sinter' : /ALTO\s*FORNO/.test(t) ? 'Alto Forno' : 'Coqueria'; };
+    const unidadeP = p => { if (p.un) return p.un; const c = p.ativ ? cmap.get(p.ativ) : null; const fi = fichaMat.get(String(p.mat)) || {}; const t = `${(c && c.area) || ''} | ${fi.setor || ''} | ${fi.subsetor || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return /SINTER/.test(t) ? 'Sinter' : /ALTO\s*FORNO/.test(t) ? 'Alto Forno' : 'Coqueria'; };
     const filtra = !!(F.area || F.rota || F.turno || U.fCard || U.fUn); const procura = !!q || filtra;
     const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
     const passa = (g, p) => { if (U.fUn && unidadeP(p) !== U.fUn) return false; if (!(F.area || F.rota || F.turno)) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
@@ -579,12 +579,12 @@ export function criarAdministrativo(X) {
     if (!pode()) return '<div class="card"><div class="empty">Somente leitura: quem edita a Frequência importa planilhas.</div></div>';
     const adm = ME().papel === 'admin';
     let h = `<div class="${adm ? 'grid2' : ''}">${adm ? `<div class="card"><header><h2>Planilhas recebidas</h2><p>CONTROLE DE FREQUÊNCIA (Pátio e Bateria) e FÉRIAS GERAL, já no sistema</p></header><div class="body stackcol"><p class="m0 small">Lê as planilhas, liga cada pessoa ao cadastro do RH e às Atividades e mostra a conferência antes de gravar. Na presença do dia, só preenche o que ainda está vazio: nada do que os líderes já lançaram é trocado.</p><div class="row-gap"><button class="btn pri" data-a="impSeeds" ${st && st.busy ? 'disabled' : ''}>${st && st.busy ? 'Lendo…' : 'Ler as planilhas recebidas'}</button></div></div></div>` : ''}
-      <div class="card"><header><h2>Importar arquivo</h2><p>Uma planilha nova de frequência ou de férias (Excel)</p></header><div class="body stackcol"><div class="seg setsw" role="tablist" aria-label="Frequência de">${['patio', 'bateria'].map(k => `<button type="button" role="tab" data-a="impConj" data-v="${k}" aria-selected="${(U.impConj || 'patio') === k}">${SETS[k].curto}</button>`).join('')}</div><p class="muted small m0">Frequência: escolha Pátio ou Bateria. Férias: o sistema reconhece sozinho.</p><label class="btn">${I.file} Escolher arquivo<input type="file" id="aImpArq" accept=".xlsx,.xlsm,.xls" hidden></label></div></div></div>`;
+      <div class="card"><header><h2>Importar arquivo</h2><p>Uma planilha nova de frequência ou de férias (Excel)</p></header><div class="body stackcol"><div class="seg setsw" role="tablist" aria-label="Frequência de">${[['patio', 'Pátio'], ['bateria', 'Bateria'], ['sinter', 'Sinter']].map(([k, t]) => `<button type="button" role="tab" data-a="impConj" data-v="${k}" aria-selected="${(U.impConj || 'patio') === k}">${t}</button>`).join('')}</div><p class="muted small m0">Frequência: escolha Pátio, Bateria ou Sinter. A Sinter entra na folha do Pátio, junto dos grupos que já estão lá (não apaga ninguém). Férias: o sistema reconhece sozinho.</p><label class="btn">${I.file} Escolher arquivo<input type="file" id="aImpArq" accept=".xlsx,.xlsm,.xls" hidden></label></div></div></div>`;
     if (st && st.erro) h += `<div class="card"><div class="body"><p class="err m0">${esc(st.erro)}</p></div></div>`;
     if (st && st.prep) {
       const r = st.prep.resumo;
       h += `<div class="card"><header><h2>Conferência</h2><p>${esc(st.origem || '')}</p></header><div class="body stackcol">
-        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Escala do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
+        ${Object.entries(r.frequencia).map(([conj, x]) => `<div><b>Frequência ${r.unidade ? `${r.unidade} (folha do ${SETS[conj].curto})` : SETS[conj].curto}</b>: ${x.competencias.map(nomeComp).join(', ')} · ${x.pessoas} pessoas · ${x.diasPresenca} dias na Escala do dia (só os vazios) · ${x.diasFolha} dias de quem está só na folha</div>`).join('')}
         ${r.ferias ? `<div><b>Férias</b>: ${r.ferias.total} períodos (${r.ferias.comData} com data marcada)</div><label class="mchip"><input type="checkbox" id="aImpSubst" ${st.subst ? 'checked' : ''}><span>Substituir as férias que já estão no sistema (${A().ferias.length})</span></label>` : ''}
         ${r.semRH.length ? `<details class="legdet"><summary>${r.semRH.length} nome(s) sem ficha no RH (entram na folha mesmo assim)</summary><p class="small m0">${r.semRH.map(x => esc(title(x.nome))).join(' · ')}</p></details>` : ''}
         <div class="row-gap"><button class="btn pri" data-a="impOk" ${st.busy ? 'disabled' : ''}>${st.busy ? 'Gravando…' : 'Gravar no sistema'}</button><button class="btn" data-a="impCancel">Cancelar</button></div></div></div>`;
@@ -608,10 +608,12 @@ export function criarAdministrativo(X) {
       const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: true });
       const abas = abasDoXLSX(XLSX, wb);
       const ehFerias = abas.some(a => a.linhas.some(l => (l || []).some(v => typeof v === 'string' && /^matr[ií]cula$/i.test(v.trim()))));
-      const conj = U.impConj || 'patio';
+      // Sinter: a folha fica dentro da do Pátio (as pessoas estão na Escala do dia do Pátio, área SINTER) e é juntada à que já existe.
+      const un = U.impConj === 'sinter' ? 'Sinter' : ''; const conj = un ? 'patio' : (U.impConj || 'patio');
       const prep = ehFerias ? prepararImportacao({ ferias: lerFerias(abas), colabs: A().colabs, rh: A().rh }) : prepararImportacao({ freq: { [conj]: lerFrequencia(abas, conj) }, colabs: A().colabs, rh: A().rh });
+      if (un && !ehFerias) { prep.comps = prep.comps.map(c => ({ ...c, un })); prep.resumo.unidade = un; }
       if (!prep.comps.length && !(prep.ferias && prep.ferias.length)) throw new Error('Não achei folha de frequência nem lista de férias nesse arquivo.');
-      U.imp = { prep, origem: `${file.name} · ${ehFerias ? 'férias' : 'frequência ' + SETS[conj].curto}`, subst: false };
+      U.imp = { prep, origem: `${file.name} · ${ehFerias ? 'férias' : 'frequência ' + (un ? 'Sinter (dentro da folha do Pátio)' : SETS[conj].curto)}`, subst: false };
     } catch (e) { U.imp = { erro: 'Não foi possível ler o arquivo: ' + ((e && e.message) || e) }; }
     render();
   }

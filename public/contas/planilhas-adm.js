@@ -368,3 +368,18 @@ export function prepararImportacao({ freq = {}, ferias = null, colabs = {}, rh =
   return { comps, presenca, ferias: fer, resumo };
 }
 export { addDias };
+
+// Folha de uma unidade (ex.: Sinter) que fica dentro da folha do Pátio: junta a planilha nova à folha que já existe,
+// sem apagar os outros grupos. Quem está na planilha nova sai do grupo antigo e entra no da planilha; os lançamentos
+// (d) dessas pessoas são trocados pelos da planilha; os das outras pessoas e as justificativas ficam como estão.
+// atual = documento freqcomp que já existe (ou null) · nova = { conj, competencia, ini, fim, grupos, d } · un = 'Sinter'
+export function juntarFolha(atual, nova, un = '', rh = []) {
+  const marcar = p => (un ? { ...p, un } : p);
+  const novos = (nova.grupos || []).map(g => ({ ...g, pessoas: (g.pessoas || []).map(marcar) }));
+  if (!atual) return { ...nova, grupos: novos };
+  const ks = new Set(novos.flatMap(g => g.pessoas.map(p => p.k)));
+  const velhos = (atual.grupos || []).map(g => ({ ...g, pessoas: (g.pessoas || []).filter(p => !ks.has(p.k)) })).filter(g => g.pessoas.length);
+  const d = Object.fromEntries(Object.entries(atual.d || {}).filter(([k]) => !ks.has(k)));
+  Object.assign(d, nova.d || {});
+  return { ...atual, ...nova, ini: atual.ini || nova.ini, fim: atual.fim || nova.fim, grupos: unirGrupos([...velhos, ...novos], rh), d, jus: atual.jus || {} };
+}

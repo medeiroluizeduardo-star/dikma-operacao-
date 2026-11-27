@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as XLSX from '../public/vendor/xlsx.js';
-import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres } from '../public/contas/planilhas-adm.js';
+import { lerFrequencia, lerFerias, abasDoXLSX, prepararImportacao, diasDaCompetencia, competenciaDe, criarBusca, unirGrupos, canonLideres, juntarFolha } from '../public/contas/planilhas-adm.js';
 import { casaParte, lideresDasFichas, trocarNasFichas, moverNaFolha } from '../public/contas/lideres.js';
 import { indiceFerias, perfilDe, editaAdm, temFreq } from '../public/contas/acessos.js';
 
@@ -162,4 +162,24 @@ test('trocar líder: parte do nome, fichas e grupos da folha (move as pessoas e 
   // sem nenhum grupo do líder novo: cria no lugar do antigo
   const c = moverNaFolha([g('A'), g('LIDER BRENO ANDRADE - SUPERVISÃO KAROL', 'X'), g('B')], n => casaParte('breno andrade', n), 'Kauan Souza');
   assert.deepEqual(c.grupos.map(x => x.nome), ['A', 'LIDER KAUAN SOUZA - SUPERVISÃO KAROL', 'B']);
+});
+
+test('folha da Sinter entra na do Pátio sem apagar os grupos que já estão lá', () => {
+  const atual = { conj: 'patio', competencia: '2026-12', ini: '2026-11-16', fim: '2026-12-15',
+    grupos: [{ nome: 'LIDER ANA - SUPERVISÃO BIA', turno: false, pessoas: [{ k: '100', nome: 'ANA TESTE', mat: '100' }, { k: '200', nome: 'CAIO TESTE', mat: '200' }] }],
+    d: { 100: { '2026-11-20': 'FA' }, 200: { '2026-11-21': 'AT' } }, jus: { 100: { '2026-11-20': { cod: 'FA' } } } };
+  const nova = { conj: 'patio', competencia: '2026-12', ini: '2026-11-16', fim: '2026-12-15',
+    grupos: [{ nome: 'LIDER DIEGO - SUPERVISÃO EVA', turno: true, pessoas: [{ k: '200', nome: 'CAIO TESTE', mat: '200' }, { k: '300', nome: 'FABIO TESTE', mat: '300' }] }],
+    d: { 300: { '2026-11-22': 'FA' } } };
+  const r = juntarFolha(atual, nova, 'Sinter');
+  const todos = r.grupos.flatMap(g => g.pessoas);
+  assert.equal(todos.length, 3, 'ninguém some e ninguém repete');
+  assert.deepEqual(todos.filter(p => p.un === 'Sinter').map(p => p.k).sort(), ['200', '300']);
+  assert.ok(r.grupos.some(g => g.pessoas.some(p => p.k === '100')), 'quem é do Pátio continua');
+  assert.deepEqual(r.d['100'], { '2026-11-20': 'FA' }, 'lançamento do Pátio fica');
+  assert.equal(r.d['200'], undefined, 'lançamento antigo de quem veio na planilha da Sinter é trocado pelo da planilha');
+  assert.deepEqual(r.d['300'], { '2026-11-22': 'FA' });
+  assert.ok(r.jus['100'], 'justificativas ficam');
+  const sem = juntarFolha(null, nova, 'Sinter');
+  assert.ok(sem.grupos[0].pessoas.every(p => p.un === 'Sinter'), 'sem folha do Pátio: cria só com a Sinter');
 });
