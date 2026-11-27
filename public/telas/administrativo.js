@@ -213,7 +213,13 @@ export function criarAdministrativo(X) {
     if (U.grp == null || (U.grp !== '*' && !GR[+U.grp])) U.grp = '*';
     // Filtros: área, rota e turno (contas/filtro-freq.js); a área e a rota vêm da Escala do dia.
     const F = { area: U.fArea || '', rota: U.fRota || '', turno: U.fTurno || '' };
+<<<<<<< HEAD
     const unidadeP = p => unidadeDaPessoa(p, cmap);
+=======
+    // Unidade (Coqueria, Sinter, Alto Forno): pela área da Escala do dia ou pela Área/Setor da ficha.
+    const fichaMat = new Map((A().rh || []).map(c => [String(c.mat), c]));
+    const unidadeP = p => { if (p.un) return p.un; const c = p.ativ ? cmap.get(p.ativ) : null; const fi = fichaMat.get(String(p.mat)) || {}; const t = `${(c && c.area) || ''} | ${fi.setor || ''} | ${fi.subsetor || ''}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); return /SINTER/.test(t) ? 'Sinter' : /ALTO\s*FORNO/.test(t) ? 'Alto Forno' : 'Coqueria'; };
+>>>>>>> origin/main
     const filtra = !!(F.area || F.rota || F.turno || U.fCard || U.fUn); const procura = !!q || filtra;
     const diaRef = U.fDia || (hojeNaComp(datas) ? TODAY : datas[datas.length - 1]);
     const passa = (g, p) => { if (U.fUn && unidadeP(p) !== U.fUn) return false; if (!(F.area || F.rota || F.turno)) return true; const c = p.ativ ? cmap.get(p.ativ) : null; const rt = regimeTurma(conj, g, p, cmap, diaRef); return passaFiltroFreq({ area: (c && c.area) || '', rota: (c && c.rota) || '', regime: rt.regime, turma: rt.turma }, F); };
