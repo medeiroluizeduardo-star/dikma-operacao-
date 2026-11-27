@@ -86,7 +86,7 @@ import { SETS, SET_KEYS, ATIVOS, weeksOfMonth, novaSemana, seedParaBanco, setDaA
 import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/pessoas.js';
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
 import { veTreinos } from '../contas/treinos.js';
-import { competenciaDe } from '../contas/planilhas-adm.js';
+import { competenciaDe, juntarFolha } from '../contas/planilhas-adm.js';
 import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { incrementosFt } from '../contas/fotos.js';
@@ -1197,7 +1197,12 @@ export async function treinosImportar(itens) {
 // Importação das planilhas (administrador): folhas de frequência, presença de quem está nas Atividades e férias.
 // presenca: { patio: { 'C012|2026-10-03': 'AT' }, bateria: {...} } — só grava os dias que ainda estão vazios no banco.
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
-  for (const c of comps) { const b = writeBatch(db); b.set(doc(db, 'freqcomp', c.conj + '|' + c.competencia), { ...c, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }); await track(b.commit()); }
+  // c.un (ex.: 'Sinter'): a planilha é de uma unidade dentro da folha do conjunto; junta à folha que já existe, sem apagar.
+  for (const c0 of comps) {
+    const { un, ...c } = c0; const ref = doc(db, 'freqcomp', c.conj + '|' + c.competencia);
+    const dados = un ? juntarFolha((await getDoc(ref)).data() || null, c, un, cache.adm.rh || []) : c;
+    const b = writeBatch(db); b.set(ref, { ...dados, importadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }); await track(b.commit());
+  }
   let n = 0;
   for (const k of Object.keys(presenca || {})) {
     const porMes = {};

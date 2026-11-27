@@ -68,7 +68,7 @@ export function gruposPelaFicha({ fichas = [], colabs = [], outros = [], folha =
     // a mesma pessoa na folha: pela ligação já gravada (p.ativ) ou pela matrícula
     const ff = daFolha.find(x => x.p.ativ === c.id && !usadas.has(x)) || (naFolha(pessoa) || {}).x;
     const fp = ff && !usadas.has(ff) ? ff : null; if (fp) usadas.add(fp);
-    const p = { k: fp ? fp.p.k : 'at:' + c.id, nome: pessoa.nome, mat: pessoa.mat, turma: letra(c.turma) || (fp && letra(fp.p.turma)) || '', obs: (fp && fp.p.obs) || '', notas: (fp && fp.p.notas) || [], ativ: c.id, desligado: (fp && fp.p.desligado) || null, turno: fp ? fp.turno : null, semFicha: !f };
+    const p = { k: fp ? fp.p.k : 'at:' + c.id, nome: pessoa.nome, mat: pessoa.mat, turma: letra(c.turma) || (fp && letra(fp.p.turma)) || '', obs: (fp && fp.p.obs) || '', notas: (fp && fp.p.notas) || [], ativ: c.id, desligado: (fp && fp.p.desligado) || null, un: (fp && fp.p.un) || '', turno: fp ? fp.turno : null, semFicha: !f };
     if (fora(p)) continue;
     out.push({ g: grupoDe(f), p });
   }
@@ -84,7 +84,7 @@ export function gruposPelaFicha({ fichas = [], colabs = [], outros = [], folha =
     // homônimo com ficha própria (outra matrícula) continua separado; sem ficha própria, é a mesma pessoa
     if (ja && !(f0 && mat(f0) && mat(f0) !== mat(ja))) { usadas.add(x); if (String(ja.k).startsWith('at:')) ja.k = x.p.k; continue; }
     const f = f0;
-    const p = { k: x.p.k, nome: (f && f.nome) || x.p.nome, mat: mat(x.p) || mat(f), turma: letra(x.p.turma) || '', obs: x.p.obs || '', notas: x.p.notas || [], ativ: null, desligado: x.p.desligado || null, turno: x.turno, semFicha: !f };
+    const p = { k: x.p.k, nome: (f && f.nome) || x.p.nome, mat: mat(x.p) || mat(f), turma: letra(x.p.turma) || '', obs: x.p.obs || '', notas: x.p.notas || [], ativ: null, desligado: x.p.desligado || null, un: x.p.un || '', turno: x.turno, semFicha: !f };
     if (fora(p)) continue;
     usadas.add(x); out.push({ g: grupoDe(f), p }); porNome.set(normNome(p.nome), p);
   }

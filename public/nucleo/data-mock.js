@@ -2,7 +2,7 @@
 // Os dados ficam só neste navegador. Os apontamentos antes de hoje são exemplos.
 import { SETS, SET_KEYS, setDaArea, MOTIVOS, ATIVOS, add, today, weekOf, monthOfWeek, addMonth, weeksOfMonth, novaSemana, seedParaBanco } from '../contas/cal.js';
 import { legadoDoAcesso, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
-import { prepararImportacao } from '../contas/planilhas-adm.js';
+import { prepararImportacao, juntarFolha } from '../contas/planilhas-adm.js';
 import { veRegSeg, fotosDoReg } from '../contas/segcalc.js';
 import { TIPOS_INSP, notaInsp } from '../contas/inspecoes.js';
 import { aplicarCampos } from '../contas/limpeza.js';
@@ -755,7 +755,7 @@ export async function treinosImportar(itens) {
 export function treinosCarregar() { treinosExemplo(); }
 export function feriasExcluir(id) { cache.adm.ferias = cache.adm.ferias.filter(f => f.id !== id); admCh(); }
 export async function admImportar({ comps, presenca, ferias, substituirFerias }) {
-  for (const c of comps) cache.adm.comps[c.conj + '|' + c.competencia] = c;
+  for (const { un, ...c } of comps) { const id = c.conj + '|' + c.competencia; cache.adm.comps[id] = un ? juntarFolha(cache.adm.comps[id] || null, c, un, cache.adm.rh || []) : c; }
   let n = 0;
   for (const k of Object.keys(presenca || {})) for (const [key, cod] of Object.entries(presenca[k])) { const m = key.split('|')[1].slice(0, 7); const o = (S[k].sitByMonth[m] ||= {}); if (!o[key]) { o[key] = cod; n++; } }
   if (ferias) cache.adm.ferias = [...(substituirFerias ? [] : cache.adm.ferias), ...ferias.map((f, i) => ({ id: 'fi' + Date.now().toString(36) + i, ...f }))];
