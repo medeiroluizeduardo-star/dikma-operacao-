@@ -245,6 +245,8 @@ table.bal td.tot{background:var(--surface-2);font-weight:600}
 .card.aprov>header .r{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .card.aprov .nreal{color:var(--st-nreal);font-weight:600}
 .aviso{margin:0;padding:8px 10px;border-radius:8px;font-size:12.5px;background:color-mix(in srgb,var(--st-atr) 13%,transparent);color:var(--ink);border-left:3px solid var(--st-atr)}
+/* ícone dentro de aviso ou título em negrito: sem tamanho, o SVG ocupa a largura toda (Atestados no computador) */
+.aviso svg,.at-inss b svg{width:15px;height:15px;vertical-align:-3px;flex:none}
 .conf .body{display:flex;flex-direction:column;gap:10px}
 .conf-l{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.conf-l small{color:var(--ink-3)}
 .conf-f{display:flex;align-items:center;gap:6px;flex-wrap:wrap}

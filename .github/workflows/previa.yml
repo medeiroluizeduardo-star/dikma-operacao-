@@ -27,6 +27,9 @@ jobs:
       - name: Site sem dados pessoais
         run: node ferramentas/conferir-site.mjs
 
+      - name: Marcas dos arquivos (o celular baixa só o que mudou)
+        run: node ferramentas/marcas-sw.mjs
+
       - name: Publicar a prévia
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

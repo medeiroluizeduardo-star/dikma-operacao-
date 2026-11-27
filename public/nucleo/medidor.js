@@ -9,7 +9,7 @@ const lerTudo = () => { try { return JSON.parse(localStorage.getItem(CHAVE) || '
 const con = navigator.connection || {};
 const S = {
   em: Date.now(), rede: con.effectiveType || '', mem: navigator.deviceMemory || 0, nucleos: navigator.hardwareConcurrency || 0,
-  tela: 0, dados1: 0, dadosN: 0, dadosFim: 0, des: 0, desMs: 0, desMax: 0, desMaxAba: '', trocas: []
+  tela: 0, dados1: 0, dadosN: 0, dadosFim: 0, des: 0, desMs: 0, desMax: 0, desMaxAba: '', trocas: [], partes: {}
 };
 let gravar = 0;
 const salvar = () => {
@@ -25,6 +25,16 @@ export function marcarDados() {
   const t = agora(); if (t > 120000) return;
   if (!S.dados1) S.dados1 = t;
   S.dadosN++; S.dadosFim = t; salvar();
+}
+
+// Cada parte do banco (coleção ou documento) na abertura: quando chegou a 1ª vez (cópia do aparelho ou servidor),
+// quando chegou do servidor e quantos documentos trouxe. Só os primeiros 2 minutos e no máximo 60 partes.
+export function marcarParte(nome, docs, doCache) {
+  const t = agora(); if (t > 120000) return;
+  let p = S.partes[nome];
+  if (!p) { if (Object.keys(S.partes).length >= 60) return; p = S.partes[nome] = { c: 0, s: 0, n: 0 }; }
+  if (doCache) { if (!p.c) p.c = t; } else if (!p.s) p.s = t;
+  p.n = Math.max(p.n, docs || 0); salvar();
 }
 
 // Um desenho da tela: quanto tempo o aparelho levou para montar.

@@ -5,6 +5,7 @@
 //   - nenhum arquivo do site faltando (erro 404);
 //   - a tela desenhou alguma coisa e não ficou presa no "Carregando";
 //   - nada passa da largura da tela (sem rolagem lateral).
+//   - nenhum ícone sem tamanho (fica gigante).
 // Não usa o banco de verdade: o modo demonstração tem dados inventados e não grava nada.
 // Para rodar no computador: cd testes && npm install && npx playwright install chromium && npm run telas
 // Simulando uma máquina lenta (processador 6 vezes mais lento): LENTO=6 npm run telas
@@ -139,11 +140,14 @@ for (const [nome, tela] of [['computador', { width: 1366, height: 800 }], ['celu
             texto: (document.getElementById('view')?.innerText || '').trim().length,
             carregando: !!document.querySelector('#view [aria-busy="true"]'),
             largura: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth), janela: w,
+            // ícone (desenho 24x24) sem tamanho no CSS fica do tamanho da tela (Atestados, 27/11)
+            iconeGrande: [...document.querySelectorAll('#view svg[viewBox="0 0 24 24"]')].some(e => e.getBoundingClientRect().height > 96),
             falhou: [...document.querySelectorAll('.toast')].map(e => e.innerText).find(s => /não foi possível/i.test(s)) || ''
           }), tela.width);
           assert.deepEqual(erros, [], 'erros na tela');
           assert.equal(r.falhou, '', 'aviso de falha na tela');
           assert.ok(r.texto > 0, 'tela em branco');
+          assert.equal(r.iconeGrande, false, 'ícone gigante (falta tamanho no CSS)');
           assert.equal(r.carregando, false, 'tela presa no "Carregando"');
           assert.ok(r.largura <= r.janela + 1, `rolagem lateral: conteúdo com ${r.largura}px numa tela de ${r.janela}px`);
           await fecharJanelas(page);

@@ -17,7 +17,7 @@ import { render, schedule, isMobile } from '../ui/shell.js';
 // Criadas por inicio.js (PES, AV) ou quando o arquivo da tela chega (EQ, AD, GE). Os outros arquivos leem estas variáveis.
 export let PES = null, AV = null, EQ = null, AD = null, GE = null, SG = null;
 // Telas que quase ninguém abre, baixadas só quando abertas: configurações da Administração (CF), e Resumos (RE).
-let CF = null, RE = null, CO = null, IC = null, MD = null, TR = null, AG = null, PR = null, FN = null, OM = null, OI = null, FP = null, AT = null;
+let QZ = null, CF = null, RE = null, CO = null, IC = null, MD = null, TR = null, AG = null, PR = null, FN = null, OM = null, OI = null, FP = null, AT = null;
 
 // Pessoas e Avisos no celular (antes de abrir o link recebido).
 export function criarModulos() {
@@ -61,6 +61,8 @@ const CARGA = {
   FN: () => import('../telas/funcoes.js').then(m => { FN = m; }),
   CF: () => import('../telas/config.js').then(m => { CF = m; }),
   RE: () => import('../telas/relatorios.js').then(m => { RE = m; }),
+  // QZ: Queda zero (lançar e indicadores), baixada só quando aberta
+  QZ: () => import('../telas/queda-zero.js').then(m => { QZ = m; }),
   // CO: RH › Colaboradores (cadastro único, ficha em abas)
   CO: () => import('../telas/colaboradores.js').then(m => { CO = m; }),
   // FP: RH › Férias (controle mensal, plano do ano e pendências)
@@ -69,7 +71,7 @@ const CARGA = {
   AT: () => import('../telas/atestados.js').then(m => { AT = m; }),
   GE: () => import('../telas/gestao.js').then(m => { GE = m.criarGestao({ podeItem: id => podeItem(id, 'gestao'), PES, get ME() { return meEm('gestao'); }, DB, esc, title, I, sheet, formSheet, toast, showErr, render: () => render(), isAdmin: () => admDe('fichas'), prepararFoto, framed, UI }); })
 };
-const pronto = { AT: () => AT, AG: () => AG, OM: () => OM, OI: () => OI, FN: () => FN, PR: () => PR, TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO, FP: () => FP };
+const pronto = { QZ: () => QZ, AT: () => AT, AG: () => AG, OM: () => OM, OI: () => OI, FN: () => FN, PR: () => PR, TR: () => TR, MD: () => MD, IC: () => IC, EQ: () => EQ, AD: () => AD, GE: () => GE, SG: () => SG, CF: () => CF, RE: () => RE, CO: () => CO, FP: () => FP };
 const pedidos = {};
 // Baixa (uma vez só) o arquivo da tela; quando chega, a tela é redesenhada. Devolve uma promessa.
 export function carregarModulo(k) {
@@ -90,7 +92,7 @@ export function modulo(k) {
 }
 // Desenha com o módulo, ou o esqueleto enquanto o arquivo chega.
 export const comModulo = (k, fn) => { const m = modulo(k); return m ? fn(m) : M.ESQUELETO; };
-// Logo depois do login: baixa em segundo plano as telas dos módulos da pessoa (abrem na hora quando ela tocar).
+// Depois do login: baixa em segundo plano as telas dos módulos da pessoa (abrem na hora quando ela tocar).
 export function precarregarModulos(u) {
   const ms = modsReais(u); const ks = [];
   if (ms.includes('equipamentos') || eqInd(u)) ks.push('EQ');
@@ -98,6 +100,9 @@ export function precarregarModulos(u) {
   if (ms.includes('frequencia') || conjsInd(u).length) ks.push('AD');
   if (temSeg(u) || conjsInd(u).length) ks.push('SG');
   if (!ks.length) return;
+  // Espera uns 8 s (o mesmo tempo dos dados dos outros módulos, ver PRIO em data.js): no celular, a tela e os dados
+  // do módulo aberto chegam primeiro, sem disputar processador com arquivos que a pessoa talvez nem abra. A tela que
+  // ela abrir antes disso é baixada na hora (comModulo).
   const ir = () => ks.forEach(k => carregarModulo(k));
-  if ('requestIdleCallback' in window) requestIdleCallback(ir, { timeout: 1500 }); else setTimeout(ir, 300);
+  setTimeout(() => { if ('requestIdleCallback' in window) requestIdleCallback(ir, { timeout: 3000 }); else ir(); }, 8000);
 }

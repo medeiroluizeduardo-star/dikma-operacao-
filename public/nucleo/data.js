@@ -76,7 +76,7 @@ import {
   onAuthStateChanged, signOut as fbSignOut, signInWithEmailAndPassword, createUserWithEmailAndPassword, updatePassword,
   reauthenticateWithCredential, EmailAuthProvider,
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot, collection, query, where, orderBy, limit, getDocs,
+  doc, getDoc, setDoc, updateDoc, addDoc, onSnapshot as onSnapshotFB, collection, query, where, orderBy, limit, getDocs,
   writeBatch, serverTimestamp, FieldPath, deleteField, arrayUnion, increment,
   getMessaging, getToken, deleteToken, mensagensSuportadas, initializeAppCheck, ReCaptchaEnterpriseProvider
 } from '../vendor/firebase.js';
@@ -93,6 +93,29 @@ import { incrementosFt } from '../contas/fotos.js';
 import { idEf, novoEf, travaEf, destravaEf } from '../contas/efetivo-dia.js';
 
 export const isMock = false;
+import { marcarParte } from './medidor.js';
+
+// Toda escuta do banco passa por aqui: o medidor de velocidade anota quanto tempo cada parte (coleção ou documento)
+// levou para chegar na abertura e quantos documentos trouxe (menu › Velocidade deste aparelho › Dados por parte).
+function nomeParte(r) {
+  try {
+    if (r.type === 'document') return r.parent.id === 'usuarios' ? 'usuarios' : `${r.parent.id}/${r.id}`;
+    if (r.type === 'collection') return r.id;
+    return (r._query && r._query.path && r._query.path.lastSegment()) || 'consulta';
+  } catch (e) { return 'consulta'; }
+}
+function onSnapshot(ref, ...a) {
+  const i = a.findIndex(x => typeof x === 'function');
+  if (i >= 0) {
+    const fn = a[i]; const nome = nomeParte(ref); let doServidor = false;
+    a[i] = s => {
+      if (!doServidor) { doServidor = !(s && s.metadata && s.metadata.fromCache); marcarParte(nome, s && typeof s.size === 'number' ? s.size : 1, !doServidor); }
+      return fn(s);
+    };
+  }
+  return onSnapshotFB(ref, ...a);
+}
+
 // Dados de cada conjunto de atividades (Pátio e Bateria). cache.config, cache.plano etc. apontam para o conjunto ativo.
 const novoSet = () => ({ config: null, configLoaded: false, configErro: null, plano: {}, colabs: {}, sitByMonth: {}, sitExtra: {}, semanas: {}, aprov: {}, acoes: {}, monthsLoaded: new Set() });
 const S = { patio: novoSet(), bateria: novoSet() };

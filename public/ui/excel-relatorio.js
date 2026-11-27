@@ -1,3 +1,4 @@
+import { fmtTexto } from './fmt-texto.js';
 // Dikma Gestão — relatório em Excel (.xlsx) com formatação e gráficos, para mandar aos gerentes (Indicadores › OMs e Queda zero).
 // Monta o arquivo à mão (o Excel é um .zip de XMLs): a biblioteca de planilhas do site não faz cores nem gráficos.
 // Sem tela: montarXlsx(rel) devolve os bytes (usado nos testes); baixarRelatorioExcel(arquivo, rel) baixa no navegador.
@@ -239,18 +240,7 @@ export function arquivosXlsx(rel) {
 }
 
 // Texto do valor como aparece (para medir a largura das colunas e para o papel impresso).
-export function fmtTexto(v, fmt) {
-  if (v == null || v === '') return '';
-  if (typeof v !== 'number') return String(v);
-  if (fmt === 'pct') return v > 0 && v < 1 ? '< 1%' : Math.round(v) + '%';
-  if (fmt === 't') return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (fmt === 'h') { // no papel, igual à tela (contas/oms.js › duracao): 28 min, 14h 40, 1d 13h
-    const m = Math.round(v * 60); if (m < 0) return '';
-    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
-    return d ? `${d}d ${h}h` : h ? `${h}h${mm ? ' ' + String(mm).padStart(2, '0') : ''}` : `${mm} min`;
-  }
-  return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-}
+export { fmtTexto };
 
 /* ---------- zip simples (sem compressão: o Excel abre normalmente) ---------- */
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();

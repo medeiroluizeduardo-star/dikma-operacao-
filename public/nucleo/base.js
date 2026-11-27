@@ -7,8 +7,6 @@ import { pad, today, weekOf, monthOfWeek } from '../contas/cal.js';
 // Assim a prévia nunca mexe nos dados reais.
 const PREVIA = location.hostname.includes('--');
 export const DEMO = PREVIA || new URLSearchParams(location.search).has('demo');
-// Fontes carregam sem travar a página (sem script dentro do HTML, por causa da política de segurança do site).
-{ const f = document.getElementById('fontes'); if (f) { if (f.sheet) f.media = 'all'; else f.addEventListener('load', () => { f.media = 'all'; }); } }
 export const DB = await import(DEMO ? './data-mock.js' : './data.js');
 
 export const TODAY = today();
