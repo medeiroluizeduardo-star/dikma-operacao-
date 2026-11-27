@@ -11,6 +11,8 @@ import { baixarExcel, dataBR } from '../ui/exportar.js';
 import { diasDaCompetencia, competenciaDe, normNome, criarBusca, prepararImportacao, lerFrequencia, lerFerias, abasDoXLSX, addDias, NOMES_CODIGO, unirGrupos } from '../contas/planilhas-adm.js';
 import { abrirLancamento, CODIGOS_LANC, JUS_CODS, pedirJus, textoJus } from '../ui/presenca.js';
 import { caixaBusca } from '../ui/busca.js';
+import { abrirAtestado } from '../ui/atestado.js';
+import { DECLARACAO, diasDoAtestado } from '../contas/atestados.js';
 import { passaFiltroFreq, filtrosFreqAtivos, rotasFreq, marcasFreq, passaCartao, CARTOES_FREQ } from '../contas/filtro-freq.js';
 import { gruposPelaFicha, folhaPelaFicha, SEM_FICHA } from '../contas/folha-ficha.js';
 import { repetidosNaFolha } from '../contas/duplicados.js';
@@ -329,10 +331,14 @@ export function criarAdministrativo(X) {
       sheet, nome: title(p.nome), dt, ok: I.ok, codigos: CODS,
       atual: atual.auto ? { v: atual.v, auto: true, motivo: atual.por === 'ferias' ? 'férias' : atual.por === 'escala' ? 'pela escala' : '' } : { v: atual.v },
       linhaInfo: (p.virt ? 'Na Escala do dia, fora da folha · mesma presença' : p.ativ ? 'Mesma presença da Escala do dia' : 'Só na folha (fora das Atividades)') + (jAt ? `<br>Justificativa: ${esc(textoJus(jAt))}` : ''),
-      extras: !atual.auto && JUS_CODS.includes(atual.v) ? [{ t: jAt ? 'Editar a justificativa' : `Justificar ${(NOMES_CODIGO[atual.v] || '').toLowerCase()}`, d: jAt ? textoJus(jAt) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: '<span class="opt-ic">✎</span>' }] : [],
-      aoExtra: v => { if (v === 'jus') justificar(conj, comp, p, [dt], atual.v, jAt); },
+      extras: !atual.auto && atual.v === 'AT' ? [{ t: jAt && jAt.at ? 'Ver o atestado' : 'Lançar o atestado (com foto)', d: jAt && jAt.at ? `${textoJus({ mot: jAt.mot })}${jAt.dias > 1 ? ` · ${jAt.dias} dias` : ''}` : jAt ? textoJus(jAt) : 'Ainda sem o atestado', v: 'atest', extra: true, ic: `<span class="opt-ic">${I.cam}</span>` }]
+        : !atual.auto && JUS_CODS.includes(atual.v) ? [{ t: jAt ? 'Editar a justificativa' : `Justificar ${(NOMES_CODIGO[atual.v] || '').toLowerCase()}`, d: jAt ? textoJus(jAt) : 'Ainda sem justificativa', v: 'jus', extra: true, ic: '<span class="opt-ic">✎</span>' }] : [],
+      aoExtra: v => { if (v === 'atest') verAtestadoFreq(conj, comp, doc, g, p, dt, jAt); if (v === 'jus') justificar(conj, comp, p, [dt], atual.v, jAt); },
       depois: datas.filter(x => x > dt), fim: { t: 'Até o fim da competência', v: datas[datas.length - 1] },
+      semAte: ['AT'],
       aoEscolher: (cod, lista) => {
+        // Atestado: o mesmo formulário da Escala do dia (tipo, emissão, dias e foto); os dias saem do atestado.
+        if (cod === 'AT') { abrirAtestado({ c: colabAt(conj, g, p), conj, dt, rh: true, aoSalvar: (x, it) => aplicarAt(conj, comp, doc, g, p, dt, x, it, null, true) }); return; }
         const antes = lista.map(x => [x, codigo(conj, comp, doc, g, p, x, cmap)]);
         lista.forEach(x => { DB.admSetCodigo(conj, comp, p, x, cod); const ju = jusDe(conj, doc, p, x); if (ju && ju.cod !== cod) DB.admSetJus(conj, comp, p, x, null); if (p.ativ && X.limparPresenca) X.limparPresenca(conj, p.ativ, x, cod); limparFolha(conj, comp, doc, p, x, cod); });
         DB.log(`Frequência: ${title(p.nome)} → ${cod ? NOMES_CODIGO[cod] : 'automático'} ${lista.length > 1 ? `de ${ddmm(dt)} a ${ddmm(lista[lista.length - 1])}` : 'em ' + ddmm(dt)}`, 'rh');
@@ -343,6 +349,37 @@ export function criarAdministrativo(X) {
           { desfazer: () => { antes.forEach(([x, c]) => DB.admSetCodigo(conj, comp, p, x, c.auto ? '' : c.v)); render(); } });
       }
     });
+  }
+  // ---- Atestado pela Frequência (o mesmo de Operação › Escala do dia: ui/atestado.js) ----
+  // Na Presença/folha fica só o código AT e uma justificativa curta (tipo, dias e o id do atestado), sem observação;
+  // os detalhes e a foto ficam no atestado (só RH · Administrativo, administrador e quem lançou).
+  const diasAt = it => (it.tipo === DECLARACAO ? [it.ini] : diasDoAtestado(it.ini, it.dias));
+  function colabAt(conj, g, p) {
+    const c = p.ativ ? colabPorId(conj).get(p.ativ) : null;
+    return { id: p.ativ || '', area: (c && c.area) || (g && g.nome) || '', nome: p.nome, mat: p.mat || (c && c.mat) || '' };
+  }
+  // Grava AT nos dias do atestado. Quem está só na folha fica dentro da competência aberta (a folha é por competência).
+  function aplicarAt(conj, comp, doc, g, p, dt, at, it, antes, novo) {
+    const cmap = colabPorId(conj); const datas = diasDaCompetencia(comp);
+    let dias = diasAt(it); const fora = p.ativ ? [] : dias.filter(d => !datas.includes(d)); if (fora.length) dias = dias.filter(d => datas.includes(d));
+    const velhos = antes ? diasAt({ tipo: at.tipo, ini: antes.ini, dias: antes.dias }) : [];
+    const guarda = [...new Set([...dias, ...velhos])].map(x => [x, codigo(conj, comp, doc, g, p, x, cmap), jusDe(conj, doc, p, x)]);
+    for (const d of velhos.filter(d => !dias.includes(d) && (p.ativ || datas.includes(d)))) if (codigo(conj, comp, doc, g, p, d, cmap).v === 'AT') { DB.admSetCodigo(conj, comp, p, d, null); DB.admSetJus(conj, comp, p, d, null); }
+    const j = { cod: 'AT', mot: at.tipo, at: at.id, dias: dias.length, ...(at.horas ? { horas: at.horas } : {}), por: ME() ? ME().uid : '', nomePor: ME() ? (ME().nome || ME().login || '') : '', em: new Date().toISOString() };
+    for (const d of dias) { DB.admSetCodigo(conj, comp, p, d, 'AT'); DB.admSetJus(conj, comp, p, d, j); if (p.ativ && X.limparPresenca) X.limparPresenca(conj, p.ativ, d, 'AT'); limparFolha(conj, comp, doc, p, d, 'AT'); }
+    DB.log(`Frequência: ${title(p.nome)} → Atestado ${dias.length > 1 ? `de ${ddmm(dias[0])} a ${ddmm(dias[dias.length - 1])}` : 'em ' + ddmm(dias[0] || dt)}`, 'rh');
+    render();
+    const b = document.querySelector(`[data-a="cel"][data-p="${CSS.escape(p.k)}"][data-dt="${dt}"]`); if (b && X.pulsar) X.pulsar(b);
+    const msg = fora.length ? `Atestado salvo · ${fora.length} dia${fora.length > 1 ? 's' : ''} fora desta competência: lance na folha seguinte` : novo ? `${title(p.nome).split(' ')[0]}: atestado em ${dias.length > 1 ? dias.length + ' dias' : ddmm(dias[0])}` : 'Atestado atualizado';
+    // Desfazer (só no lançamento novo): volta os dias e apaga o atestado e as fotos.
+    toast(msg, novo ? { desfazer: () => { guarda.forEach(([x, c, ju]) => { DB.admSetCodigo(conj, comp, p, x, c.auto ? '' : c.v); DB.admSetJus(conj, comp, p, x, ju || null); }); DB.atFotos(at.id, true).then(l => DB.atApagar(at.id, l.map(f => f.id))).catch(() => {}); render(); } } : undefined);
+  }
+  // "Ver o atestado" / "Lançar o atestado (com foto)" num dia que já está com AT.
+  function verAtestadoFreq(conj, comp, doc, g, p, dt, jus) {
+    if (DB.atWatch) DB.atWatch(true);
+    const a = jus && jus.at ? ((DB.cache.atest && DB.cache.atest.d) || {})[jus.at] : null;
+    if (jus && jus.at && !a) { toast(DB.cache.atest && DB.cache.atest.loaded ? 'Atestado não encontrado (pode ter sido apagado)' : 'Carregando o atestado… toque de novo em instantes'); return; }
+    abrirAtestado({ c: colabAt(conj, g, p), conj, dt, atual: a, rh: true, aoSalvar: (x, it, antes) => aplicarAt(conj, comp, doc, g, p, dt, x, it, antes || (a ? null : { ini: dt, dias: 1 }), false) });
   }
   // Ligado à Presença com lançamento antigo só na folha: a mudança vale na Presença e o da folha sai (senão voltaria a aparecer).
   function limparFolha(conj, comp, doc, p, dt, cod) {
