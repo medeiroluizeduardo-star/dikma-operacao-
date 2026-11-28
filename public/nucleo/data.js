@@ -87,9 +87,10 @@ import { chaveFicha, veTodasFichas, areasFichaDe, FICHA_GERAL } from '../contas/
 import { temFreq, resumoFerias, marcasDe, ehAdminU, modsHistorico, MODS_HIST, temIndU, conjsInd, eqInd } from '../contas/acessos.js';
 import { veTreinos } from '../contas/treinos.js';
 import { competenciaDe, juntarFolha } from '../contas/planilhas-adm.js';
-import { temSeg, veTudoSeg, registraSeg, supConjs, fotosDoReg } from '../contas/segcalc.js';
+import { temSeg } from '../contas/segcalc.js';
 import { mapaFeriados, aplicarNaSemana } from '../contas/feriados.js';
 import { idEf, novoEf, travaEf, destravaEf } from '../contas/efetivo-dia.js';
+import { novoSeg, startSeg, pararSeg } from './data-seg.js';
 
 export const isMock = false;
 import { marcarParte } from './medidor.js';
@@ -126,6 +127,7 @@ export const dados = k => S[k];
 const C = (n, k = cur) => SETS[k].pre + n;
 export const cache = { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, gVersao: 0, e: novoE(), eVersao: 0 };
 for (const k of Object.keys(novoSet())) Object.defineProperty(cache, k, { get: () => S[cur][k], set: v => { S[cur][k] = v; }, enumerable: true });
+cache.seg = novoSeg();
 function novoE() { return { loaded: false, config: null, cad: { operadores: [], frota: [] }, lanc: [], par: [], insp: [], aval: {}, meses: new Set() }; }
 // Que dados carregar: tirado do acesso por módulo (escopos com Operação ou Gestão, Fichas, RH) e, para quem tem os
 // Indicadores, os conjuntos do escopo (só leitura; as regras liberam a leitura do que está por trás dos painéis).
@@ -432,7 +434,7 @@ function stopData() {
   for (const f of omRecSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } omRecSubs.clear(); cache.omsRec = {};
   eqFreqSubs.clear(); heOpSubs.clear(); cache.heOp = {}; cache.eqFreq = { comps: {}, sit: porSet(() => ({})), v: 0 }; admOn = false;
   for (const f of admSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } admSubs.clear();
-  for (const f of segSubs.values()) { try { f(); } catch (e) { /* já fechado */ } } segSubs.clear(); segRes.clear(); segOn = false; segIniciais = []; cache.seg = novoSeg();
+  pararSeg();
   for (const k of SET_KEYS) S[k] = novoSet();
   Object.assign(cache, { treinos: [], tLoaded: false, log: [], usuarios: [], g: { loaded: false, config: null, colabs: [], ocorr: [] }, gAssin: {}, e: novoE() });
 }
@@ -577,7 +579,7 @@ async function gravarLote(b) { pending++; syncMudou(); try { await b.commit(); }
 // Quem gravou e quando: o banco exige nas coleções principais (semanas, presença, cadastro, fichas; firestore.rules › marcaOk).
 function marca() { return { atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }; }
 // Estado da conexão para as partes separadas deste arquivo (data-fotos.js). Lido na hora de cada chamada (getters).
-export const interno = { get db() { return db; }, get me() { return me; }, get cur() { return cur; }, C, track, gravarLote, marca, toLocal };
+export const interno = { get db() { return db; }, get me() { return me; }, get cur() { return cur; }, get cb() { return cb; }, get dataSubs() { return dataSubs; }, cache, changed, onSnapshot, C, track, gravarLote, marca, toLocal };
 export * from './data-fotos.js';
 // Apaga o acesso: sem o cadastro e sem o login, a pessoa não entra mais.
 // (A conta interna do Firebase Authentication fica órfã e pode ser apagada no console, se quiser.)
@@ -1327,97 +1329,8 @@ export async function eImportar(seed) {
   }
 }
 
-// ---------- módulo Segurança (interações e anomalias) ----------
-// Lido por mês (o atual e o anterior; a tela pede outros) e, à parte, todas as anomalias ainda em aberto.
-// As regras só deixam ler o que é da pessoa: quem só registra pede os próprios (por == uid); o supervisor, os da área
-// dele (conj); quem vê tudo, sem filtro. Cada consulta fica numa lista própria e o cache junta tudo.
-function novoSeg() { return { on: false, loaded: false, cfg: null, cfgLoaded: false, inter: [], anom: [], cartao: [], insp: [], meses: new Set(), v: 0 }; }
-cache.seg = novoSeg();
-let segOn = false; const segSubs = new Map(), segRes = new Map(); let segIniciais = [];
-const segDoc = d => { const x = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...x, em: x.em && x.em.toMillis ? x.em.toMillis() : (+x.em || Date.now()) }; };
-function segJuntar() {
-  const inter = {}, anom = {}, cartao = {}, insp = {};
-  for (const [k, l] of segRes) { const alvo = k.startsWith('seginter') ? inter : k.startsWith('segcartao') ? cartao : k.startsWith('seginsp') ? insp : anom; for (const x of l) alvo[x.id] = x; }
-  cache.seg.inter = Object.values(inter); cache.seg.anom = Object.values(anom); cache.seg.cartao = Object.values(cartao); cache.seg.insp = Object.values(insp);
-  cache.seg.loaded = segIniciais.every(k => segRes.has(k)); cache.seg.v++; changed();
-}
-function segOuvir(key, q) {
-  if (segSubs.has(key)) return;
-  segSubs.set(key, onSnapshot(q, qs => { segRes.set(key, qs.docs.map(segDoc)); segJuntar(); }, e => { segRes.set(key, []); segJuntar(); if (e.code !== 'permission-denied') cb.onError && cb.onError(e); }));
-}
-// Filtros que as regras pedem para esta pessoa: [] = sem filtro (vê tudo).
-// Indicadores: os registros dos conjuntos do escopo (Pátio, Bateria), como o supervisor da área.
-function filtrosSeg() {
-  if (veTudoSeg(me)) return [[]];
-  const l = [];
-  if (registraSeg(me)) l.push([where('por', '==', me.uid)]);
-  for (const k of new Set([...supConjs(me), ...conjsInd(me)])) l.push([where('conj', '==', k)]);
-  return l;
-}
-function startSeg() {
-  segOn = true; cache.seg.on = true;
-  dataSubs.push(onSnapshot(doc(db, 'config', 'seguranca'), s => { cache.seg.cfg = s.exists() ? s.data() : null; cache.seg.cfgLoaded = true; cache.seg.v++; changed(); }, e => { cache.seg.cfgLoaded = true; cb.onError && cb.onError(e); }));
-  const m = today().slice(0, 7);
-  // em aberto: uma consulta por situação (só igualdades: não precisa de índice composto no banco)
-  for (const st of ['aberta', 'tratamento']) filtrosSeg().forEach((f, i) => { const k = `seganom|${st}|${i}`; segIniciais.push(k); segOuvir(k, query(collection(db, 'seganom'), where('status', '==', st), ...f)); });
-  // Cartões Amarelos ainda sem validação (de qualquer mês)
-  filtrosSeg().forEach((f, i) => { const k = `segcartao|pendente|${i}`; segIniciais.push(k); segOuvir(k, query(collection(db, 'segcartao'), where('status', '==', 'pendente'), ...f)); });
-  segWatch([addMonth(m, -1), m], true);
-}
-export function segWatch(meses, inicial) {
-  if (!db || !me || !segOn) return;
-  for (const m of new Set(meses.filter(Boolean))) {
-    if (cache.seg.meses.has(m)) continue; cache.seg.meses.add(m);
-    for (const col of ['seginter', 'seganom', 'segcartao', 'seginsp']) filtrosSeg().forEach((f, i) => { const k = `${col}|${m}|${i}`; if (inicial) segIniciais.push(k); segOuvir(k, query(collection(db, col), where('mes', '==', m), ...f)); });
-  }
-}
-// Novo registro com as fotos: tudo num lote só. Sem sinal, fica na fila do aparelho (inclusive as fotos) e sobe
-// quando a conexão voltar. fotos: [{ dados, mini }] já reduzidas pela tela.
-export function segNovo(col, dados, fotos) {
-  const r = doc(collection(db, col)); const ids = fotos.map(() => doc(collection(db, 'segfotos')).id);
-  const b = writeBatch(db);
-  b.set(r, { ...dados, fotos: ids, minis: fotos.map(f => f.mini), por: me.uid, porNome: me.nome || me.login || '', em: serverTimestamp() });
-  fotos.forEach((f, i) => b.set(doc(db, 'segfotos', ids[i]), { reg: r.id, col, tipo: 'antes', mini: f.mini, dados: f.dados, ordem: i, autor: me.uid, por: me.uid, conj: dados.conj || '', area: dados.area, mes: dados.mes, em: serverTimestamp() }));
-  track(b.commit());
-  return r.id;
-}
-// O autor corrige o próprio registro (até 24 h; a anomalia, enquanto aberta).
-export const segEditar = (col, id, patch) => track(updateDoc(doc(db, col, id), { ...patch, atualizadoEm: serverTimestamp() }));
-// Acompanhamento da anomalia (só os campos do tratamento). foto = { dados, mini } do depois, quando houver.
-export function segTratar(a, patch, foto) {
-  const b = writeBatch(db); const p = { ...patch };
-  if (foto) {
-    const fid = doc(collection(db, 'segfotos')).id;
-    b.set(doc(db, 'segfotos', fid), { reg: a.id, col: 'seganom', tipo: 'depois', mini: foto.mini, dados: foto.dados, ordem: 0, autor: a.por, por: me.uid, conj: a.conj || '', area: a.area, mes: a.mes, em: serverTimestamp() });
-    p.trat = { ...p.trat, fotoDepois: fid, miniDepois: foto.mini };
-  }
-  b.update(doc(db, 'seganom', a.id), { ...p, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid });
-  track(b.commit());
-}
-// Segurança › Inspeções (contas/inspecoes.js): grava a inspeção e, no mesmo lote, uma anomalia (seganom, aberta) para
-// cada item "Não OK" novo; o item guarda o id da anomalia (anom) e a anomalia, o da inspeção (insp).
-// id vazio = inspeção nova. anoms: [{ i: posição do item, dados: anomDaInsp(...) }].
-export function segInspSalvar(id, dados, anoms = []) {
-  const r = id ? doc(db, 'seginsp', id) : doc(collection(db, 'seginsp'));
-  const itens = dados.itens.map(i => ({ ...i })); const quem = { por: me.uid, porNome: me.nome || me.login || '' };
-  const b = writeBatch(db);
-  for (const a of anoms) { const ar = doc(collection(db, 'seganom')); itens[a.i].anom = ar.id; b.set(ar, { ...a.dados, insp: r.id, fotos: [], minis: [], ...quem, em: serverTimestamp() }); }
-  if (id) b.update(r, { ...dados, itens, atualizadoEm: serverTimestamp() });
-  else b.set(r, { ...dados, itens, ...quem, em: serverTimestamp() });
-  track(b.commit());
-  return r.id;
-}
-// Validação do Cartão Amarelo (só status, valid e o carimbo de quem gravou).
-export const segValidar = (c, patch) => track(updateDoc(doc(db, 'segcartao', c.id), { ...patch, atualizadoEm: serverTimestamp(), atualizadoPor: me.uid }));
-// Foto grande (só ao tocar na miniatura).
-export async function segFoto(id) { const s = await getDoc(doc(db, 'segfotos', id)); return s.exists() ? s.data().dados : null; }
-// Apagar um registro (só o administrador; as regras conferem): o registro e as fotos dele, num lote só.
-export function segExcluir(col, r) {
-  const b = writeBatch(db); b.delete(doc(db, col, r.id));
-  for (const f of fotosDoReg(r)) b.delete(doc(db, 'segfotos', f));
-  return track(b.commit());
-}
-export const segSalvarCfg = cfg => track(setDoc(doc(db, 'config', 'seguranca'), { ...cfg, atualizadoEm: serverTimestamp(), por: me.nome || me.login || '' }));
+// Módulo Segurança: em data-seg.js (reexportado aqui).
+export { segEditar, segExcluir, segFoto, segInspSalvar, segNovo, segSalvarCfg, segTratar, segValidar, segWatch } from './data-seg.js';
 
 // ---------- Limpeza de dados (Administração › Limpeza de dados, só o administrador) ----------
 // A tela lê do servidor o que vai sair (para a prévia e a cópia de segurança) e grava em lotes de até 400.
